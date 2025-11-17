@@ -12,4 +12,11 @@ export const TRACKED_TICKERS = [
   "UNH",
   "CSCO",
   "LULU",
+
+  // Index fund favorites
+  "VTI",
+  "VOO",
+  "VTSAX",
+  "FXAIX",
+  "SWTSX",
 ];

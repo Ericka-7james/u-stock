@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2025-11-17T22:24:32.478Z",
+  "generatedAt": "2025-11-17T23:16:29.292Z",
   "subreddits": [
     "stocks",
     "investing",
@@ -14,7 +14,7 @@
   "mentions": [
     {
       "ticker": "SPY",
-      "count": 35
+      "count": 36
     },
     {
       "ticker": "META",
@@ -41,16 +41,20 @@
       "count": 8
     },
     {
+      "ticker": "AAPL",
+      "count": 7
+    },
+    {
       "ticker": "AMZN",
       "count": 7
     },
     {
-      "ticker": "AAPL",
+      "ticker": "SLE",
       "count": 6
     },
     {
-      "ticker": "SLE",
-      "count": 6
+      "ticker": "MSFT",
+      "count": 4
     },
     {
       "ticker": "SRFM",
@@ -59,6 +63,10 @@
     {
       "ticker": "UFG",
       "count": 4
+    },
+    {
+      "ticker": "VTI",
+      "count": 3
     },
     {
       "ticker": "LAC",
@@ -70,14 +78,6 @@
     },
     {
       "ticker": "NFLX",
-      "count": 3
-    },
-    {
-      "ticker": "MSFT",
-      "count": 3
-    },
-    {
-      "ticker": "CSCO",
       "count": 3
     },
     {
@@ -97,11 +97,23 @@
       "count": 3
     },
     {
+      "ticker": "OONEF",
+      "count": 2
+    },
+    {
+      "ticker": "VOO",
+      "count": 2
+    },
+    {
       "ticker": "TE",
       "count": 2
     },
     {
       "ticker": "ORCL",
+      "count": 2
+    },
+    {
+      "ticker": "CSCO",
       "count": 2
     },
     {
@@ -122,6 +134,10 @@
     },
     {
       "ticker": "SE",
+      "count": 2
+    },
+    {
+      "ticker": "KWM",
       "count": 2
     },
     {
@@ -214,6 +230,10 @@
     },
     {
       "ticker": "FSLR",
+      "count": 1
+    },
+    {
+      "ticker": "VTSAX",
       "count": 1
     },
     {

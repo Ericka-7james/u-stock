@@ -31,14 +31,31 @@ export default function DashboardPage() {
 
       <main className="dashboard-main">
         <section className="panel panel-filters">
-          <h3>Filters (coming soon)</h3>
-          <p className="muted">
-            Here you’ll be able to filter by subreddit, minimum mentions, and
-            watchlists.
-          </p>
-          <Link to="/index-funds" className="panel-link">
-            Explore index funds →
-          </Link>
+          {/* Tabs under Filters */}
+          <div className="filters-tabs">
+            <button
+              type="button"
+              className="filters-tab filters-tab--active"
+            >
+              Filters
+            </button>
+
+            <Link
+              to="/index-funds"
+              className="filters-tab filters-tab--link"
+            >
+              Explore index funds
+            </Link>
+          </div>
+
+          {/* Filters content inside a card */}
+          <div className="filters-card">
+            <h3>Filters (coming soon)</h3>
+            <p className="muted">
+              Here you’ll be able to filter by subreddit, minimum mentions,
+              and watchlists.
+            </p>
+          </div>
         </section>
 
         <section className="panel panel-chart">

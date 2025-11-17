@@ -1,42 +1,58 @@
 // src/pages/IndexFundsPage.jsx
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { useRedditMentions } from "../hooks/useRedditMentions";
 
 const INDEX_FUNDS = [
   {
     ticker: "VTI",
     name: "Vanguard Total Stock Market ETF",
-    subs: ["Bogleheads", "personalfinance"],
     blurb: "Tracks the entire U.S. stock market with very low fees.",
   },
   {
     ticker: "VOO",
     name: "Vanguard S&P 500 ETF",
-    subs: ["Bogleheads", "investing"],
     blurb: "Follows the S&P 500; classic diversified U.S. large-cap exposure.",
   },
   {
     ticker: "VTSAX",
     name: "Vanguard Total Stock Market Index Fund Admiral Shares",
-    subs: ["Bogleheads"],
     blurb: "Mutual fund version of VTI; Boglehead favorite for ‘own the market’.",
   },
   {
     ticker: "FXAIX",
     name: "Fidelity 500 Index Fund",
-    subs: ["Bogleheads", "Fidelity"],
     blurb: "Fidelity’s S&P 500 index fund with rock-bottom expense ratio.",
   },
   {
     ticker: "SWTSX",
     name: "Schwab Total Stock Market Index Fund",
-    subs: ["Bogleheads", "Schwab"],
     blurb: "Schwab’s low-cost total U.S. market index alternative.",
   },
 ];
 
 export default function IndexFundsPage() {
   const [activeTab, setActiveTab] = useState("about"); // "about" | "funds"
+  const { rawData, meta, loading } = useRedditMentions();
+
+  // Build a map from ticker → mention count from reddit-mentions.json
+  const mentionMap = useMemo(() => {
+    const map = {};
+    for (const item of rawData) {
+      // rawData item: { ticker, count }
+      map[item.ticker.toUpperCase()] = item.count;
+    }
+    return map;
+  }, [rawData]);
+
+  const fundsWithCounts = useMemo(
+    () =>
+      INDEX_FUNDS.map((fund) => ({
+        ...fund,
+        mentions: mentionMap[fund.ticker.toUpperCase()] || 0,
+      })),
+    [mentionMap]
+  );
 
   return (
     <div className="dashboard">
@@ -44,8 +60,8 @@ export default function IndexFundsPage() {
         <div>
           <h1>Index Funds Radar</h1>
           <p className="muted">
-            Learn what index funds are and see popular picks from Reddit
-            communities.
+            Learn what index funds are and see how often they appear in Reddit
+            investing discussions.
           </p>
         </div>
 
@@ -72,7 +88,7 @@ export default function IndexFundsPage() {
           }
           onClick={() => setActiveTab("funds")}
         >
-          Top index funds by subreddit
+          Top index funds by mentions
         </button>
       </div>
 
@@ -105,44 +121,47 @@ export default function IndexFundsPage() {
             </li>
           </ul>
           <p className="muted">
-            U-Stock&apos;s index funds view is meant to give you a quick sense
-            of which broad, diversified funds Reddit communities talk about the
-            most—not to serve as financial advice.
+            This page uses the same Reddit snapshot as your main U-Stock radar
+            to show which broad index funds come up most often in discussions.
           </p>
         </section>
       ) : (
         <section className="panel">
-          <h3>Popular index funds mentioned on Reddit</h3>
-          <p className="muted">
-            These are well-known index funds that frequently show up in
-            long-term investing discussions on subreddits like{" "}
-            <code>r/Bogleheads</code>, <code>r/personalfinance</code>, and{" "}
-            <code>r/investing</code>.
-          </p>
+          <h3>Popular index funds in this Reddit snapshot</h3>
 
-          <div className="fund-grid">
-            {INDEX_FUNDS.map((fund) => (
-              <article key={fund.ticker} className="fund-card">
-                <header className="fund-card-header">
-                  <div>
-                    <div className="fund-ticker">{fund.ticker}</div>
-                    <div className="fund-name">{fund.name}</div>
-                  </div>
-                </header>
-                <p className="fund-blurb">{fund.blurb}</p>
-                <div className="fund-subreddits">
-                  <span className="fund-subreddits-label">
-                    Seen in subreddits:
-                  </span>
-                  {fund.subs.map((sub) => (
-                    <span key={sub} className="fund-subreddit-pill">
-                      r/{sub}
-                    </span>
-                  ))}
-                </div>
-              </article>
-            ))}
-          </div>
+          {loading ? (
+            <p className="muted">Loading live mention counts…</p>
+          ) : (
+            <>
+              <p className="muted">
+                Counts below are based on the most recent Reddit data pulled for
+                your radar. They reflect how many post titles/descriptions
+                mention each ticker across the configured subreddits.
+              </p>
+
+              <div className="fund-grid">
+                {fundsWithCounts.map((fund) => (
+                  <article key={fund.ticker} className="fund-card">
+                    <header className="fund-card-header">
+                      <div>
+                        <div className="fund-ticker">{fund.ticker}</div>
+                        <div className="fund-name">{fund.name}</div>
+                      </div>
+                      <div className="fund-mentions">
+                        <span className="fund-mentions-count">
+                          {fund.mentions}
+                        </span>
+                        <span className="fund-mentions-label">
+                          mentions
+                        </span>
+                      </div>
+                    </header>
+                    <p className="fund-blurb">{fund.blurb}</p>
+                  </article>
+                ))}
+              </div>
+            </>
+          )}
         </section>
       )}
     </div>

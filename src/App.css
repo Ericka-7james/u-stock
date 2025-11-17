@@ -296,3 +296,59 @@ body {
 .panel-link:hover {
   text-decoration: underline;
 }
+
+.panel.panel-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Tabs bar under Filters */
+.filters-tabs {
+  display: inline-flex;
+  gap: 8px;
+}
+
+/* Tab button + tab link share same base styling */
+.filters-tab {
+  border-radius: 16px;
+  border: 1px solid #b29678;
+  padding: 6px 14px;
+  font-size: 13px;
+  background: transparent;
+  cursor: pointer;
+  color: #5a5247;
+  text-decoration: none; /* works for Link and button */
+}
+
+.filters-tab--active {
+  background: #fef5e7;
+  font-weight: 600;
+}
+
+.filters-tab--link:hover {
+  background: rgba(254, 245, 231, 0.6);
+}
+
+/* Filters content card */
+.filters-card {
+  background: #f8d4aa;
+  border-radius: 10px;
+  padding: 12px 14px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+}
+
+.fund-mentions {
+  text-align: right;
+}
+
+.fund-mentions-count {
+  display: block;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.fund-mentions-label {
+  font-size: 11px;
+  color: #766f65;
+}
