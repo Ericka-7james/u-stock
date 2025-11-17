@@ -4,7 +4,6 @@ import { useRedditMentions } from "../hooks/useRedditMentions";
 
 export default function SubredditsPage() {
   const { meta, loading } = useRedditMentions();
-
   const subreddits = meta?.subreddits ?? [];
 
   return (
@@ -16,11 +15,11 @@ export default function SubredditsPage() {
             View which communities are included in this U-Stock radar snapshot.
           </p>
         </div>
-        <div className="dashboard-header-meta">
-          <Link to="/" className="back-link">
-            ← Back to dashboard
-          </Link>
-        </div>
+
+        {/* Back link lives in the header, on the right */}
+        <Link to="/" className="back-link">
+          ← Back to dashboard
+        </Link>
       </header>
 
       {loading ? (

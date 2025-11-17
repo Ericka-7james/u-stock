@@ -10,9 +10,13 @@ body {
 }
 
 .dashboard {
+  overflow: visible !important;
+  position: relative;
+  width: 100%;
   max-width: 1200px;
   margin: 0 auto;
-  padding: 24px;
+  padding: 32px 24px;
+  box-sizing: border-box;
 }
 
 .dashboard-header {
@@ -30,6 +34,10 @@ body {
 
 .dashboard-header-meta span {
   font-weight: 600;
+}
+
+.dashboard-header > div {
+  flex: 0 1 auto;   /* prevents full-width stretching */
 }
 
 .muted {
@@ -179,8 +187,11 @@ body {
   font-size: 14px;
   text-decoration: none;
   color: #444;
+  white-space: nowrap;
 }
 
 .back-link:hover {
   text-decoration: underline;
 }
+
+

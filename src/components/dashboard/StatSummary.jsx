@@ -27,9 +27,7 @@ export default function StatSummary({ meta, rawData }) {
       <Link to="/subreddits" className="stat-card stat-card--accent-teal stat-card--clickable">
         <div className="stat-label">Subreddits</div>
         <div className="stat-value">{meta?.subreddits?.length ?? 0}</div>
-        <div className="stat-caption">
-          {meta?.subreddits?.join(", ") || "—"}
-        </div>
+        <div className="stat-caption">See more details →</div>
       </Link>
 
     </div>
