@@ -1,0 +1,59 @@
+{
+  "generatedAt": "2025-11-17T21:26:51.076Z",
+  "subreddits": [
+    "stocks",
+    "investing",
+    "wallstreetbets",
+    "stockmarket"
+  ],
+  "mentions": [
+    {
+      "ticker": "DJT",
+      "count": 5
+    },
+    {
+      "ticker": "LAC",
+      "count": 3
+    },
+    {
+      "ticker": "MP",
+      "count": 3
+    },
+    {
+      "ticker": "UNH",
+      "count": 2
+    },
+    {
+      "ticker": "LULU",
+      "count": 1
+    },
+    {
+      "ticker": "PACS",
+      "count": 1
+    },
+    {
+      "ticker": "CSCO",
+      "count": 1
+    },
+    {
+      "ticker": "VOYG",
+      "count": 1
+    },
+    {
+      "ticker": "RAMP",
+      "count": 1
+    },
+    {
+      "ticker": "TMGLF",
+      "count": 1
+    },
+    {
+      "ticker": "PPTA",
+      "count": 1
+    },
+    {
+      "ticker": "GME",
+      "count": 1
+    }
+  ]
+}
