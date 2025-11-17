@@ -2,6 +2,7 @@
 import { useRedditMentions } from "../../hooks/useRedditMentions";
 import StatSummary from "./StatSummary";
 import RedditMentionsChart from "../RedditMentionsChart";
+import { Link } from "react-router-dom";
 
 export default function DashboardPage() {
   const { rawData, meta, loading } = useRedditMentions();
@@ -35,6 +36,9 @@ export default function DashboardPage() {
             Here you’ll be able to filter by subreddit, minimum mentions, and
             watchlists.
           </p>
+          <Link to="/index-funds" className="panel-link">
+            Explore index funds →
+          </Link>
         </section>
 
         <section className="panel panel-chart">
