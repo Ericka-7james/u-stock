@@ -1,15 +1,64 @@
 {
-  "generatedAt": "2025-11-17T21:26:51.076Z",
+  "generatedAt": "2025-11-17T22:24:32.478Z",
   "subreddits": [
     "stocks",
     "investing",
     "wallstreetbets",
-    "stockmarket"
+    "stockmarket",
+    "options",
+    "pennystocks",
+    "RobinHoodPennyStocks"
   ],
+  "postsPerSubreddit": 100,
+  "totalPosts": 700,
   "mentions": [
     {
-      "ticker": "DJT",
-      "count": 5
+      "ticker": "SPY",
+      "count": 35
+    },
+    {
+      "ticker": "META",
+      "count": 22
+    },
+    {
+      "ticker": "NVDA",
+      "count": 18
+    },
+    {
+      "ticker": "AMD",
+      "count": 15
+    },
+    {
+      "ticker": "GOOGL",
+      "count": 12
+    },
+    {
+      "ticker": "UNH",
+      "count": 9
+    },
+    {
+      "ticker": "TSLA",
+      "count": 8
+    },
+    {
+      "ticker": "AMZN",
+      "count": 7
+    },
+    {
+      "ticker": "AAPL",
+      "count": 6
+    },
+    {
+      "ticker": "SLE",
+      "count": 6
+    },
+    {
+      "ticker": "SRFM",
+      "count": 4
+    },
+    {
+      "ticker": "UFG",
+      "count": 4
     },
     {
       "ticker": "LAC",
@@ -20,7 +69,143 @@
       "count": 3
     },
     {
-      "ticker": "UNH",
+      "ticker": "NFLX",
+      "count": 3
+    },
+    {
+      "ticker": "MSFT",
+      "count": 3
+    },
+    {
+      "ticker": "CSCO",
+      "count": 3
+    },
+    {
+      "ticker": "GNS",
+      "count": 3
+    },
+    {
+      "ticker": "PLBY",
+      "count": 3
+    },
+    {
+      "ticker": "NFE",
+      "count": 3
+    },
+    {
+      "ticker": "BYND",
+      "count": 3
+    },
+    {
+      "ticker": "TE",
+      "count": 2
+    },
+    {
+      "ticker": "ORCL",
+      "count": 2
+    },
+    {
+      "ticker": "BULL",
+      "count": 2
+    },
+    {
+      "ticker": "TMGLF",
+      "count": 2
+    },
+    {
+      "ticker": "PPTA",
+      "count": 2
+    },
+    {
+      "ticker": "DJT",
+      "count": 2
+    },
+    {
+      "ticker": "SE",
+      "count": 2
+    },
+    {
+      "ticker": "EONR",
+      "count": 2
+    },
+    {
+      "ticker": "MIGI",
+      "count": 2
+    },
+    {
+      "ticker": "TRUG",
+      "count": 2
+    },
+    {
+      "ticker": "VSME",
+      "count": 2
+    },
+    {
+      "ticker": "PW",
+      "count": 2
+    },
+    {
+      "ticker": "MSGM",
+      "count": 2
+    },
+    {
+      "ticker": "RUBI",
+      "count": 2
+    },
+    {
+      "ticker": "BURU",
+      "count": 2
+    },
+    {
+      "ticker": "TNMG",
+      "count": 2
+    },
+    {
+      "ticker": "AABB",
+      "count": 2
+    },
+    {
+      "ticker": "ASTI",
+      "count": 2
+    },
+    {
+      "ticker": "ENTO",
+      "count": 2
+    },
+    {
+      "ticker": "BLIS",
+      "count": 2
+    },
+    {
+      "ticker": "CYCU",
+      "count": 2
+    },
+    {
+      "ticker": "IQST",
+      "count": 2
+    },
+    {
+      "ticker": "OFAL",
+      "count": 2
+    },
+    {
+      "ticker": "RMXI",
+      "count": 2
+    },
+    {
+      "ticker": "YDKG",
+      "count": 2
+    },
+    {
+      "ticker": "VSEE",
+      "count": 2
+    },
+    {
+      "ticker": "LFS",
+      "count": 2
+    },
+    {
+      "ticker": "NRXP",
       "count": 2
     },
     {
@@ -28,11 +213,15 @@
       "count": 1
     },
     {
-      "ticker": "PACS",
+      "ticker": "FSLR",
       "count": 1
     },
     {
-      "ticker": "CSCO",
+      "ticker": "LVMH",
+      "count": 1
+    },
+    {
+      "ticker": "PACS",
       "count": 1
     },
     {
@@ -40,19 +229,219 @@
       "count": 1
     },
     {
+      "ticker": "MU",
+      "count": 1
+    },
+    {
+      "ticker": "MSTR",
+      "count": 1
+    },
+    {
+      "ticker": "OPEN",
+      "count": 1
+    },
+    {
       "ticker": "RAMP",
       "count": 1
     },
     {
-      "ticker": "TMGLF",
-      "count": 1
-    },
-    {
-      "ticker": "PPTA",
-      "count": 1
-    },
-    {
       "ticker": "GME",
+      "count": 1
+    },
+    {
+      "ticker": "BILI",
+      "count": 1
+    },
+    {
+      "ticker": "B",
+      "count": 1
+    },
+    {
+      "ticker": "USD",
+      "count": 1
+    },
+    {
+      "ticker": "BRL",
+      "count": 1
+    },
+    {
+      "ticker": "NU",
+      "count": 1
+    },
+    {
+      "ticker": "IONQ",
+      "count": 1
+    },
+    {
+      "ticker": "SPHD",
+      "count": 1
+    },
+    {
+      "ticker": "CMBM",
+      "count": 1
+    },
+    {
+      "ticker": "LUFFF",
+      "count": 1
+    },
+    {
+      "ticker": "HERB",
+      "count": 1
+    },
+    {
+      "ticker": "GGAZF",
+      "count": 1
+    },
+    {
+      "ticker": "SMOFF",
+      "count": 1
+    },
+    {
+      "ticker": "GGA",
+      "count": 1
+    },
+    {
+      "ticker": "LODE",
+      "count": 1
+    },
+    {
+      "ticker": "RMX",
+      "count": 1
+    },
+    {
+      "ticker": "RMXFF",
+      "count": 1
+    },
+    {
+      "ticker": "LKY",
+      "count": 1
+    },
+    {
+      "ticker": "LKYRF",
+      "count": 1
+    },
+    {
+      "ticker": "RVYL",
+      "count": 1
+    },
+    {
+      "ticker": "SNTI",
+      "count": 1
+    },
+    {
+      "ticker": "ETHZ",
+      "count": 1
+    },
+    {
+      "ticker": "ASBP",
+      "count": 1
+    },
+    {
+      "ticker": "SGBX",
+      "count": 1
+    },
+    {
+      "ticker": "KRRO",
+      "count": 1
+    },
+    {
+      "ticker": "OTLK",
+      "count": 1
+    },
+    {
+      "ticker": "MSAI",
+      "count": 1
+    },
+    {
+      "ticker": "IFRX",
+      "count": 1
+    },
+    {
+      "ticker": "INTS",
+      "count": 1
+    },
+    {
+      "ticker": "UGRO",
+      "count": 1
+    },
+    {
+      "ticker": "CENN",
+      "count": 1
+    },
+    {
+      "ticker": "GNPX",
+      "count": 1
+    },
+    {
+      "ticker": "SWISF",
+      "count": 1
+    },
+    {
+      "ticker": "DTCK",
+      "count": 1
+    },
+    {
+      "ticker": "CSS",
+      "count": 1
+    },
+    {
+      "ticker": "MARA",
+      "count": 1
+    },
+    {
+      "ticker": "KORRO",
+      "count": 1
+    },
+    {
+      "ticker": "WTO",
+      "count": 1
+    },
+    {
+      "ticker": "ONON",
+      "count": 1
+    },
+    {
+      "ticker": "MOBX",
+      "count": 1
+    },
+    {
+      "ticker": "LUCY",
+      "count": 1
+    },
+    {
+      "ticker": "NBIS",
+      "count": 1
+    },
+    {
+      "ticker": "VIVK",
+      "count": 1
+    },
+    {
+      "ticker": "CTM",
+      "count": 1
+    },
+    {
+      "ticker": "MONI",
+      "count": 1
+    },
+    {
+      "ticker": "EPWK",
+      "count": 1
+    },
+    {
+      "ticker": "NPC",
+      "count": 1
+    },
+    {
+      "ticker": "GANX",
+      "count": 1
+    },
+    {
+      "ticker": "HBIO",
+      "count": 1
+    },
+    {
+      "ticker": "MTVA",
       "count": 1
     }
   ]

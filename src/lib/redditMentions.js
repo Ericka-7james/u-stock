@@ -5,13 +5,38 @@ export const TICKER_REGEX = /\$[A-Z]{1,5}\b/g;
 
 /**
  * Extract tickers from a single text string.
+ * - Finds $TICKER mentions (e.g., $TSLA)
+ * - Also finds tracked tickers (e.g., TSLA) even without the '$'
  * Returns array like ["TSLA", "AAPL"]
  */
 export function extractTickersFromText(text) {
   if (!text) return [];
-  const matches = text.match(TICKER_REGEX);
-  if (!matches) return [];
-  return matches.map((m) => m.slice(1)); // strip leading "$"
+
+  const found = new Set();
+
+  // 1) $TICKER mentions
+  const matches = text.match(TICKER_REGEX) || [];
+  for (const m of matches) {
+    const ticker = m.slice(1).toUpperCase(); // strip '$'
+    found.add(ticker);
+  }
+
+  // 2) Bare tracked tickers (TSLA, AAPL, etc.)
+  if (TRACKED_TICKERS && TRACKED_TICKERS.length > 0) {
+    const upperText = text.toUpperCase();
+
+    for (const ticker of TRACKED_TICKERS) {
+      const upperTicker = ticker.toUpperCase();
+
+      // Require whole-word-ish match to avoid false positives in random strings
+      const pattern = new RegExp(`\\b${upperTicker}\\b`, "g");
+      if (pattern.test(upperText)) {
+        found.add(upperTicker);
+      }
+    }
+  }
+
+  return Array.from(found);
 }
 
 /**

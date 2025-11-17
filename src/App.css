@@ -1,42 +1,186 @@
-#root {
-  max-width: 1280px;
+:root {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #2f2b26;
+  background-color: #f6ddba;
+}
+
+body {
+  margin: 0;
+  background: #f6ddba;
+}
+
+.dashboard {
+  max-width: 1200px;
   margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
+  padding: 24px;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
+.dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 24px;
 }
 
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+.dashboard-header h1 {
+  margin: 0;
+  font-size: 32px;
+  letter-spacing: 0.05em;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
+.dashboard-header-meta span {
+  font-weight: 600;
 }
 
-.card {
-  padding: 2em;
+.muted {
+  color: #766f65;
+  font-size: 14px;
 }
 
-.read-the-docs {
-  color: #888;
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.stat-card {
+  background: #fbe1c3;
+  border-radius: 10px;
+  padding: 16px 18px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+}
+
+.stat-card--accent-blue {
+  border-top: 4px solid #4e9ad8;
+}
+
+.stat-card--accent-orange {
+  border-top: 4px solid #f18b42;
+}
+
+.stat-card--accent-teal {
+  border-top: 4px solid #3fb8a5;
+}
+
+.stat-label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #766f65;
+}
+
+.stat-value {
+  font-size: 24px;
+  font-weight: 700;
+  margin: 6px 0;
+}
+
+.stat-caption {
+  font-size: 12px;
+  color: #7a7369;
+}
+
+.dashboard-main {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 16px;
+}
+
+.panel.panel-chart {
+  /* same base styling as other panels */
+  background: #fbe1c3;
+  border-radius: 10px;
+  padding: 16px 18px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+}
+
+/* This is now just a layout wrapper, not a separate “card-on-card” */
+.card-main-chart {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  box-sizing: border-box;
+  padding: 4px 0 0 0; /* light spacing inside panel */
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.card-header h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.chart-wrapper {
+  flex: 1;
+  min-height: 260px;
+}
+
+.toggle-group {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.toggle-btn {
+  border-radius: 14px;
+  border: 1px solid #b29678;
+  padding: 4px 10px;
+  font-size: 12px;
+  background: transparent;
+  cursor: pointer;
+  color: #5a5247;
+}
+
+.toggle-btn--active {
+  background: #fef5e7;
+  font-weight: 600;
+}
+
+.chart-wrapper {
+  flex: 1;
+  min-height: 260px;
+}
+.stat-card--clickable {
+  cursor: pointer;
+  text-decoration: none;
+  color: inherit;
+}
+
+.stat-card--clickable:hover {
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.12);
+}
+
+/* Subreddits page list styling */
+.subreddit-list {
+  list-style: none;
+  padding-left: 0;
+  margin-top: 8px;
+}
+
+.subreddit-list li {
+  margin-bottom: 4px;
+}
+
+.subreddit-list a {
+  color: #2f4b8f;
+  text-decoration: none;
+}
+
+.subreddit-list a:hover {
+  text-decoration: underline;
+}
+
+.back-link {
+  font-size: 14px;
+  text-decoration: none;
+  color: #444;
+}
+
+.back-link:hover {
+  text-decoration: underline;
 }

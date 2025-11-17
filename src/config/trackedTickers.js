@@ -9,4 +9,7 @@ export const TRACKED_TICKERS = [
   "META",
   "NFLX",
   "AMD",
+  "UNH",
+  "CSCO",
+  "LULU",
 ];

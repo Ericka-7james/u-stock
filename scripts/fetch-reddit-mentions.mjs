@@ -2,7 +2,10 @@
 import dotenv from "dotenv";
 import { writeFile } from "node:fs/promises";
 
-import { REDDIT_SUBREDDITS } from "../src/config/redditSources.js";
+import {
+  REDDIT_SUBREDDITS,
+  POSTS_PER_SUBREDDIT,
+} from "../src/config/redditSources.js";
 import {
   tallyTickerMentions,
   sortTickerCounts,
@@ -49,7 +52,7 @@ async function getRedditToken() {
   return data.access_token;
 }
 
-async function fetchSubredditPosts(subreddit, token, limit = 50) {
+async function fetchSubredditPosts(subreddit, token, limit = POSTS_PER_SUBREDDIT) {
   const url = `https://oauth.reddit.com/r/${subreddit}/new?limit=${limit}`;
 
   const response = await fetch(url, {
@@ -72,6 +75,7 @@ async function fetchSubredditPosts(subreddit, token, limit = 50) {
 
 async function main() {
   console.log("🔍 Fetching Reddit ticker mentions from:", REDDIT_SUBREDDITS.join(", "));
+  console.log(`📊 Posts per subreddit: ${POSTS_PER_SUBREDDIT}`);
 
   const token = await getRedditToken();
   console.log("✅ Got Reddit token");
@@ -80,17 +84,19 @@ async function main() {
 
   for (const sub of REDDIT_SUBREDDITS) {
     console.log(`📥 Fetching /r/${sub}...`);
-    const posts = await fetchSubredditPosts(sub, token, 50);
+    const posts = await fetchSubredditPosts(sub, token);
     allPosts.push(...posts);
   }
 
-  // 👉 Pure logic now lives in src/lib/redditMentions.js
+  // Pure logic via src/lib
   const counts = tallyTickerMentions(allPosts, { trackedOnly: false });
   const sorted = sortTickerCounts(counts);
 
   const result = {
     generatedAt: new Date().toISOString(),
     subreddits: REDDIT_SUBREDDITS,
+    postsPerSubreddit: POSTS_PER_SUBREDDIT,
+    totalPosts: allPosts.length,
     mentions: sorted,
   };
 
@@ -98,7 +104,7 @@ async function main() {
 
   console.log("✅ Saved ticker mentions to public/reddit-mentions.json");
   if (sorted.length > 0) {
-    console.log("Top tickers:", sorted.slice(0, 10));
+    console.log("Top tickers:", sorted.slice(0, 15));
   } else {
     console.log("No tickers found this run.");
   }
