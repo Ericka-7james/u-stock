@@ -2,6 +2,8 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useRedditMentions } from "../hooks/useRedditMentions";
+import "./IndexFundsPage.css";
+
 
 const INDEX_FUNDS = [
   {
@@ -58,13 +60,12 @@ export default function IndexFundsPage() {
     <div className="dashboard">
       <header className="dashboard-header">
         <div>
-          <h1>Index Funds Radar</h1>
+          <h1 className="page-title">Index Funds Radar</h1>
           <p className="muted">
             Learn what index funds are and see how often they appear in Reddit
             investing discussions.
           </p>
         </div>
-
         <Link to="/" className="back-link">
           ← Back to dashboard
         </Link>

@@ -1,6 +1,7 @@
 // src/pages/SubredditsPage.jsx
 import { Link } from "react-router-dom";
 import { useRedditMentions } from "../hooks/useRedditMentions";
+import './SubredditsPage.css';
 
 export default function SubredditsPage() {
   const { meta, loading } = useRedditMentions();
@@ -10,7 +11,7 @@ export default function SubredditsPage() {
     <div className="dashboard">
       <header className="dashboard-header">
         <div>
-          <h1>Subreddit Breakdown</h1>
+          <h1 className="page-title">Subreddit Breakdown</h1>
           <p className="muted">
             View which communities are included in this U-Stock radar snapshot.
           </p>

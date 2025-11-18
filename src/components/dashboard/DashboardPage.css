@@ -1,0 +1,256 @@
+/* Header + layout inside the dashboard page */
+.dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 24px;
+}
+
+.dashboard-header h1 {
+  margin: 0;
+  font-size: 32px;
+  letter-spacing: 0.05em;
+}
+
+.dashboard-header .muted {
+  font-size: 14px;
+  color: #766f65;
+  margin-top: 4px;
+}
+
+/* Purple page title */
+.page-title {
+  color: #6b4cb8; /* soft financial purple */
+  font-weight: 800;
+  margin: 0;
+}
+
+.dashboard-header > div {
+  flex: 0 1 auto; /* prevents full-width stretching */
+}
+
+/* Stat summary row + cards */
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.stat-card {
+  background: #fbe1c3;
+  border-radius: 10px;
+  padding: 16px 18px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+}
+
+.stat-card--accent-blue {
+  border-top: 4px solid #4e9ad8;
+}
+
+.stat-card--accent-orange {
+  border-top: 4px solid #f18b42;
+}
+
+.stat-card--accent-teal {
+  border-top: 4px solid #3fb8a5;
+}
+
+.stat-label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #766f65;
+}
+
+.stat-value {
+  font-size: 24px;
+  font-weight: 700;
+  margin: 6px 0;
+}
+
+.stat-caption {
+  font-size: 12px;
+  color: #7a7369;
+}
+
+.stat-card--clickable {
+  cursor: pointer;
+  text-decoration: none;
+  color: inherit;
+}
+
+.stat-card--clickable:hover {
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.12);
+}
+
+/* Main grid: left filters, right chart */
+.dashboard-main {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 16px;
+}
+
+/* Chart panel */
+.panel.panel-chart {
+  background: #fbe1c3;
+  border-radius: 10px;
+  padding: 16px 18px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+}
+
+/* Chart card inside panel */
+.card-main-chart {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  box-sizing: border-box;
+  padding: 4px 0 0 0;
+}
+
+.card-header {
+  background: linear-gradient(90deg, #fce6d5 0%, #f9d9c1 100%);
+  padding: 10px 14px;
+  border-radius: 8px;
+  margin-bottom: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.card-header h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.chart-wrapper {
+  flex: 1;
+  min-height: 260px;
+}
+
+/* Toggle buttons for chart */
+.toggle-group {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.toggle-btn {
+  border-radius: 14px;
+  border: 1px solid #b29678;
+  padding: 4px 10px;
+  font-size: 12px;
+  background: transparent;
+  cursor: pointer;
+  color: #5a5247;
+}
+
+.toggle-btn--active {
+  background: #fef5e7;
+  font-weight: 600;
+}
+
+/* Filters column container (NO card background) */
+.panel.panel-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0;              /* no padding like a card */
+  background: transparent; /* same as page background */
+  box-shadow: none;
+  border-radius: 0;
+}
+
+.chart-meta {
+  text-align: right;
+  font-size: 12px;
+  color: #766f65;
+  margin-top: 4px;
+}
+
+/* Filters content card */
+.filters-card {
+  background: #fbe1c3;
+  border-radius: 12px;
+  padding: 16px 18px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.filters-card:hover {
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
+  transform: translateY(-2px);
+}
+
+/* Filters card accent strip */
+.filters-card--filters {
+  border-top: 4px solid #d7b48a; /* warm gold */
+}
+
+/* Index fund spotlight card */
+.filters-card--index {
+  background: linear-gradient(135deg, #fbe1c3 0%, #ffe7d1 100%);
+  border-radius: 12px;
+  border-top: 4px solid #c98c8c; /* soft rose */
+  padding: 16px 18px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.filters-card--index:hover {
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
+}
+
+.filters-card-header h3 {
+  margin: 0 0 6px;
+}
+
+/* Index spotlight text */
+.index-spotlight-ticker {
+  font-size: 20px;
+  font-weight: 800;
+  color: #3d332c;
+}
+
+.index-spotlight-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: #6b5a4a;
+}
+
+.index-spotlight-mentions {
+  font-size: 12px;
+  color: #8a7766;
+  margin-top: 4px;
+}
+
+/* Link inside filters panel */
+.panel-link {
+  display: inline-block;
+  margin-top: 10px;
+  font-size: 13px;
+  text-decoration: none;
+  color: #2f4b8f;
+}
+
+.panel-link:hover {
+  text-decoration: underline;
+}
+
+/* Last updated + footer on dashboard */
+.dashboard-last-updated {
+  text-align: right;
+  font-size: 13px;
+  color: #766f65;
+  padding: 12px 4px;
+  margin-top: 20px;
+}
+
+.site-footer {
+  text-align: center;
+  font-size: 12px;
+  color: #6b5a4a;
+  margin-top: 20px;
+  padding: 14px 0;
+  opacity: 0.8;
+}

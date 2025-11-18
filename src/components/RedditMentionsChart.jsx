@@ -6,7 +6,7 @@ import {
   Tooltip,
   ResponsiveContainer,
   CartesianGrid,
-  Cell, // ⬅️ NEW
+  Cell,
 } from "recharts";
 import { TRACKED_TICKERS } from "../config/trackedTickers";
 import { useMemo, useState } from "react";
@@ -37,8 +37,9 @@ export default function RedditMentionsChart({ rawData, loading }) {
 
   return (
     <div className="card-main-chart">
+      {/* Header: title left, buttons right */}
       <div className="card-header">
-        <h2>Reddit Ticker Mentions (Top 20 / 30)</h2>
+        <h2>Reddit Ticker Mentions</h2>
 
         <div className="toggle-group">
           <button
@@ -58,7 +59,7 @@ export default function RedditMentionsChart({ rawData, loading }) {
             }
             onClick={() => setViewMode("tracked")}
           >
-            Tracked only
+            Tracked
           </button>
         </div>
       </div>
@@ -71,33 +72,40 @@ export default function RedditMentionsChart({ rawData, loading }) {
           <code>npm run fetch:reddit-mentions</code>.
         </p>
       ) : (
-        <div className="chart-wrapper">
-          <ResponsiveContainer>
-            <BarChart
-              data={displayData}
-              margin={{ top: 20, right: 20, left: 0, bottom: 60 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis
-                dataKey="ticker"
-                angle={-45}
-                textAnchor="end"
-                interval={0}
-                minTickGap={10}
-              />
-              <YAxis />
-              <Tooltip />
-              <Bar dataKey="count">
-                {displayData.map((entry, index) => (
-                  <Cell
-                    key={entry.ticker ?? index}
-                    fill={BAR_COLORS[index % BAR_COLORS.length]}
-                  />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+        <>
+          <div className="chart-wrapper">
+            <ResponsiveContainer>
+              <BarChart
+                data={displayData}
+                margin={{ top: 20, right: 20, left: 0, bottom: 60 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis
+                  dataKey="ticker"
+                  angle={-45}
+                  textAnchor="end"
+                  interval={0}
+                  minTickGap={10}
+                />
+                <YAxis />
+                <Tooltip />
+                <Bar dataKey="count">
+                  {displayData.map((entry, index) => (
+                    <Cell
+                      key={entry.ticker ?? index}
+                      fill={BAR_COLORS[index % BAR_COLORS.length]}
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Bottom-right meta text */}
+          <div className="chart-meta">
+            Top 20 (All) / Top 30 (Tracked)
+          </div>
+        </>
       )}
     </div>
   );

@@ -3,6 +3,8 @@ import { Link } from "react-router-dom";
 import { useRedditMentions } from "../../hooks/useRedditMentions";
 import StatSummary from "./StatSummary";
 import RedditMentionsChart from "../RedditMentionsChart";
+import "./DashboardPage.css";
+
 
 const INDEX_FUNDS = [
   {

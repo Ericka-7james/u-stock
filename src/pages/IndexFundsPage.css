@@ -1,0 +1,157 @@
+/* Panel/card container on Index Funds page */
+.panel {
+  background: #fbe1c3;
+  border-radius: 10px;
+  padding: 16px 18px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+  margin-bottom: 16px;
+}
+
+.panel h3 {
+  margin-top: 0;
+  margin-bottom: 8px;
+  color: #3d332c;
+}
+
+/* Grid of index fund cards */
+.fund-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+/* Individual fund cards – now same vibe as dashboard cards */
+.fund-card {
+  background: #fbe1c3;
+  border-radius: 10px;
+  padding: 12px 14px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+  border-top: 4px solid #d7b48a; /* default warm gold */
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.fund-card:hover {
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
+  transform: translateY(-2px);
+}
+
+/* Tabs for Index Funds page */
+.tabs {
+  display: inline-flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+/* Base tab button */
+.tab-btn {
+  border-radius: 16px;
+  border: 1px solid #b29678;
+  padding: 6px 14px;
+  font-size: 13px;
+  background: #fbe1c3;        /* soft peach, matches cards */
+  cursor: pointer;
+  color: #5a5247;
+  text-decoration: none;
+  transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+/* Hover state */
+.tab-btn:hover {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+  transform: translateY(-1px);
+}
+
+/* Active tab */
+.tab-btn--active {
+  background: #fef5e7;        /* lighter, “selected” feel */
+  font-weight: 600;
+}
+
+/* Alternate top border colors to match main stat cards */
+.fund-card:nth-child(1) {
+  border-top-color: #4e9ad8; /* blue */
+}
+.fund-card:nth-child(2) {
+  border-top-color: #f18b42; /* orange */
+}
+.fund-card:nth-child(3) {
+  border-top-color: #3fb8a5; /* teal */
+}
+.fund-card:nth-child(4) {
+  border-top-color: #d7b48a; /* warm gold */
+}
+.fund-card:nth-child(5) {
+  border-top-color: #b86b6b; /* rose clay */
+}
+
+.fund-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.fund-ticker {
+  font-size: 18px;
+  font-weight: 700;
+  color: #3d332c;
+}
+
+.fund-name {
+  font-size: 13px;
+  color: #5a5247;
+}
+
+.fund-blurb {
+  font-size: 13px;
+  color: #5a5247;
+  margin: 6px 0 10px;
+}
+
+.fund-mentions {
+  text-align: right;
+}
+
+.fund-mentions-count {
+  display: block;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.fund-mentions-label {
+  font-size: 11px;
+  color: #766f65;
+}
+
+/* Colorful emphasis for bold phrases in "What are index funds?" */
+.about-list {
+  margin-top: 12px;
+  padding-left: 18px;
+}
+
+.about-list li {
+  margin-bottom: 6px;
+}
+
+/* Default strong style */
+.about-list strong {
+  font-weight: 700;
+}
+
+/* Match first page accents per bullet */
+.about-list li:nth-child(1) strong {
+  color: #4e9ad8; /* blue */
+}
+
+.about-list li:nth-child(2) strong {
+  color: #f18b42; /* orange */
+}
+
+.about-list li:nth-child(3) strong {
+  color: #3fb8a5; /* teal */
+}
+
+.about-list li:nth-child(4) strong {
+  color: #6b4cb8; /* purple page-title color */
+}

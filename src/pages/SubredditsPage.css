@@ -1,0 +1,34 @@
+/* Card-style panel on Subreddits page */
+.panel {
+  background: #fbe1c3;
+  border-radius: 10px;
+  padding: 16px 18px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+  margin-top: 12px;
+}
+
+.panel h3 {
+  margin-top: 0;
+  margin-bottom: 8px;
+  color: #3d332c;
+}
+
+/* Subreddits page list styling */
+.subreddit-list {
+  list-style: none;
+  padding-left: 0;
+  margin-top: 8px;
+}
+
+.subreddit-list li {
+  margin-bottom: 4px;
+}
+
+.subreddit-list a {
+  color: #2f4b8f;
+  text-decoration: none;
+}
+
+.subreddit-list a:hover {
+  text-decoration: underline;
+}
