@@ -4,19 +4,31 @@
   background-color: #f6ddba;
 }
 
+/* Make sure the app fills the viewport cleanly */
+html,
 body {
   margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
   background: #f6ddba;
+}
+
+#root {
+  width: 100%;
+  height: 100%;
 }
 
 /* Shared page wrapper used by all main pages */
 .dashboard {
-  overflow: visible !important;
   position: relative;
   width: 100%;
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 32px 24px;
+
+  /* 💡 THIS is what keeps everything centered and wide, without being huge */
+  max-width: 1440px;
+  margin: 0 auto;          /* centers horizontally */
+
+  padding: 32px 40px;      /* fixed, predictable padding – no clamp, no vw */
   box-sizing: border-box;
 }
 

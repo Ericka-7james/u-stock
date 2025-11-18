@@ -32,7 +32,7 @@
 /* Stat summary row + cards */
 .stat-row {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 16px;
   margin-bottom: 24px;
 }
@@ -84,13 +84,6 @@
   box-shadow: 0 3px 6px rgba(0, 0, 0, 0.12);
 }
 
-/* Main grid: left filters, right chart */
-.dashboard-main {
-  display: grid;
-  grid-template-columns: 280px 1fr;
-  gap: 16px;
-}
-
 /* Chart panel */
 .panel.panel-chart {
   background: #fbe1c3;
@@ -116,10 +109,12 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;     /* allow wrapping on small screens */
+  row-gap: 8px;        /* vertical space when wrapped */
 }
 
 .card-header h2 {
-  margin: 0;
+  margin: 0 12px 0 0;
   font-size: 18px;
 }
 
@@ -130,6 +125,7 @@
 
 /* Toggle buttons for chart */
 .toggle-group {
+  margin-left: auto; 
   display: inline-flex;
   gap: 4px;
 }
@@ -254,3 +250,23 @@
   padding: 14px 0;
   opacity: 0.8;
 }
+
+/* On bigger screens, show filters + chart side-by-side */
+@media (min-width: 1024px) {
+  .dashboard-main {
+    grid-template-columns: 280px minmax(0, 1fr);
+  }
+}
+
+/* Small screens: stack everything in a single column */
+@media (max-width: 720px) {
+  .stat-row {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-main {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ### 📝 TODO: Improve large-screen (>1440px) layout behavior */
