@@ -6,9 +6,19 @@ import {
   Tooltip,
   ResponsiveContainer,
   CartesianGrid,
+  Cell, // ⬅️ NEW
 } from "recharts";
 import { TRACKED_TICKERS } from "../config/trackedTickers";
 import { useMemo, useState } from "react";
+
+const BAR_COLORS = [
+  "#b86b6b", // rose clay
+  "#c49a6c", // warm gold
+  "#4e9ad8", // soft blue
+  "#3fb8a5", // soft teal
+  "#f18b42", // orange
+  "#8c6f52", // cocoa brown
+];
 
 export default function RedditMentionsChart({ rawData, loading }) {
   const [viewMode, setViewMode] = useState("all"); // "all" | "tracked";
@@ -77,7 +87,14 @@ export default function RedditMentionsChart({ rawData, loading }) {
               />
               <YAxis />
               <Tooltip />
-              <Bar dataKey="count" />
+              <Bar dataKey="count">
+                {displayData.map((entry, index) => (
+                  <Cell
+                    key={entry.ticker ?? index}
+                    fill={BAR_COLORS[index % BAR_COLORS.length]}
+                  />
+                ))}
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>

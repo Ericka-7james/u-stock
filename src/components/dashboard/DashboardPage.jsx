@@ -60,20 +60,12 @@ export default function DashboardPage() {
     <div className="dashboard">
       <header className="dashboard-header">
         <div>
-          <h1>U-Stock Radar</h1>
+          <h1 className="page-title">U-Stock Radar</h1>
           <p className="muted">
             Live Reddit discussion snapshot for your watchlist and the wider
             market.
           </p>
         </div>
-        {meta && (
-          <div className="dashboard-header-meta">
-            Last updated:{" "}
-            <span>
-              {new Date(meta.generatedAt).toLocaleString()}
-            </span>
-          </div>
-        )}
       </header>
 
       <StatSummary meta={meta} rawData={rawData} />
@@ -81,7 +73,7 @@ export default function DashboardPage() {
       <main className="dashboard-main">
         <section className="panel panel-filters">
           {/* First card: Filters info */}
-          <div className="filters-card">
+          <div className="filters-card filters-card--filters">
             <h3>Filters (coming soon)</h3>
             <p className="muted">
               Here you’ll be able to filter by subreddit, minimum mentions, and
@@ -126,11 +118,20 @@ export default function DashboardPage() {
             )}
           </div>
         </section>
-
         <section className="panel panel-chart">
           <RedditMentionsChart rawData={rawData} loading={loading} />
         </section>
       </main>
+      {meta && (
+        <div className="dashboard-last-updated">
+          Last updated: {new Date(meta.generatedAt).toLocaleString()}
+        </div>
+      )}
+      
+      {/* Footer */}
+      <footer className="site-footer">
+        © {new Date().getFullYear()} U-Stock. All rights reserved.
+      </footer>
     </div>
   );
 }
