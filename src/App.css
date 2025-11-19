@@ -4,185 +4,41 @@
   background-color: #f6ddba;
 }
 
+/* Make sure the app fills the viewport cleanly */
+html,
 body {
   margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
   background: #f6ddba;
 }
 
+#root {
+  width: 100%;
+  height: 100%;
+}
+
+/* Shared page wrapper used by all main pages */
 .dashboard {
-  overflow: visible !important;
   position: relative;
   width: 100%;
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 32px 24px;
+
+  /* 💡 THIS is what keeps everything centered and wide, without being huge */
+  max-width: 1440px;
+  margin: 0 auto;          /* centers horizontally */
+
+  padding: 32px 40px;      /* fixed, predictable padding – no clamp, no vw */
   box-sizing: border-box;
 }
 
-.dashboard-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  margin-bottom: 24px;
-}
-
-.dashboard-header h1 {
-  margin: 0;
-  font-size: 32px;
-  letter-spacing: 0.05em;
-}
-
-.dashboard-header-meta span {
-  font-weight: 600;
-}
-
-.dashboard-header > div {
-  flex: 0 1 auto;   /* prevents full-width stretching */
-}
-
+/* Global muted text */
 .muted {
   color: #766f65;
   font-size: 14px;
 }
 
-.stat-row {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
-  margin-bottom: 24px;
-}
-
-.stat-card {
-  background: #fbe1c3;
-  border-radius: 10px;
-  padding: 16px 18px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
-}
-
-.stat-card--accent-blue {
-  border-top: 4px solid #4e9ad8;
-}
-
-.stat-card--accent-orange {
-  border-top: 4px solid #f18b42;
-}
-
-.stat-card--accent-teal {
-  border-top: 4px solid #3fb8a5;
-}
-
-.stat-label {
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  color: #766f65;
-}
-
-.stat-value {
-  font-size: 24px;
-  font-weight: 700;
-  margin: 6px 0;
-}
-
-.stat-caption {
-  font-size: 12px;
-  color: #7a7369;
-}
-
-.dashboard-main {
-  display: grid;
-  grid-template-columns: 280px 1fr;
-  gap: 16px;
-}
-
-.panel.panel-chart {
-  /* same base styling as other panels */
-  background: #fbe1c3;
-  border-radius: 10px;
-  padding: 16px 18px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
-}
-
-/* This is now just a layout wrapper, not a separate “card-on-card” */
-.card-main-chart {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  box-sizing: border-box;
-  padding: 4px 0 0 0; /* light spacing inside panel */
-}
-
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
-}
-
-.card-header h2 {
-  margin: 0;
-  font-size: 18px;
-}
-
-.chart-wrapper {
-  flex: 1;
-  min-height: 260px;
-}
-
-.toggle-group {
-  display: inline-flex;
-  gap: 4px;
-}
-
-.toggle-btn {
-  border-radius: 14px;
-  border: 1px solid #b29678;
-  padding: 4px 10px;
-  font-size: 12px;
-  background: transparent;
-  cursor: pointer;
-  color: #5a5247;
-}
-
-.toggle-btn--active {
-  background: #fef5e7;
-  font-weight: 600;
-}
-
-.chart-wrapper {
-  flex: 1;
-  min-height: 260px;
-}
-.stat-card--clickable {
-  cursor: pointer;
-  text-decoration: none;
-  color: inherit;
-}
-
-.stat-card--clickable:hover {
-  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.12);
-}
-
-/* Subreddits page list styling */
-.subreddit-list {
-  list-style: none;
-  padding-left: 0;
-  margin-top: 8px;
-}
-
-.subreddit-list li {
-  margin-bottom: 4px;
-}
-
-.subreddit-list a {
-  color: #2f4b8f;
-  text-decoration: none;
-}
-
-.subreddit-list a:hover {
-  text-decoration: underline;
-}
-
+/* Global back-link style */
 .back-link {
   font-size: 14px;
   text-decoration: none;
@@ -192,200 +48,4 @@ body {
 
 .back-link:hover {
   text-decoration: underline;
-}
-
-/* Tabs for Index Funds page */
-.tabs {
-  display: inline-flex;
-  gap: 8px;
-  margin-bottom: 16px;
-}
-
-.tab-btn {
-  border-radius: 16px;
-  border: 1px solid #b29678;
-  padding: 6px 14px;
-  font-size: 13px;
-  background: transparent;
-  cursor: pointer;
-  color: #5a5247;
-}
-
-.tab-btn--active {
-  background: #fef5e7;
-  font-weight: 600;
-}
-
-/* Index funds layout */
-.about-list {
-  margin-top: 12px;
-  padding-left: 18px;
-}
-
-.about-list li {
-  margin-bottom: 6px;
-}
-
-.fund-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 12px;
-  margin-top: 12px;
-}
-
-.fund-card {
-  background: #f8d4aa;
-  border-radius: 10px;
-  padding: 12px 14px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
-}
-
-.fund-card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 6px;
-}
-
-.fund-ticker {
-  font-size: 18px;
-  font-weight: 700;
-}
-
-.fund-name {
-  font-size: 13px;
-  color: #5a5247;
-}
-
-.fund-blurb {
-  font-size: 13px;
-  color: #5a5247;
-  margin: 6px 0 10px;
-}
-
-.fund-subreddits {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  align-items: center;
-}
-
-.fund-subreddits-label {
-  font-size: 12px;
-  color: #766f65;
-  margin-right: 4px;
-}
-
-.fund-subreddit-pill {
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: #fef5e7;
-  border: 1px solid #d1b894;
-}
-
-/* Link inside Filters panel */
-.panel-link {
-  display: inline-block;
-  margin-top: 10px;
-  font-size: 13px;
-  text-decoration: none;
-  color: #2f4b8f;
-}
-
-.panel-link:hover {
-  text-decoration: underline;
-}
-
-.panel.panel-filters {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-/* Tabs bar under Filters */
-.filters-tabs {
-  display: inline-flex;
-  gap: 8px;
-}
-
-/* Tab button + tab link share same base styling */
-.filters-tab {
-  border-radius: 16px;
-  border: 1px solid #b29678;
-  padding: 6px 14px;
-  font-size: 13px;
-  background: transparent;
-  cursor: pointer;
-  color: #5a5247;
-  text-decoration: none; /* works for Link and button */
-}
-
-.filters-tab--active {
-  background: #fef5e7;
-  font-weight: 600;
-}
-
-.filters-tab--link:hover {
-  background: rgba(254, 245, 231, 0.6);
-}
-
-/* Filters content card */
-.filters-card {
-  background: linear-gradient(135deg, #f8d4aa 0%, #fcd6b8 100%);
-  border-radius: 12px;
-  padding: 16px 18px;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.12);
-  transition: box-shadow 0.2s ease, transform 0.2s ease;
-}
-
-.filters-card:hover {
-  box-shadow: 0 4px 10px rgba(0,0,0,0.15);
-  transform: translateY(-2px);
-}
-
-.filters-card--index {
-  background: linear-gradient(135deg, #fbe1c3 0%, #ffe7d1 100%);
-  border-radius: 12px;
-  padding: 16px 18px;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.12);
-  transition: box-shadow 0.2s ease, transform 0.2s ease;
-}
-
-.filters-card--index:hover {
-  box-shadow: 0 4px 10px rgba(0,0,0,0.15);
-  transform: translateY(-2px);
-}
-
-.index-spotlight-ticker {
-  font-size: 20px;
-  font-weight: 800;
-  color: #3d332c; /* darker for contrast */
-}
-
-.index-spotlight-name {
-  font-size: 14px;
-  font-weight: 500;
-  color: #6b5a4a;
-}
-
-.index-spotlight-mentions {
-  font-size: 12px;
-  color: #8a7766;
-  margin-top: 4px;
-}
-
-.fund-mentions {
-  text-align: right;
-}
-
-.fund-mentions-count {
-  display: block;
-  font-size: 18px;
-  font-weight: 700;
-}
-
-.fund-mentions-label {
-  font-size: 11px;
-  color: #766f65;
 }

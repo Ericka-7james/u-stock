@@ -28,6 +28,10 @@ By blending multiple data sources and indicators, U-Stock helps you navigate the
 4. Run the dev server:
     ```bash 
     npm run dev -- --host 0.0.0.0 --port 5173
+    
+    OR
+    
+    npm run dev
 5. Open the forwarded port link to view the app.
 
 
