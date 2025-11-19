@@ -44,6 +44,7 @@ DEFAULT_OUTPUT_FILE = DEFAULT_OUTPUT_DIR / "fundamentals.json"
 
 # TODO: keep in sync with tracked tickers / UI config.
 DEFAULT_TICKERS = [
+    # Large-cap single names
     "AAPL",
     "MSFT",
     "TSLA",
@@ -51,6 +52,13 @@ DEFAULT_TICKERS = [
     "AMZN",
     "BRK-B",
     "JPM",
+
+    # Index funds (used on IndexFundsPage)
+    "VTI",
+    "VOO",
+    "VTSAX",
+    "FXAIX",
+    "SWTSX",
 ]
 
 

@@ -1,3 +1,4 @@
+// src/components/RedditMentionsChart.jsx
 import {
   BarChart,
   Bar,
@@ -8,8 +9,7 @@ import {
   CartesianGrid,
   Cell,
 } from "recharts";
-import { TRACKED_TICKERS } from "../config/trackedTickers";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 
 const BAR_COLORS = [
   "#b86b6b", // rose clay
@@ -21,69 +21,55 @@ const BAR_COLORS = [
 ];
 
 export default function RedditMentionsChart({ rawData, loading }) {
-  const [viewMode, setViewMode] = useState("all"); // "all" | "tracked";
-
+  // rawData should be the `data` array from reddit-mentions.json
   const displayData = useMemo(() => {
-    let data = Array.isArray(rawData) ? [...rawData] : [];
+    const data = Array.isArray(rawData) ? rawData : [];
+    // Just take the top 20 tickers from the snapshot
+    return data.slice(0, 20);
+  }, [rawData]);
 
-    if (viewMode === "tracked") {
-      const trackedSet = new Set(TRACKED_TICKERS.map((t) => t.toUpperCase()));
-      data = data.filter(
-        (item) => item?.ticker && trackedSet.has(item.ticker.toUpperCase())
-      );
-    }
+  if (loading) {
+    return <p className="muted">Loading Reddit mentions…</p>;
+  }
 
-    const limit = viewMode === "all" ? 20 : 30;
-    return data.slice(0, limit);
-  }, [rawData, viewMode]);
+  if (!loading && displayData.length === 0) {
+    return (
+      <p className="muted">
+        No ticker mentions were found in the latest snapshot.
+        <br />
+        Make sure the data scout pipeline ran successfully, for example:
+        <br />
+        <code>PYTHONPATH=src python -m data_scout.reddit</code> or{" "}
+        <code>PYTHONPATH=src python -m data_scout.run_all</code>.
+      </p>
+    );
+  }
 
   return (
-    <div className="card-main-chart">
-      {/* Header: title left, buttons right */}
-
-      {loading ? (
-        <p className="muted">Loading Reddit mentions…</p>
-      ) : displayData.length === 0 ? (
-        <p className="muted">
-          No data for this view. Try switching modes or run{" "}
-          <code>npm run fetch:reddit-mentions</code>.
-        </p>
-      ) : (
-        <>
-          <div className="chart-wrapper">
-            <ResponsiveContainer width="100%" height={320}>
-              <BarChart
-                data={displayData}
-                margin={{ top: 20, right: 20, left: 0, bottom: 60 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis
-                  dataKey="ticker"
-                  angle={-45}
-                  textAnchor="end"
-                  interval={0}
-                  minTickGap={10}
-                />
-                <YAxis />
-                <Tooltip />
-                <Bar dataKey="count">
-                  {displayData.map((entry, index) => (
-                    <Cell
-                      key={entry.ticker ?? index}
-                      fill={BAR_COLORS[index % BAR_COLORS.length]}
-                    />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* Bottom-right meta text */}
-          <div className="chart-meta">
-            Top 20 (All) / Top 30 (Tracked)
-          </div>
-        </>
-      )}
-    </div>
+    <ResponsiveContainer width="100%" height={320}>
+      <BarChart
+        data={displayData}
+        margin={{ top: 20, right: 20, left: 0, bottom: 60 }}
+      >
+        <CartesianGrid strokeDasharray="3 3" />
+        <XAxis
+          dataKey="ticker"
+          angle={-45}
+          textAnchor="end"
+          interval={0}
+          minTickGap={10}
+        />
+        <YAxis />
+        <Tooltip />
+        <Bar dataKey="count">
+          {displayData.map((entry, index) => (
+            <Cell
+              key={entry.ticker ?? index}
+              fill={BAR_COLORS[index % BAR_COLORS.length]}
+            />
+          ))}
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
   );
 }
