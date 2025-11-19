@@ -1,17 +1,14 @@
-/* Reuse global greens (if already defined in another file this is harmless) */
 :root {
   --ustock-green-main: #0f766e;
-  --ustock-green-soft: #bbf7d0;
 }
 
-/* Page wrapper tweak so it feels like a landing section */
-.subreddits-page {
+/* Wrapper tweaks */
+.data-sources-page {
   padding-bottom: 40px;
 }
 
-/* HERO SECTION – styled like a big dashboard card ------------------ */
-
-.subreddit-hero {
+/* HERO – like a big card */
+.data-hero {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -22,20 +19,25 @@
   background: #ffffff;
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
   border: 1px solid rgba(148, 163, 184, 0.25);
-  border-top: 4px solid var(--ustock-green-main); /* same green strip */
+  border-top: 4px solid var(--ustock-green-main);
 }
 
-.subreddit-hero-text h1.page-title {
+.data-hero-text h1.page-title {
   color: var(--ustock-green-main);
   margin-bottom: 4px;
-  text-transform: none;
 }
 
-.subreddit-hero-text .muted {
-  max-width: 420px;
+.data-hero-meta {
+  margin-top: 8px;
+  font-size: 13px;
+  color: #4b5563;
 }
 
-/* Back link styled as pill button */
+.data-hero-meta span {
+  font-weight: 600;
+}
+
+/* Back button pill */
 .back-link-pill {
   display: inline-flex;
   align-items: center;
@@ -58,92 +60,121 @@
   background: #f9fafb;
 }
 
-/* MAIN LAYOUT ------------------------------------------------------ */
-
-.subreddit-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.6fr);
-  gap: 20px;
-  align-items: flex-start;
-}
-
-/* summary card on the left – same style as filters cards */
-.subreddit-summary-card {
+/* SUMMARY CARD */
+.data-summary-card {
   background: #ffffff;
   border-radius: 18px;
   padding: 18px 20px;
+  margin-bottom: 20px;
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
-  border: 1px solid rgba(148, 163, 184, 0.26);
+  border: 1px solid rgba(148, 163, 184, 0.25);
   border-top: 4px solid var(--ustock-green-main);
 }
 
-.subreddit-summary-card h2 {
+.data-summary-card h2 {
   margin: 0 0 6px;
   font-size: 18px;
   color: #0f172a;
 }
 
-.highlight-count {
-  font-weight: 700;
-  color: var(--ustock-green-main);
+.loading-note {
+  font-size: 12px;
+  margin: 6px 0 12px;
 }
 
-/* grid of subreddit cards on the right – same card body feel -------- */
-
-.subreddit-card-grid {
+/* GRID OF CATEGORY CARDS */
+.data-section-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 18px;
+  align-items: flex-start;
 }
 
-/* individual subreddit card */
-.subreddit-card {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  padding: 14px 14px 12px;
-  border-radius: 16px;
-  text-decoration: none;
+/* Each category card */
+.data-card {
   background: #ffffff;
-  border: 1px solid rgba(148, 163, 184, 0.26);
+  border-radius: 18px;
+  padding: 16px 18px 18px;
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+  border: 1px solid rgba(148, 163, 184, 0.26);
   border-top: 4px solid var(--ustock-green-main);
-  transition: transform 0.15s ease, box-shadow 0.15s ease,
-    border-color 0.15s ease;
 }
 
-.subreddit-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.12);
-  border-color: var(--ustock-green-accent);
+.data-card h3 {
+  margin: 0 0 6px;
+  font-size: 16px;
+  color: #0f172a;
 }
 
-/* r/subreddit text pill */
-.subreddit-chip {
-  display: inline-flex;
+.data-card .small {
+  font-size: 12px;
+  margin-bottom: 10px;
+}
+
+/* List inside each category */
+.data-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.data-list li {
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.24);
+}
+
+.data-list li:last-child {
+  border-bottom: none;
+}
+
+.data-item-title {
+  display: flex;
   align-items: center;
-  padding: 6px 10px;
-  border-radius: 999px;
-  background: #ecfdf3;
-  color: var(--ustock-green-main);
-  font-size: 13px;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 14px;
   font-weight: 600;
+  color: #111827;
 }
 
-.subreddit-card-footer {
-  margin-top: 10px;
+.data-item-notes {
+  margin: 4px 0 0;
   font-size: 12px;
   color: #4b5563;
 }
 
-/* small screens: collapse columns */
+.data-item-link {
+  margin-top: 4px;
+  display: inline-block;
+  font-size: 12px;
+  color: #059669;
+  text-decoration: none;
+}
+
+.data-item-link:hover {
+  text-decoration: underline;
+}
+
+/* pills for roles / tiers */
+.data-pill {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  background: #ecfdf3;
+  color: #166534;
+  border: 1px solid rgba(22, 101, 52, 0.18);
+}
+
+.data-pill--outline {
+  background: transparent;
+  color: #0f766e;
+  border-color: rgba(15, 118, 110, 0.4);
+}
+
+/* Mobile tweaks */
 @media (max-width: 768px) {
-  .subreddit-hero {
+  .data-hero {
     flex-direction: column;
     align-items: flex-start;
-  }
-
-  .subreddit-layout {
-    grid-template-columns: 1fr;
   }
 }

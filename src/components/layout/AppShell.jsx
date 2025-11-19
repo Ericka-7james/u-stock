@@ -42,7 +42,7 @@ export default function AppShell({ children }) {
             }
           >
             <span className="side-nav-item-dot" />
-            Subreddits
+            Data Sources
           </Link>
 
           <Link
