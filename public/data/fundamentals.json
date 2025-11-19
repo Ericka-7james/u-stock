@@ -1,0 +1,105 @@
+{
+  "generatedAt": "2025-11-19T12:36:30.497217+00:00",
+  "universe": [
+    "AAPL",
+    "AMZN",
+    "BRK-B",
+    "GOOGL",
+    "JPM",
+    "MSFT",
+    "TSLA"
+  ],
+  "data": [
+    {
+      "ticker": "AAPL",
+      "pe": 35.849865,
+      "forwardPE": 32.18291,
+      "pb": 53.58445,
+      "roe": 1.7142199,
+      "roa": 0.22964,
+      "debtToEquity": 152.411,
+      "marketCap": 3968913899520,
+      "dividendYield": 0.39,
+      "sector": "Technology",
+      "industry": "Consumer Electronics"
+    },
+    {
+      "ticker": "AMZN",
+      "pe": 31.433617,
+      "forwardPE": 36.186993,
+      "pb": 6.4344983,
+      "roe": 0.24327,
+      "roa": 0.07495,
+      "debtToEquity": 43.405,
+      "marketCap": 2379107532800,
+      "dividendYield": null,
+      "sector": "Consumer Cyclical",
+      "industry": "Internet Retail"
+    },
+    {
+      "ticker": "BRK-B",
+      "pe": 16.129517,
+      "forwardPE": 25.118029,
+      "pb": 0.0010393502,
+      "roe": 0.1017,
+      "roa": 0.04775,
+      "debtToEquity": 18.166,
+      "marketCap": 1088094928896,
+      "dividendYield": null,
+      "sector": "Financial Services",
+      "industry": "Insurance - Diversified"
+    },
+    {
+      "ticker": "GOOGL",
+      "pe": 28.09091,
+      "forwardPE": 31.727678,
+      "pb": 8.874598,
+      "roe": 0.3545,
+      "roa": 0.16275999,
+      "debtToEquity": 11.424,
+      "marketCap": 3443233914880,
+      "dividendYield": 0.3,
+      "sector": "Communication Services",
+      "industry": "Internet Content & Information"
+    },
+    {
+      "ticker": "JPM",
+      "pe": 14.836967,
+      "forwardPE": 17.885902,
+      "pb": 2.3961043,
+      "roe": 0.16437,
+      "roa": 0.01323,
+      "debtToEquity": null,
+      "marketCap": 823303798784,
+      "dividendYield": 2.0,
+      "sector": "Financial Services",
+      "industry": "Banks - Diversified"
+    },
+    {
+      "ticker": "MSFT",
+      "pe": 35.095238,
+      "forwardPE": 33.029434,
+      "pb": 10.11036,
+      "roe": 0.32241002,
+      "roa": 0.14656,
+      "debtToEquity": 33.154,
+      "marketCap": 3670423371776,
+      "dividendYield": 0.74,
+      "sector": "Technology",
+      "industry": "Software - Infrastructure"
+    },
+    {
+      "ticker": "TSLA",
+      "pe": 278.6458,
+      "forwardPE": 123.84259,
+      "pb": 16.678444,
+      "roe": 0.06791,
+      "roa": 0.0235,
+      "debtToEquity": 17.082,
+      "marketCap": 1334484926464,
+      "dividendYield": null,
+      "sector": "Consumer Cyclical",
+      "industry": "Auto Manufacturers"
+    }
+  ]
+}

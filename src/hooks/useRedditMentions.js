@@ -9,7 +9,7 @@ export function useRedditMentions() {
   useEffect(() => {
     async function loadData() {
       try {
-        const res = await fetch("/reddit-mentions.json");
+        const res = await fetch("/data/reddit-mentions.json");
         if (!res.ok) {
           console.error("Failed to load reddit-mentions.json");
           setLoading(false);
