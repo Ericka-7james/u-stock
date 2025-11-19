@@ -10,9 +10,11 @@ import { FUNDAMENTAL_SOURCES } from "../config/fundamentalsSources";
 import { MACRO_SOURCES } from "../config/macroSources";
 import { REDDIT_SOURCES } from "../config/redditSources";
 import { TRACKED_TICKERS } from "../config/trackedTickers";
+import { useState } from "react";
 
 export default function SubredditsPage() {
   const { meta, loading } = useRedditMentions();
+  const [showCommunitiesModal, setShowCommunitiesModal] = useState(false);
 
   const totalPriceSources = PRICE_SOURCES?.length ?? 0;
   const totalFundamentalSources = FUNDAMENTAL_SOURCES?.length ?? 0;

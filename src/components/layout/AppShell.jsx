@@ -89,7 +89,7 @@ export default function AppShell({ children }) {
               <span className="hamburger-lines" />
             </button>
 
-            <Link to="/" className="topbar-home-link">
+            <Link to="/" className="topbar-home-link" onClick={() => setNavOpen(false)}>
               <span className="topbar-home-label">Home</span>
             </Link>
           </div>

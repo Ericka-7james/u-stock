@@ -201,7 +201,20 @@
   background: none;
   border: none;
   cursor: pointer;
+   /* 🔥 make it easier to click */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 40px;
+  height: 40px;
   padding: 0;
+
+  border-radius: 999px;
+}
+
+.hamburger-btn:hover {
+  background: rgba(15, 118, 110, 0.06); /* subtle hover ring */
 }
 
 /* clean 3 lines */
@@ -579,6 +592,16 @@
   display: inline-flex;
   align-items: center;
 }
+
+/* 
+===========================================
+TODO: Fix mobile sidebar drawer behavior
+===========================================
+
+Current issue:
+- On screens < 768px the sidebar overlaps the cards with no backdrop.
+
+*/
 
 /* Small screens */
 @media (max-width: 768px) {
