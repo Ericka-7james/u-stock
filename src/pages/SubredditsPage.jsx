@@ -171,6 +171,8 @@ export default function SubredditsPage() {
             </ul>
           </article>
 
+              
+          {/* TODO: Make it so only 3 communties show @ a time }
           {/* Reddit communities */}
           <article className="data-card">
             <h3>Reddit communities</h3>

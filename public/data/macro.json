@@ -1,0 +1,50 @@
+{
+  "generatedAt": "2025-11-19T13:37:35.364899+00:00",
+  "series": [
+    {
+      "id": "CPIAUCSL",
+      "label": "CPI (All Items)",
+      "latest": 324.368,
+      "lastUpdated": "2025-09-01",
+      "units": "Index 1982-1984=100",
+      "frequency": "Monthly",
+      "source": null
+    },
+    {
+      "id": "UNRATE",
+      "label": "Unemployment Rate",
+      "latest": 4.3,
+      "lastUpdated": "2025-08-01",
+      "units": "Percent",
+      "frequency": "Monthly",
+      "source": null
+    },
+    {
+      "id": "GDPC1",
+      "label": "Real GDP (Chained 2017 Dollars)",
+      "latest": 23770.976,
+      "lastUpdated": "2025-04-01",
+      "units": "Billions of Chained 2017 Dollars",
+      "frequency": "Quarterly",
+      "source": null
+    },
+    {
+      "id": "DFF",
+      "label": "Effective Federal Funds Rate",
+      "latest": 3.88,
+      "lastUpdated": "2025-11-17",
+      "units": "Percent",
+      "frequency": "Daily, 7-Day",
+      "source": null
+    },
+    {
+      "id": "M2SL",
+      "label": "M2 Money Stock",
+      "latest": 22212.5,
+      "lastUpdated": "2025-09-01",
+      "units": "Billions of Dollars",
+      "frequency": "Monthly",
+      "source": null
+    }
+  ]
+}

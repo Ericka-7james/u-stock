@@ -1,0 +1,49 @@
+{
+  "generatedAt": "2025-11-19T13:37:17.667724+00:00",
+  "universe": [
+    "AAPL",
+    "MSFT",
+    "SPY",
+    "TSLA",
+    "VOO",
+    "VTI"
+  ],
+  "data": [
+    {
+      "ticker": "AAPL",
+      "price": 267.44000244140625,
+      "currency": "USD",
+      "timestamp": "2025-11-19T13:37:16.968797+00:00"
+    },
+    {
+      "ticker": "MSFT",
+      "price": 493.7900085449219,
+      "currency": "USD",
+      "timestamp": "2025-11-19T13:37:17.126636+00:00"
+    },
+    {
+      "ticker": "SPY",
+      "price": 660.0800170898438,
+      "currency": "USD",
+      "timestamp": "2025-11-19T13:37:17.287079+00:00"
+    },
+    {
+      "ticker": "TSLA",
+      "price": 401.25,
+      "currency": "USD",
+      "timestamp": "2025-11-19T13:37:17.399039+00:00"
+    },
+    {
+      "ticker": "VOO",
+      "price": 607.0,
+      "currency": "USD",
+      "timestamp": "2025-11-19T13:37:17.525826+00:00"
+    },
+    {
+      "ticker": "VTI",
+      "price": 324.2200012207031,
+      "currency": "USD",
+      "timestamp": "2025-11-19T13:37:17.667715+00:00"
+    }
+  ]
+}

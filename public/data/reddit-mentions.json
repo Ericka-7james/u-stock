@@ -1,0 +1,54 @@
+{
+  "generatedAt": "2025-11-19T13:37:31.843042+00:00",
+  "windowDescription": "Last ~100 new posts per subreddit (OAuth API)",
+  "subreddits": [
+    "SecurityAnalysis",
+    "ValueInvesting",
+    "QualityInvesting",
+    "EconMonitor",
+    "ETFs",
+    "MacroEconomics",
+    "InvestorPsychology",
+    "Frugal",
+    "Unemployment",
+    "RealEstate",
+    "stocks",
+    "investing",
+    "wallstreetbets",
+    "cryptocurrency"
+  ],
+  "data": [
+    {
+      "ticker": "SPY",
+      "count": 36
+    },
+    {
+      "ticker": "VOO",
+      "count": 34
+    },
+    {
+      "ticker": "GOOGL",
+      "count": 18
+    },
+    {
+      "ticker": "VTI",
+      "count": 16
+    },
+    {
+      "ticker": "TSLA",
+      "count": 9
+    },
+    {
+      "ticker": "AAPL",
+      "count": 9
+    },
+    {
+      "ticker": "AMZN",
+      "count": 8
+    },
+    {
+      "ticker": "MSFT",
+      "count": 7
+    }
+  ]
+}

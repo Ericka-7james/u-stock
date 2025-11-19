@@ -257,3 +257,100 @@
 .index-about-panel strong {
   color: var(--ustock-green-main);
 }
+
+.fund-metric {
+  display: flex;
+  gap: 22px;
+  margin-top: 8px;
+}
+
+.fund-metric {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px; /* space between label + value */
+}
+
+.fund-metric-label {
+  font-weight: 600;
+  color: var(--ustock-green-main); /* theme green */
+  font-size: 15px;
+}
+
+.fund-metric-value {
+  font-size: 15px;
+  color: #111827; /* slate-900 */
+}
+
+.index-fundamentals-card {
+  background: #ffffff;
+  border-radius: 18px;
+  padding: 20px 22px;
+  margin-top: 16px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-top: 4px solid var(--ustock-green-main);
+}
+
+.index-fundamentals-card h3 {
+  margin-top: 0;
+  margin-bottom: 10px;
+  font-size: 20px;
+  color: var(--ustock-green-main);
+  font-weight: 700;
+}
+
+.fundamentals-explain p {
+  font-size: 14px;
+  color: #374151;
+  margin-bottom: 6px;
+}
+
+.metrics-list {
+  margin: 6px 0 12px;
+  padding-left: 20px;
+  font-size: 14px;
+  color: #4b5563;
+}
+
+.metrics-list li {
+  margin-bottom: 6px;
+}
+
+.metrics-list strong {
+  color: var(--ustock-green-main);
+}
+
+/* Title stays BLACK (default text color) */
+.fundamentals-title {
+  color: #0f172a; /* slate-900 */
+  margin-top: 0;
+  margin-bottom: 10px;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+/* Green headings inside card */
+.metric-heading {
+  font-weight: 700;
+  color: var(--ustock-green-main); /* your U-Stock green */
+}
+
+/* Body text within card */
+.fundamentals-explain p {
+  font-size: 14px;
+  color: #374151; /* gray-700 */
+  margin-bottom: 6px;
+}
+
+/* Bullet list styling */
+.metrics-list {
+  margin: 6px 0 12px;
+  padding-left: 20px;
+  font-size: 14px;
+  color: #4b5563; /* gray-600 */
+}
+
+.metrics-list li {
+  margin-bottom: 6px;
+}

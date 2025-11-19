@@ -2,9 +2,10 @@
 import { Link } from "react-router-dom";
 
 export default function StatSummary({ meta, rawData }) {
-  const totalMentions = rawData.reduce((sum, item) => sum + item.count, 0);
-  const topTicker = rawData[0]?.ticker ?? "—";
-  const topTickerCount = rawData[0]?.count ?? 0;
+  const list = Array.isArray(rawData) ? rawData : [];
+  const totalMentions = list.reduce((sum, item) => sum + (item.count || 0), 0);
+  const topTicker = list[0]?.ticker ?? "—";
+  const topTickerCount = list[0]?.count ?? 0;
 
   return (
     <div className="stat-row">
