@@ -1,34 +1,149 @@
-/* Card-style panel on Subreddits page */
-.panel {
-  background: #fbe1c3;
-  border-radius: 10px;
-  padding: 16px 18px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
-  margin-top: 12px;
+/* Reuse global greens (if already defined in another file this is harmless) */
+:root {
+  --ustock-green-main: #0f766e;
+  --ustock-green-soft: #bbf7d0;
 }
 
-.panel h3 {
-  margin-top: 0;
-  margin-bottom: 8px;
-  color: #3d332c;
+/* Page wrapper tweak so it feels like a landing section */
+.subreddits-page {
+  padding-bottom: 40px;
 }
 
-/* Subreddits page list styling */
-.subreddit-list {
-  list-style: none;
-  padding-left: 0;
-  margin-top: 8px;
+/* HERO SECTION – styled like a big dashboard card ------------------ */
+
+.subreddit-hero {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 22px;
+  margin-bottom: 24px;
+  border-radius: 18px;
+  background: #ffffff;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-top: 4px solid var(--ustock-green-main); /* same green strip */
 }
 
-.subreddit-list li {
+.subreddit-hero-text h1.page-title {
+  color: var(--ustock-green-main);
   margin-bottom: 4px;
+  text-transform: none;
 }
 
-.subreddit-list a {
-  color: #2f4b8f;
+.subreddit-hero-text .muted {
+  max-width: 420px;
+}
+
+/* Back link styled as pill button */
+.back-link-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(15, 118, 110, 0.15);
+  background: #ffffff;
+  color: var(--ustock-green-main);
+  font-size: 13px;
+  font-weight: 500;
   text-decoration: none;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
+  transition: transform 0.15s ease, box-shadow 0.15s ease,
+    background 0.15s ease;
 }
 
-.subreddit-list a:hover {
-  text-decoration: underline;
+.back-link-pill:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+  background: #f9fafb;
+}
+
+/* MAIN LAYOUT ------------------------------------------------------ */
+
+.subreddit-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.6fr);
+  gap: 20px;
+  align-items: flex-start;
+}
+
+/* summary card on the left – same style as filters cards */
+.subreddit-summary-card {
+  background: #ffffff;
+  border-radius: 18px;
+  padding: 18px 20px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+  border: 1px solid rgba(148, 163, 184, 0.26);
+  border-top: 4px solid var(--ustock-green-main);
+}
+
+.subreddit-summary-card h2 {
+  margin: 0 0 6px;
+  font-size: 18px;
+  color: #0f172a;
+}
+
+.highlight-count {
+  font-weight: 700;
+  color: var(--ustock-green-main);
+}
+
+/* grid of subreddit cards on the right – same card body feel -------- */
+
+.subreddit-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 14px;
+}
+
+/* individual subreddit card */
+.subreddit-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 14px 14px 12px;
+  border-radius: 16px;
+  text-decoration: none;
+  background: #ffffff;
+  border: 1px solid rgba(148, 163, 184, 0.26);
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+  border-top: 4px solid var(--ustock-green-main);
+  transition: transform 0.15s ease, box-shadow 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.subreddit-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.12);
+  border-color: var(--ustock-green-accent);
+}
+
+/* r/subreddit text pill */
+.subreddit-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #ecfdf3;
+  color: var(--ustock-green-main);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.subreddit-card-footer {
+  margin-top: 10px;
+  font-size: 12px;
+  color: #4b5563;
+}
+
+/* small screens: collapse columns */
+@media (max-width: 768px) {
+  .subreddit-hero {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .subreddit-layout {
+    grid-template-columns: 1fr;
+  }
 }

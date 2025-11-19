@@ -24,45 +24,22 @@ export default function RedditMentionsChart({ rawData, loading }) {
   const [viewMode, setViewMode] = useState("all"); // "all" | "tracked";
 
   const displayData = useMemo(() => {
-    let data = [...rawData];
+    let data = Array.isArray(rawData) ? [...rawData] : [];
 
     if (viewMode === "tracked") {
       const trackedSet = new Set(TRACKED_TICKERS.map((t) => t.toUpperCase()));
-      data = data.filter((item) => trackedSet.has(item.ticker.toUpperCase()));
+      data = data.filter(
+        (item) => item?.ticker && trackedSet.has(item.ticker.toUpperCase())
+      );
     }
 
-    const limit = viewMode === "all" ? 20 : 30; // fewer labels for "all"
+    const limit = viewMode === "all" ? 20 : 30;
     return data.slice(0, limit);
   }, [rawData, viewMode]);
 
   return (
     <div className="card-main-chart">
       {/* Header: title left, buttons right */}
-      <div className="card-header">
-        <h2>Reddit Ticker Mentions</h2>
-
-        <div className="toggle-group">
-          <button
-            type="button"
-            className={
-              "toggle-btn " + (viewMode === "all" ? "toggle-btn--active" : "")
-            }
-            onClick={() => setViewMode("all")}
-          >
-            All
-          </button>
-          <button
-            type="button"
-            className={
-              "toggle-btn " +
-              (viewMode === "tracked" ? "toggle-btn--active" : "")
-            }
-            onClick={() => setViewMode("tracked")}
-          >
-            Tracked
-          </button>
-        </div>
-      </div>
 
       {loading ? (
         <p className="muted">Loading Reddit mentions…</p>
@@ -74,7 +51,7 @@ export default function RedditMentionsChart({ rawData, loading }) {
       ) : (
         <>
           <div className="chart-wrapper">
-            <ResponsiveContainer>
+            <ResponsiveContainer width="100%" height={320}>
               <BarChart
                 data={displayData}
                 margin={{ top: 20, right: 20, left: 0, bottom: 60 }}

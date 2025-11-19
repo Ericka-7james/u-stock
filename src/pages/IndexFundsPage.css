@@ -1,88 +1,174 @@
-/* Panel/card container on Index Funds page */
-.panel {
-  background: #fbe1c3;
-  border-radius: 10px;
-  padding: 16px 18px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+/* Use same greens as rest of app */
+:root {
+  --ustock-green-main: #0f766e;
+  --ustock-green-soft: #bbf7d0;
+}
+
+/* Page wrapper */
+.index-funds-page {
+  padding-bottom: 40px;
+}
+
+/* HERO CARD -------------------------------------------------------- */
+
+.index-hero {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 22px;
+  margin-bottom: 20px;
+  border-radius: 18px;
+  background: #ffffff;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-top: 4px solid var(--ustock-green-main);
+}
+
+.index-hero-text .page-title {
+  margin-bottom: 4px;
+  color: var(--ustock-green-main);
+}
+
+.index-hero-text .muted {
+  max-width: 460px;
+}
+
+.index-hero-meta {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.index-hero-meta span {
+  font-weight: 600;
+  color: var(--ustock-green-main);
+}
+
+/* back link pill reused from Subreddits */
+.back-link-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(15, 118, 110, 0.15);
+  background: #ffffff;
+  color: var(--ustock-green-main);
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
+  transition: transform 0.15s ease, box-shadow 0.15s ease,
+    background 0.15s ease;
+}
+
+.back-link-pill:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+  background: #f9fafb;
+}
+
+/* TABS ------------------------------------------------------------- */
+
+.index-tabs-row {
   margin-bottom: 16px;
 }
 
-.panel h3 {
-  margin-top: 0;
-  margin-bottom: 8px;
-  color: #3d332c;
-}
-
-/* Grid of index fund cards */
-.fund-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 12px;
-  margin-top: 12px;
-}
-
-/* Individual fund cards – now same vibe as dashboard cards */
-.fund-card {
-  background: #fbe1c3;
-  border-radius: 10px;
-  padding: 12px 14px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
-  border-top: 4px solid #d7b48a; /* default warm gold */
-  transition: box-shadow 0.2s ease, transform 0.2s ease;
-}
-
-.fund-card:hover {
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
-  transform: translateY(-2px);
-}
-
-/* Tabs for Index Funds page */
 .tabs {
   display: inline-flex;
   gap: 8px;
-  margin-bottom: 16px;
 }
 
 /* Base tab button */
 .tab-btn {
-  border-radius: 16px;
-  border: 1px solid #b29678;
+  border-radius: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.7);
   padding: 6px 14px;
   font-size: 13px;
-  background: #fbe1c3;        /* soft peach, matches cards */
+  background: #ffffff;
   cursor: pointer;
-  color: #5a5247;
+  color: #4b5563;
   text-decoration: none;
-  transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+  transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease,
+    border-color 0.15s ease, color 0.15s ease;
 }
 
-/* Hover state */
 .tab-btn:hover {
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.12);
   transform: translateY(-1px);
 }
 
-/* Active tab */
 .tab-btn--active {
-  background: #fef5e7;        /* lighter, “selected” feel */
+  background: #ecfdf3;
+  border-color: var(--ustock-green-main);
+  color: var(--ustock-green-main);
   font-weight: 600;
 }
 
-/* Alternate top border colors to match main stat cards */
-.fund-card:nth-child(1) {
-  border-top-color: #4e9ad8; /* blue */
+/* MAIN CARDS ------------------------------------------------------- */
+
+.index-card {
+  background: #ffffff;
+  border-radius: 18px;
+  padding: 18px 20px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-top: 4px solid var(--ustock-green-main);
+  margin-bottom: 18px;
 }
-.fund-card:nth-child(2) {
-  border-top-color: #f18b42; /* orange */
+
+.index-about-card h2,
+.index-funds-card h2 {
+  margin-top: 0;
+  margin-bottom: 8px;
+  font-size: 18px;
+  color: #0f172a;
 }
-.fund-card:nth-child(3) {
-  border-top-color: #3fb8a5; /* teal */
+
+/* about list reused, but neutral colors */
+.about-list {
+  margin-top: 12px;
+  padding-left: 18px;
 }
-.fund-card:nth-child(4) {
-  border-top-color: #d7b48a; /* warm gold */
+
+.about-list li {
+  margin-bottom: 6px;
 }
-.fund-card:nth-child(5) {
-  border-top-color: #b86b6b; /* rose clay */
+
+.about-list strong {
+  font-weight: 700;
+  color: var(--ustock-green-main);
+}
+
+/* FUNDS GRID ------------------------------------------------------- */
+
+.index-funds-header {
+  margin-bottom: 12px;
+}
+
+.fund-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+  margin-top: 12px;
+}
+
+/* Individual fund card – match other cards */
+.fund-card {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 12px 14px;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-top: 4px solid var(--ustock-green-main);
+  transition: box-shadow 0.18s ease, transform 0.18s ease,
+    border-color 0.18s ease;
+}
+
+.fund-card:hover {
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.14);
+  transform: translateY(-2px);
+  border-color: var(--ustock-green-main);
 }
 
 .fund-card-header {
@@ -95,17 +181,17 @@
 .fund-ticker {
   font-size: 18px;
   font-weight: 700;
-  color: #3d332c;
+  color: #111827;
 }
 
 .fund-name {
   font-size: 13px;
-  color: #5a5247;
+  color: #4b5563;
 }
 
 .fund-blurb {
   font-size: 13px;
-  color: #5a5247;
+  color: #4b5563;
   margin: 6px 0 10px;
 }
 
@@ -117,41 +203,57 @@
   display: block;
   font-size: 18px;
   font-weight: 700;
+  color: #111827;
 }
 
 .fund-mentions-label {
   font-size: 11px;
-  color: #766f65;
+  color: #6b7280;
 }
 
-/* Colorful emphasis for bold phrases in "What are index funds?" */
-.about-list {
-  margin-top: 12px;
-  padding-left: 18px;
+/* responsive tweak */
+@media (max-width: 768px) {
+  .index-hero {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 }
 
-.about-list li {
-  margin-bottom: 6px;
+/* About card (What are index funds?) */
+.index-about-panel {
+  background: #ffffff;
+  border-radius: 18px;
+  padding: 20px 22px;
+  margin-top: 16px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-top: 4px solid var(--ustock-green-main);
 }
 
-/* Default strong style */
-.about-list strong {
-  font-weight: 700;
+.index-about-panel h3 {
+  margin-top: 0;
+  margin-bottom: 10px;
+  font-size: 20px;
+  color: #0f172a;
 }
 
-/* Match first page accents per bullet */
-.about-list li:nth-child(1) strong {
-  color: #4e9ad8; /* blue */
+.index-about-panel p {
+  margin-bottom: 14px;
+  font-size: 14px;
+  color: #4b5563;
 }
 
-.about-list li:nth-child(2) strong {
-  color: #f18b42; /* orange */
+.index-about-panel .about-list {
+  padding-left: 20px;
+  margin: 12px 0 16px;
 }
 
-.about-list li:nth-child(3) strong {
-  color: #3fb8a5; /* teal */
+.index-about-panel .about-list li {
+  margin-bottom: 8px;
+  font-size: 14px;
+  color: #374151;
 }
 
-.about-list li:nth-child(4) strong {
-  color: #6b4cb8; /* purple page-title color */
+.index-about-panel strong {
+  color: var(--ustock-green-main);
 }

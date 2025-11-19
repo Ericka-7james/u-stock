@@ -1,50 +1,65 @@
-// src/pages/SubredditsPage.jsx
 import { Link } from "react-router-dom";
 import { useRedditMentions } from "../hooks/useRedditMentions";
-import './SubredditsPage.css';
+import AppShell from "../components/layout/AppShell";
+import "./SubredditsPage.css";
 
 export default function SubredditsPage() {
   const { meta, loading } = useRedditMentions();
   const subreddits = meta?.subreddits ?? [];
 
   return (
-    <div className="dashboard">
-      <header className="dashboard-header">
-        <div>
-          <h1 className="page-title">Subreddit Breakdown</h1>
-          <p className="muted">
-            View which communities are included in this U-Stock radar snapshot.
-          </p>
-        </div>
+    <AppShell>
+      <div className="dashboard subreddits-page">
+        <header className="subreddit-hero">
+          <div className="subreddit-hero-text">
+            <h1 className="page-title">Subreddit breakdown</h1>
+            <p className="muted">
+              These are the communities feeding your current U-Stock radar
+              snapshot.
+            </p>
+          </div>
 
-        {/* Back link lives in the header, on the right */}
-        <Link to="/" className="back-link">
-          ← Back to dashboard
-        </Link>
-      </header>
+          <Link to="/" className="back-link-pill">
+            ← Back to dashboard
+          </Link>
+        </header>
 
-      {loading ? (
-        <p className="muted">Loading subreddit details…</p>
-      ) : subreddits.length === 0 ? (
-        <p className="muted">No subreddit metadata found.</p>
-      ) : (
-        <div className="panel">
-          <h3>Included subreddits</h3>
-          <ul className="subreddit-list">
-            {subreddits.map((sub) => (
-              <li key={sub}>
+        {loading ? (
+          <p className="muted">Loading subreddit details…</p>
+        ) : subreddits.length === 0 ? (
+          <p className="muted">No subreddit metadata found.</p>
+        ) : (
+          <section className="subreddit-layout">
+            <div className="subreddit-summary-card">
+              <h2>Communities in this snapshot</h2>
+              <p className="muted">
+                U-Stock is currently tracking{" "}
+                <span className="highlight-count">
+                  {subreddits.length}
+                </span>{" "}
+                subreddits for this pull.
+              </p>
+            </div>
+
+            <div className="subreddit-card-grid">
+              {subreddits.map((sub) => (
                 <a
+                  key={sub}
+                  className="subreddit-card"
                   href={`https://www.reddit.com/r/${sub}/`}
                   target="_blank"
                   rel="noreferrer"
                 >
-                  r/{sub}
+                  <div className="subreddit-chip">r/{sub}</div>
+                  <div className="subreddit-card-footer">
+                    Open on Reddit →
+                  </div>
                 </a>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-    </div>
+              ))}
+            </div>
+          </section>
+        )}
+      </div>
+    </AppShell>
   );
 }
