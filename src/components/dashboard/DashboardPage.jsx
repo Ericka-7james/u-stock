@@ -1,5 +1,5 @@
 // src/components/dashboard/DashboardPage.jsx
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useRedditMentions } from "../../hooks/useRedditMentions";
 import { usePricesSnapshot } from "../../hooks/usePricesSnapshot";
