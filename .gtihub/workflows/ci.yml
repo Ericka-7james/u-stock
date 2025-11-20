@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, feat/data-bot ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      # 1) Setup Node and run Node-side tasks (lint + vitest)
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Lint (ESLint)
+        run: npm run lint
+
+      - name: Frontend tests (Vitest + coverage)
+        run: npm run test:frontend -- --coverage
+
+      # 2) Setup Python and run backend tests (pytest + coverage)
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip
+          # If you already have requirements.txt, this is perfect:
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          else
+            # Fallback: install what data_scout needs
+            pip install pytest pytest-cov yfinance requests python-dotenv
+          fi
+
+      - name: Backend tests (pytest + coverage)
+        run: npm run test:backend

@@ -1,0 +1,63 @@
+name: Run Full Test Suite
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test-all:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        python-version: ['3.12']
+        node-version: ['20']
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # -------------------------
+      # 🔧 FRONTEND: Node + Vitest
+      # -------------------------
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix['node-version'] }}
+
+      - name: Install frontend deps
+        run: npm install
+
+      - name: Run Vitest with coverage
+        run: npm run test -- --coverage
+
+      # -------------------------
+      # 🐍 BACKEND: Python + PyTest
+      # -------------------------
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix['python-version'] }}
+
+      - name: Install backend deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest pytest-cov python-dotenv yfinance requests
+
+      - name: Run Pytest with coverage
+        run: pytest --cov=src/data_scout --cov-report=xml
+
+      # -------------------------
+      # 📊 Upload coverage artifacts (optional)
+      # -------------------------
+      - name: Upload frontend coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage
+          path: coverage/
+
+      - name: Upload backend coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: coverage.xml

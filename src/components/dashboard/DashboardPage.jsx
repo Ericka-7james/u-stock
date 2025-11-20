@@ -33,7 +33,6 @@ export default function DashboardPage() {
 
   const {
     series: macroSeries,
-    meta: macroMeta,
     loading: macroLoading,
   } = useMacroSnapshot();
 
