@@ -10,13 +10,11 @@
     "test:reddit-auth": "node scripts/test-reddit-auth.mjs",
     "fetch:reddit-mentions": "node scripts/fetch-reddit-mentions.mjs",
     "script": "node",
-
     "test": "vitest",
     "test:ui": "vitest --ui",
-
     "test:frontend": "vitest run",
     "test:backend": "pytest",
-    "test:all": "npm run test:frontend && npm run test:backend"
+    "test:all": "npm run test:frontend -- --coverage && npm run test:backend"
   },
   "dependencies": {
     "react": "^19.2.0",
@@ -31,6 +29,7 @@
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",
     "@vitejs/plugin-react": "^5.1.0",
+    "@vitest/coverage-v8": "^4.0.10",
     "@vitest/ui": "^4.0.10",
     "dotenv": "^17.2.3",
     "eslint": "^9.39.1",
