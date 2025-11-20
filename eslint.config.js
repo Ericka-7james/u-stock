@@ -26,4 +26,19 @@ export default defineConfig([
       'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
     },
   },
+
+  // 🔥 Vitest test environment
+  {
+    files: [
+      "**/*.test.js",
+      "**/*.test.jsx",
+      "**/__tests__/**/*.[jt]s?(x)",
+    ],
+    languageOptions: {
+      globals: {
+        ...globals.jest, // gives describe/it/expect
+        vi: "readonly",  // vitest mock function
+      },
+    },
+  },
 ])

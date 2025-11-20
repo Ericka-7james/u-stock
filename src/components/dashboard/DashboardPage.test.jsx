@@ -1,5 +1,5 @@
 // src/components/dashboard/DashboardPage.test.jsx
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import DashboardPage from "./DashboardPage";
 
@@ -175,6 +175,52 @@ describe("DashboardPage", () => {
     // Last updated footer exists (exact date string is locale-dependent)
     expect(
       screen.getByText(/last updated:/i)
+    ).toBeInTheDocument();
+  });
+
+  it("lets you switch to 'choose' mode and add ticker chips", () => {
+    useRedditMentions.mockReturnValue({
+      rawData: [
+        { ticker: "TSLA", count: 10 },
+        { ticker: "AAPL", count: 5 },
+      ],
+      meta: { windowDescription: "Last 24 hours", generatedAt: new Date().toISOString() },
+      loading: false,
+    });
+
+    usePricesSnapshot.mockReturnValue({
+      data: [],
+      meta: null,
+      loading: false,
+    });
+
+    useMacroSnapshot.mockReturnValue({
+      series: [],
+      meta: null,
+      loading: false,
+    });
+
+    render(
+      <MemoryRouter>
+        <DashboardPage />
+      </MemoryRouter>
+    );
+
+    // Switch the "View" select to "Choose…"
+    const select = screen.getByLabelText(/view/i);
+    fireEvent.change(select, { target: { value: "choose" } });
+
+    // Type a ticker that exists in this snapshot and press Enter
+    const input = screen.getByPlaceholderText(/type a ticker from this snapshot/i);
+    fireEvent.change(input, { target: { value: "TSLA" } });
+    fireEvent.keyDown(input, { key: "Enter", code: "Enter" });
+
+    // After adding, there should be a chip visible for TSLA
+    expect(screen.getByRole("button", { name: /tsla/i })).toBeInTheDocument();
+
+    // We should also see the helper text listing available tickers
+    expect(
+      screen.getByText(/available from this snapshot/i)
     ).toBeInTheDocument();
   });
 });

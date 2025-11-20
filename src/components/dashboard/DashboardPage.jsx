@@ -1,5 +1,5 @@
 // src/components/dashboard/DashboardPage.jsx
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useRedditMentions } from "../../hooks/useRedditMentions";
 import { usePricesSnapshot } from "../../hooks/usePricesSnapshot";
@@ -33,7 +33,6 @@ export default function DashboardPage() {
 
   const {
     series: macroSeries,
-    meta: macroMeta,
     loading: macroLoading,
   } = useMacroSnapshot();
 
