@@ -37,12 +37,12 @@ Your React frontend displays the radar; your Python backend (“Data Scout Bot�
 
 Create a file at the **root** of the project:
 
-    ### VITE_REDDIT_CLIENT_ID=xxxx
-    ### VITE_REDDIT_SECRET=xxxx
-    ### VITE_REDDIT_USERNAME=yourbot
-    ### VITE_REDDIT_PASSWORD= yourpassword
-    ### VITE_REDDIT_USER_AGENT=win:QuantaTrail/0.1
-    ### FRED API= yourfredapi
+    VITE_REDDIT_CLIENT_ID=xxxx
+    VITE_REDDIT_SECRET=xxxx
+    VITE_REDDIT_USERNAME=yourbot
+    VITE_REDDIT_PASSWORD= yourpassword
+    VITE_REDDIT_USER_AGENT=win:QuantaTrail/0.1
+    FRED API= yourfredapi
 
 ---
 
@@ -66,21 +66,6 @@ npm run dev
 
 ---
 
-## Testing Reddit OAuth
-
-### Ensure your Reddit credentials work:
-```bash
-npm run test:reddit-auth
-```
-
-### Expected
-```bash
-🔍 Testing Reddit credentials...
-✅ Reddit auth successful!
-```
-
----
-
 ## 🐍 Running the Data Scout Pipeline (Python)
 
 ### Set your PYTHONPATH:
@@ -94,10 +79,31 @@ PYTHONPATH=src python -m data_scout.run_all
 ```
 
 ### You’ll see:
-```bash
-▶ Prices
-▶ Reddit Mentions
-▶ Fundamentals
-▶ Macro
-📊 Final Summary
-```
+- `▶ Prices`
+- `▶ Reddit Mentions`
+- `▶ Fundamentals`
+- `▶ Macro`
+- `📊 Final Summary`
+
+---
+
+## Testing
+
+✅ **Frontend tests**
+
+- `npm run test` – run Vitest in Node
+- `npm run test:ui` – open the Vitest browser dashboard
+
+✅ **Backend tests**
+
+- `npm run test:backend` – run Python tests with pytest
+
+✅ **Run everything**
+
+- `npm run test:all` – runs frontend tests (Vitest) and then backend tests (pytest)
+
+✅ **Ensure your Reddit credentials work**
+
+- `npm run test:reddit-auth` – runs frontend tests (Vitest) and then backend tests (pytest)
+
+---
