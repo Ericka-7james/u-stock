@@ -154,18 +154,14 @@ def main(tickers: Iterable[str] | None = None) -> None:
     """
     CLI entry point.
 
-        PYTHONPATH=src python -m data_scout.fundamentals
+        python -m data_scout.fundamentals
     """
-    if tickers is None:
-        tickers = load_universe_tickers()
-    else:
-        tickers = list(tickers)
-
+    tickers = list(tickers) if tickers is not None else DEFAULT_TICKERS
     snapshot = fetch_fundamentals_snapshot(tickers)
     write_snapshot(snapshot)
     print(
-        f"[fundamentals] Wrote fundamentals for {len(snapshot['universe'])} tickers "
-        f"→ {DEFAULT_OUTPUT_FILE}"
+        f"[fundamentals] Wrote fundamentals for {len(snapshot['universe'])} "
+        f"tickers → {DEFAULT_OUTPUT_FILE}"
     )
 
 

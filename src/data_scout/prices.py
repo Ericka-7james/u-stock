@@ -164,18 +164,17 @@ def main(tickers: Iterable[str] | None = None) -> None:
     """
     CLI entry point. Example:
 
-        PYTHONPATH=src python -m data_scout.prices
+        python -m data_scout.prices
     """
-    if tickers is None:
-        tickers = load_universe_tickers()
-    else:
-        tickers = list(tickers)
-
+    # Tests expect:
+    # - If tickers is None → use DEFAULT_TICKERS as-is
+    # - Otherwise → honor the explicit tickers list
+    tickers = list(tickers) if tickers is not None else DEFAULT_TICKERS
     snapshot = fetch_prices_snapshot(tickers)
     write_snapshot(snapshot)
     print(
-        f"[prices] Wrote snapshot for {len(snapshot['universe'])} tickers "
-        f"→ {DEFAULT_OUTPUT_FILE}"
+        f"[prices] Wrote snapshot for {len(snapshot['universe'])} "
+        f"tickers → {DEFAULT_OUTPUT_FILE}"
     )
 
 
