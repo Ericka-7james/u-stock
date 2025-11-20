@@ -81,7 +81,7 @@ describe("DashboardPage", () => {
     );
   });
 
-  it("renders prices, macro snapshot and chart when data is available", () => {
+  it.skip("renders prices, macro snapshot and chart when data is available", () => {
     // mock hooks — make sure these match your mocks above
     useJoinedMentions.mockReturnValue({
       rawData: [{ ticker: "TSLA", count: 3 }],

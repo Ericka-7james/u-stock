@@ -40,7 +40,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "public" / "data"
 DEFAULT_OUTPUT_FILE = DEFAULT_OUTPUT_DIR / "news-mentions.json"
 
-from data_scout.config.news_sources import NEWS_SOURCES
+from config.news_sources import NEWS_SOURCES
 
 
 def ensure_output_dir(path: Path) -> None:
@@ -64,14 +64,11 @@ def build_news_corpus() -> Dict[str, str]:
     """
     corpus: Dict[str, str] = {}
 
-    for src in NEWS_SOURCES:
-        src_id = src["id"]
-        url = src["url"]
+    for src_id, url in NEWS_SOURCES.items():
         print(f"[news] Fetching RSS from {src_id} …")
         try:
             xml_text = fetch_rss_text(url)
-            # Super simple: just use entire XML as one big text blob.
-            # Later you can parse <title> and <description>.
+            # For now just treat the RSS XML as one big blob of text.
             corpus[src_id] = xml_text
         except Exception as exc:  # noqa: BLE001
             print(f"[news] Failed to fetch {src_id}: {exc}")
