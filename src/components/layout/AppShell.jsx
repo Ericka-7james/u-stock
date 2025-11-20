@@ -61,10 +61,6 @@ export default function AppShell({ children }) {
           </button>
           <button className="side-nav-item" type="button">
             <span className="side-nav-item-dot" />
-            Data Sources
-          </button>
-          <button className="side-nav-item" type="button">
-            <span className="side-nav-item-dot" />
             Settings
           </button>
         </nav>

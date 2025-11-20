@@ -52,9 +52,28 @@ def is_valid_symbol(sym: str) -> bool:
     return sym.upper() in load_symbol_universe()
 
 
-def filter_valid_symbols(symbols: Iterable[str]) -> List[str]:
+def filter_valid_symbols(
+    candidates: Iterable[str],
+    universe: Set[str] | None = None,
+) -> List[str]:
     """
-    Keep only valid symbols from an iterable.
+    Filter a list of candidate ticker strings down to those that are
+    in the given universe set.
+
+    If `universe` is None, this function will call load_symbol_universe()
+    internally. This keeps old one-arg usages working.
     """
-    uni = load_symbol_universe()
-    return [s.upper() for s in symbols if s and s.upper() in uni]
+    # Normalize candidates
+    norm = {c.upper().strip() for c in candidates if c and c.strip()}
+    if not norm:
+        return []
+
+    # Load universe lazily if not provided
+    if universe is None:
+        try:
+            universe = load_symbol_universe()
+        except Exception:
+            # Fall back to returning normalized candidates as-is
+            return sorted(norm)
+
+    return sorted(sym for sym in norm if sym in universe)
