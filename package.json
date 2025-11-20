@@ -17,7 +17,8 @@
     "test:all": "npm run test:frontend -- --coverage && npm run test:backend",
     "lint": "eslint . --ext .js,.jsx --max-warnings=0",
     "format": "prettier \"src/**/*.{js,jsx,json,css,md}\" --check",
-    "format:fix": "prettier \"src/**/*.{js,jsx,json,css,md}\" --write"
+    "format:fix": "prettier \"src/**/*.{js,jsx,json,css,md}\" --write",
+    "symbols:update": "PYTHONPATH=src python -m data_scout.update_symbols"
   },
   "dependencies": {
     "react": "^19.2.0",

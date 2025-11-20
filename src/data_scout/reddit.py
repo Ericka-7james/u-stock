@@ -36,7 +36,7 @@ from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Any, Iterable, List, Tuple
-from data_scout.symbols import filter_valid_symbols, load_symbol_universe
+from data_scout.symbols import load_symbol_universe, filter_valid_symbols
 import requests
 from dotenv import load_dotenv
 
@@ -212,30 +212,35 @@ def fetch_reddit_mentions(
     Build the full Reddit mentions snapshot.
     """
     subreddits_list = [s.strip().lstrip("r/") for s in subreddits if s.strip()]
-    tickers_list = sorted({t.upper().strip() for t in tickers if t.strip()})
+    raw_tickers_list = [t.upper().strip() for t in tickers if t.strip()]
+
+    # 🔒 Validate against symbol universe (if available)
+    validated_tickers = filter_valid_symbols(raw_tickers_list)
+    tickers_list = sorted(validated_tickers or raw_tickers_list)
 
     ticker_pattern = build_ticker_regex(tickers_list)
     aggregate_counts: Counter = Counter()
 
-        # At this point aggregate_counts may include acronyms, junk, etc.
-    # Apply symbol-universe filter to keep only real US tickers.
-    if aggregate_counts:
-        universe = load_symbol_universe()
-        if universe:
-            filtered_counts = {
-                t: c for t, c in aggregate_counts.items() if t.upper() in universe
-            }
-        else:
-            # No universe loaded → keep everything (fail soft)
-            filtered_counts = dict(aggregate_counts)
-    else:
-        filtered_counts = {}
+    for sub in subreddits_list:
+        print(f"[reddit] Fetching r/{sub} …")
+        posts = fetch_subreddit_posts(sub, token, user_agent, limit=posts_per_sub)
+        for post in posts:
+            title = post.get("title") or ""
+            selftext = post.get("selftext") or ""
+            combined = f"{title} {selftext}"
+            counts = count_mentions_in_text(combined, ticker_pattern)
+            aggregate_counts.update(counts)
+
+    # Optional: filter counts one more time for extra safety
+    universe = load_symbol_universe()
+    if universe:
+        aggregate_counts = Counter(
+            {t: c for t, c in aggregate_counts.items() if t.upper() in universe}
+        )
 
     data = [
         {"ticker": ticker, "count": int(count)}
-        for ticker, count in sorted(
-            filtered_counts.items(), key=lambda kv: kv[1], reverse=True
-        )
+        for ticker, count in aggregate_counts.most_common()
     ]
 
     snapshot = {
@@ -254,8 +259,21 @@ def write_snapshot(snapshot: Dict[str, Any], output_file: Path = DEFAULT_OUTPUT_
 
 
 def main(
-    subreddits: Iterable[str] | None = None,
-    tickers: Iterable[str] | None = None,
+    subreddits = list(subreddits) if subreddits is not None else DEFAULT_SUBREDDITS
+
+    if tickers is not None:
+        tickers_list = list(tickers)
+    else:
+        # ⭐ Prefer full symbol universe, fallback to small default
+        universe = load_symbol_universe()
+        if universe:
+            print(f"[reddit] Using full symbol universe ({len(universe)} tickers)")
+            tickers_list = sorted(universe)
+        else:
+            print("[reddit] No symbol CSV found. Falling back to DEFAULT_TICKERS.")
+            tickers_list = DEFAULT_TICKERS
+
+    snapshot = fetch_reddit_mentions(subreddits, tickers_list, token, user_agent)
 ) -> None:
     """
     CLI entry point.
