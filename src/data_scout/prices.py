@@ -33,10 +33,11 @@ from pathlib import Path
 from typing import Iterable, Dict, Any, List
 
 import yfinance as yf  # type: ignore
-
 from dotenv import load_dotenv
-load_dotenv(dotenv_path=".env.local")
 
+from data_scout.symbols import filter_valid_symbols
+
+load_dotenv(dotenv_path=".env.local")
 
 # TODO: keep in sync with frontend trackedTickers config.
 DEFAULT_TICKERS = [
@@ -51,10 +52,45 @@ DEFAULT_TICKERS = [
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "public" / "data"
 DEFAULT_OUTPUT_FILE = DEFAULT_OUTPUT_DIR / "prices.json"
+UNIVERSE_FILE = DEFAULT_OUTPUT_DIR / "ticker-universe.json"
 
 
 def ensure_output_dir(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True)
+
+
+def load_universe_tickers() -> List[str]:
+    """
+    Try to load dynamic tickers from ticker-universe.json.
+
+    Falls back to DEFAULT_TICKERS if the file is missing, invalid, or empty.
+
+    Expected schema:
+
+    {
+      "generatedAt": "...",
+      "tickers": ["TSLA", "AAPL", ...]
+      // or "universe": [...]
+    }
+    """
+    if not UNIVERSE_FILE.exists():
+        return DEFAULT_TICKERS
+
+    try:
+        with UNIVERSE_FILE.open("r", encoding="utf-8") as f:
+            payload = json.load(f)
+    except Exception:
+        return DEFAULT_TICKERS
+
+    raw = payload.get("tickers") or payload.get("universe") or []
+    tickers = sorted(
+        {
+            (t or "").strip().upper()
+            for t in raw
+            if (t or "").strip()
+        }
+    )
+    return tickers or DEFAULT_TICKERS
 
 
 def fetch_latest_price(ticker: str) -> Dict[str, Any]:
@@ -73,8 +109,14 @@ def fetch_latest_price(ticker: str) -> Dict[str, Any]:
 
         # Try fast_info first
         if info:
-            price = getattr(info, "last_price", None) or getattr(info, "last_price", None)
-            currency = getattr(info, "currency", None) or info.get("currency") if isinstance(info, dict) else None
+            # fast_info may be an object or dict depending on yfinance version
+            price = getattr(info, "last_price", None)
+            if price is None and isinstance(info, dict):
+                price = info.get("last_price")
+
+            currency = getattr(info, "currency", None)
+            if currency is None and isinstance(info, dict):
+                currency = info.get("currency")
 
         # Fallback to history
         if price is None:
@@ -122,12 +164,19 @@ def main(tickers: Iterable[str] | None = None) -> None:
     """
     CLI entry point. Example:
 
-        python -m data_scout.prices
+        PYTHONPATH=src python -m data_scout.prices
     """
-    tickers = list(tickers) if tickers is not None else DEFAULT_TICKERS
+    if tickers is None:
+        tickers = load_universe_tickers()
+    else:
+        tickers = list(tickers)
+
     snapshot = fetch_prices_snapshot(tickers)
     write_snapshot(snapshot)
-    print(f"[prices] Wrote snapshot for {len(snapshot['universe'])} tickers → {DEFAULT_OUTPUT_FILE}")
+    print(
+        f"[prices] Wrote snapshot for {len(snapshot['universe'])} tickers "
+        f"→ {DEFAULT_OUTPUT_FILE}"
+    )
 
 
 if __name__ == "__main__":

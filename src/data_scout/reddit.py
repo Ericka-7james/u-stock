@@ -36,7 +36,7 @@ from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Any, Iterable, List, Tuple
-
+from data_scout.symbols import filter_valid_symbols, load_symbol_universe
 import requests
 from dotenv import load_dotenv
 
@@ -217,19 +217,25 @@ def fetch_reddit_mentions(
     ticker_pattern = build_ticker_regex(tickers_list)
     aggregate_counts: Counter = Counter()
 
-    for sub in subreddits_list:
-        print(f"[reddit] Fetching r/{sub} …")
-        posts = fetch_subreddit_posts(sub, token, user_agent, limit=posts_per_sub)
-        for post in posts:
-            title = post.get("title") or ""
-            selftext = post.get("selftext") or ""
-            combined = f"{title} {selftext}"
-            counts = count_mentions_in_text(combined, ticker_pattern)
-            aggregate_counts.update(counts)
+        # At this point aggregate_counts may include acronyms, junk, etc.
+    # Apply symbol-universe filter to keep only real US tickers.
+    if aggregate_counts:
+        universe = load_symbol_universe()
+        if universe:
+            filtered_counts = {
+                t: c for t, c in aggregate_counts.items() if t.upper() in universe
+            }
+        else:
+            # No universe loaded → keep everything (fail soft)
+            filtered_counts = dict(aggregate_counts)
+    else:
+        filtered_counts = {}
 
     data = [
         {"ticker": ticker, "count": int(count)}
-        for ticker, count in aggregate_counts.most_common()
+        for ticker, count in sorted(
+            filtered_counts.items(), key=lambda kv: kv[1], reverse=True
+        )
     ]
 
     snapshot = {

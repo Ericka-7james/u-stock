@@ -33,14 +33,16 @@ from pathlib import Path
 from typing import Dict, Any, Iterable, List
 
 import yfinance as yf  # type: ignore
-
 from dotenv import load_dotenv
-load_dotenv(dotenv_path=".env.local")
 
+from data_scout.symbols import filter_valid_symbols
+
+load_dotenv(dotenv_path=".env.local")
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "public" / "data"
 DEFAULT_OUTPUT_FILE = DEFAULT_OUTPUT_DIR / "fundamentals.json"
+UNIVERSE_FILE = DEFAULT_OUTPUT_DIR / "ticker-universe.json"
 
 # TODO: keep in sync with tracked tickers / UI config.
 DEFAULT_TICKERS = [
@@ -64,6 +66,32 @@ DEFAULT_TICKERS = [
 
 def ensure_output_dir(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True)
+
+
+def load_universe_tickers() -> List[str]:
+    """
+    Try to load dynamic tickers from ticker-universe.json.
+
+    Falls back to DEFAULT_TICKERS if the file is missing, invalid, or empty.
+    """
+    if not UNIVERSE_FILE.exists():
+        return DEFAULT_TICKERS
+
+    try:
+        with UNIVERSE_FILE.open("r", encoding="utf-8") as f:
+            payload = json.load(f)
+    except Exception:
+        return DEFAULT_TICKERS
+
+    raw = payload.get("tickers") or payload.get("universe") or []
+    tickers = sorted(
+        {
+            (t or "").strip().upper()
+            for t in raw
+            if (t or "").strip()
+        }
+    )
+    return tickers or DEFAULT_TICKERS
 
 
 def fetch_fundamentals_for_ticker(ticker: str) -> Dict[str, Any]:
@@ -126,12 +154,19 @@ def main(tickers: Iterable[str] | None = None) -> None:
     """
     CLI entry point.
 
-        python -m data_scout.fundamentals
+        PYTHONPATH=src python -m data_scout.fundamentals
     """
-    tickers = list(tickers) if tickers is not None else DEFAULT_TICKERS
+    if tickers is None:
+        tickers = load_universe_tickers()
+    else:
+        tickers = list(tickers)
+
     snapshot = fetch_fundamentals_snapshot(tickers)
     write_snapshot(snapshot)
-    print(f"[fundamentals] Wrote fundamentals for {len(snapshot['universe'])} tickers → {DEFAULT_OUTPUT_FILE}")
+    print(
+        f"[fundamentals] Wrote fundamentals for {len(snapshot['universe'])} tickers "
+        f"→ {DEFAULT_OUTPUT_FILE}"
+    )
 
 
 if __name__ == "__main__":

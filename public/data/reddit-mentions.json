@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2025-11-19T13:37:31.843042+00:00",
+  "generatedAt": "2025-11-20T17:51:09.099449+00:00",
   "windowDescription": "Last ~100 new posts per subreddit (OAuth API)",
   "subreddits": [
     "SecurityAnalysis",
@@ -19,36 +19,36 @@
   ],
   "data": [
     {
-      "ticker": "SPY",
-      "count": 36
-    },
-    {
       "ticker": "VOO",
-      "count": 34
-    },
-    {
-      "ticker": "GOOGL",
-      "count": 18
+      "count": 32
     },
     {
       "ticker": "VTI",
-      "count": 16
+      "count": 27
     },
     {
-      "ticker": "TSLA",
-      "count": 9
+      "ticker": "SPY",
+      "count": 26
     },
     {
-      "ticker": "AAPL",
-      "count": 9
+      "ticker": "GOOGL",
+      "count": 12
     },
     {
       "ticker": "AMZN",
       "count": 8
     },
     {
-      "ticker": "MSFT",
+      "ticker": "TSLA",
       "count": 7
+    },
+    {
+      "ticker": "MSFT",
+      "count": 6
+    },
+    {
+      "ticker": "AAPL",
+      "count": 4
     }
   ]
 }
