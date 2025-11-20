@@ -1,9 +1,12 @@
 // src/components/dashboard/DashboardPage.jsx
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+
 import { useJoinedMentions } from "../../hooks/useJoinedMentions";
+import { useRedditMentions } from "../../hooks/useRedditMentions";
 import { usePricesSnapshot } from "../../hooks/usePricesSnapshot";
 import { useMacroSnapshot } from "../../hooks/useMacroSnapshot";
+
 import StatSummary from "./StatSummary";
 import RedditMentionsChart from "../RedditMentionsChart";
 import AppShell from "../layout/AppShell";
@@ -21,10 +24,17 @@ const INDEX_FUNDS = [
 ];
 
 export default function DashboardPage() {
-  // Joined snapshot: Reddit + news
-  const { rawData, meta, loading } = useJoinedMentions();
+  // Reddit snapshot – used for StatSummary + index spotlight
+  const { rawData, meta, loading } = useRedditMentions();
 
-  // NEW: prices + macro snapshots
+  // Joined mentions (Reddit + news) – used for the main chart
+  const {
+    rawData: joinedRaw,
+    meta: joinedMeta,
+    loading: joinedLoading,
+  } = useJoinedMentions();
+
+  // Prices + macro snapshots
   const {
     data: priceRows,
     meta: pricesMeta,
@@ -36,12 +46,12 @@ export default function DashboardPage() {
     loading: macroLoading,
   } = useMacroSnapshot();
 
-  // chart state
+  // Chart state
   const [tickerMode, setTickerMode] = useState("all"); // "all" | "track" | "choose"
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedTickers, setSelectedTickers] = useState([]);
 
-  // Map ticker -> mentions from snapshot.data
+  // Map ticker -> mentions from *reddit* snapshot (for index fund spotlight)
   const mentionMap = useMemo(() => {
     const map = {};
     const data = Array.isArray(rawData) ? rawData : [];
@@ -52,16 +62,16 @@ export default function DashboardPage() {
     return map;
   }, [rawData]);
 
-  // All tickers in this snapshot (for autocomplete)
+  // All tickers from the *joined* snapshot (for choose mode autocomplete)
   const allTickers = useMemo(() => {
-    const data = Array.isArray(rawData) ? rawData : [];
+    const data = Array.isArray(joinedRaw) ? joinedRaw : [];
     const set = new Set();
     for (const item of data) {
       if (!item?.ticker) continue;
       set.add(item.ticker.toUpperCase());
     }
     return Array.from(set).sort();
-  }, [rawData]);
+  }, [joinedRaw]);
 
   // Suggestions for "choose" mode
   const suggestions = useMemo(() => {
@@ -81,24 +91,24 @@ export default function DashboardPage() {
     setSearchTerm("");
   };
 
-  // Data that actually gets graphed
+  // Data that actually gets graphed – from *joined* snapshot
   const filteredRawData = useMemo(() => {
-    const data = Array.isArray(rawData) ? rawData : [];
+    const data = Array.isArray(joinedRaw) ? joinedRaw : [];
 
     if (tickerMode === "choose" && selectedTickers.length > 0) {
       const selectedSet = new Set(
-        selectedTickers.map((t) => t.toUpperCase().trim())
+        selectedTickers.map((t) => t.toUpperCase().trim()),
       );
       return data.filter((item) =>
-        selectedSet.has(item.ticker.toUpperCase())
+        selectedSet.has(item.ticker.toUpperCase()),
       );
     }
 
-    // For now, "all" and "track" behave the same (you can customize later)
+    // "all" and "track" currently behave the same
     return data;
-  }, [rawData, tickerMode, selectedTickers]);
+  }, [joinedRaw, tickerMode, selectedTickers]);
 
-  // Spotlight: which of your index funds has the most mentions?
+  // Spotlight: which of your index funds has the most Reddit mentions?
   const topIndexFund = useMemo(() => {
     let best = null;
     for (const fund of INDEX_FUNDS) {
@@ -143,7 +153,11 @@ export default function DashboardPage() {
   return (
     <AppShell>
       <div className="dashboard">
-        <StatSummary meta={meta} rawData={Array.isArray(rawData) ? rawData : []} />
+        {/* Stat summary from Reddit snapshot only */}
+        <StatSummary
+          meta={meta}
+          rawData={Array.isArray(rawData) ? rawData : []}
+        />
 
         <main className="dashboard-main">
           {/* LEFT column – filters + index funds + prices + macro */}
@@ -192,7 +206,7 @@ export default function DashboardPage() {
               )}
             </div>
 
-            {/* NEW: Prices mini-table */}
+            {/* Prices mini-table */}
             <div className="filters-card filters-card--prices">
               <div className="filters-card-header">
                 <h3 className="panel-title">Live prices (snapshot)</h3>
@@ -228,13 +242,13 @@ export default function DashboardPage() {
                   </table>
 
                   <button
-                type="button"
-                className="panel-link macro-link-btn"
-                disabled
-              >
-                View details → (soon)
-              </button>
-              
+                    type="button"
+                    className="panel-link macro-link-btn"
+                    disabled
+                  >
+                    View details → (soon)
+                  </button>
+
                   {pricesMeta?.generatedAt && (
                     <p className="mini-table-caption muted">
                       Snapshot:{" "}
@@ -243,10 +257,9 @@ export default function DashboardPage() {
                   )}
                 </>
               )}
-
             </div>
 
-            {/* NEW: Macro snapshot tile */}
+            {/* Macro snapshot tile */}
             <div className="filters-card filters-card--macro">
               <div className="filters-card-header">
                 <h3 className="panel-title">Macro snapshot</h3>
@@ -270,7 +283,9 @@ export default function DashboardPage() {
                     <div className="macro-pill">
                       <div className="macro-label">Unemployment rate</div>
                       <div className="macro-value">
-                        {unrate?.latest != null ? `${unrate.latest.toFixed(1)}%` : "—"}
+                        {unrate?.latest != null
+                          ? `${unrate.latest.toFixed(1)}%`
+                          : "—"}
                       </div>
                       <div className="macro-meta">
                         {unrate?.lastUpdated ?? "No date"}
@@ -280,7 +295,9 @@ export default function DashboardPage() {
                     <div className="macro-pill">
                       <div className="macro-label">Fed funds rate</div>
                       <div className="macro-value">
-                        {fedFunds?.latest != null ? fedFunds.latest.toFixed(2) : "—"}
+                        {fedFunds?.latest != null
+                          ? fedFunds.latest.toFixed(2)
+                          : "—"}
                       </div>
                       <div className="macro-meta">
                         {fedFunds?.lastUpdated ?? "No date"}
@@ -307,7 +324,8 @@ export default function DashboardPage() {
                 <div>
                   <h2>Mentions across Reddit + news</h2>
                   <p className="card-subtitle">
-                    Combined signal from communities and feeds in your latest U-Stock data scout pull.
+                    Combined signal from communities and feeds in your latest
+                    U-Stock data scout pull.
                   </p>
                 </div>
 
@@ -383,13 +401,15 @@ export default function DashboardPage() {
               <div className="chart-wrapper">
                 <RedditMentionsChart
                   rawData={filteredRawData}
-                  loading={loading}
+                  loading={joinedLoading}
                 />
               </div>
 
-              {meta && (
+              {joinedMeta && (
                 <div className="chart-meta">
-                  Snapshot window: {meta.windowDescription ?? "Latest pull"}
+                  Source: reddit + news{" · "}
+                  Snapshot window:{" "}
+                  {joinedMeta.windowDescription ?? "Latest pull"}
                 </div>
               )}
             </div>

@@ -49,35 +49,6 @@ DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "public" / "data"
 DEFAULT_OUTPUT_FILE = DEFAULT_OUTPUT_DIR / "reddit-mentions.json"
 
 
-# Keep these in sync with config/redditSources.js
-DEFAULT_SUBREDDITS = [
-    "SecurityAnalysis",
-    "ValueInvesting",
-    "QualityInvesting",
-    "EconMonitor",
-    "ETFs",
-    "MacroEconomics",
-    "InvestorPsychology",
-    "Frugal",
-    "Unemployment",
-    "RealEstate",
-    "stocks",
-    "investing",
-    "wallstreetbets",
-    "cryptocurrency",
-]
-
-# Keep in sync with config/trackedTickers.js
-DEFAULT_TICKERS = [
-    "AAPL",
-    "MSFT",
-    "TSLA",
-    "GOOGL",
-    "AMZN",
-    "SPY",
-    "VTI",
-    "VOO",
-]
 
 
 def ensure_output_dir(path: Path) -> None:

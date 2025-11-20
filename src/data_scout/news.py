@@ -40,19 +40,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "public" / "data"
 DEFAULT_OUTPUT_FILE = DEFAULT_OUTPUT_DIR / "news-mentions.json"
 
-NEWS_SOURCES = [
-    {
-        "id": "yf_top",
-        "label": "Yahoo Finance - Top Stories",
-        "url": "https://feeds.finance.yahoo.com/rss/2.0/headline?s=^GSPC&region=US&lang=en-US",
-    },
-    {
-        "id": "yf_trending",
-        "label": "Yahoo Finance - Trending Tickers",
-        "url": "https://feeds.finance.yahoo.com/rss/2.0/headline?s=AAPL,MSFT,TSLA,AMZN&region=US&lang=en-US",
-    },
-    # You can add MarketWatch, CNBC etc here later.
-]
+from data_scout.config.news_sources import NEWS_SOURCES
 
 
 def ensure_output_dir(path: Path) -> None:
@@ -137,7 +125,10 @@ def fetch_news_mentions(tickers: Iterable[str]) -> Dict[str, Any]:
 
     return {
         "generatedAt": datetime.now(timezone.utc).isoformat(),
-        "sources": NEWS_SOURCES,
+        "sources": [
+            {"id": sid, "label": sid, "url": url}
+            for sid, url in NEWS_SOURCES.items()
+        ],
         "data": data,
     }
 
