@@ -4,8 +4,8 @@ import { MemoryRouter } from "react-router-dom";
 import DashboardPage from "./DashboardPage";
 
 // 🔧 Mock hooks so we fully control the data/loading states
-vi.mock("../../hooks/useRedditMentions", () => ({
-  useRedditMentions: vi.fn(),
+vi.mock("../../hooks/useJoinedMentions", () => ({
+  useJoinedMentions: vi.fn(),
 }));
 
 vi.mock("../../hooks/usePricesSnapshot", () => ({
@@ -34,7 +34,7 @@ vi.mock("../RedditMentionsChart", () => ({
 }));
 
 // Grab the mocked hook functions so we can set return values
-import { useRedditMentions } from "../../hooks/useRedditMentions";
+import { useJoinedMentions } from "../../hooks/useJoinedMentions";
 import { usePricesSnapshot } from "../../hooks/usePricesSnapshot";
 import { useMacroSnapshot } from "../../hooks/useMacroSnapshot";
 
@@ -44,7 +44,7 @@ describe("DashboardPage", () => {
   });
 
   it("shows loading states when data is still loading", () => {
-    useRedditMentions.mockReturnValue({
+    useJoinedMentions.mockReturnValue({
       rawData: [],
       meta: null,
       loading: true,
@@ -83,7 +83,7 @@ describe("DashboardPage", () => {
 
   it("renders spotlight, prices, macro snapshot and chart when data is available", () => {
     // Reddit mentions snapshot including an index fund
-    useRedditMentions.mockReturnValue({
+    useJoinedMentions.mockReturnValue({
       rawData: [
         { ticker: "VTI", count: 5 },
         { ticker: "VOO", count: 2 },
@@ -179,7 +179,7 @@ describe("DashboardPage", () => {
   });
 
   it("lets you switch to 'choose' mode and add ticker chips", () => {
-    useRedditMentions.mockReturnValue({
+    useJoinedMentions.mockReturnValue({
       rawData: [
         { ticker: "TSLA", count: 10 },
         { ticker: "AAPL", count: 5 },

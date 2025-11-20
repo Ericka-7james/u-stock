@@ -1,7 +1,7 @@
 // src/components/dashboard/DashboardPage.jsx
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { useRedditMentions } from "../../hooks/useRedditMentions";
+import { useJoinedMentions } from "../../hooks/useJoinedMentions";
 import { usePricesSnapshot } from "../../hooks/usePricesSnapshot";
 import { useMacroSnapshot } from "../../hooks/useMacroSnapshot";
 import StatSummary from "./StatSummary";
@@ -21,8 +21,8 @@ const INDEX_FUNDS = [
 ];
 
 export default function DashboardPage() {
-  // Reddit snapshot (existing)
-  const { rawData, meta, loading } = useRedditMentions();
+  // Joined snapshot: Reddit + news
+  const { rawData, meta, loading } = useJoinedMentions();
 
   // NEW: prices + macro snapshots
   const {
@@ -305,9 +305,9 @@ export default function DashboardPage() {
             <div className="card-main-chart">
               <div className="card-header">
                 <div>
-                  <h2>Reddit mentions over time</h2>
+                  <h2>Mentions across Reddit + news</h2>
                   <p className="card-subtitle">
-                    High-signal tickers from the latest U-Stock data scout pull.
+                    Combined signal from communities and feeds in your latest U-Stock data scout pull.
                   </p>
                 </div>
 
