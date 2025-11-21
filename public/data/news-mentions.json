@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2025-11-21T21:17:40.935351+00:00",
+  "generatedAt": "2025-11-21T21:48:33.439620+00:00",
   "sources": [
     {
       "id": "yf_top",
@@ -32,21 +32,6 @@
       "url": "https://feeds.marketwatch.com/marketwatch/marketpulse/"
     },
     {
-      "id": "cnbc_top",
-      "label": "CNBC \u2013 Top News",
-      "url": "https://www.cnbc.com/id/100003114/device/rss/rss.html"
-    },
-    {
-      "id": "cnbc_markets",
-      "label": "CNBC \u2013 Markets",
-      "url": "https://www.cnbc.com/id/10001147/device/rss/rss.html"
-    },
-    {
-      "id": "wsj_markets",
-      "label": "WSJ \u2013 Markets",
-      "url": "https://feeds.a.dj.com/rss/RSSMarketsMain"
-    },
-    {
       "id": "ft_frontpage",
       "label": "Financial Times \u2013 Front Page",
       "url": "https://www.ft.com/?format=rss"
@@ -69,12 +54,12 @@
   ],
   "data": [
     {
-      "ticker": "LINK",
+      "ticker": "COM",
       "count": 129
     },
     {
-      "ticker": "COM",
-      "count": 111
+      "ticker": "LINK",
+      "count": 129
     },
     {
       "ticker": "DC",
@@ -106,43 +91,43 @@
     },
     {
       "ticker": "S",
-      "count": 35
+      "count": 37
     },
     {
-      "ticker": "A",
-      "count": 29
+      "ticker": "FOR",
+      "count": 30
     },
     {
       "ticker": "FT",
       "count": 29
     },
     {
-      "ticker": "FOR",
-      "count": 25
+      "ticker": "A",
+      "count": 21
     },
     {
       "ticker": "NET",
       "count": 21
     },
     {
-      "ticker": "NEXT",
-      "count": 17
+      "ticker": "IT",
+      "count": 20
     },
     {
-      "ticker": "IT",
-      "count": 17
+      "ticker": "U",
+      "count": 15
     },
     {
       "ticker": "ON",
-      "count": 16
+      "count": 14
+    },
+    {
+      "ticker": "NEXT",
+      "count": 14
     },
     {
       "ticker": "AS",
       "count": 11
-    },
-    {
-      "ticker": "U",
-      "count": 10
     },
     {
       "ticker": "ARE",
@@ -153,11 +138,15 @@
       "count": 9
     },
     {
-      "ticker": "ALL",
-      "count": 7
+      "ticker": "OR",
+      "count": 9
     },
     {
-      "ticker": "DAY",
+      "ticker": "UP",
+      "count": 8
+    },
+    {
+      "ticker": "ALL",
       "count": 7
     },
     {
@@ -169,11 +158,7 @@
       "count": 7
     },
     {
-      "ticker": "OR",
-      "count": 7
-    },
-    {
-      "ticker": "T",
+      "ticker": "AI",
       "count": 6
     },
     {
@@ -185,7 +170,15 @@
       "count": 6
     },
     {
-      "ticker": "UP",
+      "ticker": "HAS",
+      "count": 6
+    },
+    {
+      "ticker": "USD",
+      "count": 6
+    },
+    {
+      "ticker": "T",
       "count": 5
     },
     {
@@ -193,12 +186,12 @@
       "count": 5
     },
     {
-      "ticker": "VICI",
+      "ticker": "TIME",
       "count": 5
     },
     {
-      "ticker": "DOW",
-      "count": 4
+      "ticker": "SNDL",
+      "count": 5
     },
     {
       "ticker": "BOND",
@@ -225,7 +218,15 @@
       "count": 4
     },
     {
+      "ticker": "BTC",
+      "count": 4
+    },
+    {
       "ticker": "UTF",
+      "count": 3
+    },
+    {
+      "ticker": "KEY",
       "count": 3
     },
     {
@@ -233,15 +234,7 @@
       "count": 3
     },
     {
-      "ticker": "SEE",
-      "count": 3
-    },
-    {
       "ticker": "JUST",
-      "count": 3
-    },
-    {
-      "ticker": "HAS",
       "count": 3
     },
     {
@@ -253,11 +246,31 @@
       "count": 3
     },
     {
-      "ticker": "AMID",
+      "ticker": "BIT",
+      "count": 3
+    },
+    {
+      "ticker": "RIG",
+      "count": 3
+    },
+    {
+      "ticker": "SA",
+      "count": 3
+    },
+    {
+      "ticker": "GO",
       "count": 3
     },
     {
       "ticker": "TOP",
+      "count": 2
+    },
+    {
+      "ticker": "DOW",
+      "count": 2
+    },
+    {
+      "ticker": "GROW",
       "count": 2
     },
     {
@@ -269,19 +282,15 @@
       "count": 2
     },
     {
+      "ticker": "SEE",
+      "count": 2
+    },
+    {
       "ticker": "B",
       "count": 2
     },
     {
       "ticker": "WAY",
-      "count": 2
-    },
-    {
-      "ticker": "AI",
-      "count": 2
-    },
-    {
-      "ticker": "VOTE",
       "count": 2
     },
     {
@@ -301,10 +310,6 @@
       "count": 2
     },
     {
-      "ticker": "TIME",
-      "count": 2
-    },
-    {
       "ticker": "OPEN",
       "count": 2
     },
@@ -313,47 +318,127 @@
       "count": 2
     },
     {
-      "ticker": "KVUE",
+      "ticker": "CAAP",
       "count": 2
     },
     {
-      "ticker": "KMB",
+      "ticker": "SLAI",
       "count": 2
     },
     {
-      "ticker": "ILLR",
+      "ticker": "USO",
       "count": 2
     },
     {
-      "ticker": "SA",
+      "ticker": "UCO",
       "count": 2
     },
     {
-      "ticker": "IVA",
+      "ticker": "XLE",
       "count": 2
     },
     {
-      "ticker": "COMP",
+      "ticker": "DBO",
       "count": 2
     },
     {
-      "ticker": "ORCL",
+      "ticker": "UNG",
       "count": 2
     },
     {
-      "ticker": "INTU",
+      "ticker": "FCG",
       "count": 2
     },
     {
-      "ticker": "NVAX",
+      "ticker": "USL",
       "count": 2
     },
     {
-      "ticker": "HARD",
+      "ticker": "SCO",
+      "count": 2
+    },
+    {
+      "ticker": "UNL",
+      "count": 2
+    },
+    {
+      "ticker": "BOIL",
+      "count": 2
+    },
+    {
+      "ticker": "KOLD",
+      "count": 2
+    },
+    {
+      "ticker": "GUSH",
+      "count": 2
+    },
+    {
+      "ticker": "DRIP",
+      "count": 2
+    },
+    {
+      "ticker": "USOI",
+      "count": 2
+    },
+    {
+      "ticker": "MRK",
+      "count": 2
+    },
+    {
+      "ticker": "PFE",
+      "count": 2
+    },
+    {
+      "ticker": "ETH",
+      "count": 2
+    },
+    {
+      "ticker": "SOL",
+      "count": 2
+    },
+    {
+      "ticker": "GBTC",
+      "count": 2
+    },
+    {
+      "ticker": "COIN",
+      "count": 2
+    },
+    {
+      "ticker": "ETHE",
+      "count": 2
+    },
+    {
+      "ticker": "BITO",
+      "count": 2
+    },
+    {
+      "ticker": "IBIT",
+      "count": 2
+    },
+    {
+      "ticker": "FBTC",
+      "count": 2
+    },
+    {
+      "ticker": "ETHA",
+      "count": 2
+    },
+    {
+      "ticker": "DKI",
+      "count": 2
+    },
+    {
+      "ticker": "RARE",
       "count": 1
     },
     {
-      "ticker": "KEY",
+      "ticker": "DAY",
+      "count": 1
+    },
+    {
+      "ticker": "HARD",
       "count": 1
     },
     {
@@ -390,18 +475,6 @@
     },
     {
       "ticker": "LEG",
-      "count": 1
-    },
-    {
-      "ticker": "JOB",
-      "count": 1
-    },
-    {
-      "ticker": "CUT",
-      "count": 1
-    },
-    {
-      "ticker": "J",
       "count": 1
     },
     {
@@ -455,6 +528,38 @@
     {
       "ticker": "HUBS",
       "count": 1
+    },
+    {
+      "ticker": "AM",
+      "count": 1
     }
-  ]
+  ],
+  "meta": {
+    "failedSources": [
+      {
+        "id": "yf_top",
+        "error": "429 Client Error: Too Many Requests for url: https://finance.yahoo.com/news/rssindex"
+      },
+      {
+        "id": "yf_markets",
+        "error": "429 Client Error: Too Many Requests for url: https://feeds.finance.yahoo.com/rss/2.0/headline?s=%5EGSPC&region=US&lang=en-US"
+      },
+      {
+        "id": "yf_tech",
+        "error": "429 Client Error: Too Many Requests for url: https://finance.yahoo.com/tech/rssindex"
+      },
+      {
+        "id": "yf_etfs",
+        "error": "429 Client Error: Too Many Requests for url: https://finance.yahoo.com/etfs/rssindex"
+      },
+      {
+        "id": "reuters_business",
+        "error": "HTTPSConnectionPool(host='feeds.reuters.com', port=443): Max retries exceeded with url: /reuters/businessNews (Caused by NameResolutionError(\"<urllib3.connection.HTTPSConnection object at 0x7f9af7ecb1d0>: Failed to resolve 'feeds.reuters.com' ([Errno -2] Name or service not known)\"))"
+      },
+      {
+        "id": "reuters_markets",
+        "error": "HTTPSConnectionPool(host='feeds.reuters.com', port=443): Max retries exceeded with url: /reuters/USMarketsNews (Caused by NameResolutionError(\"<urllib3.connection.HTTPSConnection object at 0x7f9af7ec9d90>: Failed to resolve 'feeds.reuters.com' ([Errno -2] Name or service not known)\"))"
+      }
+    ]
+  }
 }

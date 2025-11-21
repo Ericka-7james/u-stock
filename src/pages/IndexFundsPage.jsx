@@ -1,8 +1,8 @@
 // src/pages/IndexFundsPage.jsx
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { useRedditMentions } from "../hooks/useRedditMentions";
-import { useFundamentalsSnapshot } from "../hooks/useFundamentalsSnapshot";
+import { useRedditMentions } from "../hooks/raw/useRedditMentions";
+import { useFundamentalsSnapshot } from "../hooks/raw/useFundamentalsSnapshot";
 import AppShell from "../components/layout/AppShell";
 import "../components/dashboard/DashboardPage.css";
 import "./IndexFundsPage.css";

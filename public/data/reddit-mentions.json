@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2025-11-21T21:17:53.535997+00:00",
+  "generatedAt": "2025-11-21T21:29:19.044263+00:00",
   "windowDescription": "Last ~100 new posts per subreddit (OAuth API)",
   "subreddits": [
     "SecurityAnalysis",
@@ -10,7 +10,7 @@
   "data": [
     {
       "ticker": "A",
-      "count": 1036
+      "count": 1049
     },
     {
       "ticker": "IT",
@@ -22,7 +22,7 @@
     },
     {
       "ticker": "FOR",
-      "count": 436
+      "count": 437
     },
     {
       "ticker": "ON",
@@ -30,7 +30,7 @@
     },
     {
       "ticker": "ARE",
-      "count": 285
+      "count": 286
     },
     {
       "ticker": "COM",
@@ -38,19 +38,19 @@
     },
     {
       "ticker": "YOU",
-      "count": 262
+      "count": 260
     },
     {
       "ticker": "BE",
-      "count": 225
+      "count": 226
     },
     {
       "ticker": "AS",
-      "count": 217
+      "count": 218
     },
     {
       "ticker": "OR",
-      "count": 200
+      "count": 201
     },
     {
       "ticker": "AI",
@@ -58,11 +58,11 @@
     },
     {
       "ticker": "T",
-      "count": 196
+      "count": 198
     },
     {
       "ticker": "HAS",
-      "count": 184
+      "count": 185
     },
     {
       "ticker": "AMP",
@@ -73,32 +73,32 @@
       "count": 141
     },
     {
+      "ticker": "JUST",
+      "count": 125
+    },
+    {
       "ticker": "BY",
       "count": 124
     },
     {
-      "ticker": "JUST",
-      "count": 123
-    },
-    {
       "ticker": "YEAR",
-      "count": 123
+      "count": 124
     },
     {
       "ticker": "UP",
-      "count": 118
-    },
-    {
-      "ticker": "AN",
-      "count": 118
-    },
-    {
-      "ticker": "SO",
-      "count": 116
+      "count": 122
     },
     {
       "ticker": "M",
-      "count": 115
+      "count": 120
+    },
+    {
+      "ticker": "AN",
+      "count": 119
+    },
+    {
+      "ticker": "SO",
+      "count": 118
     },
     {
       "ticker": "CAN",
@@ -106,55 +106,55 @@
     },
     {
       "ticker": "ALL",
-      "count": 108
+      "count": 109
     },
     {
       "ticker": "NOW",
-      "count": 108
+      "count": 107
     },
     {
       "ticker": "OUT",
-      "count": 98
+      "count": 101
     },
     {
       "ticker": "TIME",
-      "count": 81
+      "count": 83
+    },
+    {
+      "ticker": "HERE",
+      "count": 69
     },
     {
       "ticker": "R",
       "count": 69
     },
     {
-      "ticker": "HERE",
-      "count": 68
-    },
-    {
       "ticker": "ANY",
       "count": 59
     },
     {
-      "ticker": "TECH",
+      "ticker": "SEE",
       "count": 59
     },
     {
-      "ticker": "SEE",
-      "count": 57
+      "ticker": "HIGH",
+      "count": 58
+    },
+    {
+      "ticker": "TECH",
+      "count": 58
     },
     {
       "ticker": "KNOW",
       "count": 57
     },
     {
-      "ticker": "HIGH",
-      "count": 56
-    },
-    {
       "ticker": "CASH",
-      "count": 56
+      "count": 55
     },
     {
       "ticker": "AM",
-      "count": 54
+      "count": 55
     },
     {
       "ticker": "POST",
@@ -162,26 +162,26 @@
     },
     {
       "ticker": "GOOD",
-      "count": 50
+      "count": 51
     },
     {
       "ticker": "NEXT",
-      "count": 48
+      "count": 49
     },
     {
       "ticker": "LOT",
-      "count": 45
+      "count": 46
     },
     {
       "ticker": "DON",
-      "count": 42
-    },
-    {
-      "ticker": "NVDA",
-      "count": 42
+      "count": 43
     },
     {
       "ticker": "REAL",
+      "count": 41
+    },
+    {
+      "ticker": "NVDA",
       "count": 40
     },
     {
@@ -191,6 +191,10 @@
     {
       "ticker": "GT",
       "count": 38
+    },
+    {
+      "ticker": "WANT",
+      "count": 35
     },
     {
       "ticker": "U",
@@ -205,8 +209,8 @@
       "count": 34
     },
     {
-      "ticker": "WANT",
-      "count": 34
+      "ticker": "GO",
+      "count": 31
     },
     {
       "ticker": "WAY",
@@ -217,19 +221,11 @@
       "count": 31
     },
     {
-      "ticker": "GO",
-      "count": 30
-    },
-    {
-      "ticker": "META",
-      "count": 30
-    },
-    {
       "ticker": "D",
       "count": 30
     },
     {
-      "ticker": "HOLD",
+      "ticker": "META",
       "count": 29
     },
     {
@@ -241,20 +237,28 @@
       "count": 27
     },
     {
+      "ticker": "WELL",
+      "count": 27
+    },
+    {
+      "ticker": "HOLD",
+      "count": 27
+    },
+    {
       "ticker": "PAY",
       "count": 26
     },
     {
-      "ticker": "WELL",
-      "count": 26
-    },
-    {
       "ticker": "JOB",
-      "count": 25
+      "count": 26
     },
     {
       "ticker": "VS",
       "count": 24
+    },
+    {
+      "ticker": "COST",
+      "count": 23
     },
     {
       "ticker": "Q",
@@ -273,7 +277,7 @@
       "count": 22
     },
     {
-      "ticker": "COST",
+      "ticker": "FUND",
       "count": 21
     },
     {
@@ -289,16 +293,16 @@
       "count": 21
     },
     {
-      "ticker": "FUND",
-      "count": 20
-    },
-    {
       "ticker": "TAX",
       "count": 20
     },
     {
       "ticker": "NET",
       "count": 20
+    },
+    {
+      "ticker": "BIT",
+      "count": 19
     },
     {
       "ticker": "OPEN",
@@ -310,10 +314,6 @@
     },
     {
       "ticker": "EPS",
-      "count": 18
-    },
-    {
-      "ticker": "BIT",
       "count": 18
     },
     {
@@ -329,6 +329,10 @@
       "count": 18
     },
     {
+      "ticker": "MOVE",
+      "count": 18
+    },
+    {
       "ticker": "FCF",
       "count": 17
     },
@@ -341,15 +345,11 @@
       "count": 17
     },
     {
-      "ticker": "SPY",
-      "count": 17
-    },
-    {
-      "ticker": "MOVE",
-      "count": 17
-    },
-    {
       "ticker": "PLAY",
+      "count": 16
+    },
+    {
+      "ticker": "MID",
       "count": 16
     },
     {
@@ -357,8 +357,8 @@
       "count": 16
     },
     {
-      "ticker": "MID",
-      "count": 15
+      "ticker": "SPY",
+      "count": 16
     },
     {
       "ticker": "FACT",
@@ -401,10 +401,6 @@
       "count": 13
     },
     {
-      "ticker": "GOOGL",
-      "count": 13
-    },
-    {
       "ticker": "BOOM",
       "count": 12
     },
@@ -418,6 +414,10 @@
     },
     {
       "ticker": "FORM",
+      "count": 11
+    },
+    {
+      "ticker": "GOOGL",
       "count": 11
     },
     {
@@ -465,7 +465,7 @@
       "count": 9
     },
     {
-      "ticker": "BTC",
+      "ticker": "HI",
       "count": 9
     },
     {
@@ -501,10 +501,6 @@
       "count": 9
     },
     {
-      "ticker": "MSFT",
-      "count": 8
-    },
-    {
       "ticker": "APP",
       "count": 8
     },
@@ -513,7 +509,7 @@
       "count": 8
     },
     {
-      "ticker": "HI",
+      "ticker": "BTC",
       "count": 8
     },
     {
@@ -581,14 +577,6 @@
       "count": 7
     },
     {
-      "ticker": "AMZN",
-      "count": 7
-    },
-    {
-      "ticker": "TILL",
-      "count": 7
-    },
-    {
       "ticker": "MIND",
       "count": 7
     },
@@ -617,7 +605,15 @@
       "count": 6
     },
     {
+      "ticker": "MSFT",
+      "count": 6
+    },
+    {
       "ticker": "GRID",
+      "count": 6
+    },
+    {
+      "ticker": "DOW",
       "count": 6
     },
     {
@@ -681,6 +677,10 @@
       "count": 6
     },
     {
+      "ticker": "CAR",
+      "count": 6
+    },
+    {
       "ticker": "FTC",
       "count": 6
     },
@@ -693,11 +693,11 @@
       "count": 6
     },
     {
-      "ticker": "VIA",
-      "count": 5
+      "ticker": "TILL",
+      "count": 6
     },
     {
-      "ticker": "DOW",
+      "ticker": "VIA",
       "count": 5
     },
     {
@@ -753,15 +753,15 @@
       "count": 5
     },
     {
+      "ticker": "AMZN",
+      "count": 5
+    },
+    {
       "ticker": "NOV",
       "count": 5
     },
     {
       "ticker": "C",
-      "count": 5
-    },
-    {
-      "ticker": "CAR",
       "count": 5
     },
     {
@@ -897,6 +897,10 @@
       "count": 4
     },
     {
+      "ticker": "HOUR",
+      "count": 4
+    },
+    {
       "ticker": "PICK",
       "count": 4
     },
@@ -946,10 +950,6 @@
     },
     {
       "ticker": "ROCK",
-      "count": 3
-    },
-    {
-      "ticker": "NFLX",
       "count": 3
     },
     {
@@ -1033,10 +1033,6 @@
       "count": 3
     },
     {
-      "ticker": "HOUR",
-      "count": 3
-    },
-    {
       "ticker": "EDIT",
       "count": 3
     },
@@ -1070,6 +1066,10 @@
     },
     {
       "ticker": "WAVE",
+      "count": 3
+    },
+    {
+      "ticker": "EAT",
       "count": 3
     },
     {
@@ -1373,6 +1373,14 @@
       "count": 2
     },
     {
+      "ticker": "VTI",
+      "count": 2
+    },
+    {
+      "ticker": "EFT",
+      "count": 2
+    },
+    {
       "ticker": "AIM",
       "count": 2
     },
@@ -1461,10 +1469,6 @@
       "count": 2
     },
     {
-      "ticker": "EAT",
-      "count": 2
-    },
-    {
       "ticker": "CA",
       "count": 2
     },
@@ -1510,6 +1514,10 @@
     },
     {
       "ticker": "RLGT",
+      "count": 1
+    },
+    {
+      "ticker": "NFLX",
       "count": 1
     },
     {
@@ -2069,6 +2077,18 @@
       "count": 1
     },
     {
+      "ticker": "EGG",
+      "count": 1
+    },
+    {
+      "ticker": "VOOG",
+      "count": 1
+    },
+    {
+      "ticker": "GD",
+      "count": 1
+    },
+    {
       "ticker": "GS",
       "count": 1
     },
@@ -2302,10 +2322,6 @@
     },
     {
       "ticker": "SHLS",
-      "count": 1
-    },
-    {
-      "ticker": "VTI",
       "count": 1
     },
     {

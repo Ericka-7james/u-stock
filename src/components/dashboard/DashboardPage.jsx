@@ -2,10 +2,10 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
-import { useJoinedMentions } from "../../hooks/useJoinedMentions";
-import { useRedditMentions } from "../../hooks/useRedditMentions";
-import { usePricesSnapshot } from "../../hooks/usePricesSnapshot";
-import { useMacroSnapshot } from "../../hooks/useMacroSnapshot";
+import { useJoinedMentions } from "../../hooks/derived/useJoinedMentions";
+import { useRedditMentions } from "../../hooks/raw/useRedditMentions";
+import { usePricesSnapshot } from "../../hooks/raw/usePricesSnapshot";
+import { useMacroSnapshot } from "../../hooks/raw/useMacroSnapshot";
 
 import StatSummary from "./StatSummary";
 import RedditMentionsChart from "../RedditMentionsChart";

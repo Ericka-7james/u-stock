@@ -1,15 +1,14 @@
 // src/pages/SubredditsPage.jsx
-import { Link } from "react-router-dom";
-import { useRedditMentions } from "../hooks/useRedditMentions";
 import AppShell from "../components/layout/AppShell";
 import "./SubredditsPage.css";
+import { Link } from "react-router-dom";
 
-// Config-driven sources
-import { PRICE_SOURCES } from "../config/pricesSources";
-import { FUNDAMENTAL_SOURCES } from "../config/fundamentalsSources";
-import { MACRO_SOURCES } from "../config/macroSources";
-import { REDDIT_SOURCES } from "../config/redditSources";
-import { TRACKED_TICKERS } from "../config/trackedTickers";
+import { PRICE_SOURCES } from "../config/raw/pricesSources";
+import { FUNDAMENTAL_SOURCES } from "../config/raw/fundamentalsSources";
+import { MACRO_SOURCES } from "../config/raw/macroSources";
+import { REDDIT_SOURCES } from "../config/raw/redditSources";
+import { TRACKED_TICKERS } from "../config/raw/trackedTickers";
+import { useRedditMentions } from "../hooks/raw/useRedditMentions";
 
 export default function SubredditsPage() {
   const { meta, loading } = useRedditMentions();
