@@ -18,7 +18,16 @@
     "lint": "eslint . --ext .js,.jsx --max-warnings=0",
     "format": "prettier \"src/**/*.{js,jsx,json,css,md}\" --check",
     "format:fix": "prettier \"src/**/*.{js,jsx,json,css,md}\" --write",
-    "symbols:update": "PYTHONPATH=src python -m data_scout.update_symbols"
+    "symbols:update": "PYTHONPATH=src python -m data_scout.update_symbols",
+
+    "fetch:prices": "PYTHONPATH=src python -m data_scout.prices",
+    "fetch:fundamentals": "PYTHONPATH=src python -m data_scout.fundamentals",
+    "fetch:macro": "PYTHONPATH=src python -m data_scout.macro",
+    "fetch:reddit": "PYTHONPATH=src python -m data_scout.reddit",
+    "fetch:news": "PYTHONPATH=src python -m data_scout.news",
+
+    "fetch:all:parallel": "npm run fetch:prices & npm run fetch:fundamentals & npm run fetch:macro & npm run fetch:reddit & npm run fetch:news"
+
   },
   "dependencies": {
     "react": "^19.2.0",

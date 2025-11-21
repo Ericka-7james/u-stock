@@ -63,24 +63,17 @@ def load_universe_tickers() -> List[str]:
     """
     Try to load dynamic tickers from ticker-universe.json.
 
-    Falls back to DEFAULT_TICKERS if the file is missing, invalid, or empty.
-
-    Expected schema:
-
-    {
-      "generatedAt": "...",
-      "tickers": ["TSLA", "AAPL", ...]
-      // or "universe": [...]
-    }
+    Returns an empty list if the file is missing, invalid, or empty.
+    The caller (main) will then decide whether to fall back to DEFAULT_TICKERS.
     """
     if not UNIVERSE_FILE.exists():
-        return DEFAULT_TICKERS
+        return []
 
     try:
         with UNIVERSE_FILE.open("r", encoding="utf-8") as f:
             payload = json.load(f)
     except Exception:
-        return DEFAULT_TICKERS
+        return []
 
     raw = payload.get("tickers") or payload.get("universe") or []
     tickers = sorted(
@@ -90,7 +83,7 @@ def load_universe_tickers() -> List[str]:
             if (t or "").strip()
         }
     )
-    return tickers or DEFAULT_TICKERS
+    return tickers  # may be empty if file had no valid symbols
 
 
 def fetch_latest_price(ticker: str) -> Dict[str, Any]:
@@ -166,17 +159,35 @@ def main(tickers: Iterable[str] | None = None) -> None:
 
         python -m data_scout.prices
     """
-    # Tests expect:
-    # - If tickers is None → use DEFAULT_TICKERS as-is
-    # - Otherwise → honor the explicit tickers list
-    tickers = list(tickers) if tickers is not None else DEFAULT_TICKERS
-    snapshot = fetch_prices_snapshot(tickers)
+    used_default = False
+
+    # 1) Prefer ticker-universe.json
+    universe = load_universe_tickers()
+
+    if universe:
+        tickers_list = universe
+    elif tickers is not None:
+        # 2) If caller passed explicit tickers, honor them next
+        tickers_list = list(tickers)
+    else:
+        # 3) Fallback: hard-coded defaults
+        tickers_list = list(DEFAULT_TICKERS)
+        used_default = True
+
+    snapshot = fetch_prices_snapshot(tickers_list)
+
+    # Add note if we fell back to DEFAULT_TICKERS
+    if used_default:
+        snapshot["meta"] = {
+            "usedDefaultTickers": True,
+            "reason": "ticker-universe.json missing/invalid/empty and no explicit tickers passed",
+        }
+
     write_snapshot(snapshot)
     print(
         f"[prices] Wrote snapshot for {len(snapshot['universe'])} "
         f"tickers → {DEFAULT_OUTPUT_FILE}"
     )
-
 
 if __name__ == "__main__":
     main()

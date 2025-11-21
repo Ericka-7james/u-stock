@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2025-11-19T13:37:35.364899+00:00",
+  "generatedAt": "2025-11-21T21:17:37.826647+00:00",
   "series": [
     {
       "id": "CPIAUCSL",
@@ -13,8 +13,8 @@
     {
       "id": "UNRATE",
       "label": "Unemployment Rate",
-      "latest": 4.3,
-      "lastUpdated": "2025-08-01",
+      "latest": 4.4,
+      "lastUpdated": "2025-09-01",
       "units": "Percent",
       "frequency": "Monthly",
       "source": null
@@ -32,7 +32,7 @@
       "id": "DFF",
       "label": "Effective Federal Funds Rate",
       "latest": 3.88,
-      "lastUpdated": "2025-11-17",
+      "lastUpdated": "2025-11-20",
       "units": "Percent",
       "frequency": "Daily, 7-Day",
       "source": null
