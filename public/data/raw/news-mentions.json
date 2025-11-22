@@ -1,0 +1,665 @@
+{
+  "generatedAt": "2025-11-22T13:05:51.459982+00:00",
+  "sources": [
+    {
+      "id": "yf_top",
+      "label": "Yahoo Finance \u2013 Top Stories",
+      "url": "https://finance.yahoo.com/news/rssindex"
+    },
+    {
+      "id": "yf_markets",
+      "label": "Yahoo Finance \u2013 Markets",
+      "url": "https://feeds.finance.yahoo.com/rss/2.0/headline?s=%5EGSPC&region=US&lang=en-US"
+    },
+    {
+      "id": "yf_tech",
+      "label": "Yahoo Finance \u2013 Tech",
+      "url": "https://finance.yahoo.com/tech/rssindex"
+    },
+    {
+      "id": "yf_etfs",
+      "label": "Yahoo Finance \u2013 ETFs",
+      "url": "https://finance.yahoo.com/etfs/rssindex"
+    },
+    {
+      "id": "mw_top",
+      "label": "MarketWatch \u2013 Top Stories",
+      "url": "https://feeds.marketwatch.com/marketwatch/topstories/"
+    },
+    {
+      "id": "mw_markets",
+      "label": "MarketWatch \u2013 Markets",
+      "url": "https://feeds.marketwatch.com/marketwatch/marketpulse/"
+    },
+    {
+      "id": "ft_frontpage",
+      "label": "Financial Times \u2013 Front Page",
+      "url": "https://www.ft.com/?format=rss"
+    },
+    {
+      "id": "reuters_business",
+      "label": "Reuters \u2013 Business News",
+      "url": "https://feeds.reuters.com/reuters/businessNews"
+    },
+    {
+      "id": "reuters_markets",
+      "label": "Reuters \u2013 Markets",
+      "url": "https://feeds.reuters.com/reuters/USMarketsNews"
+    },
+    {
+      "id": "sa_latest",
+      "label": "Seeking Alpha \u2013 Latest",
+      "url": "https://seekingalpha.com/market_currents.xml"
+    }
+  ],
+  "data": [
+    {
+      "ticker": "COM",
+      "count": 174
+    },
+    {
+      "ticker": "LINK",
+      "count": 129
+    },
+    {
+      "ticker": "DC",
+      "count": 86
+    },
+    {
+      "ticker": "WWW",
+      "count": 72
+    },
+    {
+      "ticker": "AMP",
+      "count": 64
+    },
+    {
+      "ticker": "MKTW",
+      "count": 50
+    },
+    {
+      "ticker": "MOD",
+      "count": 40
+    },
+    {
+      "ticker": "NOV",
+      "count": 37
+    },
+    {
+      "ticker": "S",
+      "count": 36
+    },
+    {
+      "ticker": "FT",
+      "count": 29
+    },
+    {
+      "ticker": "FOR",
+      "count": 22
+    },
+    {
+      "ticker": "NET",
+      "count": 21
+    },
+    {
+      "ticker": "ON",
+      "count": 21
+    },
+    {
+      "ticker": "FRI",
+      "count": 21
+    },
+    {
+      "ticker": "NEXT",
+      "count": 20
+    },
+    {
+      "ticker": "SAT",
+      "count": 18
+    },
+    {
+      "ticker": "AS",
+      "count": 17
+    },
+    {
+      "ticker": "A",
+      "count": 16
+    },
+    {
+      "ticker": "U",
+      "count": 12
+    },
+    {
+      "ticker": "BE",
+      "count": 11
+    },
+    {
+      "ticker": "IT",
+      "count": 11
+    },
+    {
+      "ticker": "AI",
+      "count": 9
+    },
+    {
+      "ticker": "BY",
+      "count": 9
+    },
+    {
+      "ticker": "ARE",
+      "count": 8
+    },
+    {
+      "ticker": "ALL",
+      "count": 7
+    },
+    {
+      "ticker": "WEEK",
+      "count": 7
+    },
+    {
+      "ticker": "YEAR",
+      "count": 7
+    },
+    {
+      "ticker": "CUT",
+      "count": 6
+    },
+    {
+      "ticker": "UP",
+      "count": 5
+    },
+    {
+      "ticker": "NOW",
+      "count": 5
+    },
+    {
+      "ticker": "EVER",
+      "count": 5
+    },
+    {
+      "ticker": "AMD",
+      "count": 5
+    },
+    {
+      "ticker": "SAY",
+      "count": 4
+    },
+    {
+      "ticker": "BOND",
+      "count": 4
+    },
+    {
+      "ticker": "LOW",
+      "count": 4
+    },
+    {
+      "ticker": "TV",
+      "count": 4
+    },
+    {
+      "ticker": "UK",
+      "count": 4
+    },
+    {
+      "ticker": "USE",
+      "count": 4
+    },
+    {
+      "ticker": "UTF",
+      "count": 3
+    },
+    {
+      "ticker": "TWO",
+      "count": 3
+    },
+    {
+      "ticker": "AN",
+      "count": 3
+    },
+    {
+      "ticker": "HAS",
+      "count": 3
+    },
+    {
+      "ticker": "ATOM",
+      "count": 3
+    },
+    {
+      "ticker": "RUN",
+      "count": 3
+    },
+    {
+      "ticker": "SHE",
+      "count": 3
+    },
+    {
+      "ticker": "CON",
+      "count": 3
+    },
+    {
+      "ticker": "TOP",
+      "count": 2
+    },
+    {
+      "ticker": "DOW",
+      "count": 2
+    },
+    {
+      "ticker": "YOU",
+      "count": 2
+    },
+    {
+      "ticker": "PAY",
+      "count": 2
+    },
+    {
+      "ticker": "COST",
+      "count": 2
+    },
+    {
+      "ticker": "TECH",
+      "count": 2
+    },
+    {
+      "ticker": "GRAB",
+      "count": 2
+    },
+    {
+      "ticker": "HE",
+      "count": 2
+    },
+    {
+      "ticker": "CAN",
+      "count": 2
+    },
+    {
+      "ticker": "GLP",
+      "count": 2
+    },
+    {
+      "ticker": "KEY",
+      "count": 2
+    },
+    {
+      "ticker": "GROW",
+      "count": 2
+    },
+    {
+      "ticker": "MID",
+      "count": 2
+    },
+    {
+      "ticker": "UNIT",
+      "count": 2
+    },
+    {
+      "ticker": "DEC",
+      "count": 2
+    },
+    {
+      "ticker": "SHY",
+      "count": 2
+    },
+    {
+      "ticker": "TIME",
+      "count": 2
+    },
+    {
+      "ticker": "OPEN",
+      "count": 2
+    },
+    {
+      "ticker": "SELF",
+      "count": 2
+    },
+    {
+      "ticker": "TAX",
+      "count": 2
+    },
+    {
+      "ticker": "OR",
+      "count": 2
+    },
+    {
+      "ticker": "NVDA",
+      "count": 2
+    },
+    {
+      "ticker": "ALAB",
+      "count": 2
+    },
+    {
+      "ticker": "AVGO",
+      "count": 2
+    },
+    {
+      "ticker": "INTC",
+      "count": 2
+    },
+    {
+      "ticker": "MRVL",
+      "count": 2
+    },
+    {
+      "ticker": "ARM",
+      "count": 2
+    },
+    {
+      "ticker": "MRK",
+      "count": 2
+    },
+    {
+      "ticker": "IYT",
+      "count": 2
+    },
+    {
+      "ticker": "XTN",
+      "count": 2
+    },
+    {
+      "ticker": "FTXR",
+      "count": 2
+    },
+    {
+      "ticker": "NSC",
+      "count": 2
+    },
+    {
+      "ticker": "CSX",
+      "count": 2
+    },
+    {
+      "ticker": "UNP",
+      "count": 2
+    },
+    {
+      "ticker": "CP",
+      "count": 2
+    },
+    {
+      "ticker": "WAB",
+      "count": 2
+    },
+    {
+      "ticker": "TSLA",
+      "count": 2
+    },
+    {
+      "ticker": "TPOR",
+      "count": 2
+    },
+    {
+      "ticker": "SHPP",
+      "count": 2
+    },
+    {
+      "ticker": "HWAY",
+      "count": 2
+    },
+    {
+      "ticker": "GOOG",
+      "count": 2
+    },
+    {
+      "ticker": "GOOGL",
+      "count": 2
+    },
+    {
+      "ticker": "ADBE",
+      "count": 2
+    },
+    {
+      "ticker": "CRWD",
+      "count": 2
+    },
+    {
+      "ticker": "DUK",
+      "count": 2
+    },
+    {
+      "ticker": "GS",
+      "count": 2
+    },
+    {
+      "ticker": "AMGN",
+      "count": 2
+    },
+    {
+      "ticker": "DLR",
+      "count": 2
+    },
+    {
+      "ticker": "ASML",
+      "count": 2
+    },
+    {
+      "ticker": "MS",
+      "count": 2
+    },
+    {
+      "ticker": "IBIT",
+      "count": 2
+    },
+    {
+      "ticker": "ED",
+      "count": 2
+    },
+    {
+      "ticker": "USO",
+      "count": 2
+    },
+    {
+      "ticker": "UCO",
+      "count": 2
+    },
+    {
+      "ticker": "XLE",
+      "count": 2
+    },
+    {
+      "ticker": "CSIQ",
+      "count": 2
+    },
+    {
+      "ticker": "DBO",
+      "count": 2
+    },
+    {
+      "ticker": "UNG",
+      "count": 2
+    },
+    {
+      "ticker": "FCG",
+      "count": 2
+    },
+    {
+      "ticker": "USL",
+      "count": 2
+    },
+    {
+      "ticker": "GEOS",
+      "count": 2
+    },
+    {
+      "ticker": "SCO",
+      "count": 2
+    },
+    {
+      "ticker": "UNL",
+      "count": 2
+    },
+    {
+      "ticker": "BNO",
+      "count": 2
+    },
+    {
+      "ticker": "LTBR",
+      "count": 2
+    },
+    {
+      "ticker": "UAMY",
+      "count": 2
+    },
+    {
+      "ticker": "EP",
+      "count": 2
+    },
+    {
+      "ticker": "BOIL",
+      "count": 2
+    },
+    {
+      "ticker": "KOLD",
+      "count": 2
+    },
+    {
+      "ticker": "TMQ",
+      "count": 2
+    },
+    {
+      "ticker": "GUSH",
+      "count": 2
+    },
+    {
+      "ticker": "DRIP",
+      "count": 2
+    },
+    {
+      "ticker": "METC",
+      "count": 2
+    },
+    {
+      "ticker": "VVPR",
+      "count": 2
+    },
+    {
+      "ticker": "USOI",
+      "count": 2
+    },
+    {
+      "ticker": "SLI",
+      "count": 2
+    },
+    {
+      "ticker": "SGML",
+      "count": 2
+    },
+    {
+      "ticker": "CRML",
+      "count": 2
+    },
+    {
+      "ticker": "ASPI",
+      "count": 2
+    },
+    {
+      "ticker": "ATLX",
+      "count": 2
+    },
+    {
+      "ticker": "METCB",
+      "count": 2
+    },
+    {
+      "ticker": "LB",
+      "count": 2
+    },
+    {
+      "ticker": "HUSA",
+      "count": 2
+    },
+    {
+      "ticker": "B",
+      "count": 2
+    },
+    {
+      "ticker": "HERE",
+      "count": 1
+    },
+    {
+      "ticker": "LEE",
+      "count": 1
+    },
+    {
+      "ticker": "VIA",
+      "count": 1
+    },
+    {
+      "ticker": "RARE",
+      "count": 1
+    },
+    {
+      "ticker": "DAY",
+      "count": 1
+    },
+    {
+      "ticker": "OUT",
+      "count": 1
+    },
+    {
+      "ticker": "T",
+      "count": 1
+    },
+    {
+      "ticker": "BILL",
+      "count": 1
+    },
+    {
+      "ticker": "SEE",
+      "count": 1
+    },
+    {
+      "ticker": "KYIV",
+      "count": 1
+    },
+    {
+      "ticker": "AIM",
+      "count": 1
+    },
+    {
+      "ticker": "GO",
+      "count": 1
+    },
+    {
+      "ticker": "SAFE",
+      "count": 1
+    },
+    {
+      "ticker": "MOVE",
+      "count": 1
+    },
+    {
+      "ticker": "WEST",
+      "count": 1
+    }
+  ],
+  "meta": {
+    "failedSources": [
+      {
+        "id": "yf_top",
+        "error": "429 Client Error: Too Many Requests for url: https://finance.yahoo.com/news/rssindex"
+      },
+      {
+        "id": "yf_markets",
+        "error": "429 Client Error: Too Many Requests for url: https://feeds.finance.yahoo.com/rss/2.0/headline?s=%5EGSPC&region=US&lang=en-US"
+      },
+      {
+        "id": "yf_tech",
+        "error": "429 Client Error: Too Many Requests for url: https://finance.yahoo.com/tech/rssindex"
+      },
+      {
+        "id": "yf_etfs",
+        "error": "429 Client Error: Too Many Requests for url: https://finance.yahoo.com/etfs/rssindex"
+      },
+      {
+        "id": "reuters_business",
+        "error": "HTTPSConnectionPool(host='feeds.reuters.com', port=443): Max retries exceeded with url: /reuters/businessNews (Caused by NameResolutionError(\"<urllib3.connection.HTTPSConnection object at 0x74571a3a2a80>: Failed to resolve 'feeds.reuters.com' ([Errno -2] Name or service not known)\"))"
+      },
+      {
+        "id": "reuters_markets",
+        "error": "HTTPSConnectionPool(host='feeds.reuters.com', port=443): Max retries exceeded with url: /reuters/USMarketsNews (Caused by NameResolutionError(\"<urllib3.connection.HTTPSConnection object at 0x74571a3a26f0>: Failed to resolve 'feeds.reuters.com' ([Errno -2] Name or service not known)\"))"
+      }
+    ]
+  }
+}
