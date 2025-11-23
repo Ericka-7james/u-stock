@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2025-11-22T13:05:51.459982+00:00",
+  "generatedAt": "2025-11-23T14:05:03.356449+00:00",
   "sources": [
     {
       "id": "yf_top",
@@ -54,12 +54,8 @@
   ],
   "data": [
     {
-      "ticker": "COM",
-      "count": 174
-    },
-    {
       "ticker": "LINK",
-      "count": 129
+      "count": 125
     },
     {
       "ticker": "DC",
@@ -67,11 +63,11 @@
     },
     {
       "ticker": "WWW",
-      "count": 72
+      "count": 68
     },
     {
       "ticker": "AMP",
-      "count": 64
+      "count": 59
     },
     {
       "ticker": "MKTW",
@@ -83,114 +79,106 @@
     },
     {
       "ticker": "NOV",
-      "count": 37
-    },
-    {
-      "ticker": "S",
-      "count": 36
-    },
-    {
-      "ticker": "FT",
-      "count": 29
+      "count": 35
     },
     {
       "ticker": "FOR",
-      "count": 22
+      "count": 26
     },
     {
-      "ticker": "NET",
-      "count": 21
+      "ticker": "FT",
+      "count": 25
     },
     {
       "ticker": "ON",
-      "count": 21
-    },
-    {
-      "ticker": "FRI",
-      "count": 21
-    },
-    {
-      "ticker": "NEXT",
-      "count": 20
-    },
-    {
-      "ticker": "SAT",
       "count": 18
     },
     {
-      "ticker": "AS",
-      "count": 17
-    },
-    {
-      "ticker": "A",
+      "ticker": "SUN",
       "count": 16
     },
     {
-      "ticker": "U",
-      "count": 12
-    },
-    {
-      "ticker": "BE",
-      "count": 11
-    },
-    {
       "ticker": "IT",
-      "count": 11
+      "count": 16
+    },
+    {
+      "ticker": "AS",
+      "count": 16
     },
     {
       "ticker": "AI",
-      "count": 9
+      "count": 15
     },
     {
-      "ticker": "BY",
-      "count": 9
-    },
-    {
-      "ticker": "ARE",
-      "count": 8
+      "ticker": "SAT",
+      "count": 14
     },
     {
       "ticker": "ALL",
-      "count": 7
+      "count": 9
     },
     {
-      "ticker": "WEEK",
-      "count": 7
-    },
-    {
-      "ticker": "YEAR",
-      "count": 7
-    },
-    {
-      "ticker": "CUT",
-      "count": 6
+      "ticker": "NEXT",
+      "count": 9
     },
     {
       "ticker": "UP",
+      "count": 8
+    },
+    {
+      "ticker": "USD",
+      "count": 8
+    },
+    {
+      "ticker": "FRI",
+      "count": 7
+    },
+    {
+      "ticker": "BABA",
+      "count": 7
+    },
+    {
+      "ticker": "HPQ",
+      "count": 7
+    },
+    {
+      "ticker": "JUST",
+      "count": 6
+    },
+    {
+      "ticker": "ZS",
+      "count": 6
+    },
+    {
+      "ticker": "KEY",
       "count": 5
     },
     {
-      "ticker": "NOW",
+      "ticker": "BY",
       "count": 5
     },
     {
-      "ticker": "EVER",
+      "ticker": "ZM",
       "count": 5
     },
     {
-      "ticker": "AMD",
+      "ticker": "DELL",
       "count": 5
     },
     {
-      "ticker": "SAY",
-      "count": 4
+      "ticker": "LI",
+      "count": 5
     },
     {
-      "ticker": "BOND",
-      "count": 4
+      "ticker": "NIO",
+      "count": 5
     },
     {
-      "ticker": "LOW",
+      "ticker": "EM",
+      "count": 5
+    },
+    {
+      "ticker": "HIT",
       "count": 4
     },
     {
@@ -202,7 +190,19 @@
       "count": 4
     },
     {
-      "ticker": "USE",
+      "ticker": "NVDA",
+      "count": 4
+    },
+    {
+      "ticker": "AMD",
+      "count": 4
+    },
+    {
+      "ticker": "INTC",
+      "count": 4
+    },
+    {
+      "ticker": "RSP",
       "count": 4
     },
     {
@@ -210,15 +210,23 @@
       "count": 3
     },
     {
-      "ticker": "TWO",
+      "ticker": "TOP",
       "count": 3
     },
     {
-      "ticker": "AN",
+      "ticker": "CAN",
       "count": 3
     },
     {
-      "ticker": "HAS",
+      "ticker": "OR",
+      "count": 3
+    },
+    {
+      "ticker": "CAPS",
+      "count": 3
+    },
+    {
+      "ticker": "BE",
       "count": 3
     },
     {
@@ -226,43 +234,15 @@
       "count": 3
     },
     {
-      "ticker": "RUN",
+      "ticker": "HACK",
       "count": 3
-    },
-    {
-      "ticker": "SHE",
-      "count": 3
-    },
-    {
-      "ticker": "CON",
-      "count": 3
-    },
-    {
-      "ticker": "TOP",
-      "count": 2
     },
     {
       "ticker": "DOW",
       "count": 2
     },
     {
-      "ticker": "YOU",
-      "count": 2
-    },
-    {
-      "ticker": "PAY",
-      "count": 2
-    },
-    {
-      "ticker": "COST",
-      "count": 2
-    },
-    {
-      "ticker": "TECH",
-      "count": 2
-    },
-    {
-      "ticker": "GRAB",
+      "ticker": "LOT",
       "count": 2
     },
     {
@@ -270,15 +250,15 @@
       "count": 2
     },
     {
-      "ticker": "CAN",
+      "ticker": "WAY",
       "count": 2
     },
     {
-      "ticker": "GLP",
+      "ticker": "SAY",
       "count": 2
     },
     {
-      "ticker": "KEY",
+      "ticker": "TWO",
       "count": 2
     },
     {
@@ -298,47 +278,43 @@
       "count": 2
     },
     {
+      "ticker": "EVER",
+      "count": 2
+    },
+    {
+      "ticker": "BOND",
+      "count": 2
+    },
+    {
       "ticker": "SHY",
       "count": 2
     },
     {
-      "ticker": "TIME",
+      "ticker": "AN",
       "count": 2
     },
     {
-      "ticker": "OPEN",
+      "ticker": "MU",
       "count": 2
     },
     {
-      "ticker": "SELF",
+      "ticker": "WDC",
       "count": 2
     },
     {
-      "ticker": "TAX",
+      "ticker": "IBM",
       "count": 2
     },
     {
-      "ticker": "OR",
+      "ticker": "QUBT",
       "count": 2
     },
     {
-      "ticker": "NVDA",
+      "ticker": "QBTS",
       "count": 2
     },
     {
-      "ticker": "ALAB",
-      "count": 2
-    },
-    {
-      "ticker": "AVGO",
-      "count": 2
-    },
-    {
-      "ticker": "INTC",
-      "count": 2
-    },
-    {
-      "ticker": "MRVL",
+      "ticker": "IONQ",
       "count": 2
     },
     {
@@ -346,55 +322,111 @@
       "count": 2
     },
     {
-      "ticker": "MRK",
+      "ticker": "PSTG",
       "count": 2
     },
     {
-      "ticker": "IYT",
+      "ticker": "BBY",
       "count": 2
     },
     {
-      "ticker": "XTN",
+      "ticker": "KSS",
       "count": 2
     },
     {
-      "ticker": "FTXR",
+      "ticker": "DE",
       "count": 2
     },
     {
-      "ticker": "NSC",
+      "ticker": "ADI",
       "count": 2
     },
     {
-      "ticker": "CSX",
+      "ticker": "KEYS",
       "count": 2
     },
     {
-      "ticker": "UNP",
+      "ticker": "NTAP",
       "count": 2
     },
     {
-      "ticker": "CP",
+      "ticker": "SMTC",
       "count": 2
     },
     {
-      "ticker": "WAB",
+      "ticker": "ADSK",
       "count": 2
     },
     {
-      "ticker": "TSLA",
+      "ticker": "PNNT",
       "count": 2
     },
     {
-      "ticker": "TPOR",
+      "ticker": "PFLT",
       "count": 2
     },
     {
-      "ticker": "SHPP",
+      "ticker": "BLRX",
       "count": 2
     },
     {
-      "ticker": "HWAY",
+      "ticker": "WDAY",
+      "count": 2
+    },
+    {
+      "ticker": "AMBA",
+      "count": 2
+    },
+    {
+      "ticker": "EH",
+      "count": 2
+    },
+    {
+      "ticker": "BZUN",
+      "count": 2
+    },
+    {
+      "ticker": "NTNX",
+      "count": 2
+    },
+    {
+      "ticker": "GOTU",
+      "count": 2
+    },
+    {
+      "ticker": "PONY",
+      "count": 2
+    },
+    {
+      "ticker": "URTH",
+      "count": 2
+    },
+    {
+      "ticker": "GLD",
+      "count": 2
+    },
+    {
+      "ticker": "IAU",
+      "count": 2
+    },
+    {
+      "ticker": "EEM",
+      "count": 2
+    },
+    {
+      "ticker": "LQD",
+      "count": 2
+    },
+    {
+      "ticker": "TLT",
+      "count": 2
+    },
+    {
+      "ticker": "IWM",
+      "count": 2
+    },
+    {
+      "ticker": "VWO",
       "count": 2
     },
     {
@@ -402,47 +434,19 @@
       "count": 2
     },
     {
-      "ticker": "GOOGL",
+      "ticker": "AMZN",
       "count": 2
     },
     {
-      "ticker": "ADBE",
+      "ticker": "MSFT",
       "count": 2
     },
     {
-      "ticker": "CRWD",
+      "ticker": "ORCL",
       "count": 2
     },
     {
-      "ticker": "DUK",
-      "count": 2
-    },
-    {
-      "ticker": "GS",
-      "count": 2
-    },
-    {
-      "ticker": "AMGN",
-      "count": 2
-    },
-    {
-      "ticker": "DLR",
-      "count": 2
-    },
-    {
-      "ticker": "ASML",
-      "count": 2
-    },
-    {
-      "ticker": "MS",
-      "count": 2
-    },
-    {
-      "ticker": "IBIT",
-      "count": 2
-    },
-    {
-      "ticker": "ED",
+      "ticker": "XPER",
       "count": 2
     },
     {
@@ -450,43 +454,19 @@
       "count": 2
     },
     {
-      "ticker": "UCO",
+      "ticker": "SPEM",
       "count": 2
     },
     {
-      "ticker": "XLE",
+      "ticker": "JNK",
       "count": 2
     },
     {
-      "ticker": "CSIQ",
+      "ticker": "TBT",
       "count": 2
     },
     {
-      "ticker": "DBO",
-      "count": 2
-    },
-    {
-      "ticker": "UNG",
-      "count": 2
-    },
-    {
-      "ticker": "FCG",
-      "count": 2
-    },
-    {
-      "ticker": "USL",
-      "count": 2
-    },
-    {
-      "ticker": "GEOS",
-      "count": 2
-    },
-    {
-      "ticker": "SCO",
-      "count": 2
-    },
-    {
-      "ticker": "UNL",
+      "ticker": "COPX",
       "count": 2
     },
     {
@@ -494,95 +474,227 @@
       "count": 2
     },
     {
-      "ticker": "LTBR",
+      "ticker": "CPER",
       "count": 2
     },
     {
-      "ticker": "UAMY",
+      "ticker": "INDA",
       "count": 2
     },
     {
-      "ticker": "EP",
+      "ticker": "META",
       "count": 2
     },
     {
-      "ticker": "BOIL",
+      "ticker": "GOOGL",
       "count": 2
     },
     {
-      "ticker": "KOLD",
+      "ticker": "COP",
       "count": 2
     },
     {
-      "ticker": "TMQ",
+      "ticker": "JPM",
       "count": 2
     },
     {
-      "ticker": "GUSH",
+      "ticker": "MS",
       "count": 2
     },
     {
-      "ticker": "DRIP",
+      "ticker": "TSLA",
       "count": 2
     },
     {
-      "ticker": "METC",
+      "ticker": "AVGO",
       "count": 2
     },
     {
-      "ticker": "VVPR",
+      "ticker": "ICLN",
       "count": 2
     },
     {
-      "ticker": "USOI",
+      "ticker": "QCLN",
       "count": 2
     },
     {
-      "ticker": "SLI",
+      "ticker": "TAN",
       "count": 2
     },
     {
-      "ticker": "SGML",
+      "ticker": "FAN",
       "count": 2
     },
     {
-      "ticker": "CRML",
+      "ticker": "PBW",
       "count": 2
     },
     {
-      "ticker": "ASPI",
+      "ticker": "ERTH",
       "count": 2
     },
     {
-      "ticker": "ATLX",
+      "ticker": "SMOG",
       "count": 2
     },
     {
-      "ticker": "METCB",
+      "ticker": "PBD",
       "count": 2
     },
     {
-      "ticker": "LB",
+      "ticker": "CNRG",
       "count": 2
     },
     {
-      "ticker": "HUSA",
+      "ticker": "ACES",
       "count": 2
     },
     {
-      "ticker": "B",
+      "ticker": "SH",
       "count": 2
     },
     {
-      "ticker": "HERE",
+      "ticker": "SPY",
+      "count": 2
+    },
+    {
+      "ticker": "VOO",
+      "count": 2
+    },
+    {
+      "ticker": "IVV",
+      "count": 2
+    },
+    {
+      "ticker": "SDS",
+      "count": 2
+    },
+    {
+      "ticker": "SSO",
+      "count": 2
+    },
+    {
+      "ticker": "UPRO",
+      "count": 2
+    },
+    {
+      "ticker": "SPXU",
+      "count": 2
+    },
+    {
+      "ticker": "PAG",
+      "count": 2
+    },
+    {
+      "ticker": "GME",
+      "count": 2
+    },
+    {
+      "ticker": "FITB",
+      "count": 2
+    },
+    {
+      "ticker": "SWKS",
+      "count": 2
+    },
+    {
+      "ticker": "AMKR",
+      "count": 2
+    },
+    {
+      "ticker": "STZ",
+      "count": 2
+    },
+    {
+      "ticker": "BF.B",
+      "count": 2
+    },
+    {
+      "ticker": "HXL",
+      "count": 2
+    },
+    {
+      "ticker": "LAD",
+      "count": 2
+    },
+    {
+      "ticker": "WRB",
+      "count": 2
+    },
+    {
+      "ticker": "WLK",
+      "count": 2
+    },
+    {
+      "ticker": "AOS",
+      "count": 2
+    },
+    {
+      "ticker": "PNFP",
+      "count": 2
+    },
+    {
+      "ticker": "CHTR",
+      "count": 2
+    },
+    {
+      "ticker": "QXO",
+      "count": 2
+    },
+    {
+      "ticker": "DBX",
+      "count": 2
+    },
+    {
+      "ticker": "ACI",
+      "count": 2
+    },
+    {
+      "ticker": "BYND",
+      "count": 2
+    },
+    {
+      "ticker": "DUOL",
+      "count": 2
+    },
+    {
+      "ticker": "SN",
+      "count": 2
+    },
+    {
+      "ticker": "LAW",
       "count": 1
     },
     {
-      "ticker": "LEE",
+      "ticker": "DON",
       "count": 1
     },
     {
-      "ticker": "VIA",
+      "ticker": "LIVE",
+      "count": 1
+    },
+    {
+      "ticker": "IVE",
+      "count": 1
+    },
+    {
+      "ticker": "AWAY",
+      "count": 1
+    },
+    {
+      "ticker": "SHOP",
+      "count": 1
+    },
+    {
+      "ticker": "GEN",
+      "count": 1
+    },
+    {
+      "ticker": "BEAT",
+      "count": 1
+    },
+    {
+      "ticker": "ODDS",
       "count": 1
     },
     {
@@ -590,15 +702,7 @@
       "count": 1
     },
     {
-      "ticker": "DAY",
-      "count": 1
-    },
-    {
-      "ticker": "OUT",
-      "count": 1
-    },
-    {
-      "ticker": "T",
+      "ticker": "ALEX",
       "count": 1
     },
     {
@@ -606,23 +710,11 @@
       "count": 1
     },
     {
+      "ticker": "SELF",
+      "count": 1
+    },
+    {
       "ticker": "SEE",
-      "count": 1
-    },
-    {
-      "ticker": "KYIV",
-      "count": 1
-    },
-    {
-      "ticker": "AIM",
-      "count": 1
-    },
-    {
-      "ticker": "GO",
-      "count": 1
-    },
-    {
-      "ticker": "SAFE",
       "count": 1
     },
     {
@@ -630,7 +722,31 @@
       "count": 1
     },
     {
-      "ticker": "WEST",
+      "ticker": "RUN",
+      "count": 1
+    },
+    {
+      "ticker": "BIT",
+      "count": 1
+    },
+    {
+      "ticker": "LIFT",
+      "count": 1
+    },
+    {
+      "ticker": "RAIL",
+      "count": 1
+    },
+    {
+      "ticker": "BHP",
+      "count": 1
+    },
+    {
+      "ticker": "TECK",
+      "count": 1
+    },
+    {
+      "ticker": "JABS",
       "count": 1
     }
   ],
@@ -654,11 +770,11 @@
       },
       {
         "id": "reuters_business",
-        "error": "HTTPSConnectionPool(host='feeds.reuters.com', port=443): Max retries exceeded with url: /reuters/businessNews (Caused by NameResolutionError(\"<urllib3.connection.HTTPSConnection object at 0x74571a3a2a80>: Failed to resolve 'feeds.reuters.com' ([Errno -2] Name or service not known)\"))"
+        "error": "HTTPSConnectionPool(host='feeds.reuters.com', port=443): Max retries exceeded with url: /reuters/businessNews (Caused by NameResolutionError(\"<urllib3.connection.HTTPSConnection object at 0x7a393ce27ad0>: Failed to resolve 'feeds.reuters.com' ([Errno -2] Name or service not known)\"))"
       },
       {
         "id": "reuters_markets",
-        "error": "HTTPSConnectionPool(host='feeds.reuters.com', port=443): Max retries exceeded with url: /reuters/USMarketsNews (Caused by NameResolutionError(\"<urllib3.connection.HTTPSConnection object at 0x74571a3a26f0>: Failed to resolve 'feeds.reuters.com' ([Errno -2] Name or service not known)\"))"
+        "error": "HTTPSConnectionPool(host='feeds.reuters.com', port=443): Max retries exceeded with url: /reuters/USMarketsNews (Caused by NameResolutionError(\"<urllib3.connection.HTTPSConnection object at 0x7a393ce27a40>: Failed to resolve 'feeds.reuters.com' ([Errno -2] Name or service not known)\"))"
       }
     ]
   }

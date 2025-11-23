@@ -1,78 +1,35 @@
-# src/data_scout/news.py
 """
 data_scout/news.py
 
 Counts ticker mentions in financial news headlines/snippets and writes
-`public/data/news-mentions.json`.
-
-Snapshot schema:
-
-{
-  "generatedAt": "...",
-  "sources": [
-    {"id": "yf_top", "label": "Yahoo Finance - Top Stories", "url": "..."},
-    ...
-  ],
-  "data": [
-    {"ticker": "AAPL", "count": 12},
-    {"ticker": "TSLA", "count": 9}
-  ],
-  "meta": {
-    "usedDefaultTickers": true,
-    "reason": "..."
-  }
-}
+`public/data/raw/news-mentions.json`.
 """
 
 from __future__ import annotations
 
 import json
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Any, Iterable, List, Tuple
 
 import requests
 from dotenv import load_dotenv
-import time
 
-from .reddit import build_ticker_regex, count_mentions_in_text
-from .symbols import load_symbol_universe, filter_valid_symbols
-
-from config.news_sources import NEWS_SOURCES
+from data_scout.reddit import build_ticker_regex, count_mentions_in_text, DEFAULT_TICKERS
+from data_scout.symbols import (
+    load_clean_symbol_universe,
+    filter_valid_symbols,
+    load_ticker_set_for_mentions,
+)
+from config.raw.news_sources import NEWS_SOURCES
 
 load_dotenv(dotenv_path=".env.local")
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "public" / "data"
+DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "public" / "data" / "raw"
 DEFAULT_OUTPUT_FILE = DEFAULT_OUTPUT_DIR / "news-mentions.json"
-UNIVERSE_FILE = DEFAULT_OUTPUT_DIR / "ticker-universe.json"
 
-def load_universe_tickers() -> List[str]:
-    """
-    Try to load dynamic tickers from ticker-universe.json.
-
-    Falls back to a small DEFAULT_TICKERS set if the file is missing, invalid, or empty.
-    """
-    from .reddit import DEFAULT_TICKERS  # reuse your existing core set
-
-    if not UNIVERSE_FILE.exists():
-        return list(DEFAULT_TICKERS)
-
-    try:
-        with UNIVERSE_FILE.open("r", encoding="utf-8") as f:
-            payload = json.load(f)
-    except Exception:
-        return list(DEFAULT_TICKERS)
-
-    raw = payload.get("tickers") or payload.get("universe") or []
-    tickers = sorted(
-        {
-            (t or "").strip().upper()
-            for t in raw
-            if (t or "").strip()
-        }
-    )
-    return tickers or list(DEFAULT_TICKERS)
 
 def ensure_output_dir(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True)
@@ -95,10 +52,8 @@ def build_news_corpus() -> Tuple[Dict[str, str], List[Dict[str, str]]]:
       - corpus: source_id -> combined text
       - errors: list of {"id", "error"} for failed sources
 
-    Adds a 0.5 second delay between requests to reduce rate limits.
+    Adds a small delay between requests to reduce rate limits.
     """
-    import time
-
     corpus: Dict[str, str] = {}
     errors: List[Dict[str, str]] = []
 
@@ -116,7 +71,7 @@ def build_news_corpus() -> Tuple[Dict[str, str], List[Dict[str, str]]]:
             corpus[src_id] = ""
             errors.append({"id": src_id, "error": msg})
 
-        # ⏳ throttle 0.5 seconds between RSS calls
+        # throttle between RSS calls
         time.sleep(0.5)
 
     return corpus, errors
@@ -151,7 +106,7 @@ def fetch_news_mentions(tickers: Iterable[str]) -> Dict[str, Any]:
 
     # Optional: validate against symbol universe
     try:
-        symbol_universe = load_symbol_universe()
+        symbol_universe = load_clean_symbol_universe()
         tickers_list = filter_valid_symbols(tickers_list, symbol_universe)
     except Exception as exc:  # noqa: BLE001
         print(f"[news] Symbol universe unavailable, using raw tickers: {exc}")
@@ -210,31 +165,42 @@ def main(tickers: Iterable[str] | None = None) -> None:
 
         PYTHONPATH=src python -m data_scout.news
     """
-    # Decide which tickers to scan:
-    # 1) If caller passes tickers explicitly, honor them.
-    # 2) Else, try full symbol_universe (all stocks from listings).
-    # 3) If that fails, fall back to curated ticker-universe.json / DEFAULT_TICKERS.
+    used_default = False
+
     if tickers is not None:
-        tickers_list = list(tickers)
+        raw_tickers = [t.upper().strip() for t in tickers if t and t.strip()]
+        tickers_list = raw_tickers
     else:
-        try:
-            # 👇 this is the "all stocks from some source" you were thinking of
-            symbol_universe = load_symbol_universe()
-            tickers_list = sorted(symbol_universe)
-            print(f"[news] Using full symbol universe with {len(tickers_list)} tickers")
-        except Exception as exc:  # noqa: BLE001
-            print(f"[news] Symbol universe unavailable, falling back: {exc}")
-            # use the curated universe file / default core set as a fallback
-            tickers_list = load_universe_tickers()
-            print(f"[news] Falling back to curated universe with {len(tickers_list)} tickers")
+        mention_set = load_ticker_set_for_mentions()
+        if mention_set:
+            tickers_list = sorted(mention_set)
+            print(
+                f"[news] Using mentions ticker set with {len(tickers_list)} symbols "
+                "from raw prices/fundamentals"
+            )
+        else:
+            tickers_list = list(DEFAULT_TICKERS)
+            used_default = True
+            print(
+                f"[news] Mentions ticker set empty; falling back to DEFAULT_TICKERS "
+                f"({len(tickers_list)})"
+            )
 
     snapshot = fetch_news_mentions(tickers_list)
+
+    if used_default:
+        snapshot.setdefault("meta", {})
+        snapshot["meta"]["usedDefaultTickers"] = True
+        snapshot["meta"]["reason"] = (
+            "mentions ticker set unavailable; fell back to DEFAULT_TICKERS"
+        )
 
     write_snapshot(snapshot)
     print(
         f"[news] Wrote news mentions snapshot for {len(tickers_list)} tickers "
         f"→ {DEFAULT_OUTPUT_FILE}"
     )
+
 
 if __name__ == "__main__":
     main()

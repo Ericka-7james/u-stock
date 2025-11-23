@@ -2,9 +2,7 @@
 data_scout/fundamentals.py
 
 Fetches basic fundamental metrics for a universe of tickers using yfinance
-and writes to `public/data/fundamentals.json`.
-
-This is intentionally simple; you can extend with FMP/Finnhub later.
+and writes to `public/data/raw/fundamentals.json`.
 
 Snapshot schema:
 
@@ -35,18 +33,26 @@ from typing import Dict, Any, Iterable, List
 import yfinance as yf  # type: ignore
 from dotenv import load_dotenv
 
-from data_scout.symbols import filter_valid_symbols
+from data_scout.symbols import (
+    load_clean_symbol_universe,
+    filter_valid_symbols,
+    load_delisted_symbols,
+    add_delisted_symbol,
+)
 
 load_dotenv(dotenv_path=".env.local")
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "public" / "data"
+
+# write into /raw
+DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "public" / "data" / "raw"
 DEFAULT_OUTPUT_FILE = DEFAULT_OUTPUT_DIR / "fundamentals.json"
+
+# Optional curated universe file
 UNIVERSE_FILE = DEFAULT_OUTPUT_DIR / "ticker-universe.json"
 
-# TODO: keep in sync with tracked tickers / UI config.
+# Small backup set if everything else fails badly
 DEFAULT_TICKERS = [
-    # Large-cap single names
     "AAPL",
     "MSFT",
     "TSLA",
@@ -54,8 +60,6 @@ DEFAULT_TICKERS = [
     "AMZN",
     "BRK-B",
     "JPM",
-
-    # Index funds (used on IndexFundsPage)
     "VTI",
     "VOO",
     "VTSAX",
@@ -73,7 +77,7 @@ def load_universe_tickers() -> List[str]:
     Try to load dynamic tickers from ticker-universe.json.
 
     Returns an empty list if the file is missing, invalid, or empty.
-    The caller (main) will then decide whether to fall back to DEFAULT_TICKERS.
+    The caller (main) will then decide whether to fall back.
     """
     if not UNIVERSE_FILE.exists():
         return []
@@ -118,6 +122,8 @@ def fetch_fundamentals_for_ticker(ticker: str) -> Dict[str, Any]:
             "industry": info.get("industry"),
         }
     except Exception as exc:  # noqa: BLE001
+        # mark as delisted/invalid so future runs can skip it
+        add_delisted_symbol(ticker)
         return {
             "ticker": ticker.upper(),
             "pe": None,
@@ -155,29 +161,44 @@ def main(tickers: Iterable[str] | None = None) -> None:
     """
     CLI entry point.
 
-        python -m data_scout.fundamentals
+        PYTHONPATH=src python -m data_scout.fundamentals
     """
     used_default = False
 
-    # 1) Prefer ticker-universe.json
+    # 1) Prefer curated ticker-universe.json if present
     universe = load_universe_tickers()
 
-    if universe:
-        tickers_list = universe
-    elif tickers is not None:
-        # 2) If caller passed explicit tickers, honor them
-        tickers_list = list(tickers)
-    else:
-        # 3) Fallback to hard-coded defaults
-        tickers_list = list(DEFAULT_TICKERS)
-        used_default = True
+    # 2) If curated file missing/empty and explicit tickers passed, validate them
+    if not universe and tickers is not None:
+        cleaned = load_clean_symbol_universe()
+        delisted = load_delisted_symbols()
+        cleaned_minus_delisted = {t for t in cleaned if t not in delisted}
+        universe = filter_valid_symbols(tickers, cleaned_minus_delisted)
 
-    snapshot = fetch_fundamentals_snapshot(tickers_list)
+    # 3) If still empty, fall back to full cleaned symbol universe (minus delisted)
+    if not universe:
+        cleaned = load_clean_symbol_universe()
+        delisted = load_delisted_symbols()
+        cleaned_minus_delisted = [t for t in cleaned if t not in delisted]
+        if cleaned_minus_delisted:
+            universe = sorted(cleaned_minus_delisted)
+        else:
+            # 4) Absolute last-resort fallback
+            universe = list(DEFAULT_TICKERS)
+            used_default = True
+
+    # 5) Also ensure we filter out delisted from curated universe path
+    delisted = load_delisted_symbols()
+    if delisted:
+        universe = [t for t in universe if t not in delisted]
+
+    snapshot = fetch_fundamentals_snapshot(universe)
 
     if used_default:
         snapshot["meta"] = {
             "usedDefaultTickers": True,
-            "reason": "ticker-universe.json missing/invalid/empty and no explicit tickers passed",
+            "reason": "ticker-universe.json and cleaned universe were empty; "
+                      "fell back to DEFAULT_TICKERS",
         }
 
     write_snapshot(snapshot)
