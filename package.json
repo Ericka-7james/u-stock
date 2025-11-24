@@ -20,14 +20,21 @@
     "format:fix": "prettier \"src/**/*.{js,jsx,json,css,md}\" --write",
     "symbols:update": "PYTHONPATH=src python -m data_scout.update_symbols",
 
-    "fetch:prices": "PYTHONPATH=src python -m data_scout.prices",
-    "fetch:fundamentals": "PYTHONPATH=src python -m data_scout.fundamentals",
-    "fetch:macro": "PYTHONPATH=src python -m data_scout.macro",
-    "fetch:reddit": "PYTHONPATH=src python -m data_scout.reddit",
-    "fetch:news": "PYTHONPATH=src python -m data_scout.news",
+    "fetch:prices": "PYTHONPATH=src python -m fetchers.fetch_prices",
+    "fetch:intraday": "PYTHONPATH=src python -m fetchers.fetch_intraday",
+    "fetch:fundamentals": "PYTHONPATH=src python -m fetchers.fetch_fundamentals",
 
-    "fetch:all:parallel": "npm run fetch:prices & npm run fetch:fundamentals & npm run fetch:macro & npm run fetch:reddit & npm run fetch:news"
+    "indicators:daily": "PYTHONPATH=src python -m indicators.compute_indicators",
+    "indicators:intraday": "PYTHONPATH=src python -m indicators.intraday_indicators",
+    "indicators:multiday": "PYTHONPATH=src python -m indicators.multiday_indicators",
 
+    "signals:final": "PYTHONPATH=src python -m indicators.signal_engine",
+
+    "fetch:all": "npm run fetch:prices && npm run fetch:intraday && npm run fetch:fundamentals",
+
+    "indicators:all": "npm run indicators:daily && npm run indicators:intraday && npm run indicators:multiday",
+
+    "fetch+indicators:all": "npm run fetch:all && npm run indicators:all && npm run signals:final"
   },
   "dependencies": {
     "react": "^19.2.0",

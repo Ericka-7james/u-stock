@@ -1,9 +1,9 @@
 """
 Fetch intraday OHLCV price data (5m and 15m bars) for a list of symbols
-using yahooquery, and save them as JSON snapshots under:
+using yahooquery, and save them both as:
 
-  public/data/fetched/intraday-5m.json
-  public/data/fetched/intraday-15m.json
+  - Parquet (raw efficient storage): public/data/pandas/intraday_<interval>.parquet
+  - JSON snapshots:                 public/data/fetched/intraday-<interval>.json
 """
 
 import json
@@ -11,114 +11,138 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Any, List
 
+import pandas as pd
 from yahooquery import Ticker
 
 
-def fetch_intraday(
+# ---------- Core batched intraday fetcher ----------
+
+def fetch_intraday_df(
     symbols: List[str],
     period: str = "5d",
     interval: str = "5m",
-) -> Dict[str, Any]:
+) -> pd.DataFrame:
     """
-    Fetch intraday OHLCV data for each symbol.
+    Fetch intraday OHLCV data for tickers in ONE batched call.
 
-    :param symbols: list of tickers, e.g. ["AAPL", "MSFT"]
-    :param period:  lookback window, e.g. "5d", "10d"
-    :param interval: bar size, e.g. "5m", "15m"
-    :return: dict mapping symbol -> list of bar dicts
+    Returns DataFrame with columns:
+    ["symbol", "date", "open", "high", "low", "close", "volume", "adjclose"]
     """
-    data: Dict[str, Any] = {}
+    print(f"Fetching INTRADAY batch: {len(symbols)} symbols, interval={interval}, period={period}")
 
-    for symbol in symbols:
-        print(f"Fetching intraday {interval} for {symbol} (period={period})...")
+    if not symbols:
+        return pd.DataFrame(columns=["symbol", "date", "open", "high", "low", "close", "volume", "adjclose"])
 
-        t = Ticker(symbol)
+    try:
+        t = Ticker(symbols)
+        df = t.history(period=period, interval=interval)
+    except Exception as e:
+        print(f"ERROR fetching intraday batch: {e}")
+        return pd.DataFrame(columns=["symbol", "date", "open", "high", "low", "close", "volume", "adjclose"])
 
-        try:
-            df = t.history(period=period, interval=interval)
-        except Exception as e:
-            print(f"  ERROR fetching {symbol}: {e}")
-            continue
+    if df is None:
+        print("Warning: intraday history returned None")
+        return pd.DataFrame(columns=["symbol", "date", "open", "high", "low", "close", "volume", "adjclose"])
 
-        if df is None or len(df) == 0:
-            print(f"  Warning: no intraday data for {symbol}")
-            continue
+    if not isinstance(df, pd.DataFrame):
+        print(f"Unexpected type from yahooquery: {type(df)}")
+        return pd.DataFrame(columns=["symbol", "date", "open", "high", "low", "close", "volume", "adjclose"])
 
-        # Reset index so "date" is a column
-        df = df.reset_index()
+    if df.empty:
+        print("Warning: intraday DataFrame is empty")
+        return pd.DataFrame(columns=["symbol", "date", "open", "high", "low", "close", "volume", "adjclose"])
 
-        # Keep core OHLCV columns (plus symbol/date if present)
-        cols = [
-            c
-            for c in df.columns
-            if c in ("symbol", "date", "open", "high", "low", "close", "volume", "adjclose")
-        ]
-        subset = df[cols].copy()
+    df = df.reset_index()
 
-        # Convert to JSON-friendly records (stringify date)
-        records: List[Dict[str, Any]] = []
-        for row in subset.to_dict(orient="records"):
-            if "date" in row:
-                row["date"] = str(row["date"])
-            records.append(row)
+    # Columns we care about
+    wanted_cols = [
+        "symbol", "date", "open", "high", "low", "close", "volume", "adjclose"
+    ]
+    cols = [c for c in df.columns if c in wanted_cols]
+    if not cols:
+        print("ERROR: No OHLCV columns found in intraday data")
+        return pd.DataFrame(columns=wanted_cols)
 
-        data[symbol] = records
+    subset = df[cols].copy()
 
-    return data
+    # Clean up date
+    subset["date"] = pd.to_datetime(subset["date"], errors="coerce")
+    subset = subset.dropna(subset=["date", "close"])
+
+    # Sort nicely
+    subset = subset.sort_values(["symbol", "date"]).reset_index(drop=True)
+
+    return subset
 
 
-def save_intraday_json(
-    data: Dict[str, Any],
-    interval_label: str,
-    filename: str | None = None,
-) -> Path:
-    """
-    Save intraday data to public/data/fetched/<filename> as:
+# ---------- Save helpers (Parquet + JSON) ----------
 
-    {
-      "generated_at": "...",
-      "interval": "5m",
-      "symbols": ["AAPL", "MSFT"],
-      "prices": {
-        "AAPL": [ { ... }, ... ],
-        "MSFT": [ { ... }, ... ]
-      }
-    }
-    """
-    project_root = Path(__file__).resolve().parents[2]
-    data_dir = project_root / "public" / "data" / "fetched"
+def get_project_root() -> Path:
+    return Path(__file__).resolve().parents[2]
+
+
+def save_intraday_parquet(df: pd.DataFrame, interval: str) -> Path:
+    root = get_project_root()
+    data_dir = root / "public" / "data" / "pandas"
     data_dir.mkdir(parents=True, exist_ok=True)
 
-    if filename is None:
-        filename = f"intraday-{interval_label}.json"
+    out_path = data_dir / f"intraday_{interval}.parquet"
+    df.to_parquet(out_path, index=False)
+    print(f"Saved Parquet intraday ({interval}) to {out_path}")
+    return out_path
 
-    out_path = data_dir / filename
 
-    wrapper = {
-        "generated_at": datetime.now(timezone.utc).isoformat(),
-        "interval": interval_label,
-        "symbols": list(data.keys()),
-        "prices": data,
-    }
+def save_intraday_json(df: pd.DataFrame, interval: str) -> Path:
+    root = get_project_root()
+    data_dir = root / "public" / "data" / "fetched"
+    data_dir.mkdir(parents=True, exist_ok=True)
+
+    out_path = data_dir / f"intraday-{interval}.json"
+
+    if df.empty:
+        wrapper = {
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "interval": interval,
+            "symbols": [],
+            "prices": {},
+        }
+    else:
+        df_json = df.copy()
+        df_json["date"] = df_json["date"].astype(str)
+
+        grouped = {
+            symbol: group.to_dict(orient="records")
+            for symbol, group in df_json.groupby("symbol")
+        }
+
+        wrapper = {
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "interval": interval,
+            "symbols": list(grouped.keys()),
+            "prices": grouped,
+        }
 
     with out_path.open("w", encoding="utf-8") as f:
         json.dump(wrapper, f, indent=2)
 
-    print(f"\nSaved intraday snapshot ({interval_label}) to {out_path}")
+    print(f"Saved intraday JSON ({interval}) to {out_path}")
     return out_path
 
 
+# ---------- Main ----------
+
 def main() -> None:
-    # TODO: later pull this from your symbol universe
     symbols = ["AAPL", "MSFT", "GOOG"]
 
-    # 5-minute bars, last 5 days
-    data_5m = fetch_intraday(symbols, period="5d", interval="5m")
-    save_intraday_json(data_5m, interval_label="5m", filename="intraday-5m.json")
+    # --- 5 minute bars ---
+    df_5m = fetch_intraday_df(symbols, period="5d", interval="5m")
+    save_intraday_parquet(df_5m, interval="5m")
+    save_intraday_json(df_5m, interval="5m")
 
-    # 15-minute bars, last 10 days
-    data_15m = fetch_intraday(symbols, period="10d", interval="15m")
-    save_intraday_json(data_15m, interval_label="15m", filename="intraday-15m.json")
+    # --- 15 minute bars ---
+    df_15m = fetch_intraday_df(symbols, period="10d", interval="15m")
+    save_intraday_parquet(df_15m, interval="15m")
+    save_intraday_json(df_15m, interval="15m")
 
 
 if __name__ == "__main__":
