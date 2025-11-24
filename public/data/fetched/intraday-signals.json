@@ -1,5 +1,5 @@
 {
-  "generated_at": "2025-11-24T13:01:25.431658+00:00",
+  "generated_at": "2025-11-24T16:33:39.398095+00:00",
   "interval": "5m",
   "symbols": [
     "AAPL",
@@ -10,8 +10,6 @@
     "AAPL": {
       "symbol": "AAPL",
       "session_date": "2025-11-21",
-      "first_open": 265.8800048828125,
-      "last_close": 271.489990234375,
       "intraday_return": 0.02109968876386592,
       "intraday_range_pct": 0.02818938987341656,
       "vwap": 270.7229743021919,
@@ -21,8 +19,6 @@
     "MSFT": {
       "symbol": "MSFT",
       "session_date": "2025-11-21",
-      "first_open": 478.3900146484375,
-      "last_close": 472.1199951171875,
       "intraday_return": -0.013106501681181104,
       "intraday_range_pct": 0.022262221384133744,
       "vwap": 473.96111907608656,
@@ -32,8 +28,6 @@
     "GOOG": {
       "symbol": "GOOG",
       "session_date": "2025-11-21",
-      "first_open": 297.2900085449219,
-      "last_close": 299.6499938964844,
       "intraday_return": 0.007938327167849923,
       "intraday_range_pct": 0.032291721307764774,
       "vwap": 299.325885001173,

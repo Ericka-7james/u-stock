@@ -1,0 +1,44 @@
+{
+  "generatedAt": "2025-11-24T16:33:32.005508+00:00",
+  "windowDescription": "Daily EOD day-trading indicators",
+  "universe": [
+    "AAPL",
+    "GOOG",
+    "MSFT"
+  ],
+  "data": [
+    {
+      "ticker": "AAPL",
+      "indicators": {
+        "close_return_1d": 0.019680714495305063,
+        "gap_pct": -0.0013896713615023648,
+        "day_range_pct": 0.028189408755829714,
+        "volume_ratio": 1.2595108907857504,
+        "vol_10d": 0.012127800366664816,
+        "in_play_score": 6.765796956257194
+      }
+    },
+    {
+      "ticker": "MSFT",
+      "indicators": {
+        "close_return_1d": -0.013188967362399162,
+        "gap_pct": -8.36067972326271e-05,
+        "day_range_pct": 0.022262171032003248,
+        "volume_ratio": 1.2261834378334984,
+        "vol_10d": 0.014902379915187959,
+        "in_play_score": 5.986650152777367
+      }
+    },
+    {
+      "ticker": "GOOG",
+      "indicators": {
+        "close_return_1d": 0.03334706719013192,
+        "gap_pct": 0.025208705787206354,
+        "day_range_pct": 0.03229170170540538,
+        "volume_ratio": 1.6025267989378769,
+        "vol_10d": 0.023841966431253404,
+        "in_play_score": 14.159505381765284
+      }
+    }
+  ]
+}
