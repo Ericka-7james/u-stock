@@ -1,36 +1,50 @@
 // src/components/dashboard/StatSummary.jsx
-import { Link } from "react-router-dom";
+export default function StatSummary({ signalsMeta, signalsData, pricesMeta }) {
+  const list = Array.isArray(signalsData) ? signalsData : [];
+  const totalTickers = list.length;
 
-export default function StatSummary({ meta, rawData }) {
-  const list = Array.isArray(rawData) ? rawData : [];
-  const totalMentions = list.reduce((sum, item) => sum + (item.count || 0), 0);
-  const topTicker = list[0]?.ticker ?? "—";
-  const topTickerCount = list[0]?.count ?? 0;
+  const top = list[0];
+  const topTicker = top?.ticker ?? "—";
+  const topScore =
+    typeof top?.score === "number" ? top.score.toFixed(2) : "—";
+
+  const lastRun =
+    signalsMeta?.generatedAt || pricesMeta?.generatedAt || null;
 
   return (
     <div className="stat-row">
       <div className="stat-card stat-card--accent-blue">
-        <div className="stat-label">Total Mentions</div>
-        <div className="stat-value">{totalMentions.toLocaleString()}</div>
-        <div className="stat-caption">Across all scanned posts</div>
-      </div>
-
-      <div className="stat-card stat-card--accent-orange">
-        <div className="stat-label">Top Ticker</div>
-        <div className="stat-value">{topTicker}</div>
+        <div className="stat-label">Universe size</div>
+        <div className="stat-value">{totalTickers}</div>
         <div className="stat-caption">
-          {topTickerCount > 0
-            ? `${topTickerCount} mentions`
-            : "No mentions this run"}
+          Tickers ranked by your data-bot pipeline
         </div>
       </div>
 
-      <Link to="/subreddits" className="stat-card stat-card--accent-teal stat-card--clickable">
-        <div className="stat-label">Subreddits</div>
-        <div className="stat-value">{meta?.subreddits?.length ?? 0}</div>
-        <div className="stat-caption">See more details →</div>
-      </Link>
+      <div className="stat-card stat-card--accent-orange">
+        <div className="stat-label">Top in-play ticker</div>
+        <div className="stat-value">{topTicker}</div>
+        <div className="stat-caption">
+          Score: {topScore !== "NaN" ? topScore : "—"}
+        </div>
+      </div>
 
+      <div className="stat-card stat-card--accent-teal">
+        <div className="stat-label">Last data refresh</div>
+        <div className="stat-value">
+          {lastRun
+            ? new Date(lastRun).toLocaleTimeString(undefined, {
+                hour: "2-digit",
+                minute: "2-digit",
+              })
+            : "—"}
+        </div>
+        <div className="stat-caption">
+          {lastRun
+            ? new Date(lastRun).toLocaleDateString()
+            : "Run fetch + indicators"}
+        </div>
+      </div>
     </div>
   );
 }
