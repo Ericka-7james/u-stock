@@ -1,4 +1,4 @@
-import { TRACKED_TICKERS } from "../config/trackedTickers.js";
+import { TRACKED_TICKERS } from "../config/raw/trackedTickers.js";
 
 // Match things like: $TSLA, $AAPL, $SPY
 export const TICKER_REGEX = /\$[A-Z]{1,5}\b/g;

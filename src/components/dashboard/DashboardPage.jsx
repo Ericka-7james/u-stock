@@ -1,209 +1,98 @@
 // src/components/dashboard/DashboardPage.jsx
-import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
-import { useRedditMentions } from "../../hooks/useRedditMentions";
-import { usePricesSnapshot } from "../../hooks/usePricesSnapshot";
-import { useMacroSnapshot } from "../../hooks/useMacroSnapshot";
-import StatSummary from "./StatSummary";
-import RedditMentionsChart from "../RedditMentionsChart";
+import { useEffect, useMemo, useState } from "react";
+
 import AppShell from "../layout/AppShell";
+import StatSummary from "./StatSummary";
+import PriceChart from "./PriceChart";
+
+import { useSignalsSnapshot } from "../../hooks/raw/useSignalsSnapshot";
+import { useDailyPricesHistory } from "../../hooks/raw/useDailyPricesHistory";
+
 import "./DashboardPage.css";
 
-const INDEX_FUNDS = [
-  { ticker: "VTI", name: "Vanguard Total Stock Market ETF" },
-  { ticker: "VOO", name: "Vanguard S&P 500 ETF" },
-  {
-    ticker: "VTSAX",
-    name: "Vanguard Total Stock Market Index Fund Admiral Shares",
-  },
-  { ticker: "FXAIX", name: "Fidelity 500 Index Fund" },
-  { ticker: "SWTSX", name: "Schwab Total Stock Market Index Fund" },
-];
-
 export default function DashboardPage() {
-  // Reddit snapshot (existing)
-  const { rawData, meta, loading } = useRedditMentions();
-
-  // NEW: prices + macro snapshots
+  // Ranked signals from your Python signal_engine
   const {
-    data: priceRows,
+    data: signals,
+    meta: signalsMeta,
+    loading: signalsLoading,
+  } = useSignalsSnapshot();
+
+  // Daily OHLCV history (from prices-raw.json)
+  const {
+    historyBySymbol,
+    symbols: priceSymbols,
     meta: pricesMeta,
     loading: pricesLoading,
-  } = usePricesSnapshot();
+  } = useDailyPricesHistory();
 
-  const {
-    series: macroSeries,
-    loading: macroLoading,
-  } = useMacroSnapshot();
+  const [selectedTicker, setSelectedTicker] = useState("");
 
-  // chart state
-  const [tickerMode, setTickerMode] = useState("all"); // "all" | "track" | "choose"
-  const [searchTerm, setSearchTerm] = useState("");
-  const [selectedTickers, setSelectedTickers] = useState([]);
-
-  // Map ticker -> mentions from snapshot.data
-  const mentionMap = useMemo(() => {
-    const map = {};
-    const data = Array.isArray(rawData) ? rawData : [];
-    for (const item of data) {
-      if (!item?.ticker) continue;
-      map[item.ticker.toUpperCase()] = item.count;
-    }
-    return map;
-  }, [rawData]);
-
-  // All tickers in this snapshot (for autocomplete)
-  const allTickers = useMemo(() => {
-    const data = Array.isArray(rawData) ? rawData : [];
-    const set = new Set();
-    for (const item of data) {
-      if (!item?.ticker) continue;
-      set.add(item.ticker.toUpperCase());
-    }
-    return Array.from(set).sort();
-  }, [rawData]);
-
-  // Suggestions for "choose" mode
-  const suggestions = useMemo(() => {
-    const term = searchTerm.trim().toUpperCase();
-    if (!term) return [];
-    return allTickers
-      .filter((t) => t.includes(term) && !selectedTickers.includes(t))
-      .slice(0, 8);
-  }, [searchTerm, allTickers, selectedTickers]);
-
-  const addTicker = (value) => {
-    const ticker = value.trim().toUpperCase();
-    if (!ticker) return;
-    if (!allTickers.includes(ticker)) return;
-    if (selectedTickers.includes(ticker)) return;
-    setSelectedTickers([...selectedTickers, ticker]);
-    setSearchTerm("");
-  };
-
-  // Data that actually gets graphed
-  const filteredRawData = useMemo(() => {
-    const data = Array.isArray(rawData) ? rawData : [];
-
-    if (tickerMode === "choose" && selectedTickers.length > 0) {
-      const selectedSet = new Set(
-        selectedTickers.map((t) => t.toUpperCase().trim())
-      );
-      return data.filter((item) =>
-        selectedSet.has(item.ticker.toUpperCase())
-      );
-    }
-
-    // For now, "all" and "track" behave the same (you can customize later)
-    return data;
-  }, [rawData, tickerMode, selectedTickers]);
-
-  // Spotlight: which of your index funds has the most mentions?
-  const topIndexFund = useMemo(() => {
-    let best = null;
-    for (const fund of INDEX_FUNDS) {
-      const t = fund.ticker.toUpperCase();
-      const mentions = mentionMap[t] || 0;
-      if (!best || mentions > best.mentions) {
-        best = { ...fund, mentions };
+  // Default ticker = top-ranked from signals, or first in priceSymbols
+  useEffect(() => {
+    if (!selectedTicker) {
+      if (signals && signals.length > 0) {
+        setSelectedTicker(signals[0].ticker);
+      } else if (priceSymbols && priceSymbols.length > 0) {
+        setSelectedTicker(priceSymbols[0]);
       }
     }
-    if (best && best.mentions > 0) return best;
-    return null;
-  }, [mentionMap]);
+  }, [selectedTicker, signals, priceSymbols]);
 
-  // Macro helpers – quick lookup by id
-  const macroById = useMemo(() => {
-    const map = {};
-    const list = Array.isArray(macroSeries) ? macroSeries : [];
-    for (const s of list) {
-      if (!s?.id) continue;
-      map[s.id] = s;
-    }
-    return map;
-  }, [macroSeries]);
+  const currentSeries = useMemo(() => {
+    if (!selectedTicker) return [];
+    return historyBySymbol[selectedTicker] || [];
+  }, [historyBySymbol, selectedTicker]);
 
-  const cpi = macroById["CPIAUCSL"];
-  const unrate = macroById["UNRATE"];
-  const fedFunds = macroById["DFF"];
+  const combinedLoading = signalsLoading || pricesLoading;
 
-  const handleModeChange = (e) => {
-    setTickerMode(e.target.value);
-  };
-
-  const handleSearchKeyDown = (e) => {
-    if (e.key !== "Enter") return;
-    addTicker(searchTerm);
-  };
-
-  const removeTicker = (ticker) => {
-    setSelectedTickers(selectedTickers.filter((t) => t !== ticker));
-  };
+  const topFiveSignals = useMemo(() => {
+    if (!signals || signals.length === 0) return [];
+    return signals.slice(0, 5);
+  }, [signals]);
 
   return (
     <AppShell>
       <div className="dashboard">
-        <StatSummary meta={meta} rawData={Array.isArray(rawData) ? rawData : []} />
+        {/* Top stats row – now uses your own signals/prices */}
+        <StatSummary
+          signalsMeta={signalsMeta}
+          signalsData={signals}
+          pricesMeta={pricesMeta}
+        />
 
         <main className="dashboard-main">
-          {/* LEFT column – filters + index funds + prices + macro */}
+          {/* LEFT column – about + top signals */}
           <section className="panel panel-filters">
+            {/* About card */}
             <div className="filters-card filters-card--filters">
-              <h3 className="panel-title">Filters (coming soon)</h3>
+              <h3 className="panel-title">About this dashboard</h3>
               <p className="muted">
-                Soon you’ll be able to filter by subreddit, minimum mentions,
-                and custom watchlists.
+                This is a personal prototype of my u-Stock day-trading
+                intelligence bot. The backend Python pipeline fetches real
+                market data (prices, intraday bars, and fundamentals), computes
+                multi-horizon indicators, and ranks tickers by a combined
+                &quot;in-play&quot; score. This page visualizes the latest
+                snapshot.
+              </p>
+              <p className="muted">
+                Under the hood: Python, pandas, yahooquery, Parquet storage,
+                and a React + Vite frontend.
               </p>
             </div>
 
+            {/* Top signals table */}
             <div className="filters-card filters-card--index">
               <div className="filters-card-header">
-                <h3 className="panel-title">Explore index funds</h3>
+                <h3 className="panel-title">Top signals (today)</h3>
               </div>
 
-              {loading ? (
-                <p className="muted">Loading index fund mentions…</p>
-              ) : topIndexFund ? (
-                <>
-                  <div className="index-spotlight">
-                    <div className="index-spotlight-ticker">
-                      {topIndexFund.ticker}
-                    </div>
-                    <div className="index-spotlight-name">
-                      {topIndexFund.name}
-                    </div>
-                    <div className="index-spotlight-mentions">
-                      {topIndexFund.mentions} mentions in this snapshot
-                    </div>
-                  </div>
-                  <Link to="/index-funds" className="panel-link">
-                    See more →
-                  </Link>
-                </>
-              ) : (
-                <>
-                  <p className="muted">
-                    No index fund tickers detected in this snapshot yet.
-                  </p>
-                  <Link to="/index-funds" className="panel-link">
-                    See more →
-                  </Link>
-                </>
-              )}
-            </div>
-
-            {/* NEW: Prices mini-table */}
-            <div className="filters-card filters-card--prices">
-              <div className="filters-card-header">
-                <h3 className="panel-title">Live prices (snapshot)</h3>
-              </div>
-
-              {pricesLoading ? (
-                <p className="muted">Loading prices…</p>
-              ) : priceRows.length === 0 ? (
+              {combinedLoading ? (
+                <p className="muted">Loading signals…</p>
+              ) : topFiveSignals.length === 0 ? (
                 <p className="muted">
-                  No price data yet. Try running{" "}
-                  <code>PYTHONPATH=src python -m data_scout.prices</code>.
+                  No signals available. Run your fetchers and indicator scripts
+                  to generate a new snapshot.
                 </p>
               ) : (
                 <>
@@ -211,194 +100,145 @@ export default function DashboardPage() {
                     <thead>
                       <tr>
                         <th>Ticker</th>
-                        <th>Price</th>
+                        <th>Score</th>
+                        <th>1d</th>
+                        <th>Intraday</th>
+                        <th>5d</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {priceRows.map((row) => (
-                        <tr key={row.ticker}>
-                          <td>{row.ticker}</td>
-                          <td>
-                            {row.price != null ? row.price.toFixed(2) : "—"}{" "}
-                            {row.currency || "USD"}
-                          </td>
-                        </tr>
-                      ))}
+                      {topFiveSignals.map((row) => {
+                        const daily = row.components?.daily ?? {};
+                        const intraday = row.components?.intraday ?? {};
+                        const multiday = row.components?.multiday ?? {};
+
+                        return (
+                          <tr
+                            key={row.ticker}
+                            className={
+                              row.ticker === selectedTicker
+                                ? "mini-table-row--active"
+                                : ""
+                            }
+                            onClick={() => setSelectedTicker(row.ticker)}
+                          >
+                            <td>{row.ticker}</td>
+                            <td>{row.score?.toFixed(2) ?? "—"}</td>
+                            <td>
+                              {daily.close_return_1d != null
+                                ? (daily.close_return_1d * 100).toFixed(1) + "%"
+                                : "—"}
+                            </td>
+                            <td>
+                              {intraday.intraday_return != null
+                                ? (intraday.intraday_return * 100).toFixed(1) +
+                                  "%"
+                                : "—"}
+                            </td>
+                            <td>
+                              {multiday.return_5d != null
+                                ? (multiday.return_5d * 100).toFixed(1) + "%"
+                                : "—"}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
 
-                  <button
-                type="button"
-                className="panel-link macro-link-btn"
-                disabled
-              >
-                View details → (soon)
-              </button>
-              
-                  {pricesMeta?.generatedAt && (
+                  {signalsMeta?.rankingDescription && (
                     <p className="mini-table-caption muted">
-                      Snapshot:{" "}
-                      {new Date(pricesMeta.generatedAt).toLocaleString()}
+                      {signalsMeta.rankingDescription}
                     </p>
                   )}
                 </>
               )}
-
             </div>
 
-            {/* NEW: Macro snapshot tile */}
+            {/* Snapshot info card */}
             <div className="filters-card filters-card--macro">
               <div className="filters-card-header">
-                <h3 className="panel-title">Macro snapshot</h3>
+                <h3 className="panel-title">Data snapshots</h3>
               </div>
 
-              {macroLoading ? (
-                <p className="muted">Loading macro data…</p>
-              ) : (
-                <>
-                  <div className="macro-grid">
-                    <div className="macro-pill">
-                      <div className="macro-label">CPI (All items)</div>
-                      <div className="macro-value">
-                        {cpi?.latest != null ? cpi.latest.toFixed(1) : "—"}
-                      </div>
-                      <div className="macro-meta">
-                        {cpi?.lastUpdated ?? "No date"}
-                      </div>
-                    </div>
-
-                    <div className="macro-pill">
-                      <div className="macro-label">Unemployment rate</div>
-                      <div className="macro-value">
-                        {unrate?.latest != null ? `${unrate.latest.toFixed(1)}%` : "—"}
-                      </div>
-                      <div className="macro-meta">
-                        {unrate?.lastUpdated ?? "No date"}
-                      </div>
-                    </div>
-
-                    <div className="macro-pill">
-                      <div className="macro-label">Fed funds rate</div>
-                      <div className="macro-value">
-                        {fedFunds?.latest != null ? fedFunds.latest.toFixed(2) : "—"}
-                      </div>
-                      <div className="macro-meta">
-                        {fedFunds?.lastUpdated ?? "No date"}
-                      </div>
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    className="panel-link macro-link-btn"
-                    disabled
-                  >
-                    View details → (soon)
-                  </button>
-                </>
-              )}
+              <ul className="muted mini-list">
+                <li>
+                  <strong>Signals:</strong>{" "}
+                  {signalsMeta?.generatedAt
+                    ? new Date(
+                        signalsMeta.generatedAt,
+                      ).toLocaleString()
+                    : "—"}
+                </li>
+                <li>
+                  <strong>Prices:</strong>{" "}
+                  {pricesMeta?.generatedAt
+                    ? new Date(
+                        pricesMeta.generatedAt,
+                      ).toLocaleString()
+                    : "—"}
+                </li>
+                <li>
+                  <strong>Universe size:</strong>{" "}
+                  {signalsMeta?.universe?.length ?? "---"}
+                </li>
+              </ul>
             </div>
           </section>
 
-          {/* RIGHT column – chart */}
+          {/* RIGHT column – price chart + ticker selector */}
           <section className="panel panel-chart">
             <div className="card-main-chart">
               <div className="card-header">
                 <div>
-                  <h2>Reddit mentions over time</h2>
+                  <h2>Price action viewer</h2>
                   <p className="card-subtitle">
-                    High-signal tickers from the latest U-Stock data scout pull.
+                    Select a ticker to see recent daily price action,
+                    powered by your u-Stock data-bot fetchers.
                   </p>
                 </div>
 
                 <div className="chart-controls">
                   <label className="chart-controls-label">
-                    View
+                    Ticker
                     <select
                       className="chart-select"
-                      value={tickerMode}
-                      onChange={handleModeChange}
+                      value={selectedTicker || ""}
+                      onChange={(e) => setSelectedTicker(e.target.value)}
                     >
-                      <option value="all">All</option>
-                      <option value="track">Track (coming soon)</option>
-                      <option value="choose">Choose…</option>
+                      <option value="" disabled>
+                        Select…
+                      </option>
+                      {signals.map((row) => (
+                        <option key={row.ticker} value={row.ticker}>
+                          {row.ticker}
+                        </option>
+                      ))}
+                      {/* fallback: if for some reason signals are empty but prices exist */}
+                      {signals.length === 0 &&
+                        priceSymbols.map((sym) => (
+                          <option key={sym} value={sym}>
+                            {sym}
+                          </option>
+                        ))}
                     </select>
                   </label>
                 </div>
               </div>
 
-              {tickerMode === "choose" && (
-                <div className="ticker-choose-row">
-                  <div className="ticker-input-group">
-                    <input
-                      type="text"
-                      className="ticker-input"
-                      placeholder="Type a ticker from this snapshot (e.g. TSLA) and press Enter"
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      onKeyDown={handleSearchKeyDown}
-                    />
-
-                    {suggestions.length > 0 && (
-                      <ul className="ticker-suggestions">
-                        {suggestions.map((t) => (
-                          <li key={t}>
-                            <button
-                              type="button"
-                              className="ticker-suggestion-item"
-                              onClick={() => addTicker(t)}
-                            >
-                              {t}
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-
-                    <small className="ticker-input-help">
-                      Available from this snapshot:{" "}
-                      {allTickers.slice(0, 8).join(", ")}
-                      {allTickers.length > 8 ? ", …" : ""}
-                    </small>
-                  </div>
-
-                  {selectedTickers.length > 0 && (
-                    <div className="ticker-chip-row">
-                      {selectedTickers.map((ticker) => (
-                        <button
-                          key={ticker}
-                          type="button"
-                          className="ticker-chip"
-                          onClick={() => removeTicker(ticker)}
-                        >
-                          {ticker}
-                          <span className="ticker-chip-close">×</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <div className="chart-wrapper">
-                <RedditMentionsChart
-                  rawData={filteredRawData}
-                  loading={loading}
-                />
-              </div>
-
-              {meta && (
-                <div className="chart-meta">
-                  Snapshot window: {meta.windowDescription ?? "Latest pull"}
-                </div>
-              )}
+              <PriceChart
+                ticker={selectedTicker}
+                data={currentSeries}
+                loading={combinedLoading}
+              />
             </div>
           </section>
         </main>
 
-        {meta && (
+        {signalsMeta?.generatedAt && (
           <div className="dashboard-last-updated">
-            Last updated: {new Date(meta.generatedAt).toLocaleString()}
+            Last updated:{" "}
+            {new Date(signalsMeta.generatedAt).toLocaleString()}
           </div>
         )}
       </div>

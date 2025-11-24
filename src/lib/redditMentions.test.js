@@ -2,7 +2,7 @@
 
 // Mock the tracked tickers so tests are deterministic.
 // IMPORTANT: this path string must match what redditMentions.js uses.
-vi.mock("../config/trackedTickers.js", () => ({
+vi.mock("../config/raw/trackedTickers.js", () => ({
   TRACKED_TICKERS: ["AAPL", "TSLA", "SPY"],
 }));
 

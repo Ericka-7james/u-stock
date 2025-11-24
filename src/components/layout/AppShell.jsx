@@ -9,7 +9,7 @@ export default function AppShell({ children }) {
   const location = useLocation();
 
   const isDashboard = location.pathname === "/";
-  const isSubreddits = location.pathname.startsWith("/subreddits");
+  const isDatasources = location.pathname.startsWith("/datasources");
   const isIndexFunds = location.pathname.startsWith("/index-funds");
 
   return (
@@ -36,9 +36,9 @@ export default function AppShell({ children }) {
           </Link>
 
           <Link
-            to="/subreddits"
+            to="/datasources"
             className={
-              "side-nav-item " + (isSubreddits ? "side-nav-item--active" : "")
+              "side-nav-item " + (isDatasources ? "side-nav-item--active" : "")
             }
           >
             <span className="side-nav-item-dot" />
@@ -58,10 +58,6 @@ export default function AppShell({ children }) {
           <button className="side-nav-item" type="button">
             <span className="side-nav-item-dot" />
             News
-          </button>
-          <button className="side-nav-item" type="button">
-            <span className="side-nav-item-dot" />
-            Data Sources
           </button>
           <button className="side-nav-item" type="button">
             <span className="side-nav-item-dot" />

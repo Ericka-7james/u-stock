@@ -1,8 +1,9 @@
 // src/App.jsx
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import DashboardPage from "./components/dashboard/DashboardPage";
-import SubredditsPage from "./pages/SubredditsPage";
-import IndexFundsPage from "./pages/IndexFundsPage"; // ← new
+import DatasourcesPage from "./components/pages/DatasourcesPage";
+import IndexFundsPage from "./components/pages/IndexFundsPage";
+
 import "./App.css";
 
 function App() {
@@ -10,8 +11,8 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<DashboardPage />} />
-        <Route path="/subreddits" element={<SubredditsPage />} />
-        <Route path="/index-funds" element={<IndexFundsPage />} /> {/* new */}
+        <Route path="/datasources" element={<DatasourcesPage />} />
+        <Route path="/index-funds" element={<IndexFundsPage />} />
       </Routes>
     </BrowserRouter>
   );

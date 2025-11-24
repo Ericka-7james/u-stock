@@ -1,14 +1,16 @@
 // src/pages/IndexFundsPage.test.jsx
+import { describe, it, expect } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import IndexFundsPage from "./IndexFundsPage";
 
 // Mock hooks
-vi.mock("../hooks/useRedditMentions", () => ({
+// Mock hooks
+vi.mock("../hooks/raw/useRedditMentions", () => ({
   useRedditMentions: vi.fn(),
 }));
 
-vi.mock("../hooks/useFundamentalsSnapshot", () => ({
+vi.mock("../hooks/raw/useFundamentalsSnapshot", () => ({
   useFundamentalsSnapshot: vi.fn(),
 }));
 
@@ -20,8 +22,8 @@ vi.mock("../components/layout/AppShell", () => ({
 }));
 
 // Import mocked hooks so we can set return values
-import { useRedditMentions } from "../hooks/useRedditMentions";
-import { useFundamentalsSnapshot } from "../hooks/useFundamentalsSnapshot";
+import { useRedditMentions } from "../hooks/raw/useRedditMentions";
+import { useFundamentalsSnapshot } from "../hooks/raw/useFundamentalsSnapshot";
 
 describe("IndexFundsPage", () => {
   beforeEach(() => {

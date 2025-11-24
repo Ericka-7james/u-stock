@@ -12,19 +12,7 @@ Fetch Reddit ticker mentions using the *official Reddit API* with OAuth.
     VITE_REDDIT_USER_AGENT   (optional)
 
 Writes snapshot to:
-    public/data/reddit-mentions.json
-
-Snapshot schema:
-
-{
-  "generatedAt": "...",
-  "windowDescription": "Last ~100 new posts per subreddit (OAuth API)",
-  "subreddits": ["SecurityAnalysis", "stocks", ...],
-  "data": [
-    { "ticker": "AAPL", "count": 32 },
-    { "ticker": "TSLA", "count": 27 }
-  ]
-}
+    public/data/raw/reddit-mentions.json
 """
 
 from __future__ import annotations
@@ -40,40 +28,33 @@ from typing import Dict, Any, Iterable, List, Tuple
 import requests
 from dotenv import load_dotenv
 
+from data_scout.symbols import (
+    load_clean_symbol_universe,
+    filter_valid_symbols,
+    load_ticker_set_for_mentions,
+)
+
 # Load .env.local at project root (same as your Node scripts)
 load_dotenv(dotenv_path=".env.local")
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "public" / "data"
+DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "public" / "data" / "raw"
 DEFAULT_OUTPUT_FILE = DEFAULT_OUTPUT_DIR / "reddit-mentions.json"
 
-
-# Keep these in sync with config/redditSources.js
+# Default subreddits to scan if none are passed to main()
 DEFAULT_SUBREDDITS = [
     "SecurityAnalysis",
-    "ValueInvesting",
-    "QualityInvesting",
-    "EconMonitor",
-    "ETFs",
-    "MacroEconomics",
-    "InvestorPsychology",
-    "Frugal",
-    "Unemployment",
-    "RealEstate",
     "stocks",
     "investing",
     "wallstreetbets",
-    "cryptocurrency",
 ]
 
-# Keep in sync with config/trackedTickers.js
+# Fallback tickers if EVERYTHING else fails (should almost never be used)
 DEFAULT_TICKERS = [
     "AAPL",
     "MSFT",
     "TSLA",
-    "GOOGL",
-    "AMZN",
     "SPY",
     "VTI",
     "VOO",
@@ -116,10 +97,6 @@ def get_reddit_access_token() -> Tuple[str | None, str]:
         print("   Required VITE_REDDIT_CLIENT_ID / SECRET / USERNAME / PASSWORD")
         return None, user_agent
 
-    # Reddit requires HTTP Basic with client_id:secret
-    auth_string = f"{client_id}:{secret}"
-    auth_b64 = auth_string.encode("ascii")
-    
     headers = {
         "User-Agent": user_agent,
     }
@@ -138,7 +115,6 @@ def get_reddit_access_token() -> Tuple[str | None, str]:
             headers=headers,
             timeout=15,
         )
-
         payload = resp.json()
 
         if not resp.ok:
@@ -180,14 +156,13 @@ def fetch_subreddit_posts(subreddit: str, token: str, user_agent: str, limit: in
 def build_ticker_regex(tickers: Iterable[str]) -> re.Pattern:
     """
     Build a regex that matches tickers as whole words (case-insensitive).
-    Example: r'\b(AAPL|TSLA|MSFT)\b'
+    Example: r'\\b(AAPL|TSLA|MSFT)\\b'
     """
     escaped = [re.escape(t.upper()) for t in tickers if t.strip()]
     if not escaped:
         # match nothing if no tickers
         return re.compile(r"a^")
 
-    # NOTE: single backslash here → \b = word boundary
     pattern = r"\b(" + "|".join(escaped) + r")\b"
     return re.compile(pattern, re.IGNORECASE)
 
@@ -212,9 +187,19 @@ def fetch_reddit_mentions(
     Build the full Reddit mentions snapshot.
     """
     subreddits_list = [s.strip().lstrip("r/") for s in subreddits if s.strip()]
-    tickers_list = sorted({t.upper().strip() for t in tickers if t.strip()})
+    raw_tickers_list = [t.upper().strip() for t in tickers if t.strip()]
 
+    # Validate against symbol universe (for safety)
+    try:
+        symbol_universe = load_clean_symbol_universe()
+        validated_tickers = filter_valid_symbols(raw_tickers_list, symbol_universe)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[reddit] Symbol universe unavailable, using raw tickers: {exc}")
+        validated_tickers = raw_tickers_list
+
+    tickers_list = sorted(validated_tickers or raw_tickers_list)
     ticker_pattern = build_ticker_regex(tickers_list)
+
     aggregate_counts: Counter = Counter()
 
     for sub in subreddits_list:
@@ -237,6 +222,9 @@ def fetch_reddit_mentions(
         "windowDescription": "Last ~100 new posts per subreddit (OAuth API)",
         "subreddits": subreddits_list,
         "data": data,
+        "meta": {
+            "tickerUniverseSize": len(tickers_list),
+        },
     }
     return snapshot
 
@@ -256,6 +244,7 @@ def main(
 
         PYTHONPATH=src python -m data_scout.reddit
     """
+    # 1) OAuth
     token, user_agent = get_reddit_access_token()
     if not token:
         # Don't crash the whole pipeline; just write an empty snapshot.
@@ -266,17 +255,59 @@ def main(
             "subreddits": [],
             "data": [],
             "error": "Reddit OAuth failed (check env vars / credentials)",
+            "meta": {
+                "usedDefaultTickers": True,
+                "reason": "OAuth failed, no data fetched",
+            },
         }
         write_snapshot(snapshot)
-        print(
-            f"[reddit] Wrote EMPTY snapshot → {DEFAULT_OUTPUT_FILE}"
-        )
+        print(f"[reddit] Wrote EMPTY snapshot → {DEFAULT_OUTPUT_FILE}")
         return
 
-    subreddits = list(subreddits) if subreddits is not None else DEFAULT_SUBREDDITS
-    tickers = list(tickers) if tickers is not None else DEFAULT_TICKERS
+    # 2) Subreddits
+    subreddits_list = (
+        list(subreddits) if subreddits is not None else DEFAULT_SUBREDDITS
+    )
 
-    snapshot = fetch_reddit_mentions(subreddits, tickers, token, user_agent)
+    # 3) Ticker universe for mentions:
+    #    - If caller passes tickers, honor them (validated).
+    #    - Else, use ticker set extracted from prices/fundamentals.
+    used_default = False
+
+    if tickers is not None:
+        raw_tickers = [t.upper().strip() for t in tickers if t and t.strip()]
+        tickers_list = raw_tickers
+    else:
+        mention_set = load_ticker_set_for_mentions()
+        if mention_set:
+            tickers_list = sorted(mention_set)
+            print(
+                f"[reddit] Using mentions ticker set with {len(tickers_list)} symbols "
+                "from raw prices/fundamentals"
+            )
+        else:
+            tickers_list = list(DEFAULT_TICKERS)
+            used_default = True
+            print(
+                f"[reddit] Mentions ticker set empty; falling back to DEFAULT_TICKERS "
+                f"({len(tickers_list)})"
+            )
+
+    # 4) Build snapshot
+    snapshot = fetch_reddit_mentions(
+        subreddits_list,
+        tickers_list,
+        token,
+        user_agent,
+    )
+
+    if used_default:
+        snapshot.setdefault("meta", {})
+        snapshot["meta"]["usedDefaultTickers"] = True
+        snapshot["meta"]["reason"] = (
+            "mentions ticker set unavailable; fell back to DEFAULT_TICKERS"
+        )
+
     write_snapshot(snapshot)
     print(
         f"[reddit] Wrote snapshot: {len(snapshot['data'])} tickers "
