@@ -1,10 +1,11 @@
-// src/pages/IndexFundsPage.jsx
+// src/components/pages/IndexFundsPage.jsx
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { useRedditMentions } from "../hooks/raw/useRedditMentions";
-import { useFundamentalsSnapshot } from "../hooks/raw/useFundamentalsSnapshot";
-import AppShell from "../components/layout/AppShell";
-import "../components/dashboard/DashboardPage.css";
+
+import { useFundamentalsSnapshot } from "../../hooks/raw/useFundamentalsSnapshot";
+import AppShell from "../layout/AppShell";
+
+import "../dashboard/DashboardPage.css";
 import "./IndexFundsPage.css";
 
 const INDEX_FUNDS = [
@@ -21,12 +22,12 @@ const INDEX_FUNDS = [
   {
     ticker: "VTSAX",
     name: "Vanguard Total Stock Market Index Fund Admiral Shares",
-    blurb: "Mutual fund version of VTI; Boglehead favorite for ‘own the market’.",
+    blurb: "Mutual fund version of VTI; simple ‘own the market’ core holding.",
   },
   {
     ticker: "FXAIX",
     name: "Fidelity 500 Index Fund",
-    blurb: "Fidelity’s S&P 500 index fund with rock-bottom expense ratio.",
+    blurb: "Fidelity’s S&P 500 index fund with a rock-bottom expense ratio.",
   },
   {
     ticker: "SWTSX",
@@ -48,22 +49,11 @@ function formatMarketCap(value) {
 export default function IndexFundsPage() {
   const [activeTab, setActiveTab] = useState("about"); // "about" | "funds"
 
-  const { rawData, meta, loading } = useRedditMentions();
   const {
     data: fundamentalsData,
     loading: fundamentalsLoading,
+    meta: fundamentalsMeta,
   } = useFundamentalsSnapshot();
-
-  // Map: ticker -> reddit mention count
-  const mentionMap = useMemo(() => {
-    const map = {};
-    const data = Array.isArray(rawData) ? rawData : [];
-    for (const item of data) {
-      if (!item?.ticker) continue;
-      map[item.ticker.toUpperCase()] = item.count;
-    }
-    return map;
-  }, [rawData]);
 
   // Map: ticker -> fundamentals object
   const fundamentalsMap = useMemo(() => {
@@ -76,18 +66,17 @@ export default function IndexFundsPage() {
     return map;
   }, [fundamentalsData]);
 
-  // Merge: index fund base info + mentions + fundamentals
+  // Merge: index fund base info + fundamentals
   const fundsWithData = useMemo(
     () =>
       INDEX_FUNDS.map((fund) => {
         const tickerKey = fund.ticker.toUpperCase();
         return {
           ...fund,
-          mentions: mentionMap[tickerKey] || 0,
           fundamentals: fundamentalsMap[tickerKey] || null,
         };
       }),
-    [mentionMap, fundamentalsMap]
+    [fundamentalsMap],
   );
 
   return (
@@ -96,15 +85,22 @@ export default function IndexFundsPage() {
         {/* Hero card */}
         <header className="index-hero">
           <div className="index-hero-text">
-            <h1 className="page-title">Index Funds Radar</h1>
+            <h1 className="page-title">Index Funds & Quant Foundations</h1>
             <p className="muted">
-              Learn how broad index funds work and see how often the big
-              tickers show up in your Reddit snapshot.
+              This page highlights broad index funds that often sit at the core
+              of systematic trading and portfolio strategies. It combines simple
+              fundamentals with educational context on how quants think about
+              diversified &quot;building blocks&quot; before hunting for
+              niche alpha.
             </p>
-            {meta && (
+            {fundamentalsMeta?.generatedAt && (
               <p className="index-hero-meta">
-                Snapshot window:{" "}
-                <span>{meta.windowDescription ?? "Latest pull"}</span>
+                Fundamentals snapshot:{" "}
+                <span>
+                  {new Date(
+                    fundamentalsMeta.generatedAt,
+                  ).toLocaleString()}
+                </span>
               </p>
             )}
           </div>
@@ -120,134 +116,155 @@ export default function IndexFundsPage() {
             <button
               type="button"
               className={
-                "tab-btn " + (activeTab === "about" ? "tab-btn--active" : "")
+                "tab-btn " +
+                (activeTab === "about" ? "tab-btn--active" : "")
               }
               onClick={() => setActiveTab("about")}
             >
-              What are index funds?
+              Index funds & core exposure
             </button>
             <button
               type="button"
               className={
-                "tab-btn " + (activeTab === "funds" ? "tab-btn--active" : "")
+                "tab-btn " +
+                (activeTab === "funds" ? "tab-btn--active" : "")
               }
               onClick={() => setActiveTab("funds")}
             >
-              Top funds in this snapshot
+              Funds in this snapshot
             </button>
           </div>
         </div>
 
         {/* Content below tabs */}
         {activeTab === "about" ? (
-            <>
-              {/* CARD 1 — How index funds work */}
-              <section className="panel index-about-panel">
-                <h3>How index funds work</h3>
-                <p className="muted">
-                  An index fund is a basket of stocks that tracks a specific market index
-                  like the S&amp;P 500 or total U.S. stock market. Instead of picking
-                  individual winners, you buy a slice of the entire market.
+          <>
+            {/* CARD 1 — How index funds work */}
+            <section className="panel index-about-panel">
+              <h3>How index funds work</h3>
+              <p className="muted">
+                An index fund is a basket of stocks that tracks a specific
+                market index like the S&amp;P 500 or the total U.S. stock
+                market. Instead of trying to pick individual winners, you buy a
+                slice of the entire market.
+              </p>
+
+              <ul className="about-list">
+                <li>
+                  <strong>Passive exposure:</strong> the fund mirrors an index
+                  instead of being actively traded.
+                </li>
+                <li>
+                  <strong>Low costs:</strong> fewer trades and less research
+                  overhead usually mean low fees.
+                </li>
+                <li>
+                  <strong>Diversification:</strong> a single fund can hold
+                  hundreds or thousands of companies.
+                </li>
+                <li>
+                  <strong>Core holding:</strong> many quants treat broad index
+                  funds as the &quot;beta&quot; or market baseline their
+                  strategies build on top of.
+                </li>
+              </ul>
+            </section>
+
+            {/* CARD 2 — How quants source data & find “gold mines” */}
+            <section className="panel index-about-panel">
+              <h3 className="fundamentals-title">
+                How quants source data & find &quot;the gold mine&quot;
+              </h3>
+
+              <div className="fundamentals-explain">
+                <p>
+                  Before chasing complex signals, quantitative researchers build
+                  a clean, reliable data foundation. This u-Stock prototype
+                  mirrors that approach:
                 </p>
 
-                <ul className="about-list">
-                  <li><strong>Passive investing:</strong> the fund mirrors an index.</li>
-                  <li><strong>Low costs:</strong> fewer trades and research.</li>
-                  <li><strong>Diversification:</strong> a single fund holds hundreds or thousands of companies.</li>
-                  <li><strong>Boglehead investing:</strong> simple long-term index portfolios.</li>
+                <ul className="metrics-list">
+                  <li>
+                    <strong>Market prices:</strong> daily and intraday OHLCV
+                    data fetched via APIs (e.g. Yahoo Finance wrappers) to
+                    understand trend, volatility, and liquidity.
+                  </li>
+                  <li>
+                    <strong>Fundamentals:</strong> company-level metrics like PE
+                    ratios, market caps, margins, and balance sheet strength to
+                    layer in quality and valuation.
+                  </li>
+                  <li>
+                    <strong>Macro context:</strong> inflation, rates, and
+                    growth data to explain why entire sectors or factors might
+                    move together.
+                  </li>
+                  <li>
+                    <strong>Alternative data (future layer):</strong> news,
+                    social, and behavior data to identify pockets of attention
+                    or stress that might not show up in prices yet.
+                  </li>
                 </ul>
 
                 <p className="muted">
-                  Below is a fundamentals guide explaining PE ratios and market caps—
-                  two metrics used to understand what’s inside an index.
+                  The &quot;gold mine&quot; isn&apos;t a single magical signal.
+                  It&apos;s the combination of clean inputs, sensible
+                  indicators, and disciplined ranking of opportunities—exactly
+                  what this project is designed to demonstrate.
                 </p>
-              </section>
-
-              {/* CARD 2 — NEW FUNDAMENTALS GUIDE */}
-              <section className="panel index-about-panel">
-                <h3 className="fundamentals-title">Understanding PE & Market Cap</h3>
-
-                <div className="fundamentals-explain">
-                  <p>
-                    <span className="metric-heading">PE Ratio (Price-to-Earnings):</span>
-                    &nbsp;shows how much investors pay for $1 of company earnings.
-                  </p>
-                  <ul className="metrics-list">
-                    <li>High PE → high expectations or possibly overvalued.</li>
-                    <li>Low PE → undervalued or slower-growth companies.</li>
-                  </ul>
-
-                  <p>
-                    <span className="metric-heading">Market Cap:</span>
-                    &nbsp;the total value of a company based on its share price.
-                  </p>
-                  <ul className="metrics-list">
-                    <li>Large caps → stable, blue-chip companies.</li>
-                    <li>Small caps → higher volatility and hype-sensitive.</li>
-                  </ul>
-
-                  <p className="muted">
-                    U-Stock uses these fundamentals to give extra context beyond Reddit hype,
-                    showing whether buzz is landing on mega-caps, growth names, or riskier
-                    small caps.
-                  </p>
-                </div>
-              </section>
-            </>
-          ) : (
+              </div>
+            </section>
+          </>
+        ) : (
           <section className="panel">
-            {loading ? (
-              <p className="muted">Loading live mention counts…</p>
+            {fundamentalsLoading ? (
+              <p className="muted">
+                Loading fundamentals snapshot (PE, market cap)…{" "}
+              </p>
             ) : (
-              <>
-                {fundamentalsLoading && (
-                  <p className="muted">
-                    Loading fundamentals snapshot (PE, market cap)…
-                  </p>
-                )}
-
-                <div className="fund-grid">
-                  {fundsWithData.map((fund) => (
-                    <article key={fund.ticker} className="fund-card">
-                      <header className="fund-card-header">
-                        <div>
-                          <div className="fund-ticker">{fund.ticker}</div>
-                          <div className="fund-name">{fund.name}</div>
-                        </div>
-                        <div className="fund-mentions">
-                          <span className="fund-mentions-count">
-                            {fund.mentions}
-                          </span>
-                          <span className="fund-mentions-label">mentions</span>
-                        </div>
-                      </header>
-
-                      <p className="fund-blurb">{fund.blurb}</p>
-
-                      <div className="fund-metrics-row">
-                        <div className="fund-metric">
-                          <span className="fund-metric-label">PE:</span>
-                          <span className="fund-metric-value">
-                            {fund.fundamentals?.pe != null &&
-                            Number.isFinite(Number(fund.fundamentals.pe))
-                              ? Number(fund.fundamentals.pe).toFixed(1)
-                              : "N/A"}
-                          </span>
-                        </div>
-
-                        <div className="fund-metric">
-                          <span className="fund-metric-label">Market Cap:</span>
-                          <span className="fund-metric-value">
-                            {fund.fundamentals?.marketCap != null
-                              ? formatMarketCap(fund.fundamentals.marketCap)
-                              : "N/A"}
-                          </span>
-                        </div>
+              <div className="fund-grid">
+                {fundsWithData.map((fund) => (
+                  <article key={fund.ticker} className="fund-card">
+                    <header className="fund-card-header">
+                      <div>
+                        <div className="fund-ticker">{fund.ticker}</div>
+                        <div className="fund-name">{fund.name}</div>
                       </div>
-                    </article>
-                  ))}
-                </div>
-              </>
+                    </header>
+
+                    <p className="fund-blurb">{fund.blurb}</p>
+
+                    <div className="fund-metrics-row">
+                      <div className="fund-metric">
+                        <span className="fund-metric-label">PE:</span>
+                        <span className="fund-metric-value">
+                          {fund.fundamentals?.pe != null &&
+                          Number.isFinite(
+                            Number(fund.fundamentals.pe),
+                          )
+                            ? Number(
+                                fund.fundamentals.pe,
+                              ).toFixed(1)
+                            : "N/A"}
+                        </span>
+                      </div>
+
+                      <div className="fund-metric">
+                        <span className="fund-metric-label">
+                          Market Cap:
+                        </span>
+                        <span className="fund-metric-value">
+                          {fund.fundamentals?.marketCap != null
+                            ? formatMarketCap(
+                                fund.fundamentals.marketCap,
+                              )
+                            : "N/A"}
+                        </span>
+                      </div>
+                    </div>
+                  </article>
+                ))}
+              </div>
             )}
           </section>
         )}

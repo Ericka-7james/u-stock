@@ -17,11 +17,11 @@
       "key_stats": {
         "beta": 1.109,
         "bookValue": 4.991,
-        "priceToBook": 55.10118,
+        "priceToBook": 55.319973,
         "52WeekChange": 0.1658436,
         "heldPercentInstitutions": 0.64314,
         "sharesOutstanding": 14776353000,
-        "forwardPE": 30.172205,
+        "forwardPE": 30.292011,
         "enterpriseValue": 4069312167936,
         "enterpriseToEbitda": 28.113,
         "enterpriseToRevenue": 9.778,
@@ -33,7 +33,7 @@
         "sharesPercentSharesOut": 0.0078
       },
       "financial_data": {
-        "currentPrice": 275.01,
+        "currentPrice": 276.102,
         "totalRevenue": 416161005568,
         "revenueGrowth": 0.079,
         "grossMargins": 0.46905,
@@ -48,13 +48,13 @@
         "payoutRatio": 0.1367
       },
       "trading_snapshot": {
-        "marketCap": 4081255710720,
-        "regularMarketVolume": 21980409,
+        "marketCap": 4097461190656,
+        "regularMarketVolume": 26794267,
         "averageVolume": 51066467,
         "averageDailyVolume10Day": 46868060,
         "regularMarketPreviousClose": 271.49,
         "regularMarketOpen": 270.9,
-        "regularMarketDayHigh": 275.92,
+        "regularMarketDayHigh": 276.51,
         "regularMarketDayLow": 270.9
       },
       "institution_ownership": [
@@ -62,31 +62,31 @@
           "organization": "Vanguard Group Inc",
           "pctHeld": 0.0947,
           "position": 1399427162,
-          "value": 384856477487
+          "value": 386359725677
         },
         {
           "organization": "Blackrock Inc.",
           "pctHeld": 0.0776,
           "position": 1146332274,
-          "value": 315252849867
+          "value": 316484226506
         },
         {
           "organization": "State Street Corporation",
           "pctHeld": 0.0404,
           "position": 597501113,
-          "value": 164318786921
+          "value": 164960615585
         },
         {
           "organization": "Geode Capital Management, LLC",
           "pctHeld": 0.0241,
           "position": 356166414,
-          "value": 97949328992
+          "value": 98331918763
         },
         {
           "organization": "FMR, LLC",
           "pctHeld": 0.020499999,
           "position": 303254081,
-          "value": 83397907777
+          "value": 83723659742
         }
       ]
     },
@@ -102,11 +102,11 @@
       "key_stats": {
         "beta": 1.065,
         "bookValue": 48.84,
-        "priceToBook": 9.742117,
+        "priceToBook": 9.718264,
         "52WeekChange": 0.12734306,
         "heldPercentInstitutions": 0.75626,
         "sharesOutstanding": 7432377655,
-        "forwardPE": 25.420736,
+        "forwardPE": 25.358496,
         "enterpriseValue": 3527337050112,
         "enterpriseToEbitda": 21.193,
         "enterpriseToRevenue": 12.005,
@@ -118,7 +118,7 @@
         "sharesPercentSharesOut": 0.0070999996
       },
       "financial_data": {
-        "currentPrice": 475.805,
+        "currentPrice": 474.64,
         "totalRevenue": 293812011008,
         "revenueGrowth": 0.184,
         "grossMargins": 0.68764,
@@ -133,8 +133,8 @@
         "payoutRatio": 0.2361
       },
       "trading_snapshot": {
-        "marketCap": 3536737533952,
-        "regularMarketVolume": 14119425,
+        "marketCap": 3528078131200,
+        "regularMarketVolume": 15651617,
         "averageVolume": 21532443,
         "averageDailyVolume10Day": 25909050,
         "regularMarketPreviousClose": 472.12,
@@ -147,31 +147,31 @@
           "organization": "Vanguard Group Inc",
           "pctHeld": 0.094399996,
           "position": 701986682,
-          "value": 334005254726
+          "value": 333197974326
         },
         {
           "organization": "Blackrock Inc.",
           "pctHeld": 0.0796,
           "position": 591860058,
-          "value": 281607008371
+          "value": 280926372917
         },
         {
           "organization": "State Street Corporation",
           "pctHeld": 0.0403,
           "position": 299761678,
-          "value": 142626602733
+          "value": 142281878633
         },
         {
           "organization": "FMR, LLC",
           "pctHeld": 0.028299998,
           "position": 210487489,
-          "value": 100149944696
+          "value": 99907885369
         },
         {
           "organization": "Geode Capital Management, LLC",
           "pctHeld": 0.024300002,
           "position": 180707258,
-          "value": 85980511150
+          "value": 85772698906
         }
       ]
     },
@@ -187,11 +187,11 @@
       "key_stats": {
         "beta": 1.082,
         "bookValue": 32.033,
-        "priceToBook": 9.854526,
+        "priceToBook": 9.915087,
         "52WeekChange": 0.768577,
         "heldPercentInstitutions": 0.60723,
         "sharesOutstanding": 5407000000,
-        "forwardPE": 28.250252,
+        "forwardPE": 28.423866,
         "enterpriseValue": 3561575677952,
         "enterpriseToEbitda": 24.533,
         "enterpriseToRevenue": 9.239,
@@ -202,7 +202,7 @@
         "sharesPercentSharesOut": 0.0033000002
       },
       "financial_data": {
-        "currentPrice": 315.645,
+        "currentPrice": 317.61,
         "totalRevenue": 385476001792,
         "revenueGrowth": 0.159,
         "grossMargins": 0.59172,
@@ -217,8 +217,8 @@
         "payoutRatio": 0.0809
       },
       "trading_snapshot": {
-        "marketCap": 3810413772800,
-        "regularMarketVolume": 25332105,
+        "marketCap": 3833954041856,
+        "regularMarketVolume": 28931071,
         "averageVolume": 23306334,
         "averageDailyVolume10Day": 27251080,
         "regularMarketPreviousClose": 299.65,
@@ -231,31 +231,31 @@
           "organization": "Vanguard Group Inc",
           "pctHeld": 0.0764,
           "position": 412885548,
-          "value": 130331453593
+          "value": 131130386121
         },
         {
           "organization": "Blackrock Inc.",
           "pctHeld": 0.066300005,
           "position": 358535293,
-          "value": 113175251901
+          "value": 113869016818
         },
         {
           "organization": "State Street Corporation",
           "pctHeld": 0.0344,
           "position": 186149073,
-          "value": 58759817064
+          "value": 59120015066
         },
         {
           "organization": "FMR, LLC",
           "pctHeld": 0.020399999,
           "position": 110104325,
-          "value": 34755531632
+          "value": 34968583232
         },
         {
           "organization": "Geode Capital Management, LLC",
           "pctHeld": 0.02,
           "position": 108236788,
-          "value": 34166024896
+          "value": 34375462816
         }
       ]
     }

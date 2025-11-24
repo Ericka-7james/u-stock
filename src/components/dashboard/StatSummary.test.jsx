@@ -24,7 +24,7 @@ describe("StatSummary", () => {
     ).toBeInTheDocument();
 
     // Subreddits label should exist (count is 0 here)
-    expect(screen.getByText(/subreddits/i)).toBeInTheDocument();
+    expect(screen.getByText(/datasources/i)).toBeInTheDocument();
   });
 
   it("renders correct totals and top ticker from rawData", () => {
