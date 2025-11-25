@@ -7,33 +7,35 @@
     "dev": "vite --host 0.0.0.0 --port 5173",
     "build": "vite build",
     "preview": "vite preview",
+
     "test:reddit-auth": "node scripts/test-reddit-auth.mjs",
     "fetch:reddit-mentions": "node scripts/fetch-reddit-mentions.mjs",
+
     "script": "node",
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:frontend": "vitest run",
     "test:backend": "pytest",
     "test:all": "npm run test:frontend -- --coverage && npm run test:backend",
+
     "lint": "eslint . --ext .js,.jsx --max-warnings=0",
-    "format": "prettier \"src/**/*.{js,jsx,json,css,md}\" --check",
-    "format:fix": "prettier \"src/**/*.{js,jsx,json,css,md}\" --write",
-    "symbols:update": "PYTHONPATH=src python -m data_scout.update_symbols",
+    "format": "prettier \"src/**/*.{js,jsx,json,css,md,ts,tsx}\" --check",
+    "format:fix": "prettier \"src/**/*.{js,jsx,json,css,md,ts,tsx}\" --write",
 
-    "fetch:prices": "PYTHONPATH=src python -m fetchers.fetch_prices",
-    "fetch:intraday": "PYTHONPATH=src python -m fetchers.fetch_intraday",
-    "fetch:fundamentals": "PYTHONPATH=src python -m fetchers.fetch_fundamentals",
+    "symbols:update": "cross-env PYTHONPATH=src python -m data_scout.update_symbols",
 
-    "indicators:daily": "PYTHONPATH=src python -m indicators.compute_indicators",
-    "indicators:intraday": "PYTHONPATH=src python -m indicators.intraday_indicators",
-    "indicators:multiday": "PYTHONPATH=src python -m indicators.multiday_indicators",
+    "fetch:prices": "cross-env PYTHONPATH=src python -m data_scout.fetchers.fetch_prices",
+    "fetch:intraday": "cross-env PYTHONPATH=src python -m data_scout.fetchers.fetch_intraday",
+    "fetch:fundamentals": "cross-env PYTHONPATH=src python -m data_scout.fetchers.fetch_fundamentals",
 
-    "signals:final": "PYTHONPATH=src python -m indicators.signal_engine",
+    "indicators:daily": "cross-env PYTHONPATH=src python -m data_scout.indicators.compute_indicators",
+    "indicators:intraday": "cross-env PYTHONPATH=src python -m data_scout.indicators.intraday_indicators",
+    "indicators:multiday": "cross-env PYTHONPATH=src python -m data_scout.indicators.multiday_indicators",
+
+    "signals:final": "cross-env PYTHONPATH=src python -m data_scout.indicators.signal_engine",
 
     "fetch:all": "npm run fetch:prices && npm run fetch:intraday && npm run fetch:fundamentals",
-
     "indicators:all": "npm run indicators:daily && npm run indicators:intraday && npm run indicators:multiday",
-
     "fetch+indicators:all": "npm run fetch:all && npm run indicators:all && npm run signals:final"
   },
   "dependencies": {
