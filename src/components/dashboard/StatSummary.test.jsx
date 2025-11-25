@@ -1,72 +1,75 @@
 // src/components/dashboard/StatSummary.test.jsx
 import { render, screen } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
 import StatSummary from "./StatSummary";
 
+// Minimal mock meta for signals
+const mockMeta = {
+  generatedAt: "2025-11-24T12:00:00Z",
+  universe: ["AAPL", "MSFT", "TSLA"],
+};
+
 describe("StatSummary", () => {
-  it("renders correct totals and placeholders when rawData is empty", () => {
+  it("renders fallback values when signals + meta are empty", () => {
     render(
-      <MemoryRouter>
-        <StatSummary meta={{}} rawData={[]} />
-      </MemoryRouter>
+      <StatSummary
+        signalsMeta={null}
+        signalsData={[]}
+        pricesMeta={null}
+      />
     );
 
-    // There are two "0" values: total mentions and subreddits
-    const zeros = screen.getAllByText("0");
-    expect(zeros).toHaveLength(2);
+    // Universe size should be "0"
+    expect(screen.getByText("0")).toBeInTheDocument();
 
-    // Top ticker should be em-dash
-    expect(screen.getByText("—")).toBeInTheDocument();
-
-    // Caption should show "No mentions this run"
-    expect(
-      screen.getByText(/no mentions this run/i)
-    ).toBeInTheDocument();
-
-    // Subreddits label should exist (count is 0 here)
-    expect(screen.getByText(/datasources/i)).toBeInTheDocument();
+    // Two placeholders: top ticker + last refresh
+    const dashes = screen.getAllByText("—");
+    expect(dashes.length).toBeGreaterThanOrEqual(2);
   });
 
-  it("renders correct totals and top ticker from rawData", () => {
-    const rawData = [
-      { ticker: "TSLA", count: 10 },
-      { ticker: "AAPL", count: 5 },
-      { ticker: "SPY", count: 1 },
+  it("renders non-zero universe size + top ticker when signals are present", () => {
+    const signals = [
+      { ticker: "TSLA", score: 5.6, components: {} },
+      { ticker: "AAPL", score: 4.1, components: {} },
     ];
 
     render(
-      <MemoryRouter>
-        <StatSummary meta={{ subreddits: [] }} rawData={rawData} />
-      </MemoryRouter>
+      <StatSummary
+        signalsMeta={mockMeta}
+        signalsData={signals}
+        pricesMeta={null}
+      />
     );
 
-    // Total mentions = 10 + 5 + 1 = 16
-    expect(screen.getByText("16")).toBeInTheDocument();
+    // Find the Universe size card label
+    const universeLabel = screen.getByText(/Universe size/i);
 
-    // Top ticker is first in list: TSLA
+    // Grab the closest stat card and its value
+    const statCard = universeLabel.closest(".stat-card");
+    const valueEl = statCard?.querySelector(".stat-value");
+
+    expect(valueEl).not.toBeNull();
+    // When meta/signals are present, this should NOT be "0"
+    expect(valueEl.textContent).not.toBe("0");
+
+    // Top in-play ticker should be the first signal by score
     expect(screen.getByText("TSLA")).toBeInTheDocument();
-
-    // Top ticker caption: "10 mentions"
-    expect(screen.getByText(/10 mentions/i)).toBeInTheDocument();
+    expect(screen.getByText(/Score:/i)).toBeInTheDocument();
   });
 
-  it("renders subreddit count from meta", () => {
-    const meta = {
-      subreddits: ["stocks", "wallstreetbets", "investing"],
-    };
-
+  it("renders last refresh when meta.generatedAt exists", () => {
     render(
-      <MemoryRouter>
-        <StatSummary meta={meta} rawData={[]} />
-      </MemoryRouter>
+      <StatSummary
+        signalsMeta={mockMeta}
+        signalsData={[]}
+        pricesMeta={null}
+      />
     );
 
-    // Should show "3" as the stat-value for subreddits
-    expect(screen.getByText("3")).toBeInTheDocument();
+    const label = screen.getByText("Last data refresh");
+    const statCard = label.closest(".stat-card");
+    const valueEl = statCard?.querySelector(".stat-value");
 
-    // Should render link tile text
-    expect(
-      screen.getByText(/see more details/i)
-    ).toBeInTheDocument();
+    expect(valueEl).not.toBeNull();
+    expect(valueEl.textContent).not.toBe("—");
   });
 });

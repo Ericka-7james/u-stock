@@ -1,5 +1,5 @@
 // src/components/dashboard/DashboardPage.jsx
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 import AppShell from "../layout/AppShell";
 import StatSummary from "./StatSummary";
@@ -13,36 +13,39 @@ import "./DashboardPage.css";
 export default function DashboardPage() {
   // Ranked signals from your Python signal_engine
   const {
-    data: signals,
+    data: signals = [],
     meta: signalsMeta,
     loading: signalsLoading,
   } = useSignalsSnapshot();
 
   // Daily OHLCV history (from prices-raw.json)
   const {
-    historyBySymbol,
-    symbols: priceSymbols,
+    historyBySymbol = {},
+    symbols: priceSymbols = [],
     meta: pricesMeta,
     loading: pricesLoading,
   } = useDailyPricesHistory();
 
   const [selectedTicker, setSelectedTicker] = useState("");
 
-  // Default ticker = top-ranked from signals, or first in priceSymbols
-  useEffect(() => {
-    if (!selectedTicker) {
-      if (signals && signals.length > 0) {
-        setSelectedTicker(signals[0].ticker);
-      } else if (priceSymbols && priceSymbols.length > 0) {
-        setSelectedTicker(priceSymbols[0]);
-      }
-    }
-  }, [selectedTicker, signals, priceSymbols]);
+  /**
+   * Default ticker:
+   * 1. First ranked signal
+   * 2. Else first available price symbol
+   */
+  const defaultTicker = useMemo(() => {
+    if (signals.length > 0) return signals[0].ticker;
+    if (priceSymbols.length > 0) return priceSymbols[0];
+    return "";
+  }, [signals, priceSymbols]);
+
+  // The actual ticker to use in UI
+  const currentTicker = selectedTicker || defaultTicker;
 
   const currentSeries = useMemo(() => {
-    if (!selectedTicker) return [];
-    return historyBySymbol[selectedTicker] || [];
-  }, [historyBySymbol, selectedTicker]);
+    if (!currentTicker) return [];
+    return historyBySymbol[currentTicker] || [];
+  }, [historyBySymbol, currentTicker]);
 
   const combinedLoading = signalsLoading || pricesLoading;
 
@@ -54,7 +57,7 @@ export default function DashboardPage() {
   return (
     <AppShell>
       <div className="dashboard">
-        {/* Top stats row – now uses your own signals/prices */}
+        {/* Top stats row */}
         <StatSummary
           signalsMeta={signalsMeta}
           signalsData={signals}
@@ -62,25 +65,8 @@ export default function DashboardPage() {
         />
 
         <main className="dashboard-main">
-          {/* LEFT column – about + top signals */}
+          {/* LEFT column: filters + top signals */}
           <section className="panel panel-filters">
-            {/* About card */}
-            <div className="filters-card filters-card--filters">
-              <h3 className="panel-title">About this dashboard</h3>
-              <p className="muted">
-                This is a personal prototype of my u-Stock day-trading
-                intelligence bot. The backend Python pipeline fetches real
-                market data (prices, intraday bars, and fundamentals), computes
-                multi-horizon indicators, and ranks tickers by a combined
-                &quot;in-play&quot; score. This page visualizes the latest
-                snapshot.
-              </p>
-              <p className="muted">
-                Under the hood: Python, pandas, yahooquery, Parquet storage,
-                and a React + Vite frontend.
-              </p>
-            </div>
-
             {/* Top signals table */}
             <div className="filters-card filters-card--index">
               <div className="filters-card-header">
@@ -91,8 +77,7 @@ export default function DashboardPage() {
                 <p className="muted">Loading signals…</p>
               ) : topFiveSignals.length === 0 ? (
                 <p className="muted">
-                  No signals available. Run your fetchers and indicator scripts
-                  to generate a new snapshot.
+                  No signals available. Run your fetchers + indicator scripts.
                 </p>
               ) : (
                 <>
@@ -116,7 +101,7 @@ export default function DashboardPage() {
                           <tr
                             key={row.ticker}
                             className={
-                              row.ticker === selectedTicker
+                              row.ticker === currentTicker
                                 ? "mini-table-row--active"
                                 : ""
                             }
@@ -165,17 +150,13 @@ export default function DashboardPage() {
                 <li>
                   <strong>Signals:</strong>{" "}
                   {signalsMeta?.generatedAt
-                    ? new Date(
-                        signalsMeta.generatedAt,
-                      ).toLocaleString()
+                    ? new Date(signalsMeta.generatedAt).toLocaleString()
                     : "—"}
                 </li>
                 <li>
                   <strong>Prices:</strong>{" "}
                   {pricesMeta?.generatedAt
-                    ? new Date(
-                        pricesMeta.generatedAt,
-                      ).toLocaleString()
+                    ? new Date(pricesMeta.generatedAt).toLocaleString()
                     : "—"}
                 </li>
                 <li>
@@ -186,15 +167,14 @@ export default function DashboardPage() {
             </div>
           </section>
 
-          {/* RIGHT column – price chart + ticker selector */}
+          {/* RIGHT column: price chart */}
           <section className="panel panel-chart">
             <div className="card-main-chart">
               <div className="card-header">
                 <div>
                   <h2>Price action viewer</h2>
                   <p className="card-subtitle">
-                    Select a ticker to see recent daily price action,
-                    powered by your u-Stock data-bot fetchers.
+                    Select a ticker to see recent daily price action.
                   </p>
                 </div>
 
@@ -203,18 +183,19 @@ export default function DashboardPage() {
                     Ticker
                     <select
                       className="chart-select"
-                      value={selectedTicker || ""}
+                      value={currentTicker}
                       onChange={(e) => setSelectedTicker(e.target.value)}
                     >
                       <option value="" disabled>
                         Select…
                       </option>
+
                       {signals.map((row) => (
                         <option key={row.ticker} value={row.ticker}>
                           {row.ticker}
                         </option>
                       ))}
-                      {/* fallback: if for some reason signals are empty but prices exist */}
+
                       {signals.length === 0 &&
                         priceSymbols.map((sym) => (
                           <option key={sym} value={sym}>
@@ -227,7 +208,7 @@ export default function DashboardPage() {
               </div>
 
               <PriceChart
-                ticker={selectedTicker}
+                ticker={currentTicker}
                 data={currentSeries}
                 loading={combinedLoading}
               />

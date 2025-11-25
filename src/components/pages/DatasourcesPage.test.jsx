@@ -1,13 +1,13 @@
-// src/components/pages/IndexFundsPage.test.jsx
+// src/components/pages/DatasourcesPage.test.jsx
 import { render } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import IndexFundsPage from "./IndexFundsPage";
+import DatasourcesPage from "./DatasourcesPage";
 
-describe("IndexFundsPage", () => {
+describe("DatasourcesPage", () => {
   it("renders without crashing", () => {
     render(
       <MemoryRouter>
-        <IndexFundsPage />
+        <DatasourcesPage />
       </MemoryRouter>
     );
   });
