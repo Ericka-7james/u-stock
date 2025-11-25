@@ -16,7 +16,6 @@ export default function DatasourcePage() {
   const totalPriceSources = PRICE_SOURCES?.length ?? 0;
   const totalFundamentalSources = FUNDAMENTAL_SOURCES?.length ?? 0;
   const totalMacroSources = MACRO_SOURCES?.length ?? 0;
-  const totalRedditCommunities = REDDIT_SOURCES?.length ?? 0;
   const totalTrackedTickers = TRACKED_TICKERS?.length ?? 0;
 
   return (
