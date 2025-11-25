@@ -13,7 +13,8 @@
 
     "script": "node",
     "test": "vitest",
-    "test:ui": "vitest --ui",
+    "test:ui": "vitest --ui"
+    ,
     "test:frontend": "vitest run",
     "test:backend": "pytest",
     "test:all": "npm run test:frontend -- --coverage && npm run test:backend",
