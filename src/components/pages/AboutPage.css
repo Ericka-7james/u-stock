@@ -1,0 +1,170 @@
+:root {
+  --ustock-green-main: #0f766e;
+}
+
+/* PAGE WRAPPER */
+.about-page {
+  padding: 24px 48px 48px;   /* top | sides | bottom */
+  max-width: 1280px;
+  margin: 0 auto;
+}
+
+/* HERO CARD */
+.about-hero-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 24px;
+  padding: 20px 22px;
+  margin-bottom: 24px;
+  border-radius: 18px;
+  background: #ffffff;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-top: 4px solid var(--ustock-green-main);
+}
+
+.about-hero-text .page-title {
+  color: var(--ustock-green-main);
+  margin-bottom: 8px;
+}
+
+.about-hero-text .muted {
+  max-width: 560px;
+}
+
+/* HERO ASIDE (headshot + meta) */
+.about-hero-aside {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+/* Headshot image */
+.about-avatar-image {
+  width: 80px;
+  height: 80px;
+  border-radius: 999px;
+  object-fit: cover;
+  border: 2px solid var(--ustock-green-main);
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.12);
+  background: #f9fafb;
+}
+
+/* Meta info next to headshot */
+.about-meta {
+  font-size: 12px;
+  color: #4b5563;
+}
+
+.about-meta-row {
+  display: flex;
+  gap: 6px;
+}
+
+.about-meta-row .label {
+  font-weight: 600;
+  color: #111827;
+}
+
+/* GRID SECTIONS */
+.about-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.about-card {
+  background: #ffffff;
+  border-radius: 18px;
+  padding: 18px 20px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.about-card h2 {
+  margin-top: 0;
+  margin-bottom: 10px;
+  font-size: 18px;
+  color: #0f172a;
+}
+
+/* Text + lists */
+.about-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 14px;
+  color: #374151;
+}
+
+.about-list li {
+  margin-bottom: 6px;
+}
+
+.about-pill-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.about-pill-list li {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  background: #ecfdf3;
+  color: #166534;
+  border: 1px solid rgba(22, 101, 52, 0.18);
+}
+
+/* Links section */
+.about-links {
+  list-style: none;
+  padding: 0;
+  margin: 10px 0 0;
+}
+
+.about-links li {
+  margin-bottom: 6px;
+}
+
+.about-links a {
+  font-size: 14px;
+  color: #0f766e;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.about-links a:hover {
+  text-decoration: underline;
+}
+
+/* MOBILE + SMALL SCREENS */
+@media (max-width: 768px) {
+  .about-page {
+    padding: 16px 16px 32px;
+  }
+
+  .about-hero-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .about-hero-aside {
+    align-items: flex-start;
+  }
+
+  .about-grid {
+    grid-template-columns: 1fr;  /* stack cards */
+  }
+}
+
+/* Tablets – 2 cards per row */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .about-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
