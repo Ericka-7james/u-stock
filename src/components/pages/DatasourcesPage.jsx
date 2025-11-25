@@ -2,7 +2,9 @@
 import { Link } from "react-router-dom";
 
 import AppShell from "../layout/AppShell";
-import "./SubredditsPage.css";
+
+import './DatasourcesPage.css';
+
 
 import { PRICE_SOURCES } from "../../config/raw/pricesSources";
 import { FUNDAMENTAL_SOURCES } from "../../config/raw/fundamentalsSources";
@@ -10,7 +12,7 @@ import { MACRO_SOURCES } from "../../config/raw/macroSources";
 import { REDDIT_SOURCES } from "../../config/raw/redditSources";
 import { TRACKED_TICKERS } from "../../config/raw/trackedTickers";
 
-export default function SubredditsPage() {
+export default function DatasourcePage() {
   const totalPriceSources = PRICE_SOURCES?.length ?? 0;
   const totalFundamentalSources = FUNDAMENTAL_SOURCES?.length ?? 0;
   const totalMacroSources = MACRO_SOURCES?.length ?? 0;
