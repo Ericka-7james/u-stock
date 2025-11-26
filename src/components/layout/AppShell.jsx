@@ -11,6 +11,7 @@ export default function AppShell({ children }) {
   const isDashboard = location.pathname === "/";
   const isDatasources = location.pathname.startsWith("/datasources");
   const isIndexFunds = location.pathname.startsWith("/index-funds");
+  const isAboutMe = location.pathname.startsWith("/about");
 
   return (
     <div className={`app-shell ${navOpen ? "app-shell--nav-open" : ""}`}>
@@ -55,10 +56,16 @@ export default function AppShell({ children }) {
             Index Funds
           </Link>
 
-          <button className="side-nav-item" type="button">
+          <Link
+            to="/about"
+            className={
+              "side-nav-item " + (isAboutMe ? "side-nav-item--active" : "")
+            }
+          >
             <span className="side-nav-item-dot" />
-            News
-          </button>
+            About me
+          </Link>
+
           <button className="side-nav-item" type="button">
             <span className="side-nav-item-dot" />
             Settings
