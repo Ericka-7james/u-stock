@@ -7,10 +7,8 @@
     "dev": "vite --host 0.0.0.0 --port 5173",
     "build": "vite build",
     "preview": "vite preview",
-
     "test:reddit-auth": "node scripts/test-reddit-auth.mjs",
     "fetch:reddit-mentions": "node scripts/fetch-reddit-mentions.mjs",
-
     "script": "node",
     "test": "vitest",
     "test:ui": "vitest --ui"
@@ -18,26 +16,21 @@
     "test:frontend": "vitest run",
     "test:backend": "pytest",
     "test:all": "npm run test:frontend -- --coverage && npm run test:backend",
-
     "lint": "eslint . --ext .js,.jsx --max-warnings=0",
     "format": "prettier \"src/**/*.{js,jsx,json,css,md,ts,tsx}\" --check",
     "format:fix": "prettier \"src/**/*.{js,jsx,json,css,md,ts,tsx}\" --write",
-
     "symbols:update": "cross-env PYTHONPATH=src python -m data_scout.update_symbols",
-
     "fetch:prices": "cross-env PYTHONPATH=src python -m data_scout.fetchers.fetch_prices",
     "fetch:intraday": "cross-env PYTHONPATH=src python -m data_scout.fetchers.fetch_intraday",
     "fetch:fundamentals": "cross-env PYTHONPATH=src python -m data_scout.fetchers.fetch_fundamentals",
-
     "indicators:daily": "cross-env PYTHONPATH=src python -m data_scout.indicators.compute_indicators",
     "indicators:intraday": "cross-env PYTHONPATH=src python -m data_scout.indicators.intraday_indicators",
     "indicators:multiday": "cross-env PYTHONPATH=src python -m data_scout.indicators.multiday_indicators",
-
     "signals:final": "cross-env PYTHONPATH=src python -m data_scout.indicators.signal_engine",
-
     "fetch:all": "npm run fetch:prices && npm run fetch:intraday && npm run fetch:fundamentals",
     "indicators:all": "npm run indicators:daily && npm run indicators:intraday && npm run indicators:multiday",
-    "fetch+indicators:all": "npm run fetch:all && npm run indicators:all && npm run signals:final"
+    "fetch+indicators:all": "npm run fetch:all && npm run indicators:all && npm run signals:final",
+    "update:tickers": "cross-env PYTHONPATH=src python -m data_scout.tickers.universe"
   },
   "dependencies": {
     "react": "^19.2.0",
@@ -54,6 +47,7 @@
     "@vitejs/plugin-react": "^5.1.0",
     "@vitest/coverage-v8": "^4.0.10",
     "@vitest/ui": "^4.0.10",
+    "cross-env": "^10.1.0",
     "dotenv": "^17.2.3",
     "eslint": "^9.39.1",
     "eslint-config-prettier": "^10.1.8",
