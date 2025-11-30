@@ -8,6 +8,9 @@ from typing import List, Set, Tuple
 
 import pandas as pd
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+
 
 # ---------- CONSTANTS ---------------------------------------------------------
 
@@ -71,12 +74,24 @@ def universe_dir() -> Path:
 
 def _download_text(url: str) -> str:
     """
-    Small helper: download a text file in memory.
+    Download a text file (with retries) and return its contents.
 
-    We call this at bootstrap time only, *not* during every ETL run.
+    This is called at bootstrap time only, not on every ETL run.
     """
+    session = requests.Session()
+    retries = Retry(
+        total=3,
+        backoff_factor=1.5,  # 0s, 1.5s, 3s…
+        status_forcelist=[500, 502, 503, 504],
+        allowed_methods=["GET"],
+        raise_on_status=False,
+    )
+    adapter = HTTPAdapter(max_retries=retries)
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+
     try:
-        resp = requests.get(url, timeout=20)
+        resp = session.get(url, timeout=10)  # shorter timeout per try
         resp.raise_for_status()
         return resp.text
     except requests.RequestException as e:
@@ -159,7 +174,24 @@ def build_us_tickers_from_nasdaq_trader() -> pd.DataFrame:
 
 
 # ---------- WIKIPEDIA INDEX HELPERS -------------------------------------------
-
+def _fetch_wiki_html(url: str) -> str:
+    """
+    Fetch raw HTML from Wikipedia with a browser-like User-Agent
+    so that pandas.read_html doesn't get a 403.
+    """
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/120.0 Safari/537.36"
+        )
+    }
+    try:
+        resp = requests.get(url, headers=headers, timeout=15)
+        resp.raise_for_status()
+        return resp.text
+    except requests.RequestException as e:
+        raise RuntimeError(f"Failed to fetch Wikipedia page {url}: {e}") from e
 
 def _fetch_wiki_table(url: str, symbol_column: str, index_name: str) -> pd.DataFrame:
     """
@@ -167,17 +199,26 @@ def _fetch_wiki_table(url: str, symbol_column: str, index_name: str) -> pd.DataF
       - symbol
       - index_name
     """
-    tables = pd.read_html(url)
+    html = _fetch_wiki_html(url)
+
+    # Wrap in StringIO to avoid FutureWarning about "literal html"
+    tables = pd.read_html(io.StringIO(html))
     if not tables:
         raise RuntimeError(f"No tables found at {url}")
 
-    df = tables[0]
+    # Find the first table that actually has the expected symbol_column
+    df = None
+    for tbl in tables:
+        if symbol_column in tbl.columns:
+            df = tbl
+            break
 
-    if symbol_column not in df.columns:
-        # Some tables use slightly different headers; raise clearly
+    if df is None:
+        # Helpful error message that shows what columns we did see
+        all_columns = [list(t.columns) for t in tables]
         raise KeyError(
-            f"Expected column '{symbol_column}' in first table at {url}, "
-            f"got columns={list(df.columns)}"
+            f"Expected column '{symbol_column}' in one of the tables at {url}, "
+            f"but found columns={all_columns}"
         )
 
     out = pd.DataFrame(
@@ -190,6 +231,7 @@ def _fetch_wiki_table(url: str, symbol_column: str, index_name: str) -> pd.DataF
     out = out[out["symbol"] != ""].drop_duplicates(subset=["symbol"])
 
     wiki_path = wiki_dir() / f"{index_name}.parquet"
+    wiki_path.parent.mkdir(parents=True, exist_ok=True)
     out.to_parquet(wiki_path, index=False)
 
     return out
