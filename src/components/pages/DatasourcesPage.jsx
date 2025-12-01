@@ -20,7 +20,6 @@ export default function DatasourcePage() {
 
   return (
     <AppShell>
-      <div className="dashboard data-sources-page">
         {/* HERO */}
         <header className="data-hero">
           <div className="data-hero-text">
@@ -157,7 +156,6 @@ export default function DatasourcePage() {
             </ul>
           </article>
         </section>
-      </div>
     </AppShell>
   );
 }

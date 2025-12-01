@@ -6,7 +6,6 @@ import headshot from "../../assets/ericka-headshot.jpeg"; // ⬅ we'll add this 
 export default function AboutPage() {
   return (
     <AppShell>
-      <div className="about-page">
         {/* HERO CARD */}
         <section className="about-hero-card">
           <div className="about-hero-text">
@@ -113,7 +112,6 @@ export default function AboutPage() {
             </ul>
           </article>
         </section>
-      </div>
     </AppShell>
   );
 }

@@ -5,7 +5,6 @@ import { Link } from "react-router-dom";
 import { useFundamentalsSnapshot } from "../../hooks/raw/useFundamentalsSnapshot";
 import AppShell from "../layout/AppShell";
 
-import "../dashboard/DashboardPage.css";
 import "./IndexFundsPage.css";
 
 const INDEX_FUNDS = [
@@ -55,7 +54,6 @@ export default function IndexFundsPage() {
     meta: fundamentalsMeta,
   } = useFundamentalsSnapshot();
 
-  // Map: ticker -> fundamentals object
   const fundamentalsMap = useMemo(() => {
     const map = {};
     const data = Array.isArray(fundamentalsData) ? fundamentalsData : [];
@@ -66,7 +64,6 @@ export default function IndexFundsPage() {
     return map;
   }, [fundamentalsData]);
 
-  // Merge: index fund base info + fundamentals
   const fundsWithData = useMemo(
     () =>
       INDEX_FUNDS.map((fund) => {
@@ -81,7 +78,7 @@ export default function IndexFundsPage() {
 
   return (
     <AppShell>
-      <div className="dashboard index-funds-page">
+      <div className="index-funds-page">
         {/* Hero card */}
         <header className="index-hero">
           <div className="index-hero-text">
@@ -90,16 +87,14 @@ export default function IndexFundsPage() {
               This page highlights broad index funds that often sit at the core
               of systematic trading and portfolio strategies. It combines simple
               fundamentals with educational context on how quants think about
-              diversified &quot;building blocks&quot; before hunting for
-              niche alpha.
+              diversified &quot;building blocks&quot; before hunting for niche
+              alpha.
             </p>
             {fundamentalsMeta?.generatedAt && (
               <p className="index-hero-meta">
                 Fundamentals snapshot:{" "}
                 <span>
-                  {new Date(
-                    fundamentalsMeta.generatedAt,
-                  ).toLocaleString()}
+                  {new Date(fundamentalsMeta.generatedAt).toLocaleString()}
                 </span>
               </p>
             )}
@@ -115,20 +110,14 @@ export default function IndexFundsPage() {
           <div className="tabs">
             <button
               type="button"
-              className={
-                "tab-btn " +
-                (activeTab === "about" ? "tab-btn--active" : "")
-              }
+              className={"tab-btn " + (activeTab === "about" ? "tab-btn--active" : "")}
               onClick={() => setActiveTab("about")}
             >
               Index funds & core exposure
             </button>
             <button
               type="button"
-              className={
-                "tab-btn " +
-                (activeTab === "funds" ? "tab-btn--active" : "")
-              }
+              className={"tab-btn " + (activeTab === "funds" ? "tab-btn--active" : "")}
               onClick={() => setActiveTab("funds")}
             >
               Funds in this snapshot
@@ -195,9 +184,9 @@ export default function IndexFundsPage() {
                     layer in quality and valuation.
                   </li>
                   <li>
-                    <strong>Macro context:</strong> inflation, rates, and
-                    growth data to explain why entire sectors or factors might
-                    move together.
+                    <strong>Macro context:</strong> inflation, rates, and growth
+                    data to explain why entire sectors or factors might move
+                    together.
                   </li>
                   <li>
                     <strong>Alternative data (future layer):</strong> news,
@@ -239,25 +228,17 @@ export default function IndexFundsPage() {
                         <span className="fund-metric-label">PE:</span>
                         <span className="fund-metric-value">
                           {fund.fundamentals?.pe != null &&
-                          Number.isFinite(
-                            Number(fund.fundamentals.pe),
-                          )
-                            ? Number(
-                                fund.fundamentals.pe,
-                              ).toFixed(1)
+                          Number.isFinite(Number(fund.fundamentals.pe))
+                            ? Number(fund.fundamentals.pe).toFixed(1)
                             : "N/A"}
                         </span>
                       </div>
 
                       <div className="fund-metric">
-                        <span className="fund-metric-label">
-                          Market Cap:
-                        </span>
+                        <span className="fund-metric-label">Market Cap:</span>
                         <span className="fund-metric-value">
                           {fund.fundamentals?.marketCap != null
-                            ? formatMarketCap(
-                                fund.fundamentals.marketCap,
-                              )
+                            ? formatMarketCap(fund.fundamentals.marketCap)
                             : "N/A"}
                         </span>
                       </div>

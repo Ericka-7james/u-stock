@@ -1,10 +1,4 @@
-/* Use same greens as rest of app */
-:root {
-  --ustock-green-main: #0f766e;
-  --ustock-green-soft: #bbf7d0;
-}
-
-/* Page wrapper */
+/* Wrapper just for vertical spacing */
 .index-funds-page {
   padding-bottom: 40px;
 }
@@ -23,6 +17,7 @@
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
   border: 1px solid rgba(148, 163, 184, 0.25);
   border-top: 4px solid var(--ustock-green-main);
+  box-sizing: border-box;
 }
 
 .index-hero-text .page-title {
@@ -45,7 +40,7 @@
   color: var(--ustock-green-main);
 }
 
-/* back link pill reused from Subreddits */
+/* back link pill */
 .back-link-pill {
   display: inline-flex;
   align-items: center;
@@ -105,46 +100,7 @@
   font-weight: 600;
 }
 
-/* MAIN CARDS ------------------------------------------------------- */
-
-.index-card {
-  background: #ffffff;
-  border-radius: 18px;
-  padding: 18px 20px;
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
-  border: 1px solid rgba(148, 163, 184, 0.25);
-  border-top: 4px solid var(--ustock-green-main);
-  margin-bottom: 18px;
-}
-
-.index-about-card h2,
-.index-funds-card h2 {
-  margin-top: 0;
-  margin-bottom: 8px;
-  font-size: 18px;
-  color: #0f172a;
-}
-
-/* about list reused, but neutral colors */
-.about-list {
-  margin-top: 12px;
-  padding-left: 18px;
-}
-
-.about-list li {
-  margin-bottom: 6px;
-}
-
-.about-list strong {
-  font-weight: 700;
-  color: var(--ustock-green-main);
-}
-
 /* FUNDS GRID ------------------------------------------------------- */
-
-.index-funds-header {
-  margin-bottom: 12px;
-}
 
 .fund-grid {
   display: grid;
@@ -153,7 +109,25 @@
   margin-top: 12px;
 }
 
-/* Individual fund card – match other cards */
+/* Responsive grid like about-grid */
+@media (max-width: 768px) {
+  .index-hero {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .fund-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (min-width: 769px) and (max-width: 1024px) {
+  .fund-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Individual fund card */
 .fund-card {
   background: #ffffff;
   border-radius: 16px;
@@ -195,39 +169,11 @@
   margin: 6px 0 10px;
 }
 
-.fund-mentions {
-  text-align: right;
-}
+/* ABOUT PANELS (top tab) ------------------------------------------- */
 
-.fund-mentions-count {
-  display: block;
-  font-size: 18px;
-  font-weight: 700;
-  color: #111827;
-}
-
-.fund-mentions-label {
-  font-size: 11px;
-  color: #6b7280;
-}
-
-/* responsive tweak */
-@media (max-width: 768px) {
-  .index-hero {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-}
-
-/* About card (What are index funds?) */
 .index-about-panel {
-  background: #ffffff;
-  border-radius: 18px;
-  padding: 20px 22px;
+  /* .panel base styles come from AppShell */
   margin-top: 16px;
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
-  border: 1px solid rgba(148, 163, 184, 0.25);
-  border-top: 4px solid var(--ustock-green-main);
 }
 
 .index-about-panel h3 {
@@ -258,9 +204,9 @@
   color: var(--ustock-green-main);
 }
 
-.fund-metric {
-  display: flex;
-  gap: 22px;
+/* Metrics styling inside fund cards -------------------------------- */
+
+.fund-metrics-row {
   margin-top: 8px;
 }
 
@@ -268,35 +214,28 @@
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 6px; /* space between label + value */
+  gap: 6px;
+  margin-top: 4px;
 }
 
 .fund-metric-label {
   font-weight: 600;
-  color: var(--ustock-green-main); /* theme green */
+  color: var(--ustock-green-main);
   font-size: 15px;
 }
 
 .fund-metric-value {
   font-size: 15px;
-  color: #111827; /* slate-900 */
+  color: #111827;
 }
 
-.index-fundamentals-card {
-  background: #ffffff;
-  border-radius: 18px;
-  padding: 20px 22px;
-  margin-top: 16px;
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
-  border: 1px solid rgba(148, 163, 184, 0.25);
-  border-top: 4px solid var(--ustock-green-main);
-}
+/* Fundamentals explanation card in about tab ------------------------ */
 
-.index-fundamentals-card h3 {
+.fundamentals-title {
+  color: #0f172a;
   margin-top: 0;
   margin-bottom: 10px;
   font-size: 20px;
-  color: var(--ustock-green-main);
   font-weight: 700;
 }
 
@@ -319,38 +258,4 @@
 
 .metrics-list strong {
   color: var(--ustock-green-main);
-}
-
-/* Title stays BLACK (default text color) */
-.fundamentals-title {
-  color: #0f172a; /* slate-900 */
-  margin-top: 0;
-  margin-bottom: 10px;
-  font-size: 20px;
-  font-weight: 700;
-}
-
-/* Green headings inside card */
-.metric-heading {
-  font-weight: 700;
-  color: var(--ustock-green-main); /* your U-Stock green */
-}
-
-/* Body text within card */
-.fundamentals-explain p {
-  font-size: 14px;
-  color: #374151; /* gray-700 */
-  margin-bottom: 6px;
-}
-
-/* Bullet list styling */
-.metrics-list {
-  margin: 6px 0 12px;
-  padding-left: 20px;
-  font-size: 14px;
-  color: #4b5563; /* gray-600 */
-}
-
-.metrics-list li {
-  margin-bottom: 6px;
 }

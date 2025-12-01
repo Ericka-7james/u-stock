@@ -1,0 +1,263 @@
+{
+  "symbols": [
+    "AAPL",
+    "MSFT",
+    "GOOG"
+  ],
+  "data": {
+    "AAPL": {
+      "company_profile": {
+        "sector": "Technology",
+        "industry": "Consumer Electronics",
+        "country": "United States",
+        "website": "https://www.apple.com",
+        "longBusinessSummary": "Apple Inc. designs, manufactures, and markets smartphones, personal computers, tablets, wearables, and accessories worldwide. The company offers iPhone, a line of smartphones; Mac, a line of personal computers; iPad, a line of multi-purpose tablets; and wearables, home, and accessories comprising AirPods, Apple Vision Pro, Apple TV, Apple Watch, Beats products, and HomePod, as well as Apple branded and third-party accessories. It also provides AppleCare support and cloud services; and operates various platforms, including the App Store that allow customers to discover and download applications and digital content, such as books, music, video, games, and podcasts, as well as advertising services include third-party licensing arrangements and its own advertising platforms. In addition, the company offers various subscription-based services, such as Apple Arcade, a game subscription service; Apple Fitness+, a personalized fitness service; Apple Music, which offers users a curated listening experience with on-demand radio stations; Apple News+, a subscription news and magazine service; Apple TV, which offers exclusive original content and live sports; Apple Card, a co-branded credit card; and Apple Pay, a cashless payment service, as well as licenses its intellectual property. The company serves consumers, and small and mid-sized businesses; and the education, enterprise, and government markets. It distributes third-party applications for its products through the App Store. The company also sells its products through its retail and online stores, and direct sales force; and third-party cellular network carriers and resellers. The company was formerly known as Apple Computer, Inc. and changed its name to Apple Inc. in January 2007. Apple Inc. was founded in 1976 and is headquartered in Cupertino, California.",
+        "fullTimeEmployees": 166000
+      },
+      "key_stats": {
+        "beta": 1.109,
+        "bookValue": 4.991,
+        "priceToBook": 55.870567,
+        "52WeekChange": 0.1638633,
+        "heldPercentInstitutions": 0.64364,
+        "sharesOutstanding": 14776353000,
+        "forwardPE": 30.593504,
+        "enterpriseValue": 4178066014208,
+        "enterpriseToEbitda": 28.864,
+        "enterpriseToRevenue": 10.04,
+        "floatShares": 14750642146,
+        "sharesShort": 114913396,
+        "sharesShortPriorMonth": 109135657,
+        "shortRatio": 2.34,
+        "shortPercentOfFloat": 0.0078,
+        "sharesPercentSharesOut": 0.0078
+      },
+      "financial_data": {
+        "currentPrice": 278.85,
+        "totalRevenue": 416161005568,
+        "revenueGrowth": 0.079,
+        "grossMargins": 0.46905,
+        "operatingMargins": 0.31647,
+        "profitMargins": 0.26915002,
+        "debtToEquity": 152.411,
+        "freeCashflow": 78862254080
+      },
+      "dividends": {
+        "dividendYield": 0.0037,
+        "dividendRate": 1.04,
+        "payoutRatio": 0.1367
+      },
+      "trading_snapshot": {
+        "marketCap": 4138242670592,
+        "regularMarketVolume": 16129268,
+        "averageVolume": 51432647,
+        "averageDailyVolume10Day": 44947280,
+        "regularMarketPreviousClose": 277.55,
+        "regularMarketOpen": 277.26,
+        "regularMarketDayHigh": 279.0,
+        "regularMarketDayLow": 275.9865
+      },
+      "institution_ownership": [
+        {
+          "organization": "Vanguard Group Inc",
+          "pctHeld": 0.0947,
+          "position": 1399427162,
+          "value": 390230272665
+        },
+        {
+          "organization": "Blackrock Inc.",
+          "pctHeld": 0.0776,
+          "position": 1146332274,
+          "value": 319654761601
+        },
+        {
+          "organization": "State Street Corporation",
+          "pctHeld": 0.0404,
+          "position": 597501113,
+          "value": 166613189006
+        },
+        {
+          "organization": "JPMORGAN CHASE & CO",
+          "pctHeld": 0.032,
+          "position": 473311062,
+          "value": 131982792527
+        },
+        {
+          "organization": "Geode Capital Management, LLC",
+          "pctHeld": 0.0241,
+          "position": 356166414,
+          "value": 99317006717
+        }
+      ]
+    },
+    "MSFT": {
+      "company_profile": {
+        "sector": "Technology",
+        "industry": "Software - Infrastructure",
+        "country": "United States",
+        "website": "https://www.microsoft.com",
+        "longBusinessSummary": "Microsoft Corporation develops and supports software, services, devices, and solutions worldwide. The company's Productivity and Business Processes segment offers Microsoft 365 Commercial, Enterprise Mobility + Security, Windows Commercial, Power BI, Exchange, SharePoint, Microsoft Teams, Security and Compliance, and Copilot; Microsoft 365 Commercial products, such as Windows Commercial on-premises and Office licensed services; Microsoft 365 Consumer products and cloud services, such as Microsoft 365 Consumer subscriptions, Office licensed on-premises, and other consumer services; LinkedIn; Dynamics products and cloud services, such as Dynamics 365, cloud-based applications, and on-premises ERP and CRM applications. Its Intelligent Cloud segment provides Server products and cloud services, such as Azure and other cloud services, GitHub, Nuance Healthcare, virtual desktop offerings, and other cloud services; Server products, including SQL and Windows Server, Visual Studio and System Center related Client Access Licenses, and other on-premises offerings; Enterprise and partner services, including Enterprise Support and Nuance professional Services, Industry Solutions, Microsoft Partner Network, and Learning Experience. The company's Personal Computing segment provides Windows and Devices, such as Windows OEM licensing and Devices and Surface and PC accessories; Gaming services and solutions, such as Xbox hardware, content, and services, first- and third-party content Xbox Game Pass, subscriptions, and Cloud Gaming, advertising, and other cloud services; search and news advertising services, such as Bing and Copilot, Microsoft News and Edge, and third-party affiliates. It sells its products through OEMs, distributors, and resellers; and online and retail stores. The company was founded in 1975 and is headquartered in Redmond, Washington.",
+        "fullTimeEmployees": 228000
+      },
+      "key_stats": {
+        "beta": 1.065,
+        "bookValue": 48.84,
+        "priceToBook": 10.073915,
+        "52WeekChange": 0.14160752,
+        "heldPercentInstitutions": 0.75689006,
+        "sharesOutstanding": 7432377655,
+        "forwardPE": 26.263128,
+        "enterpriseValue": 3675167129600,
+        "enterpriseToEbitda": 22.081,
+        "enterpriseToRevenue": 12.509,
+        "floatShares": 7421526384,
+        "sharesShort": 48553497,
+        "sharesShortPriorMonth": 52344880,
+        "shortRatio": 2.14,
+        "shortPercentOfFloat": 0.0064999997,
+        "sharesPercentSharesOut": 0.0064999997
+      },
+      "financial_data": {
+        "currentPrice": 492.01,
+        "totalRevenue": 293812011008,
+        "revenueGrowth": 0.184,
+        "grossMargins": 0.68764,
+        "operatingMargins": 0.48873,
+        "profitMargins": 0.35707,
+        "debtToEquity": 33.154,
+        "freeCashflow": 53327376384
+      },
+      "dividends": {
+        "dividendYield": 0.0074,
+        "dividendRate": 3.64,
+        "payoutRatio": 0.2361
+      },
+      "trading_snapshot": {
+        "marketCap": 3657192177664,
+        "regularMarketVolume": 10514063,
+        "averageVolume": 21777034,
+        "averageDailyVolume10Day": 26576720,
+        "regularMarketPreviousClose": 485.5,
+        "regularMarketOpen": 487.595,
+        "regularMarketDayHigh": 492.63,
+        "regularMarketDayLow": 486.65
+      },
+      "institution_ownership": [
+        {
+          "organization": "Vanguard Group Inc",
+          "pctHeld": 0.094399996,
+          "position": 701986682,
+          "value": 345384474266
+        },
+        {
+          "organization": "Blackrock Inc.",
+          "pctHeld": 0.0796,
+          "position": 591860058,
+          "value": 291201072916
+        },
+        {
+          "organization": "JPMORGAN CHASE & CO",
+          "pctHeld": 0.0427,
+          "position": 317615796,
+          "value": 156270150891
+        },
+        {
+          "organization": "State Street Corporation",
+          "pctHeld": 0.0403,
+          "position": 299761678,
+          "value": 147485746120
+        },
+        {
+          "organization": "FMR, LLC",
+          "pctHeld": 0.028299998,
+          "position": 210487489,
+          "value": 103561951518
+        }
+      ]
+    },
+    "GOOG": {
+      "company_profile": {
+        "sector": "Communication Services",
+        "industry": "Internet Content & Information",
+        "country": "United States",
+        "website": "https://abc.xyz",
+        "longBusinessSummary": "Alphabet Inc. offers various products and platforms in the United States, Europe, the Middle East, Africa, the Asia-Pacific, Canada, and Latin America. It operates through Google Services, Google Cloud, and Other Bets segments. The Google Services segment provides products and services, including ads, Android, Chrome, devices, Gmail, Google Drive, Google Maps, Google Photos, Google Play, Search, and YouTube. It is also involved in the sale of apps and in-app purchases and digital content in the Google Play and YouTube; and devices, as well as in the provision of YouTube consumer subscription services. The Google Cloud segment offers AI infrastructure, Vertex AI platform, cybersecurity, data and analytics, and other services; Google Workspace that include cloud-based communication and collaboration tools for enterprises, such as Calendar, Gmail, Docs, Drive, and Meet; and other services for enterprise customers. The Other Bets segment sells healthcare-related and internet services. The company was incorporated in 1998 and is headquartered in Mountain View, California.",
+        "fullTimeEmployees": 190167
+      },
+      "key_stats": {
+        "beta": 1.082,
+        "bookValue": 32.033,
+        "priceToBook": 9.9934435,
+        "52WeekChange": 0.8506186,
+        "heldPercentInstitutions": 0.60765,
+        "sharesOutstanding": 5407000000,
+        "forwardPE": 28.7251,
+        "enterpriseValue": 3808587153408,
+        "enterpriseToEbitda": 26.235,
+        "enterpriseToRevenue": 9.88,
+        "floatShares": 10796706910,
+        "sharesShort": 35314387,
+        "sharesShortPriorMonth": 35835418,
+        "shortRatio": 1.69,
+        "sharesPercentSharesOut": 0.0029
+      },
+      "financial_data": {
+        "currentPrice": 320.12,
+        "totalRevenue": 385476001792,
+        "revenueGrowth": 0.159,
+        "grossMargins": 0.59172,
+        "operatingMargins": 0.30512,
+        "profitMargins": 0.32233003,
+        "debtToEquity": 11.424,
+        "freeCashflow": 47997751296
+      },
+      "dividends": {
+        "dividendYield": 0.0026,
+        "dividendRate": 0.84,
+        "payoutRatio": 0.0809
+      },
+      "trading_snapshot": {
+        "marketCap": 3864435359744,
+        "regularMarketVolume": 14871829,
+        "averageVolume": 24457026,
+        "averageDailyVolume10Day": 35966090,
+        "regularMarketPreviousClose": 320.28,
+        "regularMarketOpen": 323.25,
+        "regularMarketDayHigh": 326.88,
+        "regularMarketDayLow": 316.94
+      },
+      "institution_ownership": [
+        {
+          "organization": "Vanguard Group Inc",
+          "pctHeld": 0.0764,
+          "position": 412885548,
+          "value": 132172919609
+        },
+        {
+          "organization": "Blackrock Inc.",
+          "pctHeld": 0.066300005,
+          "position": 358535293,
+          "value": 114774316244
+        },
+        {
+          "organization": "JPMORGAN CHASE & CO",
+          "pctHeld": 0.0368,
+          "position": 199059484,
+          "value": 63722921046
+        },
+        {
+          "organization": "State Street Corporation",
+          "pctHeld": 0.0344,
+          "position": 186149073,
+          "value": 59590040339
+        },
+        {
+          "organization": "FMR, LLC",
+          "pctHeld": 0.020399999,
+          "position": 110104325,
+          "value": 35246595981
+        }
+      ]
+    }
+  }
+}
