@@ -1,14 +1,3 @@
-:root {
-  --ustock-green-main: #0f766e;
-}
-
-/* PAGE WRAPPER */
-.about-page {
-  padding: 24px 48px 48px;   /* top | sides | bottom */
-  max-width: 1280px;
-  margin: 0 auto;
-}
-
 /* HERO CARD */
 .about-hero-card {
   display: flex;
@@ -144,10 +133,6 @@
 
 /* MOBILE + SMALL SCREENS */
 @media (max-width: 768px) {
-  .about-page {
-    padding: 16px 16px 32px;
-  }
-
   .about-hero-card {
     flex-direction: column;
     align-items: flex-start;
@@ -158,7 +143,7 @@
   }
 
   .about-grid {
-    grid-template-columns: 1fr;  /* stack cards */
+    grid-template-columns: 1fr; /* stack cards */
   }
 }
 
