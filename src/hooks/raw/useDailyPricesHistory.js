@@ -16,7 +16,11 @@ export function useDailyPricesHistory() {
       setError(null);
 
       try {
-        const res = await fetch("/data/fetched/prices-raw.json");
+        // Hard cache-bust so we definitely see the latest prices-raw.json
+        const url = `/data/fetched/prices-raw.json?ts=${Date.now()}`;
+        const res = await fetch(url, {
+          cache: "no-store",
+        });
         if (!res.ok) {
           throw new Error(`HTTP ${res.status}`);
         }
@@ -24,12 +28,19 @@ export function useDailyPricesHistory() {
 
         if (cancelled) return;
 
+        // Shape from fetch_prices_json:
+        // {
+        //   "generated_at": "...",
+        //   "symbols": [...],
+        //   "prices": { "AAPL": [ {...}, ... ], ... }
+        // }
         const prices = json.prices || {};
+        const symbolList = Object.keys(prices || {});
         const mapped = {};
-        const symbolList = Object.keys(prices);
 
         for (const symbol of symbolList) {
           const rows = Array.isArray(prices[symbol]) ? prices[symbol] : [];
+
           // Normalize / sort and shape for chart
           const series = rows
             .map((row) => ({
@@ -48,13 +59,19 @@ export function useDailyPricesHistory() {
 
         setHistoryBySymbol(mapped);
         setSymbols(symbolList);
+
         setMeta({
-          generatedAt: json.generated_at,
+          generatedAt: json.generated_at ?? json.generatedAt ?? null,
+          // Prefer explicit symbols array from backend if present
+          universe: Array.isArray(json.symbols) ? json.symbols : symbolList,
         });
       } catch (err) {
         console.error("Failed to load daily prices history:", err);
         if (!cancelled) {
           setError(err);
+          setHistoryBySymbol({});
+          setSymbols([]);
+          setMeta(null);
         }
       } finally {
         if (!cancelled) {

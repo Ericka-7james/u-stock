@@ -8,12 +8,19 @@ from typing import List, Set, Tuple
 
 import pandas as pd
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 # ---------- CONSTANTS ---------------------------------------------------------
 
-# Official NASDAQ Trader listing feeds
-NASDAQ_LISTED_URL = "https://ftp.nasdaqtrader.com/dynamic/SymDir/nasdaqlisted.txt"
-OTHER_LISTED_URL = "https://ftp.nasdaqtrader.com/dynamic/SymDir/otherlisted.txt"
+# Official NASDAQ Trader listing feeds – try these in order for nasdaqlisted.txt
+NASDAQ_TRADER_URLS = [
+    # Primary (often more reliable)
+    "https://www.nasdaqtrader.com/dynamic/SymDir/nasdaqlisted.txt",
+    "https://nasdaqtrader.com/dynamic/SymDir/nasdaqlisted.txt",
+    # Original ftp host as a last resort
+    "https://ftp.nasdaqtrader.com/dynamic/SymDir/nasdaqlisted.txt",
+]
 
 # Wikipedia index lists
 SP500_URL = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
@@ -30,11 +37,6 @@ def get_project_root() -> Path:
 
     This assumes this file lives at:
       <repo>/src/data_scout/tickers/universe.py
-
-    parents[0] = tickers
-    parents[1] = data_scout
-    parents[2] = src
-    parents[3] = repo root   <-- we want this
     """
     return Path(__file__).resolve().parents[3]
 
@@ -50,18 +52,27 @@ def tickers_root() -> Path:
 
 
 def nasdaq_trader_dir() -> Path:
+    """
+    Directory for raw NASDAQ Trader files.
+    """
     path = tickers_root() / "nasdaq_trader"
     path.mkdir(parents=True, exist_ok=True)
     return path
 
 
 def wiki_dir() -> Path:
+    """
+    Directory for wiki-derived index components.
+    """
     path = tickers_root() / "wiki"
     path.mkdir(parents=True, exist_ok=True)
     return path
 
 
 def universe_dir() -> Path:
+    """
+    Directory for final universe parquet(s).
+    """
     path = tickers_root() / "universe"
     path.mkdir(parents=True, exist_ok=True)
     return path
@@ -69,39 +80,82 @@ def universe_dir() -> Path:
 
 # ---------- NASDAQ TRADER DOWNLOAD + CLEAN ------------------------------------
 
+
+def _build_session() -> requests.Session:
+    """
+    Build a requests Session with retry logic.
+    """
+    session = requests.Session()
+    retries = Retry(
+        total=3,
+        backoff_factor=1.5,  # 0s, 1.5s, 3s…
+        status_forcelist=[500, 502, 503, 504],
+        allowed_methods=["GET"],
+        raise_on_status=False,
+    )
+    adapter = HTTPAdapter(max_retries=retries)
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+    return session
+
+
 def _download_text(url: str) -> str:
     """
-    Small helper: download a text file in memory.
+    Download a text file (with retries) and return its contents.
 
-    We call this at bootstrap time only, *not* during every ETL run.
+    This is called at bootstrap time only, not on every ETL run.
     """
+    session = _build_session()
     try:
-        resp = requests.get(url, timeout=20)
+        resp = session.get(url, timeout=10)  # shorter timeout per try
         resp.raise_for_status()
         return resp.text
     except requests.RequestException as e:
         raise RuntimeError(f"Failed to download {url}: {e}") from e
 
 
-def download_nasdaq_trader_files(force: bool = False) -> Tuple[Path, Path]:
+def _download_first_ok(urls: list[str]) -> str:
     """
-    Download nasdaqlisted.txt and otherlisted.txt into data/tickers/nasdaq_trader.
+    Try a list of URLs in order, using _download_text for each.
 
-    If force=False and files already exist, they are reused.
+    Returns the first successful response text.
+    Raises RuntimeError if all URLs fail.
+    """
+    last_error: Exception | None = None
+
+    for url in urls:
+        try:
+            print(f"[universe] Trying NASDAQ feed: {url}", flush=True)
+            return _download_text(url)
+        except Exception as exc:
+            last_error = exc
+            print(
+                f"[universe] Failed to download from {url}: {exc}",
+                flush=True,
+            )
+
+    # If we reach here, all URLs failed
+    raise RuntimeError(
+        f"Failed to download NASDAQ Trader listing from all URLs. Last error: {last_error}"
+    )
+
+
+def download_nasdaq_trader_file(force: bool = False) -> Path:
+    """
+    Download nasdaqlisted.txt into data/tickers/nasdaq_trader.
+
+    If force=False and the file already exists, it is reused.
+
+    We try multiple NASDAQ_TRADER_URLS before giving up.
     """
     out_dir = nasdaq_trader_dir()
     nasdaq_path = out_dir / "nasdaqlisted.txt"
-    other_path = out_dir / "otherlisted.txt"
 
     if not nasdaq_path.exists() or force:
-        txt = _download_text(NASDAQ_LISTED_URL)
+        txt = _download_first_ok(NASDAQ_TRADER_URLS)
         nasdaq_path.write_text(txt, encoding="utf-8")
 
-    if not other_path.exists() or force:
-        txt = _download_text(OTHER_LISTED_URL)
-        other_path.write_text(txt, encoding="utf-8")
-
-    return nasdaq_path, other_path
+    return nasdaq_path
 
 
 def _read_nasdaq_file(path: Path) -> pd.DataFrame:
@@ -121,30 +175,25 @@ def _read_nasdaq_file(path: Path) -> pd.DataFrame:
 
 def build_us_tickers_from_nasdaq_trader() -> pd.DataFrame:
     """
-    Merge nasdaqlisted + otherlisted, filter out test issues and junk,
-    and write a clean Parquet file:
+    Build a US tickers universe from NASDAQ Trader's nasdaqlisted.txt only,
+    clean it, and write Parquet:
 
       data/tickers/nasdaq_trader/us_tickers_nasdaq_trader.parquet
 
     Returns the cleaned DataFrame.
     """
-    nasdaq_path, other_path = download_nasdaq_trader_files(force=False)
+    nasdaq_path = download_nasdaq_trader_file(force=False)
 
-    df_nasdaq = _read_nasdaq_file(nasdaq_path)
-    df_other = _read_nasdaq_file(other_path)
-
-    df = pd.concat([df_nasdaq, df_other], ignore_index=True)
+    df = _read_nasdaq_file(nasdaq_path)
 
     # Normalize symbol column name
     if "Symbol" in df.columns:
-        df.rename(columns={"Symbol": "symbol"}, inplace=True)
+        df = df.rename(columns={"Symbol": "symbol"})
 
     # Basic cleaning: drop test issues, blanks, and NaNs
     if "Test Issue" in df.columns:
         df = df[df["Test Issue"] != "Y"]
 
-    # Some feeds mark ETFs; keep them for now (they're still valid tickers),
-    # but you could filter ETFs out here if you ever want *equities-only*.
     df = df[df["symbol"].notna()]
     df["symbol"] = df["symbol"].astype(str).str.strip().str.upper()
     df = df[df["symbol"] != ""]
@@ -152,7 +201,10 @@ def build_us_tickers_from_nasdaq_trader() -> pd.DataFrame:
     # Drop obvious duplicates
     df = df.drop_duplicates(subset=["symbol"])
 
+    df["source"] = "nasdaq"
+
     out_path = nasdaq_trader_dir() / "us_tickers_nasdaq_trader.parquet"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
     df.to_parquet(out_path, index=False)
 
     return df
@@ -161,23 +213,51 @@ def build_us_tickers_from_nasdaq_trader() -> pd.DataFrame:
 # ---------- WIKIPEDIA INDEX HELPERS -------------------------------------------
 
 
+def _fetch_wiki_html(url: str) -> str:
+    """
+    Fetch raw HTML from Wikipedia with a browser-like User-Agent
+    so that pandas.read_html doesn't get a 403.
+    """
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/120.0 Safari/537.36"
+        )
+    }
+    try:
+        resp = requests.get(url, headers=headers, timeout=15)
+        resp.raise_for_status()
+        return resp.text
+    except requests.RequestException as e:
+        raise RuntimeError(f"Failed to fetch Wikipedia page {url}: {e}") from e
+
+
 def _fetch_wiki_table(url: str, symbol_column: str, index_name: str) -> pd.DataFrame:
     """
     Fetch a table from Wikipedia and return a DataFrame with:
       - symbol
       - index_name
     """
-    tables = pd.read_html(url)
+    html = _fetch_wiki_html(url)
+
+    # Wrap in StringIO to avoid FutureWarning about "literal html"
+    tables = pd.read_html(io.StringIO(html))
     if not tables:
         raise RuntimeError(f"No tables found at {url}")
 
-    df = tables[0]
+    # Find the first table that actually has the expected symbol_column
+    df = None
+    for tbl in tables:
+        if symbol_column in tbl.columns:
+            df = tbl
+            break
 
-    if symbol_column not in df.columns:
-        # Some tables use slightly different headers; raise clearly
+    if df is None:
+        all_columns = [list(t.columns) for t in tables]
         raise KeyError(
-            f"Expected column '{symbol_column}' in first table at {url}, "
-            f"got columns={list(df.columns)}"
+            f"Expected column '{symbol_column}' in one of the tables at {url}, "
+            f"but found columns={all_columns}"
         )
 
     out = pd.DataFrame(
@@ -188,8 +268,10 @@ def _fetch_wiki_table(url: str, symbol_column: str, index_name: str) -> pd.DataF
     )
 
     out = out[out["symbol"] != ""].drop_duplicates(subset=["symbol"])
+    out["source"] = f"wiki:{index_name}"
 
     wiki_path = wiki_dir() / f"{index_name}.parquet"
+    wiki_path.parent.mkdir(parents=True, exist_ok=True)
     out.to_parquet(wiki_path, index=False)
 
     return out
@@ -212,13 +294,10 @@ def build_wiki_index_files() -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
 
 # ---------- FINAL UNIVERSE ASSEMBLY -------------------------------------------
 
+
 def _minimal_fallback_universe() -> pd.DataFrame:
     """
     Last-resort fallback if both NASDAQ Trader and Wikipedia are unavailable.
-
-    Provides a small, hardcoded universe of well-known tickers so that
-    the rest of the ETL can still function in offline / restricted-network
-    environments.
     """
     fallback_symbols = [
         "AAPL",
@@ -234,7 +313,8 @@ def _minimal_fallback_universe() -> pd.DataFrame:
     ]
 
     df = pd.DataFrame({"symbol": fallback_symbols})
-    df["symbol"] = df["symbol"].astype(str).str.upper()
+    df["source"] = "fallback:hardcoded"
+    df_universe = df_us.sort_values("source").drop_duplicates(subset=["symbol"], keep="first").copy()
 
     out_path = universe_dir() / "us_equities_universe.parquet"
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -246,19 +326,16 @@ def _minimal_fallback_universe() -> pd.DataFrame:
     )
     return df
 
+
 def build_us_equities_universe() -> pd.DataFrame:
     """
     Combine NASDAQ Trader universe with WIKI indices to produce a clean,
     deduplicated symbol list:
 
       data/tickers/universe/us_equities_universe.parquet
-
-    This is the file your ETL should read for "all valid tickers".
     """
 
-    # -------------------------------
     # 1) Try NASDAQ Trader as base
-    # -------------------------------
     try:
         df_us = build_us_tickers_from_nasdaq_trader()
     except Exception as e_nasdaq:
@@ -270,7 +347,6 @@ def build_us_equities_universe() -> pd.DataFrame:
             "[universe] Falling back to wiki-only universe (S&P 500 + Nasdaq 100 + Dow 30)…",
             flush=True,
         )
-        # If NASDAQ fails, we *try* wiki; if that also fails we go to minimal fallback.
         try:
             sp500, nasdaq100, dow30 = build_wiki_index_files()
             df_universe = pd.concat([sp500, nasdaq100, dow30], ignore_index=True)
@@ -292,11 +368,7 @@ def build_us_equities_universe() -> pd.DataFrame:
             )
             return _minimal_fallback_universe()
 
-    # If we got here, NASDAQ succeeded and df_us exists.
-
-    # -------------------------------
-    # 2) Try to enrich with wiki indices
-    # -------------------------------
+    # 2) Enrich NASDAQ base with wiki indices (if possible)
     try:
         sp500, nasdaq100, dow30 = build_wiki_index_files()
 
@@ -321,7 +393,6 @@ def build_us_equities_universe() -> pd.DataFrame:
         return df_universe
 
     except Exception as e_wiki:
-        # Wiki failed, but we still have NASDAQ base; that's good enough.
         print(
             f"[universe] Warning: wiki index fetch failed, using NASDAQ-only universe: {e_wiki}",
             flush=True,
@@ -341,8 +412,6 @@ def build_us_equities_universe() -> pd.DataFrame:
 def load_us_universe_symbols() -> List[str]:
     """
     Fast loader: returns a list of symbols from the canonical universe parquet.
-
-    Use this if you just need a "universe list" to loop over or present.
     """
     path = universe_dir() / "us_equities_universe.parquet"
     df = pd.read_parquet(path, columns=["symbol"])
@@ -351,10 +420,7 @@ def load_us_universe_symbols() -> List[str]:
 
 def load_us_universe_set() -> Set[str]:
     """
-    Fast loader for membership checks:
-
-      if symbol in load_us_universe_set():
-          ...
+    Fast loader for membership checks.
     """
     return set(load_us_universe_symbols())
 
@@ -362,28 +428,18 @@ def load_us_universe_set() -> Set[str]:
 # ---------- CLI ENTRYPOINT ----------------------------------------------------
 
 
-# ---------- CLI ENTRYPOINT ----------------------------------------------------
-
-
 def main() -> None:
-    """
-    Bootstrap / refresh the entire ticker universe.
-
-    This is designed to be run manually or as an npm script, not on every
-    ETL run.
-    """
     print("[universe] Rebuilding US equities universe from NASDAQ Trader + Wikipedia…", flush=True)
 
     df_universe = build_us_equities_universe()
     print(f"[universe] Universe size: {len(df_universe):,} symbols", flush=True)
 
-    unique_exchanges = (
-        df_universe["Listing Exchange"].dropna().unique()
-        if "Listing Exchange" in df_universe.columns
-        else []
-    )
-    print(f"[universe] Exchanges in universe: {list(unique_exchanges)}", flush=True)
+    # Print preview
+    print("\n[universe] First 5 rows:")
+    print(df_universe.head().to_string(index=False))
 
+    print("\n[universe] Columns:")
+    print(df_universe.columns.tolist())
 
 if __name__ == "__main__":
     print("[universe] __main__ entrypoint reached", flush=True)

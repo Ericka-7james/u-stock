@@ -17,11 +17,11 @@
       "key_stats": {
         "beta": 1.109,
         "bookValue": 4.991,
-        "priceToBook": 55.870567,
+        "priceToBook": 55.598072,
         "52WeekChange": 0.1638633,
         "heldPercentInstitutions": 0.64364,
         "sharesOutstanding": 14776353000,
-        "forwardPE": 30.593504,
+        "forwardPE": 30.444292,
         "enterpriseValue": 4178066014208,
         "enterpriseToEbitda": 28.864,
         "enterpriseToRevenue": 10.04,
@@ -33,7 +33,7 @@
         "sharesPercentSharesOut": 0.0078
       },
       "financial_data": {
-        "currentPrice": 278.85,
+        "currentPrice": 277.5,
         "totalRevenue": 416161005568,
         "revenueGrowth": 0.079,
         "grossMargins": 0.46905,
@@ -48,45 +48,45 @@
         "payoutRatio": 0.1367
       },
       "trading_snapshot": {
-        "marketCap": 4138242670592,
-        "regularMarketVolume": 16129268,
+        "marketCap": 4118208053248,
+        "regularMarketVolume": 3352836,
         "averageVolume": 51432647,
         "averageDailyVolume10Day": 44947280,
-        "regularMarketPreviousClose": 277.55,
-        "regularMarketOpen": 277.26,
-        "regularMarketDayHigh": 279.0,
-        "regularMarketDayLow": 275.9865
+        "regularMarketPreviousClose": 278.85,
+        "regularMarketOpen": 278.15,
+        "regularMarketDayHigh": 278.77,
+        "regularMarketDayLow": 276.14
       },
       "institution_ownership": [
         {
           "organization": "Vanguard Group Inc",
           "pctHeld": 0.0947,
           "position": 1399427162,
-          "value": 390230272665
+          "value": 388341037455
         },
         {
           "organization": "Blackrock Inc.",
           "pctHeld": 0.0776,
           "position": 1146332274,
-          "value": 319654761601
+          "value": 318107206035
         },
         {
           "organization": "State Street Corporation",
           "pctHeld": 0.0404,
           "position": 597501113,
-          "value": 166613189006
+          "value": 165806558857
         },
         {
           "organization": "JPMORGAN CHASE & CO",
           "pctHeld": 0.032,
           "position": 473311062,
-          "value": 131982792527
+          "value": 131343819705
         },
         {
           "organization": "Geode Capital Management, LLC",
           "pctHeld": 0.0241,
           "position": 356166414,
-          "value": 99317006717
+          "value": 98836179885
         }
       ]
     },
@@ -102,11 +102,11 @@
       "key_stats": {
         "beta": 1.065,
         "bookValue": 48.84,
-        "priceToBook": 10.073915,
+        "priceToBook": 9.993038,
         "52WeekChange": 0.14160752,
         "heldPercentInstitutions": 0.75689006,
         "sharesOutstanding": 7432377655,
-        "forwardPE": 26.263128,
+        "forwardPE": 26.052279,
         "enterpriseValue": 3675167129600,
         "enterpriseToEbitda": 22.081,
         "enterpriseToRevenue": 12.509,
@@ -118,7 +118,7 @@
         "sharesPercentSharesOut": 0.0064999997
       },
       "financial_data": {
-        "currentPrice": 492.01,
+        "currentPrice": 488.06,
         "totalRevenue": 293812011008,
         "revenueGrowth": 0.184,
         "grossMargins": 0.68764,
@@ -133,45 +133,45 @@
         "payoutRatio": 0.2361
       },
       "trading_snapshot": {
-        "marketCap": 3657192177664,
-        "regularMarketVolume": 10514063,
+        "marketCap": 3627831263232,
+        "regularMarketVolume": 3368799,
         "averageVolume": 21777034,
         "averageDailyVolume10Day": 26576720,
-        "regularMarketPreviousClose": 485.5,
-        "regularMarketOpen": 487.595,
-        "regularMarketDayHigh": 492.63,
-        "regularMarketDayLow": 486.65
+        "regularMarketPreviousClose": 491.92,
+        "regularMarketOpen": 487.96,
+        "regularMarketDayHigh": 488.7592,
+        "regularMarketDayLow": 484.6475
       },
       "institution_ownership": [
         {
           "organization": "Vanguard Group Inc",
           "pctHeld": 0.094399996,
           "position": 701986682,
-          "value": 345384474266
+          "value": 342724217241
         },
         {
           "organization": "Blackrock Inc.",
           "pctHeld": 0.0796,
           "position": 591860058,
-          "value": 291201072916
+          "value": 288958153047
         },
         {
           "organization": "JPMORGAN CHASE & CO",
           "pctHeld": 0.0427,
           "position": 317615796,
-          "value": 156270150891
+          "value": 155066510318
         },
         {
           "organization": "State Street Corporation",
           "pctHeld": 0.0403,
           "position": 299761678,
-          "value": 147485746120
+          "value": 146349765723
         },
         {
           "organization": "FMR, LLC",
           "pctHeld": 0.028299998,
           "position": 210487489,
-          "value": 103561951518
+          "value": 102764285642
         }
       ]
     },
@@ -187,22 +187,22 @@
       "key_stats": {
         "beta": 1.082,
         "bookValue": 32.033,
-        "priceToBook": 9.9934435,
+        "priceToBook": 9.870758,
         "52WeekChange": 0.8506186,
         "heldPercentInstitutions": 0.60765,
         "sharesOutstanding": 5407000000,
-        "forwardPE": 28.7251,
+        "forwardPE": 28.372454,
         "enterpriseValue": 3808587153408,
         "enterpriseToEbitda": 26.235,
         "enterpriseToRevenue": 9.88,
-        "floatShares": 10796706910,
+        "floatShares": 10798516960,
         "sharesShort": 35314387,
         "sharesShortPriorMonth": 35835418,
         "shortRatio": 1.69,
         "sharesPercentSharesOut": 0.0029
       },
       "financial_data": {
-        "currentPrice": 320.12,
+        "currentPrice": 316.19,
         "totalRevenue": 385476001792,
         "revenueGrowth": 0.159,
         "grossMargins": 0.59172,
@@ -217,45 +217,45 @@
         "payoutRatio": 0.0809
       },
       "trading_snapshot": {
-        "marketCap": 3864435359744,
-        "regularMarketVolume": 14871829,
+        "marketCap": 3816993062912,
+        "regularMarketVolume": 5792351,
         "averageVolume": 24457026,
         "averageDailyVolume10Day": 35966090,
-        "regularMarketPreviousClose": 320.28,
-        "regularMarketOpen": 323.25,
-        "regularMarketDayHigh": 326.88,
-        "regularMarketDayLow": 316.94
+        "regularMarketPreviousClose": 320.12,
+        "regularMarketOpen": 317.27,
+        "regularMarketDayHigh": 319.63,
+        "regularMarketDayLow": 314.41
       },
       "institution_ownership": [
         {
           "organization": "Vanguard Group Inc",
           "pctHeld": 0.0764,
           "position": 412885548,
-          "value": 132172919609
+          "value": 130632864579
         },
         {
           "organization": "Blackrock Inc.",
           "pctHeld": 0.066300005,
           "position": 358535293,
-          "value": 114774316244
+          "value": 113436986604
         },
         {
           "organization": "JPMORGAN CHASE & CO",
           "pctHeld": 0.0368,
           "position": 199059484,
-          "value": 63722921046
+          "value": 62980433058
         },
         {
           "organization": "State Street Corporation",
           "pctHeld": 0.0344,
           "position": 186149073,
-          "value": 59590040339
+          "value": 58895707933
         },
         {
           "organization": "FMR, LLC",
           "pctHeld": 0.020399999,
           "position": 110104325,
-          "value": 35246595981
+          "value": 34835908999
         }
       ]
     }

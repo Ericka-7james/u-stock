@@ -9,7 +9,7 @@ import {
   CartesianGrid,
 } from "recharts";
 
-export default function PriceChart({ ticker, data, loading }) {
+export default function PriceChart({ ticker, data, loading, pricesMeta }) {
   if (loading) {
     return <p className="muted">Loading price history…</p>;
   }
@@ -17,6 +17,10 @@ export default function PriceChart({ ticker, data, loading }) {
   if (!ticker || !data || data.length === 0) {
     return <p className="muted">No price history available.</p>;
   }
+
+  const snapshotTime = pricesMeta?.generatedAt
+    ? new Date(pricesMeta.generatedAt)
+    : null;
 
   return (
     <div className="chart-wrapper">
@@ -27,6 +31,18 @@ export default function PriceChart({ ticker, data, loading }) {
             Close price over time using your u-Stock data bot&apos;s daily OHLCV
             snapshot.
           </p>
+          {snapshotTime && (
+            <p className="card-subtitle muted">
+              Snapshot as of{" "}
+              {snapshotTime.toLocaleString(undefined, {
+                month: "short",
+                day: "2-digit",
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+              .
+            </p>
+          )}
         </div>
       </div>
 
