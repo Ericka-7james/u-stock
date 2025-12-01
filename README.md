@@ -1,109 +1,113 @@
-# U-Stock — Personal Data-Driven Market Radar
+# 📈 U-Stock – Financial Intelligence Platform
 
-**U-Stock** is a personal market-intelligence bot that blends multiple **free APIs**, **Reddit sentiment**, **price data**, **fundamentals**, and **macro indicators** into a unified snapshot.  
-Your React frontend displays the radar; your Python backend (“Data Scout Bot”) collects raw data snapshots.
+🔗 **Website Link**  
+https://u-stock-git-main-erickas-projects-e87cef06.vercel.app/
 
----
-
-## 🚀 Tech Stack
-
-### **Frontend**
-- React + Vite  
-- Recharts (visualizations)  
-- Custom UI components (Sidebar, Topbar, Footer)  
-- Config-driven data sources (`src/config/`)
-
-### **Backend / Data Scout**
-- Python 3  
-- `yfinance` (prices + fundamentals)  
-- Official **Reddit API via OAuth**  
-- **FRED** API for macro  
-- Outputs JSON snapshots to `public/data/*.json`  
-- Modular pipeline:
-  - `prices.py`
-  - `reddit.py`
-  - `fundamentals.py`
-  - `macro.py`
-  - `run_all.py`
-
-### **Dev Environment**
-- GitHub Codespaces  
-- Uses `.env.local` for credentials  
-- Works with Node & Python side-by-side
+U-Stock is a financial intelligence platform designed to automate market data ingestion, clean and preprocess stock information, compute multi-signal indicators, and provide structured analytics for future modeling. Built with a modular Python backend and a React frontend, U-Stock makes it easy to explore stock behavior across multiple timeframes.
 
 ---
 
-## 🔐 Environment Variables (`.env.local`)
+## 🚀 Features
 
-Create a file at the **root** of the project:
+### 📊 Automated Market Data Pipelines
+- Symbol universe ingestion and validation  
+- Real-time and intraday price fetching  
+- Multi-interval data (5m, 15m, daily)  
+- Duplicate and anomaly cleaning  
+- JSON-based structured outputs  
 
-    VITE_REDDIT_CLIENT_ID=xxxx
-    VITE_REDDIT_SECRET=xxxx
-    VITE_REDDIT_USERNAME=yourbot
-    VITE_REDDIT_PASSWORD= yourpassword
-    VITE_REDDIT_USER_AGENT=win:QuantaTrail/0.1
-    FRED API= yourfredapi
+### ⚙️ Indicator & Analytics Engine
+- Multiple technical indicators  
+- Intraday + multi-day analysis  
+- Extensible architecture for custom indicators  
 
----
+### 🖥️ React Frontend (TypeScript)
+- Clean, modern UI for exploring stock analytics  
+- Responsive design  
+- Future support for charts + interactive dashboards  
 
-## ▶️ Running the Frontend
-
-Install dependencies:
-
-```bash
-npm install
-```
-
-### Run dev server:
-```bash
-npm run dev -- --host 0.0.0.0 --port 5173
-```
-
-### OR simply:
-```bash
-npm run dev
-```
+### ☁️ Cloud-Ready Architecture
+- Serverless-friendly deployment (Vercel)  
+- Modular pipeline organization  
+- CI/CD-ready (GitHub Actions planned)  
 
 ---
 
-## 🐍 Running the Data Scout Pipeline (Python)
+## 🛠 Tech Stack
 
-### Set your PYTHONPATH:
-```bash
-export PYTHONPATH=src:$PYTHONPATH
-```
+**Backend**
+- Python  
+- Pandas  
+- YFinance (or similar APIs)  
+- JSON-based pipelines  
 
-### Run full pipeline
-```bash
-PYTHONPATH=src python -m data_scout.run_all
-```
+**Frontend**
+- React  
+- TypeScript  
+- Vite  
 
-### You’ll see:
-- `▶ Prices`
-- `▶ Reddit Mentions`
-- `▶ Fundamentals`
-- `▶ Macro`
-- `📊 Final Summary`
+**Infrastructure**
+- Vercel (hosting)  
+- GitHub (source control)  
 
 ---
 
-## Testing
+## 🧪 Current Capabilities
 
-✅ **Frontend tests**
-
-- `npm run test` – run Vitest in Node
-- `npm run test:ui` – open the Vitest browser dashboard
-
-✅ **Backend tests**
-
-- `npm run test:backend` – run Python tests with pytest
-
-✅ **Run everything**
-
-- `npm run test:all` – runs frontend tests (Vitest) and then backend tests (pytest)
-
-✅ **Ensure your Reddit credentials work**
-
-- `npm run test:reddit-auth` – runs frontend tests (Vitest) and then backend tests (pytest)
+- Intraday data ingestion (5m, 15m)  
+- Daily historical price collection  
+- Cleans delisted + invalid tickers  
+- Builds unified, refined symbol universe  
+- Outputs analytics-ready JSON files  
 
 ---
+
+## 🧱 Planned Improvements
+
+- Docker support  
+- CI/CD via GitHub Actions  
+- ML-driven signal scoring  
+- Portfolio simulation mode  
+- Analytics dashboard with charts  
+- Performance optimizations  
+
+---
+
+## 🖼 Screenshots
+
+**Dashboard Preview**  
+--- coming ---
+
+## 🖼 Pipeline Execution Examples
+
+### 📦 Running Full Fetch Pipeline
+This shows U-Stock pulling prices, intraday data, and fundamentals in a single automated batch.
+
+![U-Stock Batch Fetch Pipeline]
+<img width="940" height="801" alt="npmrunfetchall" src="https://github.com/user-attachments/assets/631cb2c8-dd04-4764-9d34-28d5b52433ca" />
+
+
+---
+
+### 📈 Building the Symbol Universe
+This screenshot shows the system generating the refined US equities universe using NASDAQ Trader and Wikipedia fallbacks.
+
+![U-Stock Ticker Universe Build]
+<img width="1162" height="255" alt="npmruntickers" src="https://github.com/user-attachments/assets/b79564df-1863-4222-a394-79285c0833ca" />
+
+
+---
+
+## 🤝 Contributing
+
+U-Stock is an active work-in-progress.  
+Ideas, issues, and pull requests are welcome.
+
+---
+
+## 👩‍💻 About the Developer
+
+Built by **Ericka James** — Software Engineer focusing on full-stack development, data pipelines, and cloud-native systems.
+
+- GitHub: https://github.com/ericka-7james  
+- LinkedIn: https://www.linkedin.com/in/ericka-james
