@@ -1,8 +1,7 @@
 // src/components/layout/AppShell.jsx
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-// Reuse the existing shell + dashboard styles
-import "../dashboard/DashboardPage.css";
+import "./AppShell.css"; // ⬅️ new shell CSS
 
 export default function AppShell({ children }) {
   const [navOpen, setNavOpen] = useState(false);
@@ -49,7 +48,8 @@ export default function AppShell({ children }) {
           <Link
             to="/index-funds"
             className={
-              "side-nav-item " + (isIndexFunds ? "side-nav-item--active" : "")
+              "side-nav-item " +
+              (isIndexFunds ? "side-nav-item--active" : "")
             }
           >
             <span className="side-nav-item-dot" />
@@ -73,10 +73,11 @@ export default function AppShell({ children }) {
         </nav>
 
         <div className="side-nav-footer">
-            <span className="side-nav-footer-name">Made by Ericka James</span>
-            <span className="side-nav-footer-email">james7.ericka@gmail.com</span>
+          <span className="side-nav-footer-name">Made by Ericka James</span>
+          <span className="side-nav-footer-email">
+            james7.ericka@gmail.com
+          </span>
         </div>
-
       </aside>
 
       {/* Main side: topbar + page content + footer */}
@@ -92,7 +93,11 @@ export default function AppShell({ children }) {
               <span className="hamburger-lines" />
             </button>
 
-            <Link to="/" className="topbar-home-link" onClick={() => setNavOpen(false)}>
+            <Link
+              to="/"
+              className="topbar-home-link"
+              onClick={() => setNavOpen(false)}
+            >
               <span className="topbar-home-label">Home</span>
             </Link>
           </div>
@@ -108,7 +113,8 @@ export default function AppShell({ children }) {
         </header>
 
         <div className="app-content">
-          {children}
+          {/* ⬇️ AppShell controls padding & max-width via .app-page */}
+          <main className="app-page">{children}</main>
         </div>
 
         <footer className="site-footer global-footer">

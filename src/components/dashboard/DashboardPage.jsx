@@ -56,7 +56,6 @@ export default function DashboardPage() {
 
   return (
     <AppShell>
-      <div className="dashboard">
         {/* Top stats row */}
         <StatSummary
           signalsMeta={signalsMeta}
@@ -222,7 +221,6 @@ export default function DashboardPage() {
             {new Date(signalsMeta.generatedAt).toLocaleString()}
           </div>
         )}
-      </div>
     </AppShell>
   );
 }

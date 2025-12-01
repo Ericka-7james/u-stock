@@ -1,334 +1,16 @@
-:root {
-  --ustock-green-main: #0f766e;   /* this is THE green everywhere */
-  --ustock-green-soft: #bbf7d0;    /* optional light version for gradients */
-}
-
-
-
-/* ========= APP SHELL (top bar + slide-out nav) ===================== */
-
-.app-shell {
-  min-height: 100vh;
-  background: #f5f7ff;
-  display: flex;
-  position: relative;
-  overflow-x: hidden;
-}
-
-/* when navOpen = true, margin-left is added to content */
-.app-shell--nav-open .app-main {
-  margin-left: 260px;
-}
-
-.app-main {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  transition: margin-left 0.23s ease-out;
-}
-
-/* NEW: wrap around page content so footer can sit at bottom */
-.app-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-}
-
-/* Optional: remove big extra margin so footer hugs bottom nicely */
-.site-footer {
-  text-align: center;
-  font-size: 12px;
-  color: #6b7280;
-  padding: 14px 0;
-  opacity: 0.9;
-  margin-top: 15px; /* you can lower or remove if you want tighter */
-}
-
-.side-nav-footer {
-  margin-top: auto;                 /* Pushes footer to the bottom */
-  width: 100%;
-  padding: 18px 0 14px;
-  border-top: 1px solid rgba(255, 255, 255, 0.18);
-
-  display: flex;
-  flex-direction: column;           /* ← forces each span onto its own line */
-  align-items: center;              /* Center horizontally */
-  gap: 6px;                         /* Space between lines */
-}
-
-.side-nav-footer-name {
-  font-size: 13px;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.95);
-  display: block;                   /* extra guarantee of separate line */
-}
-
-.side-nav-footer-email {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.75);
-  display: block;                   /* extra guarantee of separate line */
-}
-
-
-/* -------- SIDE NAV ------------------------------------------------- */
-
-/* Side nav: fixed on left, slide in/out */
-.side-nav {
-  position: fixed;
-  inset: 0 auto 0 0;
-  width: 260px;
-  background: linear-gradient(180deg, #0f766e 0%, #022c22 100%);
-  color: #ffffff;
-  padding: 24px 20px;
-  box-sizing: border-box;
-  transform: translateX(-100%);
-  transition: transform 0.23s ease-out;
-  z-index: 40;
-  display: flex;
-  flex-direction: column;
-}
-
-/* when navOpen, slide into view */
-.app-shell--nav-open .side-nav {
-  transform: translateX(0);
-}
-
-/* Brand at top of nav */
-
-.side-nav-brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 32px;
-}
-
-.side-nav-logo-circle {
-  width: 32px;
-  height: 32px;
-  border-radius: 999px;
-  background: #22c55e;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 800;
-  color: #022c22;
-  font-size: 16px;
-}
-
-.side-nav-brand-text {
-  display: flex;
-  flex-direction: column;
-}
-
-.side-nav-name {
-  font-size: 18px;
-  font-weight: 700;
-}
-
-.side-nav-tagline {
-  font-size: 11px;
-  opacity: 0.8;
-}
-
-/* Menu items */
-
-.side-nav-menu {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.side-nav-item {
-  background: transparent;
-  border: none;
-  text-align: left;
-  padding: 10px 10px;
-  border-radius: 999px;
-  cursor: pointer;
-  color: #e5e7eb;
-  font-size: 14px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  transition: background 0.18s ease, color 0.18s ease, transform 0.18s ease;
-}
-
-.side-nav-item-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  background: rgba(248, 250, 252, 0.4);
-}
-
-.side-nav-item--active {
-  background: #22c55e;
-  color: #022c22;
-  font-weight: 600;
-  transform: translateX(2px);
-}
-
-.side-nav-item--active .side-nav-item-dot {
-  background: #022c22;
-}
-
-.side-nav-item:hover:not(.side-nav-item--active) {
-  background: rgba(15, 118, 110, 0.6);
-}
-
-/* -------- TOP BAR -------------------------------------------------- */
-
-/* TOP BAR CLEAN LOOK */
-.topbar {
-  height: 64px;
-  padding: 0 24px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: #f5f7ff;
-  box-shadow: none;
-}
-
-/* LEFT SIDE */
-.topbar-left {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-}
-
-/* HAMBURGER BUTTON (no circle) */
-.hamburger-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-   /* 🔥 make it easier to click */
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  width: 40px;
-  height: 40px;
-  padding: 0;
-
-  border-radius: 999px;
-}
-
-.hamburger-btn:hover {
-  background: rgba(15, 118, 110, 0.06); /* subtle hover ring */
-}
-
-/* clean 3 lines */
-.hamburger-lines,
-.hamburger-lines::before,
-.hamburger-lines::after {
-  width: 22px;
-  height: 3px;
-  background-color: var(--ustock-green-main);
-  border-radius: 3px;
-  display: block;
-  position: relative;
-  content: "";
-}
-
-.hamburger-lines::before {
-  position: absolute;
-  top: -7px;
-}
-
-.hamburger-lines::after {
-  position: absolute;
-  top: 7px;
-}
-
-/* HOME LABEL (make it green) */
-.topbar-home-label {
-  font-size: 20px;
-  font-weight: 600;
-  color: #0f766e; /* GREEN */
-}
-
-.topbar-icon-circle {
-  width: 22px;
-  height: 22px;
-  border-radius: 999px;
-  border: 1px solid rgba(148, 163, 184, 0.8);
-}
-
-/* RIGHT SIDE ICON WRAPPER */
-.icon-btn {
-  background: none;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-}
-
-/* SEARCH ICON */
-.icon-search {
-  position: relative;
-  width: 18px;
-  height: 18px;
-  border: 2px solid var(--ustock-green-main);
-  border-radius: 50%;
-  display: inline-block;
-}
-
-.icon-search::after {
-  content: "";
-  position: absolute;
-  width: 10px;
-  height: 2px;
-  background: var(--ustock-green-main);
-  bottom: -4px;
-  right: -4px;
-  transform: rotate(45deg);
-  border-radius: 1px;
-}
-
-/* BELL ICON */
-.icon-bell {
-  width: 18px;
-  height: 18px;
-  border: 2px solid #0f766e; /* green */
-  border-bottom-left-radius: 10px;
-  border-bottom-right-radius: 10px;
-  border-top-left-radius: 50%;
-  border-top-right-radius: 50%;
-  position: relative;
-  display: inline-block;
-}
-
-.icon-bell::after {
-  content: "";
-  position: absolute;
-  bottom: -3px;
-  left: 50%;
-  width: 4px;
-  height: 4px;
-  background: var(--ustock-green-main);
-  transform: translateX(-50%);
-  border-radius: 50%;
-}
-
-.topbar-right {
-  display: flex;
-  align-items: center;
-  gap: 16px; /* ← add space between search + bell */
-}
-
-/* ========= DASHBOARD CONTENT (kept, but greener) =================== */
+/* =============================
+   DASHBOARD LAYOUT
+   ============================= */
 
 .dashboard {
-  width: 100%;
-  max-width: 1200px;
-  margin: 18px auto 0;
-  padding: 0 20px 24px;
-  box-sizing: border-box;
-  flex: 1;                  /* grow to fill app-main */
+  margin-top: 18px;          /* small vertical breathing room under topbar */
+  flex: 1;
   display: flex;
-  flex-direction: column;   /* so footer can sit at the bottom */
+  flex-direction: column;
+  gap: 20px;
 }
 
-/* Header */
+/* If you ever bring back a header block in this page */
 .dashboard-header {
   display: flex;
   justify-content: space-between;
@@ -348,18 +30,14 @@
   margin-top: 4px;
 }
 
-/* Page title */
-.page-title {
-  color: #0f766e;
-  font-weight: 800;
-  margin: 0;
-}
-
 .dashboard-header > div {
   flex: 0 1 auto;
 }
 
-/* Stat summary row + cards */
+/* =============================
+   STAT CARDS (TOP ROW)
+   ============================= */
+
 .stat-row {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -375,7 +53,7 @@
   border: 1px solid rgba(148, 163, 184, 0.25);
 }
 
-/* All stat cards use the same green accent at the top */
+/* All stat cards share the same green accent (from AppShell :root) */
 .stat-card--accent-blue,
 .stat-card--accent-orange,
 .stat-card--accent-teal {
@@ -413,7 +91,10 @@
   box-shadow: 0 10px 25px rgba(15, 23, 42, 0.12);
 }
 
-/* Main grid (filters + chart) */
+/* =============================
+   MAIN GRID (FILTERS + CHART)
+   ============================= */
+
 .dashboard-main {
   display: grid;
   grid-template-columns: 1fr;
@@ -427,7 +108,7 @@
   }
 }
 
-/* Chart panel */
+/* Chart panel — extends base .panel from AppShell */
 .panel.panel-chart {
   background: #ffffff;
   border-radius: 18px;
@@ -444,7 +125,12 @@
 }
 
 .card-header {
-  background: radial-gradient(circle at top left, #bbf7d0 0%, #ecfdf3 45%, #ffffff 100%);
+  background: radial-gradient(
+    circle at top left,
+    #bbf7d0 0%,
+    #ecfdf3 45%,
+    #ffffff 100%
+  );
   padding: 10px 14px;
   border-radius: 12px;
   margin-bottom: 12px;
@@ -479,7 +165,7 @@
   margin-top: 6px;
 }
 
-/* Filters column */
+/* Filters column — left side */
 .panel.panel-filters {
   display: flex;
   flex-direction: column;
@@ -510,7 +196,7 @@
   border-top: 4px solid var(--ustock-green-main);
 }
 
-/* Keep the nice soft gradient for the index card body */
+/* Soft gradient for index card body */
 .filters-card--index {
   background: radial-gradient(
     circle at top left,
@@ -530,7 +216,7 @@
   color: #111827;
 }
 
-/* Index spotlight */
+/* Index spotlight text */
 .index-spotlight-ticker {
   font-size: 20px;
   font-weight: 800;
@@ -549,25 +235,7 @@
   margin-top: 4px;
 }
 
-/* Links & muted text */
-.panel-link {
-  display: inline-block;
-  margin-top: 10px;
-  font-size: 13px;
-  text-decoration: none;
-  color: #059669;
-  font-weight: 500;
-}
-
-.panel-link:hover {
-  text-decoration: underline;
-}
-
-.muted {
-  color: #6b7280;
-}
-
-/* Last updated + footer */
+/* Last updated text */
 .dashboard-last-updated {
   text-align: right;
   font-size: 13px;
@@ -576,45 +244,18 @@
   margin-top: 20px;
 }
 
-.site-footer {
-  margin-top: auto; 
-  text-align: center;
-  font-size: 12px;
-  color: #6b7280;
-  margin-top: 12px;
-  padding: 14px 0 0;
-  opacity: 0.9;
-}
-
-.topbar-home-link {
-  text-decoration: none;
-  color: inherit;
-  display: inline-flex;
-  align-items: center;
-}
-
-/* 
-===========================================
-TODO: Fix mobile sidebar drawer behavior
-===========================================
-
-Current issue:
-- On screens < 768px the sidebar overlaps the cards with no backdrop.
-
-*/
-
 /* Small screens */
 @media (max-width: 768px) {
   .stat-row {
     grid-template-columns: 1fr;
   }
-
-  .dashboard {
-    padding: 0 14px;
-  }
 }
 
-/* Chart controls (dropdown) */
+/* =============================
+   Dashboard-only controls
+   (ticker inputs, macro tiles)
+   ============================= */
+
 .chart-controls {
   display: flex;
   align-items: center;
@@ -659,8 +300,8 @@ Current issue:
   padding: 6px 12px;
   font-size: 13px;
   outline: none;
-  background: #ffffff;       /* <- white like other cards */
-  color: #111827;           /* dark text */
+  background: #ffffff;
+  color: #111827;
 }
 
 .ticker-input::placeholder {
@@ -802,4 +443,3 @@ Current issue:
   color: inherit;
   cursor: default;
 }
-
