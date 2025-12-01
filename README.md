@@ -95,14 +95,6 @@ This screenshot shows the system generating the refined US equities universe usi
 ![U-Stock Ticker Universe Build]
 <img width="1162" height="255" alt="npmruntickers" src="https://github.com/user-attachments/assets/b79564df-1863-4222-a394-79285c0833ca" />
 
-
----
-
-## 🤝 Contributing
-
-U-Stock is an active work-in-progress.  
-Ideas, issues, and pull requests are welcome.
-
 ---
 
 ## 👩‍💻 About the Developer
