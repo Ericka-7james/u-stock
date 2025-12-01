@@ -26,16 +26,11 @@ function SearchableTickerDropdown({ allTickers, currentTicker, onChange }) {
     return universe.filter((sym) => sym.toUpperCase().startsWith(q));
   }, [allTickers, filter]);
 
+  // ⬇️ Don't force the current ticker to the top;
+  // just show the filtered list so it doesn't keep appearing above matches.
   const optionsTickers = useMemo(() => {
-    const set = new Set(filteredTickers);
-    const list = [...filteredTickers];
-
-    if (currentTicker && !set.has(currentTicker)) {
-      list.unshift(currentTicker);
-    }
-
-    return list.slice(0, MAX_VISIBLE_OPTIONS);
-  }, [filteredTickers, currentTicker]);
+    return (filteredTickers || []).slice(0, MAX_VISIBLE_OPTIONS);
+  }, [filteredTickers]);
 
   const label = currentTicker || "Select…";
 
@@ -47,7 +42,7 @@ function SearchableTickerDropdown({ allTickers, currentTicker, onChange }) {
 
   return (
     <div className="chart-search-dropdown">
-      {/* Fake "select" button – looks like the original dropdown */}
+      {/* Fake "select" button – looks like the original dropdown pill */}
       <button
         type="button"
         className="chart-select chart-select--button"
@@ -67,16 +62,7 @@ function SearchableTickerDropdown({ allTickers, currentTicker, onChange }) {
             onChange={(e) => setFilter(e.target.value)}
           />
 
-          <ul
-            className="chart-select-options"
-            style={{
-              maxHeight: "240px",
-              overflowY: "auto",
-              padding: 0,
-              margin: 0,
-              listStyle: "none",
-            }}
-          >
+          <ul className="chart-select-options">
             {optionsTickers.length === 0 ? (
               <li className="chart-select-option chart-select-option--empty">
                 No matches
@@ -293,6 +279,7 @@ export default function DashboardPage() {
         {/* RIGHT column: price chart */}
         <section className="panel panel-chart">
           <div className="card-main-chart">
+            {/* This header stays as "Price action viewer" */}
             <div className="card-header">
               <div>
                 <h2>Price action viewer</h2>
@@ -313,6 +300,7 @@ export default function DashboardPage() {
               </div>
             </div>
 
+            {/* Inside PriceChart you still get: "{TICKER} price action (daily)" */}
             <PriceChart
               ticker={currentTicker}
               data={currentSeries}
