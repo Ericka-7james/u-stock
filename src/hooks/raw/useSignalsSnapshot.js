@@ -15,36 +15,57 @@ export function useSignalsSnapshot() {
       setError(null);
 
       try {
-        const res = await fetch("/data/signals/final-signals.json");
+        // Hard cache-bust so we always see the latest final-signals.json
+        const url = `/data/signals/final-signals.json?ts=${Date.now()}`;
+        const res = await fetch(url, {
+          cache: "no-store",
+        });
+
         if (!res.ok) {
           throw new Error(`HTTP ${res.status}`);
         }
-        const json = await res.json();
 
+        const json = await res.json();
         if (cancelled) return;
 
-        // Expecting shape:
+        // Expecting shape (but we’ll be flexible):
         // {
-        //   generatedAt: "...",
+        //   generatedAt | generated_at: "...",
         //   rankingDescription: "...",
-        //   universe: [...],
+        //   universe: [...],           // optional
+        //   symbols: [...],            // optional alternative
         //   data: [ { ticker, score, components: { daily, intraday, multiday } }, ... ]
         // }
+
         const list = Array.isArray(json.data) ? json.data : [];
 
         // sort by score desc just in case
-        const sorted = [...list].sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+        const sorted = [...list].sort(
+          (a, b) => (b.score ?? 0) - (a.score ?? 0)
+        );
+
+        const generatedAt =
+          json.generated_at ?? json.generatedAt ?? null;
+
+        const universe =
+          Array.isArray(json.universe) && json.universe.length > 0
+            ? json.universe
+            : Array.isArray(json.symbols) && json.symbols.length > 0
+            ? json.symbols
+            : sorted.map((r) => r.ticker);
 
         setData(sorted);
         setMeta({
-          generatedAt: json.generatedAt,
-          rankingDescription: json.rankingDescription,
-          universe: json.universe ?? sorted.map((r) => r.ticker),
+          generatedAt,
+          rankingDescription: json.rankingDescription ?? null,
+          universe,
         });
       } catch (err) {
         console.error("Failed to load signals snapshot:", err);
         if (!cancelled) {
           setError(err);
+          setData([]);
+          setMeta(null);
         }
       } finally {
         if (!cancelled) {

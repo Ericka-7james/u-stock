@@ -25,7 +25,7 @@ export function usePricesSnapshot() {
 
         setData(rows);
         setMeta({
-          generatedAt: json.generatedAt ?? null,
+          generatedAt: json.generated_at ?? json.generatedAt ?? null,
           universe: Array.isArray(json.universe) ? json.universe : [],
         });
         setError(null);

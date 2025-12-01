@@ -25,7 +25,7 @@ export function useMacroSnapshot() {
 
         setSeries(rows);
         setMeta({
-          generatedAt: json.generatedAt ?? null,
+          generatedAt: json.generated_at ?? json.generatedAt ?? null,
           error: json.error ?? null,
         });
         setError(null);
