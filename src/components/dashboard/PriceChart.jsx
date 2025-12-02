@@ -31,7 +31,7 @@ export default function PriceChart({ ticker, data, loading, pricesMeta }) {
             Close price over time using your u-Stock data bot&apos;s daily OHLCV
             snapshot.
           </p>
-          {snapshotTime && (
+          {/* {snapshotTime && (
             <p className="card-subtitle muted">
               Snapshot as of{" "}
               {snapshotTime.toLocaleString(undefined, {
@@ -42,7 +42,7 @@ export default function PriceChart({ ticker, data, loading, pricesMeta }) {
               })}
               .
             </p>
-          )}
+          )} */}
         </div>
       </div>
 

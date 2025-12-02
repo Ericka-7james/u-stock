@@ -7,6 +7,7 @@ import PriceChart from "./PriceChart";
 
 import { useSignalsSnapshot } from "../../hooks/raw/useSignalsSnapshot";
 import { useDailyPricesHistory } from "../../hooks/raw/useDailyPricesHistory";
+import { useSentimentSnapshot } from "../../hooks/raw/useSentimentSnapshot";
 
 import "./DashboardPage.css";
 
@@ -26,10 +27,12 @@ function SearchableTickerDropdown({ allTickers, currentTicker, onChange }) {
     return universe.filter((sym) => sym.toUpperCase().startsWith(q));
   }, [allTickers, filter]);
 
-  // ⬇️ Don't force the current ticker to the top;
-  // just show the filtered list so it doesn't keep appearing above matches.
   const optionsTickers = useMemo(() => {
-    return (filteredTickers || []).slice(0, MAX_VISIBLE_OPTIONS);
+    const universe = filteredTickers;
+    // When searching, don't inject the "current" ticker back at the top.
+    // Just show the filtered list in sorted order.
+    const list = [...universe];
+    return list.slice(0, MAX_VISIBLE_OPTIONS);
   }, [filteredTickers]);
 
   const label = currentTicker || "Select…";
@@ -42,7 +45,7 @@ function SearchableTickerDropdown({ allTickers, currentTicker, onChange }) {
 
   return (
     <div className="chart-search-dropdown">
-      {/* Fake "select" button – looks like the original dropdown pill */}
+      {/* Fake "select" button – looks like the original dropdown */}
       <button
         type="button"
         className="chart-select chart-select--button"
@@ -108,6 +111,13 @@ export default function DashboardPage() {
     loading: pricesLoading,
   } = useDailyPricesHistory();
 
+  // Slim per-ticker sentiment snapshot
+  const {
+    data: sentimentData = [],
+    meta: sentimentMeta,
+    loading: sentimentLoading,
+  } = useSentimentSnapshot();
+
   const [selectedTicker, setSelectedTicker] = useState("");
 
   /**
@@ -158,6 +168,24 @@ export default function DashboardPage() {
     if (times.length === 0) return null;
     return new Date(Math.max(...times.map((t) => t.getTime())));
   }, [signalsMeta, pricesMeta]);
+
+  // Sentiment coverage: how many tickers have any sentiment row
+  const sentimentUniverseSize = useMemo(() => {
+    if (Array.isArray(sentimentMeta?.universe)) {
+      return sentimentMeta.universe.length;
+    }
+    if (Array.isArray(sentimentData)) {
+      const set = new Set(
+        sentimentData.map((row) => row.ticker).filter(Boolean)
+      );
+      return set.size;
+    }
+    return 0;
+  }, [sentimentMeta, sentimentData]);
+
+  const sentimentLastUpdated = sentimentMeta?.generatedAt
+    ? new Date(sentimentMeta.generatedAt)
+    : null;
 
   return (
     <AppShell>
@@ -276,10 +304,9 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        {/* RIGHT column: price chart */}
+        {/* RIGHT column: price chart + sentiment card */}
         <section className="panel panel-chart">
           <div className="card-main-chart">
-            {/* This header stays as "Price action viewer" */}
             <div className="card-header">
               <div>
                 <h2>Price action viewer</h2>
@@ -300,13 +327,35 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* Inside PriceChart you still get: "{TICKER} price action (daily)" */}
+            {/* Chart body */}
             <PriceChart
               ticker={currentTicker}
               data={currentSeries}
               loading={combinedLoading}
               pricesMeta={pricesMeta}
             />
+
+            {/* Sentiment coverage card under the chart */}
+            <div className="sentiment-card">
+              <div>
+                <div className="sentiment-card-title">Sentiment coverage</div>
+                <div className="sentiment-card-stat">
+                  {sentimentLoading
+                    ? "Loading…"
+                    : sentimentUniverseSize > 0
+                    ? `${sentimentUniverseSize.toLocaleString()} tickers with recent mentions`
+                    : "No sentiment snapshot available."}
+                </div>
+              </div>
+              <div className="sentiment-card-meta">
+                {sentimentLastUpdated
+                  ? `Last updated: ${sentimentLastUpdated.toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}`
+                  : ""}
+              </div>
+            </div>
           </div>
         </section>
       </main>

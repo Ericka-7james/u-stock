@@ -628,24 +628,26 @@
 
 /* === Searchable Ticker Dropdown ==================================== */
 
+/* Wrapper around the fake select + menu */
 .chart-search-dropdown {
   position: relative;
   display: inline-block;
-  width: 170px; /* small enough to stay inside card padding */
+  width: 180px;
 }
 
-/* The button that looks like a select pill */
+/* The button that looks like a select */
 .chart-select.chart-select--button {
   display: flex;
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  padding: 6px 12px;
+  padding: 6px 10px;
   border-radius: 999px;
-  border: 1px solid rgba(16, 185, 129, 0.6);
-  background: var(--ustock-green-soft); /* light green pill */
-  color: #065f46;
-  font-size: 0.85rem;
+  border: 1px solid rgba(148, 163, 184, 0.9);
+  background: #ffffff;
+  font-size: 0.9rem;
+  cursor: pointer;
+  outline: none;
 }
 
 .chart-select-label {
@@ -659,12 +661,12 @@
   font-size: 0.7rem;
 }
 
-/* The dropdown menu: floats over the card (doesn't resize it) */
+/* The dropdown menu: FLOATS over the card instead of resizing it */
 .chart-select-menu {
   position: absolute;
   top: calc(100% + 4px);
   left: 0;
-  z-index: 30;
+  z-index: 20;
   width: 100%;
   background: #ffffff;
   border-radius: 12px;
@@ -673,16 +675,16 @@
   padding: 8px 0 6px;
 }
 
-/* Search input inside menu */
+/* Search input inside menu – light green pill */
 .chart-search-input {
-  width: calc(100% - 42px);
-  margin: 0 10px 6px;
+  width: calc(100% - 16px);
+  margin: 0 8px 6px;
   padding: 6px 10px;
   border-radius: 999px;
-  border: 1px solid rgba(16, 185, 129, 0.4);
+  border: 1px solid #bbf7d0;
   font-size: 0.85rem;
   outline: none;
-  background: var(--ustock-green-soft); /* same light green */
+  background: #ecfdf3;
   color: #065f46;
 }
 
@@ -691,35 +693,36 @@
 }
 
 .chart-search-input:focus {
-  border-color: var(--ustock-green-main);
+  border-color: #0f766e;
+  box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.25);
 }
 
 /* Scrollable list of options */
 .chart-select-options {
-  max-height: 220px;        /* controls menu height */
+  max-height: 220px;
   overflow-y: auto;
   padding: 0;
   margin: 0;
   list-style: none;
 }
 
-/* Custom scrollbar */
+/* Make scrollbar match the green vibe */
 .chart-select-options::-webkit-scrollbar {
   width: 6px;
 }
 
 .chart-select-options::-webkit-scrollbar-track {
-  background: #f9fafb;
-}
-
-.chart-select-options::-webkit-scrollbar-thumb {
-  background: var(--ustock-green-soft); /* light green thumb */
+  background: #f3f4f6;
   border-radius: 999px;
 }
 
-.chart-select-options {
-  scrollbar-color: var(--ustock-green-soft) #f9fafb; /* Firefox */
-  scrollbar-width: thin;
+.chart-select-options::-webkit-scrollbar-thumb {
+  background: #bbf7d0;
+  border-radius: 999px;
+}
+
+.chart-select-options::-webkit-scrollbar-thumb:hover {
+  background: #6ee7b7;
 }
 
 .chart-select-option {
@@ -729,16 +732,13 @@
   white-space: nowrap;
 }
 
-/* Hover + active both use the same light green */
 .chart-select-option:hover {
-  background: var(--ustock-green-soft);
-  color: #065f46;
+  background: #f3f4f6;
 }
 
 .chart-select-option--active {
-  background: var(--ustock-green-soft);
+  background: #ecfdf3;
   font-weight: 500;
-  color: #065f46;
 }
 
 .chart-select-option--empty {
@@ -746,4 +746,37 @@
   font-size: 0.8rem;
   color: #9ca3af;
   cursor: default;
+}
+
+/* Sentiment coverage card under the chart */
+.sentiment-card {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: #ffffff;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  border-left: 4px solid var(--ustock-green-main);
+}
+
+.sentiment-card-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: #64748b;
+}
+
+.sentiment-card-stat {
+  font-size: 13px;
+  font-weight: 600;
+  color: #065f46;
+}
+
+.sentiment-card-meta {
+  font-size: 11px;
+  color: #9ca3af;
+  text-align: right;
 }
