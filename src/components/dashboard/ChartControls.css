@@ -1,0 +1,158 @@
+/* ========= CHART CONTROLS + TICKER DROPDOWN ======================== */
+
+.chart-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.chart-controls-label {
+  font-size: 12px;
+  color: #6b7280;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Base “select-style” button, reused by sentiment VIEW dropdown too */
+.chart-select {
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.9);
+  padding: 4px 10px;
+  font-size: 12px;
+  background: #ffffff;
+  color: #111827;
+  cursor: pointer;
+}
+
+/* === Searchable Ticker Dropdown ==================================== */
+
+.chart-search-dropdown {
+  position: relative;
+  display: inline-block;
+  width: 180px;
+}
+
+.chart-select.chart-select--button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.9);
+  background: #ffffff;
+  font-size: 0.9rem;
+  cursor: pointer;
+  outline: none;
+}
+
+.chart-select-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chart-select-caret {
+  margin-left: 8px;
+  font-size: 0.7rem;
+}
+
+/* Floating menu so card size doesn’t change */
+.chart-select-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 20;
+  width: 100%;
+  background: #ffffff;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.12);
+  padding: 8px 0 6px;
+}
+
+/* Search pill inside the menu */
+.chart-search-input {
+  width: calc(100% - 16px);
+  margin: 0 8px 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid #bbf7d0;
+  font-size: 0.85rem;
+  outline: none;
+  background: #ecfdf3;
+  color: #065f46;
+}
+
+.chart-search-input::placeholder {
+  color: #9ca3af;
+}
+
+.chart-search-input:focus {
+  border-color: #0f766e;
+  box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.25);
+}
+
+/* Scrollable list of options */
+.chart-select-options {
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+/* Green-ish scrollbar */
+.chart-select-options::-webkit-scrollbar {
+  width: 6px;
+}
+
+.chart-select-options::-webkit-scrollbar-track {
+  background: #f3f4f6;
+  border-radius: 999px;
+}
+
+.chart-select-options::-webkit-scrollbar-thumb {
+  background: #bbf7d0;
+  border-radius: 999px;
+}
+
+.chart-select-options::-webkit-scrollbar-thumb:hover {
+  background: #6ee7b7;
+}
+
+.chart-select-option {
+  padding: 6px 10px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.chart-select-option:hover {
+  background: #f3f4f6;
+}
+
+.chart-select-option--active {
+  background: #ecfdf3;
+  font-weight: 500;
+}
+
+.chart-select-option--empty {
+  padding: 6px 10px;
+  font-size: 0.8rem;
+  color: #9ca3af;
+  cursor: default;
+}
+
+/* Small screens: dropdown under subtitle, full width */
+@media (max-width: 768px) {
+  .chart-controls {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .chart-search-dropdown {
+    width: 100%;
+  }
+}

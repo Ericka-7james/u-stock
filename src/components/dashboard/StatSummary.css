@@ -1,0 +1,61 @@
+/* ========= STAT SUMMARY (top 3 cards) =============================== */
+
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.stat-card {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 16px 18px;
+  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.06);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+/* All stat cards share the same green accent at the top */
+.stat-card--accent-blue,
+.stat-card--accent-orange,
+.stat-card--accent-teal {
+  border-top: 4px solid var(--ustock-green-main);
+}
+
+.stat-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: #64748b;
+}
+
+.stat-value {
+  font-size: 24px;
+  font-weight: 700;
+  margin: 6px 0;
+  color: #111827;
+}
+
+.stat-caption {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.stat-card--clickable {
+  cursor: pointer;
+  text-decoration: none;
+  color: inherit;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.stat-card--clickable:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.12);
+}
+
+/* Mobile: stack the 3 stat cards */
+@media (max-width: 768px) {
+  .stat-row {
+    grid-template-columns: 1fr;
+  }
+}
