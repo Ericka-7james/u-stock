@@ -13,15 +13,57 @@ export default function SentimentCard({
   symbol,
   historyBySymbol,
   loading = false,
+  backendSnapshot = null,
 }) {
   const [mode, setMode] = useState("ALL");
 
   const history = symbol ? historyBySymbol[symbol] || [] : [];
 
-  const sentiment = useMemo(
+  // Local fallback sentiment from price history only
+  const localSentiment = useMemo(
     () => computeSentimentFromHistory(history),
     [history]
   );
+
+  // Choose backend if available, else local
+  const sentiment = useMemo(() => {
+    if (backendSnapshot) {
+      return {
+        source: "backend",
+        hasEnoughData: true,
+        priceBased: backendSnapshot.price_based,
+        volatility: backendSnapshot.volatility,
+        technical: backendSnapshot.technical,
+        risk: backendSnapshot.risk,
+        style: backendSnapshot.style,
+        crossSection: backendSnapshot.cross_section,
+        overallLabel: backendSnapshot.overall_label,
+        overallScore: backendSnapshot.overall_score,
+      };
+    }
+    // local fallback
+    if (localSentiment?.hasEnoughData) {
+      return {
+        source: "local",
+        ...localSentiment,
+        risk: null,
+        style: null,
+        crossSection: null,
+      };
+    }
+    return {
+      source: "none",
+      hasEnoughData: false,
+      priceBased: null,
+      volatility: null,
+      technical: null,
+      risk: null,
+      style: null,
+      crossSection: null,
+      overallLabel: "Not enough data",
+      overallScore: 0,
+    };
+  }, [backendSnapshot, localSentiment]);
 
   const hasData = sentiment.hasEnoughData;
 
@@ -44,7 +86,7 @@ export default function SentimentCard({
 
           {symbol && loading && (
             <p className="sentiment-card__subtitle">
-              Loading price history…
+              Loading price & sentiment…
             </p>
           )}
 
@@ -61,19 +103,38 @@ export default function SentimentCard({
                 {sentiment.overallLabel}
               </span>{" "}
               <span className="sentiment-card__overall-score">
-                (score {sentiment.overallScore})
+                (score {sentiment.overallScore}
+                {sentiment.source === "backend" ? ", from snapshot" : ""})
               </span>
+            </p>
+          )}
+
+          {sentiment.source === "backend" && sentiment.style && (
+            <p className="sentiment-card__subtitle">
+              Style:{" "}
+              <span className="sentiment-chip sentiment-chip--style">
+                {sentiment.style.label}
+              </span>
+              {sentiment.risk && (
+                <>
+                  {" • "}
+                  Risk:{" "}
+                  <span className="sentiment-chip sentiment-chip--risk">
+                    {sentiment.risk.label}
+                  </span>
+                </>
+              )}
             </p>
           )}
         </div>
 
-        {/* VIEW dropdown – styled like the ticker dropdown */}
+        {/* VIEW dropdown – same style as chart dropdown */}
         <SentimentModeDropdown mode={mode} onChange={setMode} />
       </header>
 
       {symbol && !loading && hasData && (
         <div className="sentiment-card__body">
-          {(mode === "ALL" || mode === "PRICE") && (
+          {(mode === "ALL" || mode === "PRICE") && sentiment.priceBased && (
             <div className="sentiment-section sentiment-section--price">
               <h3 className="sentiment-section__title">Price-based Sentiment</h3>
               <p className="sentiment-section__label">
@@ -84,27 +145,33 @@ export default function SentimentCard({
               <dl className="sentiment-metrics">
                 <div className="sentiment-metric">
                   <dt>1D Change</dt>
-                  <dd className={classForPct(sentiment.priceBased.change1D)}>
-                    {formatPct(sentiment.priceBased.change1D)}
+                  <dd className={classForPct(sentiment.priceBased.change_1d ?? sentiment.priceBased.change1D)}>
+                    {formatPct(sentiment.priceBased.change_1d ?? sentiment.priceBased.change1D)}
                   </dd>
                 </div>
                 <div className="sentiment-metric">
                   <dt>5D Change</dt>
-                  <dd className={classForPct(sentiment.priceBased.change5D)}>
-                    {formatPct(sentiment.priceBased.change5D)}
+                  <dd className={classForPct(sentiment.priceBased.change_5d ?? sentiment.priceBased.change5D)}>
+                    {formatPct(sentiment.priceBased.change_5d ?? sentiment.priceBased.change5D)}
                   </dd>
                 </div>
                 <div className="sentiment-metric">
                   <dt>≈1M Change</dt>
-                  <dd className={classForPct(sentiment.priceBased.change20D)}>
-                    {formatPct(sentiment.priceBased.change20D)}
+                  <dd className={classForPct(sentiment.priceBased.change_20d ?? sentiment.priceBased.change20D)}>
+                    {formatPct(sentiment.priceBased.change_20d ?? sentiment.priceBased.change20D)}
                   </dd>
                 </div>
+                {sentiment.crossSection?.ret_20d_pct != null && (
+                  <div className="sentiment-metric">
+                    <dt>20D Return Rank</dt>
+                    <dd>{formatPercentile(sentiment.crossSection.ret_20d_pct)}</dd>
+                  </div>
+                )}
               </dl>
             </div>
           )}
 
-          {(mode === "ALL" || mode === "VOL") && (
+          {(mode === "ALL" || mode === "VOL") && sentiment.volatility && (
             <div className="sentiment-section sentiment-section--vol">
               <h3 className="sentiment-section__title">Volatility Sentiment</h3>
               <p className="sentiment-section__label">
@@ -115,13 +182,24 @@ export default function SentimentCard({
               <dl className="sentiment-metrics">
                 <div className="sentiment-metric">
                   <dt>Realized Volatility</dt>
-                  <dd>{formatNumber(sentiment.volatility.realizedVol)}%</dd>
+                  <dd>
+                    {formatNumber(
+                      sentiment.volatility.realized_vol ?? sentiment.volatility.realizedVol
+                    )}
+                    %
+                  </dd>
                 </div>
+                {sentiment.crossSection?.realized_vol_pct != null && (
+                  <div className="sentiment-metric">
+                    <dt>Volatility Rank</dt>
+                    <dd>{formatPercentile(sentiment.crossSection.realized_vol_pct)}</dd>
+                  </div>
+                )}
               </dl>
             </div>
           )}
 
-          {(mode === "ALL" || mode === "TECH") && (
+          {(mode === "ALL" || mode === "TECH") && sentiment.technical && (
             <div className="sentiment-section sentiment-section--tech">
               <h3 className="sentiment-section__title">
                 Technical Pattern Sentiment
@@ -134,16 +212,28 @@ export default function SentimentCard({
               <dl className="sentiment-metrics">
                 <div className="sentiment-metric">
                   <dt>Last Close</dt>
-                  <dd>{formatNumber(sentiment.technical.lastClose)}</dd>
+                  <dd>{formatNumber(sentiment.technical.last_close ?? sentiment.technical.lastClose)}</dd>
                 </div>
                 <div className="sentiment-metric">
                   <dt>20-day MA</dt>
-                  <dd>{formatNumber(sentiment.technical.maShort)}</dd>
+                  <dd>{formatNumber(sentiment.technical.ma_short)}</dd>
                 </div>
                 <div className="sentiment-metric">
                   <dt>50-day MA</dt>
-                  <dd>{formatNumber(sentiment.technical.maLong)}</dd>
+                  <dd>{formatNumber(sentiment.technical.ma_long)}</dd>
                 </div>
+                {sentiment.technical.rsi_14 != null && (
+                  <div className="sentiment-metric">
+                    <dt>RSI (14)</dt>
+                    <dd>{formatNumber(sentiment.technical.rsi_14)}</dd>
+                  </div>
+                )}
+                {sentiment.technical.bb_position != null && (
+                  <div className="sentiment-metric">
+                    <dt>Bollinger Position</dt>
+                    <dd>{formatBollinger(sentiment.technical.bb_position)}</dd>
+                  </div>
+                )}
               </dl>
             </div>
           )}
@@ -153,17 +243,13 @@ export default function SentimentCard({
   );
 }
 
-/* ---------- Custom dropdown for VIEW (matches ticker styles) --------------- */
+/* ---------- Dropdown for VIEW (matches ticker styles) ---------------------- */
 
 function SentimentModeDropdown({ mode, onChange }) {
   const [isOpen, setIsOpen] = useState(false);
 
   const current = SENTIMENT_MODES.find((m) => m.value === mode) || SENTIMENT_MODES[0];
-
-  // Label inside the dropdown:
-  // - "View" while mode === ALL (your default)
-  // - otherwise the chosen label ("Price-based Sentiment", etc.)
-  const labelText = current.label;
+  const labelText = mode === "ALL" ? "View" : current.label;
 
   const handleSelect = (value) => {
     onChange(value);
@@ -207,7 +293,7 @@ function SentimentModeDropdown({ mode, onChange }) {
   );
 }
 
-/* ---------- helpers + local sentiment logic -------------------------------- */
+/* ---------- Formatting helpers -------------------------------------------- */
 
 function formatPct(v) {
   if (v === null || v === undefined || isNaN(v)) return "—";
@@ -219,12 +305,28 @@ function formatNumber(v) {
   return v.toFixed(2);
 }
 
+function formatPercentile(p) {
+  if (p === null || p === undefined || isNaN(p)) return "—";
+  return `${(p * 100).toFixed(1)} pctile`;
+}
+
+function formatBollinger(pos) {
+  if (pos === null || pos === undefined || isNaN(pos)) return "—";
+  if (pos >= 0.8) return "Near upper band";
+  if (pos <= -0.8) return "Near lower band";
+  if (pos > 0.2) return "Above mid band";
+  if (pos < -0.2) return "Below mid band";
+  return "Around mid band";
+}
+
 function classForPct(v) {
   if (v === null || v === undefined || isNaN(v)) return "sentiment-pct";
   if (v > 0.1) return "sentiment-pct sentiment-pct--up";
   if (v < -0.1) return "sentiment-pct sentiment-pct--down";
   return "sentiment-pct";
 }
+
+/* ---------- Local fallback sentiment (unchanged from your original) ------- */
 
 function computeSentimentFromHistory(history = []) {
   if (!Array.isArray(history) || history.length < 3) {
@@ -241,7 +343,6 @@ function computeSentimentFromHistory(history = []) {
   const closes = history
     .map((bar) => Number(bar.close))
     .filter((v) => !isNaN(v));
-
   if (closes.length < 3) {
     return {
       hasEnoughData: false,
@@ -266,7 +367,6 @@ function computeSentimentFromHistory(history = []) {
   const change5D = pct(close5, lastClose);
   const change20D = pct(close20, lastClose);
 
-  // Price sentiment
   let priceLabel = "Neutral";
   let priceScore = 0;
 
@@ -297,17 +397,15 @@ function computeSentimentFromHistory(history = []) {
     change20D,
   };
 
-  // Volatility sentiment
   const returns = [];
   for (let i = 1; i < closes.length; i++) {
     const r = closes[i - 1] ? (closes[i] - closes[i - 1]) / closes[i - 1] : 0;
     returns.push(r);
   }
 
-  const mean =
-    returns.reduce((acc, r) => acc + r, 0) / (returns.length || 1);
+  const meanVal = returns.reduce((acc, r) => acc + r, 0) / (returns.length || 1);
   const variance =
-    returns.reduce((acc, r) => acc + (r - mean) * (r - mean), 0) /
+    returns.reduce((acc, r) => acc + (r - meanVal) * (r - meanVal), 0) /
     (returns.length || 1);
   const stdev = Math.sqrt(variance);
   const realizedVol = stdev * Math.sqrt(252) * 100;
@@ -332,16 +430,14 @@ function computeSentimentFromHistory(history = []) {
     realizedVol,
   };
 
-  // Technical sentiment (simple MA trend)
   const windowShort = 20;
   const windowLong = 50;
+
   const recentShort = closes.slice(-windowShort);
   const recentLong = closes.slice(-windowLong);
 
   const avg = (arr) =>
-    arr.length
-      ? arr.reduce((acc, v) => acc + v, 0) / arr.length
-      : lastClose;
+    arr.length ? arr.reduce((acc, v) => acc + v, 0) / arr.length : lastClose;
 
   const maShort = avg(recentShort);
   const maLong = avg(recentLong.length ? recentLong : recentShort);
@@ -377,8 +473,8 @@ function computeSentimentFromHistory(history = []) {
   };
 
   const overallScore = priceScore + volScore + techScore;
-
   let overallLabel = "Neutral / Mixed";
+
   if (overallScore >= 3) overallLabel = "Strongly Bullish";
   else if (overallScore >= 1) overallLabel = "Bullish Tilt";
   else if (overallScore <= -3) overallLabel = "Strongly Bearish";

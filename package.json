@@ -27,9 +27,9 @@
     "fetch:intraday": "cross-env PYTHONPATH=src python -m data_scout.fetchers.fetch_intraday",
     "fetch:fundamentals": "cross-env PYTHONPATH=src python -m data_scout.fetchers.fetch_fundamentals",
     "fetch:all": "npm run fetch:prices && npm run fetch:intraday && npm run fetch:fundamentals",
-    
-    "preprocess:sentiment": "cross-env PYTHONPATH=src python -m data_scout.preprocess.sentiment_slim",
 
+    "update:sentiment": "cross-env PYTHONPATH=src python -m preprocess.sentiment_snapshot",
+    
     "indicators:daily": "cross-env PYTHONPATH=src python -m data_scout.indicators.compute_indicators",
     "indicators:intraday": "cross-env PYTHONPATH=src python -m data_scout.indicators.intraday_indicators",
     "indicators:multiday": "cross-env PYTHONPATH=src python -m data_scout.indicators.multiday_indicators",

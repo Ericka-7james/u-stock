@@ -182,4 +182,14 @@
   .sentiment-mode-dropdown {
     min-width: 180px;
   }
+
+  .sentiment-chip--style {
+    background: #eef2ff;
+    color: #3730a3;
+  }
+
+  .sentiment-chip--risk {
+    background: #fef2f2;
+    color: #b91c1c;
+  }
 }

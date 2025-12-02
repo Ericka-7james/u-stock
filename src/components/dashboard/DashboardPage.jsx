@@ -185,6 +185,11 @@ export default function DashboardPage() {
     return 0;
   }, [sentimentMeta, sentimentData]);
 
+    const currentSentimentRow = useMemo(() => {
+    if (!currentTicker || !Array.isArray(sentimentData)) return null;
+    return sentimentData.find((row) => row.ticker === currentTicker) || null;
+  }, [currentTicker, sentimentData]);
+
   const sentimentLastUpdated = sentimentMeta?.generatedAt
     ? new Date(sentimentMeta.generatedAt)
     : null;
@@ -340,12 +345,14 @@ export default function DashboardPage() {
         </section>
 
         <section>
-            <SentimentCard
-              symbol={currentTicker}
-              historyBySymbol={historyBySymbol}
-              loading={pricesLoading}
-            />
+          <SentimentCard
+            symbol={currentTicker}
+            historyBySymbol={historyBySymbol}
+            loading={combinedLoading || sentimentLoading}
+            backendSnapshot={currentSentimentRow}
+          />
         </section>
+
       </main>
 
       {lastUpdated && (
