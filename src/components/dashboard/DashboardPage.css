@@ -22,6 +22,7 @@
 
   .panel-filters {
     grid-area: filters;
+    transform: none !important;
   }
 
   .panel-chart {
@@ -84,8 +85,12 @@
 /* Make title + ? icon sit on one row */
 .card-title-row {
   display: flex;
+  flex-direction: row;
   align-items: center;
-  gap: 0.4rem;
+  justify-content: flex-start;
+  gap: 8px;
+  flex-wrap: nowrap;           /* 🔥 prevents stacking */
+  white-space: nowrap;         /* 🔥 prevents wrapping onto next line */
 }
 
 /* Chart area */
@@ -107,6 +112,11 @@
   border: none;
 }
 
+.panel,
+.panel-filters {
+  transform: none !important;
+}
+
 .filters-card {
   background: #ffffff;
   border-radius: 18px;
@@ -118,7 +128,6 @@
 
 .filters-card:hover {
   box-shadow: 0 16px 40px rgba(15, 23, 42, 0.12);
-  transform: translateY(-2px);
 }
 
 /* Green accent only on the index card */

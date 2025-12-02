@@ -1,0 +1,39 @@
+/* ============================================================
+   UNIVERSAL HEADER + HELP ICON ALIGNMENT
+   Works for ANY card header containing a title + HelpTooltip
+   Does NOT override help icon styling
+   ============================================================ */
+
+/* Normalize layout for: 
+   - Price chart header (.card-title-row)
+   - Top signals header (.filters-card-header)
+   - Sentiment card header (.sentiment-card__header)
+*/
+.card-title-row,
+.filters-card-header,
+.sentiment-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem; /* uniform horizontal spacing */
+}
+
+/* Title + icon align perfectly on the baseline */
+.card-title-row h2,
+.card-title-row h3,
+.filters-card-header h3,
+.sentiment-card__header h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;      /* <--- THIS is the icon gap you want identical */
+  margin: 0;         /* remove weird top-bottom spacing */
+  padding: 0;
+}
+
+/* Prevent help icon from getting pushed down */
+.card-title-row .help-icon-button,
+.filters-card-header .help-icon-button,
+.sentiment-card__header .help-icon-button {
+  margin: 0; /* force consistent alignment */
+  flex-shrink: 0; /* never compress the icon */
+}

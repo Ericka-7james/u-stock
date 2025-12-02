@@ -2,18 +2,21 @@
 import { useMemo, useState, useRef, useEffect } from "react";
 
 import AppShell from "../layout/AppShell";
-import StatSummary from "./StatSummary";
-import PriceChart from "./PriceChart";
+import StatSummary from "./cards/StatSummary.jsx";
+import PriceChart from "./cards/PriceChart.jsx";
+import SentimentCard from "./cards/SentimentCard.jsx";
+
+import TopSignalsCard from "./cards/TopSignalsCard";
 
 import { useSignalsSnapshot } from "../../hooks/raw/useSignalsSnapshot";
 import { useDailyPricesHistory } from "../../hooks/raw/useDailyPricesHistory";
 import { useSentimentSnapshot } from "../../hooks/raw/useSentimentSnapshot";
 
 import "./DashboardPage.css";
-import "./ChartControls.css";
-import "./HelpOverlay.css";
+import "./cards/ChartControls.css";
+import "./cards/CardShared.css";
 
-import SentimentCard from "./SentimentCard";
+import HelpTooltip from '../common/HelpTooltip'
 
 const MAX_VISIBLE_OPTIONS = 300;
 
@@ -206,14 +209,28 @@ export default function DashboardPage() {
               <div className="card-header-left">
                 <div className="card-title-row">
                   <h2 className="card-title-text">Price action viewer</h2>
-                  <button
-                    type="button"
-                    className="help-icon-button"
-                    aria-label="Explain this chart"
-                    onClick={() => setShowPriceHelp(true)}
-                  >
-                    ?
-                  </button>
+                  <HelpTooltip title="What is the Price action viewer?">
+                    <p>
+                      This chart shows the daily close price for the selected ticker based on
+                      your <code>prices-raw.json</code> snapshot.
+                    </p>
+                    <ul>
+                      <li>
+                        <strong>X-axis:</strong> trading days from your latest snapshot window.
+                      </li>
+                      <li>
+                        <strong>Y-axis:</strong> adjusted close price.
+                      </li>
+                      <li>
+                        Use the ticker dropdown to switch symbols. Data refresh times appear in
+                        the dashboard header.
+                      </li>
+                    </ul>
+                    <p className="help-popover__note">
+                      This is a visualization of historical prices only and is not investment
+                      advice.
+                    </p>
+                  </HelpTooltip>
                 </div>
                 <p className="card-subtitle">
                   Select a ticker or type to filter the universe.
@@ -231,52 +248,6 @@ export default function DashboardPage() {
                 </label>
               </div>
             </div>
-
-            {/* Full-screen help popup */}
-            {showPriceHelp && (
-              <div
-                className="help-popover-backdrop"
-                onClick={() => setShowPriceHelp(false)}
-              >
-                <div
-                  className="help-popover"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <button
-                    type="button"
-                    className="help-popover__close"
-                    aria-label="Close explanation"
-                    onClick={() => setShowPriceHelp(false)}
-                  >
-                    ×
-                  </button>
-                  <h3 className="help-popover__title">
-                    What is the Price action viewer?
-                  </h3>
-                  <p className="help-popover__text">
-                    This chart shows the daily close price for the selected
-                    ticker based on your <code>prices-raw.json</code> snapshot.
-                  </p>
-                  <ul className="help-popover__list">
-                    <li>
-                      <strong>X-axis:</strong> trading days from your latest
-                      snapshot window.
-                    </li>
-                    <li>
-                      <strong>Y-axis:</strong> adjusted close price.
-                    </li>
-                    <li>
-                      Use the ticker dropdown to switch symbols. Data refresh
-                      times appear in the dashboard header.
-                    </li>
-                  </ul>
-                  <p className="help-popover__note">
-                    This is a visualization of historical prices only and is not
-                    investment advice.
-                  </p>
-                </div>
-              </div>
-            )}
 
             {/* Chart body */}
             <PriceChart
@@ -298,80 +269,14 @@ export default function DashboardPage() {
           />
         </section>
 
-        {/* FILTERS panel – Top signals + Data snapshots */}
         <section className="panel panel-filters">
-          {/* Top signals table */}
-          <div className="filters-card filters-card--index">
-            <div className="filters-card-header">
-              <h3 className="panel-title">Top signals (today)</h3>
-            </div>
-
-            {combinedLoading ? (
-              <p className="muted">Loading signals…</p>
-            ) : topFiveSignals.length === 0 ? (
-              <p className="muted">
-                No signals available. Run your fetchers + indicator scripts.
-              </p>
-            ) : (
-              <>
-                <table className="mini-table">
-                  <thead>
-                    <tr>
-                      <th>Ticker</th>
-                      <th>Score</th>
-                      <th>1d</th>
-                      <th>Intraday</th>
-                      <th>5d</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {topFiveSignals.map((row) => {
-                      const daily = row.components?.daily ?? {};
-                      const intraday = row.components?.intraday ?? {};
-                      const multiday = row.components?.multiday ?? {};
-
-                      return (
-                        <tr
-                          key={row.ticker}
-                          className={
-                            row.ticker === currentTicker
-                              ? "mini-table-row--active"
-                              : ""
-                          }
-                          onClick={() => setSelectedTicker(row.ticker)}
-                        >
-                          <td>{row.ticker}</td>
-                          <td>{row.score?.toFixed(2) ?? "—"}</td>
-                          <td>
-                            {daily.close_return_1d != null
-                              ? (daily.close_return_1d * 100).toFixed(1) + "%"
-                              : "—"}
-                          </td>
-                          <td>
-                            {intraday.intraday_return != null
-                              ? (intraday.intraday_return * 100).toFixed(1) +
-                                "%"
-                              : "—"}
-                          </td>
-                          <td>
-                            {multiday.return_5d != null
-                              ? (multiday.return_5d * 100).toFixed(1) + "%"
-                              : "—"}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-
-                {signalsMeta?.rankingDescription && (
-                  <p className="mini-table-caption muted">
-                    {signalsMeta.rankingDescription}
-                  </p>
-                )}
-              </>
-            )}
-          </div>
+          <TopSignalsCard
+            signals={signals}
+            signalsMeta={signalsMeta}
+            currentTicker={currentTicker}
+            onSelectTicker={setSelectedTicker}
+            loading={combinedLoading}
+          />
 
           {/* Snapshot info card */}
           <div className="filters-card filters-card--macro">
