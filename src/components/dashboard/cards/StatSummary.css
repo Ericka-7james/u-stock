@@ -7,12 +7,9 @@
   margin-bottom: 24px;
 }
 
+/* stat-card extends .panel from AppShell via JSX: className="panel stat-card" */
 .stat-card {
-  background: #ffffff;
-  border-radius: 16px;
-  padding: 16px 18px;
-  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.06);
-  border: 1px solid rgba(148, 163, 184, 0.25);
+  padding: 16px 18px; /* small tweak on top of .panel padding */
 }
 
 /* All stat cards share the same green accent at the top */
@@ -38,7 +35,7 @@
 
 .stat-caption {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--ustock-text-muted); /* same as #6b7280, now using token */
 }
 
 .stat-card--clickable {
