@@ -1,3 +1,5 @@
+// TODO: Fix and re-enable this chart component for Reddit mentions
+
 // // src/components/RedditMentionsChart.jsx
 // import {
 //   BarChart,
