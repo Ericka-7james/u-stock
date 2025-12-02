@@ -424,8 +424,8 @@
     grid-template-columns: minmax(260px, 380px) minmax(0, 1fr);
     grid-template-rows: auto auto;
     grid-template-areas:
-      "sentiment chart"
-      "filters   chart";
+      "filters chart"
+      "filters sentiment";
     gap: 1.5rem;
     align-items: flex-start;
   }
@@ -765,4 +765,92 @@
   font-size: 0.8rem;
   color: #9ca3af;
   cursor: default;
+}
+
+/* Circular question mark button */
+.help-icon-button {
+  height: 26px;
+  width: 26px;
+  border-radius: 999px;
+  border: 2px solid #0f766e;
+  background: #ffffff;
+  color: #0f766e;
+  font-weight: 700;
+  font-size: 0.9rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  margin-left: 0.5rem;
+  box-shadow: 0 2px 6px rgba(15, 118, 110, 0.15);
+}
+
+.help-icon-button:hover {
+  background: #ecfdf3;
+}
+
+/* Shared full-screen help modal */
+.help-popover-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 40;
+}
+
+.help-popover {
+  position: relative;
+  background: #ffffff;
+  border-radius: 18px;
+  padding: 1.6rem 1.9rem;
+  width: min(480px, 90vw);
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.25);
+}
+
+.help-popover__close {
+  position: absolute;
+  top: 0.85rem;
+  right: 0.9rem;
+  border: none;
+  background: transparent;
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+  color: #4b5563;
+}
+
+.help-popover__title {
+  margin: 0 0 0.5rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.help-popover__text {
+  margin: 0 0 0.75rem;
+  font-size: 0.9rem;
+  color: #4b5563;
+}
+
+.help-popover__list {
+  margin: 0 0 0.75rem;
+  padding-left: 1.1rem;
+  font-size: 0.88rem;
+  color: #374151;
+}
+
+.help-popover__note {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+/* Make sure title + icon sit nicely */
+.card-title-row,
+.sentiment-card__title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
 }

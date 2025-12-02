@@ -16,6 +16,7 @@ export default function SentimentCard({
   backendSnapshot = null,
 }) {
   const [mode, setMode] = useState("ALL");
+  const [showHelp, setShowHelp] = useState(false);
 
   const history = symbol ? historyBySymbol[symbol] || [] : [];
 
@@ -66,17 +67,26 @@ export default function SentimentCard({
   }, [backendSnapshot, localSentiment]);
 
   const hasData = sentiment.hasEnoughData;
+  const displayTicker = symbol || "—";
 
   return (
     <section className="sentiment-card">
       <header className="sentiment-card__header">
-        <div>
-          <h2 className="sentiment-card__title">
-            Sentiment for{" "}
-            <span className="sentiment-card__ticker">
-              {symbol || "—"}
-            </span>
-          </h2>
+        <div className="sentiment-card__header-left">
+          <div className="sentiment-card__title-row">
+            <h2 className="sentiment-card__title">
+              Sentiment for{" "}
+              <span className="sentiment-card__ticker">{displayTicker}</span>
+            </h2>
+            <button
+              type="button"
+              className="help-icon-button"
+              aria-label="Explain this sentiment card"
+              onClick={() => setShowHelp(true)}
+            >
+              ?
+            </button>
+          </div>
 
           {!symbol && !loading && (
             <p className="sentiment-card__subtitle">
@@ -86,7 +96,7 @@ export default function SentimentCard({
 
           {symbol && loading && (
             <p className="sentiment-card__subtitle">
-              Loading price & sentiment…
+              Loading price &amp; sentiment…
             </p>
           )}
 
@@ -132,11 +142,62 @@ export default function SentimentCard({
         <SentimentModeDropdown mode={mode} onChange={setMode} />
       </header>
 
+      {/* FULL-SCREEN HELP MODAL */}
+      {showHelp && (
+        <div
+          className="help-popover-backdrop"
+          onClick={() => setShowHelp(false)}
+        >
+          <div
+            className="help-popover"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="help-popover__close"
+              aria-label="Close explanation"
+              onClick={() => setShowHelp(false)}
+            >
+              ×
+            </button>
+            <h3 className="help-popover__title">
+              How is sentiment calculated?
+            </h3>
+            <p className="help-popover__text">
+              This card summarizes different views of the selected ticker, based
+              on its daily price history and your backend snapshot.
+            </p>
+            <ul className="help-popover__list">
+              <li>
+                <strong>Price-based Sentiment</strong> looks at recent returns
+                (1-day, 5-day, and ~1-month) to classify the move as bullish,
+                bearish, or neutral.
+              </li>
+              <li>
+                <strong>Volatility Sentiment</strong> uses realized volatility
+                to indicate whether trading is calm, normal, or stressed.
+              </li>
+              <li>
+                <strong>Technical Pattern Sentiment</strong> compares the latest
+                close to moving averages and pattern indicators to identify
+                uptrends, downtrends, or mixed ranges.
+              </li>
+            </ul>
+            <p className="help-popover__note">
+              These scores are for exploration only and are not trading signals
+              or investment advice.
+            </p>
+          </div>
+        </div>
+      )}
+
       {symbol && !loading && hasData && (
         <div className="sentiment-card__body">
           {(mode === "ALL" || mode === "PRICE") && sentiment.priceBased && (
             <div className="sentiment-section sentiment-section--price">
-              <h3 className="sentiment-section__title">Price-based Sentiment</h3>
+              <h3 className="sentiment-section__title">
+                Price-based Sentiment
+              </h3>
               <p className="sentiment-section__label">
                 <span className="sentiment-chip sentiment-chip--price">
                   {sentiment.priceBased.label}
@@ -145,26 +206,54 @@ export default function SentimentCard({
               <dl className="sentiment-metrics">
                 <div className="sentiment-metric">
                   <dt>1D Change</dt>
-                  <dd className={classForPct(sentiment.priceBased.change_1d ?? sentiment.priceBased.change1D)}>
-                    {formatPct(sentiment.priceBased.change_1d ?? sentiment.priceBased.change1D)}
+                  <dd
+                    className={classForPct(
+                      sentiment.priceBased.change_1d ??
+                        sentiment.priceBased.change1D
+                    )}
+                  >
+                    {formatPct(
+                      sentiment.priceBased.change_1d ??
+                        sentiment.priceBased.change1D
+                    )}
                   </dd>
                 </div>
                 <div className="sentiment-metric">
                   <dt>5D Change</dt>
-                  <dd className={classForPct(sentiment.priceBased.change_5d ?? sentiment.priceBased.change5D)}>
-                    {formatPct(sentiment.priceBased.change_5d ?? sentiment.priceBased.change5D)}
+                  <dd
+                    className={classForPct(
+                      sentiment.priceBased.change_5d ??
+                        sentiment.priceBased.change5D
+                    )}
+                  >
+                    {formatPct(
+                      sentiment.priceBased.change_5d ??
+                        sentiment.priceBased.change5D
+                    )}
                   </dd>
                 </div>
                 <div className="sentiment-metric">
                   <dt>≈1M Change</dt>
-                  <dd className={classForPct(sentiment.priceBased.change_20d ?? sentiment.priceBased.change20D)}>
-                    {formatPct(sentiment.priceBased.change_20d ?? sentiment.priceBased.change20D)}
+                  <dd
+                    className={classForPct(
+                      sentiment.priceBased.change_20d ??
+                        sentiment.priceBased.change20D
+                    )}
+                  >
+                    {formatPct(
+                      sentiment.priceBased.change_20d ??
+                        sentiment.priceBased.change20D
+                    )}
                   </dd>
                 </div>
                 {sentiment.crossSection?.ret_20d_pct != null && (
                   <div className="sentiment-metric">
                     <dt>20D Return Rank</dt>
-                    <dd>{formatPercentile(sentiment.crossSection.ret_20d_pct)}</dd>
+                    <dd>
+                      {formatPercentile(
+                        sentiment.crossSection.ret_20d_pct
+                      )}
+                    </dd>
                   </div>
                 )}
               </dl>
@@ -173,7 +262,9 @@ export default function SentimentCard({
 
           {(mode === "ALL" || mode === "VOL") && sentiment.volatility && (
             <div className="sentiment-section sentiment-section--vol">
-              <h3 className="sentiment-section__title">Volatility Sentiment</h3>
+              <h3 className="sentiment-section__title">
+                Volatility Sentiment
+              </h3>
               <p className="sentiment-section__label">
                 <span className="sentiment-chip sentiment-chip--vol">
                   {sentiment.volatility.label}
@@ -184,7 +275,8 @@ export default function SentimentCard({
                   <dt>Realized Volatility</dt>
                   <dd>
                     {formatNumber(
-                      sentiment.volatility.realized_vol ?? sentiment.volatility.realizedVol
+                      sentiment.volatility.realized_vol ??
+                        sentiment.volatility.realizedVol
                     )}
                     %
                   </dd>
@@ -192,7 +284,11 @@ export default function SentimentCard({
                 {sentiment.crossSection?.realized_vol_pct != null && (
                   <div className="sentiment-metric">
                     <dt>Volatility Rank</dt>
-                    <dd>{formatPercentile(sentiment.crossSection.realized_vol_pct)}</dd>
+                    <dd>
+                      {formatPercentile(
+                        sentiment.crossSection.realized_vol_pct
+                      )}
+                    </dd>
                   </div>
                 )}
               </dl>
@@ -212,7 +308,12 @@ export default function SentimentCard({
               <dl className="sentiment-metrics">
                 <div className="sentiment-metric">
                   <dt>Last Close</dt>
-                  <dd>{formatNumber(sentiment.technical.last_close ?? sentiment.technical.lastClose)}</dd>
+                  <dd>
+                    {formatNumber(
+                      sentiment.technical.last_close ??
+                        sentiment.technical.lastClose
+                    )}
+                  </dd>
                 </div>
                 <div className="sentiment-metric">
                   <dt>20-day MA</dt>
@@ -231,7 +332,9 @@ export default function SentimentCard({
                 {sentiment.technical.bb_position != null && (
                   <div className="sentiment-metric">
                     <dt>Bollinger Position</dt>
-                    <dd>{formatBollinger(sentiment.technical.bb_position)}</dd>
+                    <dd>
+                      {formatBollinger(sentiment.technical.bb_position)}
+                    </dd>
                   </div>
                 )}
               </dl>
@@ -248,7 +351,8 @@ export default function SentimentCard({
 function SentimentModeDropdown({ mode, onChange }) {
   const [isOpen, setIsOpen] = useState(false);
 
-  const current = SENTIMENT_MODES.find((m) => m.value === mode) || SENTIMENT_MODES[0];
+  const current =
+    SENTIMENT_MODES.find((m) => m.value === mode) || SENTIMENT_MODES[0];
   const labelText = mode === "ALL" ? "View" : current.label;
 
   const handleSelect = (value) => {
@@ -279,7 +383,9 @@ function SentimentModeDropdown({ mode, onChange }) {
                 role="option"
                 className={
                   "chart-select-option" +
-                  (option.value === mode ? " chart-select-option--active" : "")
+                  (option.value === mode
+                    ? " chart-select-option--active"
+                    : "")
                 }
                 onClick={() => handleSelect(option.value)}
               >
@@ -293,8 +399,8 @@ function SentimentModeDropdown({ mode, onChange }) {
   );
 }
 
-/* ---------- Formatting helpers -------------------------------------------- */
-
+/* ---------- Formatting helpers & fallback sentiment (unchanged) ------------ */
+// (keep everything from formatPct down exactly as in your current file)
 function formatPct(v) {
   if (v === null || v === undefined || isNaN(v)) return "—";
   return `${v >= 0 ? "+" : ""}${v.toFixed(2)}%`;
@@ -403,7 +509,8 @@ function computeSentimentFromHistory(history = []) {
     returns.push(r);
   }
 
-  const meanVal = returns.reduce((acc, r) => acc + r, 0) / (returns.length || 1);
+  const meanVal =
+    returns.reduce((acc, r) => acc + r, 0) / (returns.length || 1);
   const variance =
     returns.reduce((acc, r) => acc + (r - meanVal) * (r - meanVal), 0) /
     (returns.length || 1);

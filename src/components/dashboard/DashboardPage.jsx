@@ -45,7 +45,6 @@ function SearchableTickerDropdown({ allTickers, currentTicker, onChange }) {
 
   return (
     <div className="chart-search-dropdown">
-      {/* Fake "select" button – looks like the original dropdown */}
       <button
         type="button"
         className="chart-select chart-select--button"
@@ -96,14 +95,12 @@ function SearchableTickerDropdown({ allTickers, currentTicker, onChange }) {
 // --- Main dashboard ----------------------------------------------------------
 
 export default function DashboardPage() {
-  // Ranked signals from your Python signal_engine
   const {
     data: signals = [],
     meta: signalsMeta,
     loading: signalsLoading,
   } = useSignalsSnapshot();
 
-  // Daily OHLCV history (from prices-raw.json)
   const {
     historyBySymbol = {},
     symbols: priceSymbols = [],
@@ -111,7 +108,6 @@ export default function DashboardPage() {
     loading: pricesLoading,
   } = useDailyPricesHistory();
 
-  // Slim per-ticker sentiment snapshot
   const {
     data: sentimentData = [],
     meta: sentimentMeta,
@@ -119,29 +115,20 @@ export default function DashboardPage() {
   } = useSentimentSnapshot();
 
   const [selectedTicker, setSelectedTicker] = useState("");
+  const [showPriceHelp, setShowPriceHelp] = useState(false);
 
-  /**
-   * All tickers available for charting:
-   *  - union of signal tickers and tickers in prices-raw.json
-   */
   const allTickers = useMemo(() => {
     const fromSignals = signals.map((row) => row.ticker).filter(Boolean);
     const merged = new Set([...fromSignals, ...priceSymbols]);
     return Array.from(merged).sort();
   }, [signals, priceSymbols]);
 
-  /**
-   * Default ticker:
-   * 1. First ranked signal
-   * 2. Else first available price symbol
-   */
   const defaultTicker = useMemo(() => {
     if (signals.length > 0) return signals[0].ticker;
     if (priceSymbols.length > 0) return priceSymbols[0];
     return "";
   }, [signals, priceSymbols]);
 
-  // The actual ticker to use in UI
   const currentTicker = selectedTicker || defaultTicker;
 
   const currentSeries = useMemo(() => {
@@ -156,7 +143,6 @@ export default function DashboardPage() {
     return signals.slice(0, 5);
   }, [signals]);
 
-  // Latest data refresh across signals + prices (for footer)
   const lastUpdated = useMemo(() => {
     const times = [];
     if (signalsMeta?.generatedAt) {
@@ -169,7 +155,6 @@ export default function DashboardPage() {
     return new Date(Math.max(...times.map((t) => t.getTime())));
   }, [signalsMeta, pricesMeta]);
 
-  // Sentiment coverage: how many tickers have any sentiment row
   const sentimentUniverseSize = useMemo(() => {
     if (Array.isArray(sentimentMeta?.universe)) {
       return sentimentMeta.universe.length;
@@ -194,7 +179,6 @@ export default function DashboardPage() {
 
   return (
     <AppShell>
-      {/* Top stats row */}
       <StatSummary
         signalsMeta={signalsMeta}
         signalsData={signals}
@@ -207,8 +191,18 @@ export default function DashboardPage() {
         <section className="panel panel-chart">
           <div className="card-main-chart">
             <div className="card-header">
-              <div>
-                <h2>Price action viewer</h2>
+              <div className="card-header-left">
+                <div className="card-title-row">
+                  <h2>Price action viewer</h2>
+                  <button
+                    type="button"
+                    className="help-icon-button"
+                    aria-label="Explain this chart"
+                    onClick={() => setShowPriceHelp(true)}
+                  >
+                    ?
+                  </button>
+                </div>
                 <p className="card-subtitle">
                   Select a ticker or type to filter the universe.
                 </p>
@@ -226,7 +220,52 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* Chart body */}
+            {/* FULL-SCREEN HELP MODAL FOR PRICE CHART */}
+            {showPriceHelp && (
+              <div
+                className="help-popover-backdrop"
+                onClick={() => setShowPriceHelp(false)}
+              >
+                <div
+                  className="help-popover"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <button
+                    type="button"
+                    className="help-popover__close"
+                    aria-label="Close explanation"
+                    onClick={() => setShowPriceHelp(false)}
+                  >
+                    ×
+                  </button>
+                  <h3 className="help-popover__title">
+                    What is the Price action viewer?
+                  </h3>
+                  <p className="help-popover__text">
+                    This chart shows the daily close price for the selected
+                    ticker based on your <code>prices-raw.json</code> snapshot.
+                  </p>
+                  <ul className="help-popover__list">
+                    <li>
+                      <strong>X-axis:</strong> trading days from your latest
+                      snapshot window.
+                    </li>
+                    <li>
+                      <strong>Y-axis:</strong> adjusted close price.
+                    </li>
+                    <li>
+                      Use the ticker dropdown to switch symbols. Data refresh
+                      times appear in the dashboard header.
+                    </li>
+                  </ul>
+                  <p className="help-popover__note">
+                    This is a visualization of historical prices only and is not
+                    investment advice.
+                  </p>
+                </div>
+              </div>
+            )}
+
             <PriceChart
               ticker={currentTicker}
               data={currentSeries}
@@ -236,7 +275,7 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        {/* SENTIMENT panel – directly under chart on small screens */}
+        {/* SENTIMENT panel */}
         <section className="panel panel-sentiment">
           <SentimentCard
             symbol={currentTicker}
@@ -248,7 +287,6 @@ export default function DashboardPage() {
 
         {/* FILTERS panel – Top signals + Data snapshots */}
         <section className="panel panel-filters">
-          {/* Top signals table */}
           <div className="filters-card filters-card--index">
             <div className="filters-card-header">
               <h3 className="panel-title">Top signals (today)</h3>
@@ -321,7 +359,6 @@ export default function DashboardPage() {
             )}
           </div>
 
-          {/* Snapshot info card */}
           <div className="filters-card filters-card--macro">
             <div className="filters-card-header">
               <h3 className="panel-title">Data snapshots</h3>
