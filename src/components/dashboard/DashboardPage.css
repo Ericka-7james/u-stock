@@ -747,36 +747,3 @@
   color: #9ca3af;
   cursor: default;
 }
-
-/* Sentiment coverage card under the chart */
-.sentiment-card {
-  margin-top: 10px;
-  padding: 10px 12px;
-  border-radius: 12px;
-  border: 1px solid rgba(148, 163, 184, 0.35);
-  background: #ffffff;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-  border-left: 4px solid var(--ustock-green-main);
-}
-
-.sentiment-card-title {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.15em;
-  color: #64748b;
-}
-
-.sentiment-card-stat {
-  font-size: 13px;
-  font-weight: 600;
-  color: #065f46;
-}
-
-.sentiment-card-meta {
-  font-size: 11px;
-  color: #9ca3af;
-  text-align: right;
-}

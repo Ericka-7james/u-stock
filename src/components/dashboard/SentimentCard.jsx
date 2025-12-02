@@ -1,0 +1,395 @@
+// src/components/dashboard/SentimentCard.jsx
+import { useMemo, useState } from "react";
+import "./SentimentCard.css";
+
+const SENTIMENT_MODES = [
+  { value: "ALL", label: "All" },
+  { value: "PRICE", label: "Price-based Sentiment" },
+  { value: "VOL", label: "Volatility Sentiment" },
+  { value: "TECH", label: "Technical Pattern Sentiment" },
+];
+
+export default function SentimentCard({
+  symbol,
+  historyBySymbol,
+  loading = false,
+}) {
+  const [mode, setMode] = useState("ALL");
+
+  const history = symbol ? historyBySymbol[symbol] || [] : [];
+
+  const sentiment = useMemo(
+    () => computeSentimentFromHistory(history),
+    [history]
+  );
+
+  const hasData = sentiment.hasEnoughData;
+
+  return (
+    <section className="sentiment-card">
+      <header className="sentiment-card__header">
+        <div>
+          <h2 className="sentiment-card__title">
+            Sentiment for{" "}
+            <span className="sentiment-card__ticker">
+              {symbol || "—"}
+            </span>
+          </h2>
+
+          {!symbol && !loading && (
+            <p className="sentiment-card__subtitle">
+              Select a ticker to view sentiment.
+            </p>
+          )}
+
+          {symbol && loading && (
+            <p className="sentiment-card__subtitle">
+              Loading price history…
+            </p>
+          )}
+
+          {symbol && !loading && !hasData && (
+            <p className="sentiment-card__subtitle">
+              Not enough history to compute sentiment yet.
+            </p>
+          )}
+
+          {symbol && !loading && hasData && (
+            <p className="sentiment-card__subtitle">
+              Overall:{" "}
+              <span className="sentiment-card__overall">
+                {sentiment.overallLabel}
+              </span>{" "}
+              <span className="sentiment-card__overall-score">
+                (score {sentiment.overallScore})
+              </span>
+            </p>
+          )}
+        </div>
+
+        {/* VIEW dropdown – styled like the ticker dropdown */}
+        <SentimentModeDropdown mode={mode} onChange={setMode} />
+      </header>
+
+      {symbol && !loading && hasData && (
+        <div className="sentiment-card__body">
+          {(mode === "ALL" || mode === "PRICE") && (
+            <div className="sentiment-section sentiment-section--price">
+              <h3 className="sentiment-section__title">Price-based Sentiment</h3>
+              <p className="sentiment-section__label">
+                <span className="sentiment-chip sentiment-chip--price">
+                  {sentiment.priceBased.label}
+                </span>
+              </p>
+              <dl className="sentiment-metrics">
+                <div className="sentiment-metric">
+                  <dt>1D Change</dt>
+                  <dd className={classForPct(sentiment.priceBased.change1D)}>
+                    {formatPct(sentiment.priceBased.change1D)}
+                  </dd>
+                </div>
+                <div className="sentiment-metric">
+                  <dt>5D Change</dt>
+                  <dd className={classForPct(sentiment.priceBased.change5D)}>
+                    {formatPct(sentiment.priceBased.change5D)}
+                  </dd>
+                </div>
+                <div className="sentiment-metric">
+                  <dt>≈1M Change</dt>
+                  <dd className={classForPct(sentiment.priceBased.change20D)}>
+                    {formatPct(sentiment.priceBased.change20D)}
+                  </dd>
+                </div>
+              </dl>
+            </div>
+          )}
+
+          {(mode === "ALL" || mode === "VOL") && (
+            <div className="sentiment-section sentiment-section--vol">
+              <h3 className="sentiment-section__title">Volatility Sentiment</h3>
+              <p className="sentiment-section__label">
+                <span className="sentiment-chip sentiment-chip--vol">
+                  {sentiment.volatility.label}
+                </span>
+              </p>
+              <dl className="sentiment-metrics">
+                <div className="sentiment-metric">
+                  <dt>Realized Volatility</dt>
+                  <dd>{formatNumber(sentiment.volatility.realizedVol)}%</dd>
+                </div>
+              </dl>
+            </div>
+          )}
+
+          {(mode === "ALL" || mode === "TECH") && (
+            <div className="sentiment-section sentiment-section--tech">
+              <h3 className="sentiment-section__title">
+                Technical Pattern Sentiment
+              </h3>
+              <p className="sentiment-section__label">
+                <span className="sentiment-chip sentiment-chip--tech">
+                  {sentiment.technical.label}
+                </span>
+              </p>
+              <dl className="sentiment-metrics">
+                <div className="sentiment-metric">
+                  <dt>Last Close</dt>
+                  <dd>{formatNumber(sentiment.technical.lastClose)}</dd>
+                </div>
+                <div className="sentiment-metric">
+                  <dt>20-day MA</dt>
+                  <dd>{formatNumber(sentiment.technical.maShort)}</dd>
+                </div>
+                <div className="sentiment-metric">
+                  <dt>50-day MA</dt>
+                  <dd>{formatNumber(sentiment.technical.maLong)}</dd>
+                </div>
+              </dl>
+            </div>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
+/* ---------- Custom dropdown for VIEW (matches ticker styles) --------------- */
+
+function SentimentModeDropdown({ mode, onChange }) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  const current = SENTIMENT_MODES.find((m) => m.value === mode) || SENTIMENT_MODES[0];
+
+  // Label inside the dropdown:
+  // - "View" while mode === ALL (your default)
+  // - otherwise the chosen label ("Price-based Sentiment", etc.)
+  const labelText = current.label;
+
+  const handleSelect = (value) => {
+    onChange(value);
+    setIsOpen(false);
+  };
+
+  return (
+    <div className="chart-search-dropdown sentiment-mode-dropdown">
+      <button
+        type="button"
+        className="chart-select chart-select--button"
+        onClick={() => setIsOpen((open) => !open)}
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
+        aria-label="Sentiment view mode"
+      >
+        <span className="chart-select-label">{labelText}</span>
+        <span className="chart-select-caret">▾</span>
+      </button>
+
+      {isOpen && (
+        <div className="chart-select-menu">
+          <ul className="chart-select-options" role="listbox">
+            {SENTIMENT_MODES.map((option) => (
+              <li
+                key={option.value}
+                role="option"
+                className={
+                  "chart-select-option" +
+                  (option.value === mode ? " chart-select-option--active" : "")
+                }
+                onClick={() => handleSelect(option.value)}
+              >
+                {option.label}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---------- helpers + local sentiment logic -------------------------------- */
+
+function formatPct(v) {
+  if (v === null || v === undefined || isNaN(v)) return "—";
+  return `${v >= 0 ? "+" : ""}${v.toFixed(2)}%`;
+}
+
+function formatNumber(v) {
+  if (v === null || v === undefined || isNaN(v)) return "—";
+  return v.toFixed(2);
+}
+
+function classForPct(v) {
+  if (v === null || v === undefined || isNaN(v)) return "sentiment-pct";
+  if (v > 0.1) return "sentiment-pct sentiment-pct--up";
+  if (v < -0.1) return "sentiment-pct sentiment-pct--down";
+  return "sentiment-pct";
+}
+
+function computeSentimentFromHistory(history = []) {
+  if (!Array.isArray(history) || history.length < 3) {
+    return {
+      hasEnoughData: false,
+      priceBased: null,
+      volatility: null,
+      technical: null,
+      overallLabel: "Not enough data",
+      overallScore: 0,
+    };
+  }
+
+  const closes = history
+    .map((bar) => Number(bar.close))
+    .filter((v) => !isNaN(v));
+
+  if (closes.length < 3) {
+    return {
+      hasEnoughData: false,
+      priceBased: null,
+      volatility: null,
+      technical: null,
+      overallLabel: "Not enough data",
+      overallScore: 0,
+    };
+  }
+
+  const lastIdx = closes.length - 1;
+  const lastClose = closes[lastIdx];
+  const prevClose = closes[lastIdx - 1];
+  const close5 = closes[Math.max(0, lastIdx - 5)];
+  const close20 = closes[Math.max(0, lastIdx - 20)];
+
+  const pct = (from, to) =>
+    from && from !== 0 ? ((to - from) / from) * 100 : 0;
+
+  const change1D = pct(prevClose, lastClose);
+  const change5D = pct(close5, lastClose);
+  const change20D = pct(close20, lastClose);
+
+  // Price sentiment
+  let priceLabel = "Neutral";
+  let priceScore = 0;
+
+  const bigUp = change1D > 2 || change5D > 5;
+  const smallUp = change1D > 0 || change5D > 0;
+  const bigDown = change1D < -2 || change5D < -5;
+  const smallDown = change1D < 0 || change5D < 0;
+
+  if (bigUp) {
+    priceLabel = "Strongly Bullish";
+    priceScore = 2;
+  } else if (smallUp) {
+    priceLabel = "Bullish";
+    priceScore = 1;
+  } else if (bigDown) {
+    priceLabel = "Strongly Bearish";
+    priceScore = -2;
+  } else if (smallDown) {
+    priceLabel = "Bearish";
+    priceScore = -1;
+  }
+
+  const priceBased = {
+    label: priceLabel,
+    score: priceScore,
+    change1D,
+    change5D,
+    change20D,
+  };
+
+  // Volatility sentiment
+  const returns = [];
+  for (let i = 1; i < closes.length; i++) {
+    const r = closes[i - 1] ? (closes[i] - closes[i - 1]) / closes[i - 1] : 0;
+    returns.push(r);
+  }
+
+  const mean =
+    returns.reduce((acc, r) => acc + r, 0) / (returns.length || 1);
+  const variance =
+    returns.reduce((acc, r) => acc + (r - mean) * (r - mean), 0) /
+    (returns.length || 1);
+  const stdev = Math.sqrt(variance);
+  const realizedVol = stdev * Math.sqrt(252) * 100;
+
+  let volLabel = "Normal";
+  let volScore = 0;
+
+  if (realizedVol < 20) {
+    volLabel = "Calm";
+    volScore = 1;
+  } else if (realizedVol > 60) {
+    volLabel = "Stressed";
+    volScore = -2;
+  } else if (realizedVol > 40) {
+    volLabel = "Elevated";
+    volScore = -1;
+  }
+
+  const volatility = {
+    label: volLabel,
+    score: volScore,
+    realizedVol,
+  };
+
+  // Technical sentiment (simple MA trend)
+  const windowShort = 20;
+  const windowLong = 50;
+  const recentShort = closes.slice(-windowShort);
+  const recentLong = closes.slice(-windowLong);
+
+  const avg = (arr) =>
+    arr.length
+      ? arr.reduce((acc, v) => acc + v, 0) / arr.length
+      : lastClose;
+
+  const maShort = avg(recentShort);
+  const maLong = avg(recentLong.length ? recentLong : recentShort);
+
+  let techLabel = "Range-Bound / Mixed";
+  let techScore = 0;
+
+  const aboveShort = lastClose > maShort;
+  const aboveLong = lastClose > maLong;
+
+  if (aboveShort && aboveLong) {
+    techLabel = "Uptrend";
+    techScore = 2;
+  } else if (!aboveShort && !aboveLong) {
+    techLabel = "Downtrend";
+    techScore = -2;
+  } else if (aboveShort && !aboveLong) {
+    techLabel = "Potential Early Uptrend";
+    techScore = 1;
+  } else if (!aboveShort && aboveLong) {
+    techLabel = "Potential Early Breakdown";
+    techScore = -1;
+  }
+
+  const technical = {
+    label: techLabel,
+    score: techScore,
+    maShort,
+    maLong,
+    lastClose,
+    aboveShort,
+    aboveLong,
+  };
+
+  const overallScore = priceScore + volScore + techScore;
+
+  let overallLabel = "Neutral / Mixed";
+  if (overallScore >= 3) overallLabel = "Strongly Bullish";
+  else if (overallScore >= 1) overallLabel = "Bullish Tilt";
+  else if (overallScore <= -3) overallLabel = "Strongly Bearish";
+  else if (overallScore <= -1) overallLabel = "Bearish Tilt";
+
+  return {
+    hasEnoughData: true,
+    priceBased,
+    volatility,
+    technical,
+    overallLabel,
+    overallScore,
+  };
+}

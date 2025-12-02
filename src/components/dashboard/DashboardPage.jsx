@@ -11,6 +11,8 @@ import { useSentimentSnapshot } from "../../hooks/raw/useSentimentSnapshot";
 
 import "./DashboardPage.css";
 
+import SentimentCard from "./SentimentCard";
+
 const MAX_VISIBLE_OPTIONS = 300;
 
 // --- Custom searchable dropdown just for tickers -----------------------------
@@ -334,29 +336,15 @@ export default function DashboardPage() {
               loading={combinedLoading}
               pricesMeta={pricesMeta}
             />
-
-            {/* Sentiment coverage card under the chart */}
-            <div className="sentiment-card">
-              <div>
-                <div className="sentiment-card-title">Sentiment coverage</div>
-                <div className="sentiment-card-stat">
-                  {sentimentLoading
-                    ? "Loading…"
-                    : sentimentUniverseSize > 0
-                    ? `${sentimentUniverseSize.toLocaleString()} tickers with recent mentions`
-                    : "No sentiment snapshot available."}
-                </div>
-              </div>
-              <div className="sentiment-card-meta">
-                {sentimentLastUpdated
-                  ? `Last updated: ${sentimentLastUpdated.toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}`
-                  : ""}
-              </div>
-            </div>
           </div>
+        </section>
+
+        <section>
+            <SentimentCard
+              symbol={currentTicker}
+              historyBySymbol={historyBySymbol}
+              loading={pricesLoading}
+            />
         </section>
       </main>
 
