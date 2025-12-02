@@ -359,3 +359,29 @@ body {
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
   border: 1px solid rgba(148, 163, 184, 0.25);
 }
+
+/* Shared title + text helpers other pages can reuse */
+.panel-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0;
+}
+
+.panel-subtitle {
+  font-size: 12px;
+  color: var(--ustock-text-muted);
+  margin: 0;
+}
+
+/* Simple muted mini list used across dashboards */
+.mini-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 12px;
+}
+
+.mini-list li + li {
+  margin-top: 4px;
+}

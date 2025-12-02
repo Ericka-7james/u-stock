@@ -11,9 +11,9 @@ export default function TopSignalsCard({
   const topFiveSignals = signals?.slice(0, 5) ?? [];
 
   return (
-    <div className="filters-card filters-card--index top-signals-card">
-      <div className="filters-card-header top-signals-header">
-        <h3 className="panel-title">Top signals (today)</h3>
+    <div className="panel filters-card filters-card--index">
+      <div className="filters-card-header">
+        <h3 className="panel-title">Top signals</h3>
 
         {/* Help icon attached to the card */}
         <HelpTooltip title="How are top signals ranked?">

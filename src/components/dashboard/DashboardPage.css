@@ -37,7 +37,7 @@
 /* Chart / sentiment panels extend the base .panel style from AppShell */
 
 .panel.panel-chart {
-  padding: 18px 18px 20px;
+  padding: 18px 18px 20px; /* small tweak from base panel */
 }
 
 .card-main-chart {
@@ -89,8 +89,8 @@
   align-items: center;
   justify-content: flex-start;
   gap: 8px;
-  flex-wrap: nowrap;           /* 🔥 prevents stacking */
-  white-space: nowrap;         /* 🔥 prevents wrapping onto next line */
+  flex-wrap: nowrap;
+  white-space: nowrap;
 }
 
 /* Chart area */
@@ -100,7 +100,7 @@
   width: 100%;
 }
 
-/* Filters column (left) */
+/* Filters column (left) – this is NOT a card itself */
 .panel.panel-filters {
   display: flex;
   flex-direction: column;
@@ -117,12 +117,9 @@
   transform: none !important;
 }
 
+/* Filters cards: use AppShell .panel as base, only tweak what’s special */
 .filters-card {
-  background: #ffffff;
-  border-radius: 18px;
-  padding: 16px 18px;
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
-  border: 1px solid rgba(148, 163, 184, 0.26);
+  padding: 16px 18px; /* slight padding tweak from base panel */
   transition: box-shadow 0.18s ease, transform 0.18s ease;
 }
 
@@ -143,12 +140,6 @@
 
 .filters-card-header h3 {
   margin: 0 0 4px;
-}
-
-.panel-title {
-  font-size: 15px;
-  font-weight: 600;
-  color: #111827;
 }
 
 /* Data snapshots card can stay plain white */
