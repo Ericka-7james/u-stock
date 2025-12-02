@@ -1,4 +1,6 @@
 // src/components/dashboard/StatSummary.jsx
+import "./StatSummary.css";
+
 export default function StatSummary({
   signalsMeta,
   signalsData,

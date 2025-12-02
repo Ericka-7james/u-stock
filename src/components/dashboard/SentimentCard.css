@@ -1,0 +1,195 @@
+/* ========= Sentiment Card ================================================= */
+
+.sentiment-card {
+  margin-top: 1rem;
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+  box-shadow: 0 8px 20px rgba(15, 118, 110, 0.06);
+  border: 1px solid rgba(15, 118, 110, 0.06);
+}
+
+.sentiment-card__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+  margin-bottom: 0.75rem;
+}
+
+.sentiment-card__title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.sentiment-card__ticker {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
+}
+
+.sentiment-card__subtitle {
+  margin: 0.25rem 0 0;
+  font-size: 0.85rem;
+  color: #4b5563;
+}
+
+.sentiment-card__overall {
+  font-weight: 600;
+}
+
+.sentiment-card__overall-score {
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+.sentiment-card__mode-select {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 180px;
+}
+
+.sentiment-card__mode-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #6b7280;
+}
+
+.sentiment-card__mode-input {
+  font-size: 0.85rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid #d1d5db;
+  background: #f9fafb;
+}
+
+/* Card body / sections */
+
+.sentiment-card__body {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.sentiment-section {
+  padding: 0.75rem 0.75rem;
+  border-radius: 10px;
+  background: #f9fafb;
+  border: 1px dashed rgba(15, 118, 110, 0.15);
+}
+
+.sentiment-section__title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin: 0 0 0.35rem;
+}
+
+.sentiment-section__label {
+  margin: 0 0 0.5rem;
+}
+
+/* Chips */
+
+.sentiment-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.sentiment-chip--price {
+  background: #ecfdf3;
+  color: #166534;
+}
+
+.sentiment-chip--vol {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.sentiment-chip--tech {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+/* Metrics */
+
+.sentiment-metrics {
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.35rem 0.75rem;
+}
+
+.sentiment-metric {
+  display: flex;
+  flex-direction: column;
+}
+
+.sentiment-metric dt {
+  font-size: 0.72rem;
+  color: #6b7280;
+  margin-bottom: 0.15rem;
+}
+
+.sentiment-metric dd {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+/* Pct coloring */
+
+.sentiment-pct {
+  font-weight: 600;
+}
+
+.sentiment-pct--up {
+  color: #15803d;
+}
+
+.sentiment-pct--down {
+  color: #b91c1c;
+}
+
+/* Mobile tweaks */
+
+@media (max-width: 768px) {
+  .sentiment-card {
+    padding: 0.85rem 0.9rem;
+  }
+
+  .sentiment-card__header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .sentiment-card__mode-select {
+    min-width: 0;
+    align-items: flex-start;
+  }
+
+  .sentiment-card__body {
+    grid-template-columns: 1fr;
+  }
+
+  /* Align the sentiment dropdown with the chart dropdown style */
+  .sentiment-mode-dropdown {
+    min-width: 180px;
+  }
+
+  .sentiment-chip--style {
+    background: #eef2ff;
+    color: #3730a3;
+  }
+
+  .sentiment-chip--risk {
+    background: #fef2f2;
+    color: #b91c1c;
+  }
+}
