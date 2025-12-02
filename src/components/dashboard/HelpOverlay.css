@@ -3,18 +3,18 @@
 /* Circular question mark button */
 /* Circular question mark button — bold, thick, identical to reference */
 .help-icon-button {
-  height: 30px;
-  width: 30px;
-  min-height: 30px;
-  min-width: 30px;
+  height: 18px;
+  width: 18px;
+  min-height: 20px;
+  min-width: 20px;
 
   border-radius: 999px;
   border: 3px solid #111;        /* thick black circle */
   
   background: #ffffff;
   color: #111;                   /* black question mark */
-  font-weight: 900;              /* thick question mark */
-  font-size: 1.1rem;             /* slightly bigger */
+  font-weight: 700;              /* thick question mark */
+  font-size: 0.9rem;             /* slightly bigger */
   line-height: 1;                /* exact center */
 
   display: inline-flex;
