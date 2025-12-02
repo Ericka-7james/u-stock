@@ -31,8 +31,6 @@ function SearchableTickerDropdown({ allTickers, currentTicker, onChange }) {
 
   const optionsTickers = useMemo(() => {
     const universe = filteredTickers;
-    // When searching, don't inject the "current" ticker back at the top.
-    // Just show the filtered list in sorted order.
     const list = [...universe];
     return list.slice(0, MAX_VISIBLE_OPTIONS);
   }, [filteredTickers]);
@@ -185,7 +183,7 @@ export default function DashboardPage() {
     return 0;
   }, [sentimentMeta, sentimentData]);
 
-    const currentSentimentRow = useMemo(() => {
+  const currentSentimentRow = useMemo(() => {
     if (!currentTicker || !Array.isArray(sentimentData)) return null;
     return sentimentData.find((row) => row.ticker === currentTicker) || null;
   }, [currentTicker, sentimentData]);
@@ -205,7 +203,50 @@ export default function DashboardPage() {
       />
 
       <main className="dashboard-main">
-        {/* LEFT column: filters + top signals */}
+        {/* PRICE CHART panel */}
+        <section className="panel panel-chart">
+          <div className="card-main-chart">
+            <div className="card-header">
+              <div>
+                <h2>Price action viewer</h2>
+                <p className="card-subtitle">
+                  Select a ticker or type to filter the universe.
+                </p>
+              </div>
+
+              <div className="chart-controls">
+                <label className="chart-controls-label">
+                  Ticker
+                  <SearchableTickerDropdown
+                    allTickers={allTickers}
+                    currentTicker={currentTicker}
+                    onChange={setSelectedTicker}
+                  />
+                </label>
+              </div>
+            </div>
+
+            {/* Chart body */}
+            <PriceChart
+              ticker={currentTicker}
+              data={currentSeries}
+              loading={combinedLoading}
+              pricesMeta={pricesMeta}
+            />
+          </div>
+        </section>
+
+        {/* SENTIMENT panel – directly under chart on small screens */}
+        <section className="panel panel-sentiment">
+          <SentimentCard
+            symbol={currentTicker}
+            historyBySymbol={historyBySymbol}
+            loading={combinedLoading || sentimentLoading}
+            backendSnapshot={currentSentimentRow}
+          />
+        </section>
+
+        {/* FILTERS panel – Top signals + Data snapshots */}
         <section className="panel panel-filters">
           {/* Top signals table */}
           <div className="filters-card filters-card--index">
@@ -310,49 +351,6 @@ export default function DashboardPage() {
             </ul>
           </div>
         </section>
-
-        {/* RIGHT column: price chart + sentiment card */}
-        <section className="panel panel-chart">
-          <div className="card-main-chart">
-            <div className="card-header">
-              <div>
-                <h2>Price action viewer</h2>
-                <p className="card-subtitle">
-                  Select a ticker or type to filter the universe.
-                </p>
-              </div>
-
-              <div className="chart-controls">
-                <label className="chart-controls-label">
-                  Ticker
-                  <SearchableTickerDropdown
-                    allTickers={allTickers}
-                    currentTicker={currentTicker}
-                    onChange={setSelectedTicker}
-                  />
-                </label>
-              </div>
-            </div>
-
-            {/* Chart body */}
-            <PriceChart
-              ticker={currentTicker}
-              data={currentSeries}
-              loading={combinedLoading}
-              pricesMeta={pricesMeta}
-            />
-          </div>
-        </section>
-
-        <section>
-          <SentimentCard
-            symbol={currentTicker}
-            historyBySymbol={historyBySymbol}
-            loading={combinedLoading || sentimentLoading}
-            backendSnapshot={currentSentimentRow}
-          />
-        </section>
-
       </main>
 
       {lastUpdated && (

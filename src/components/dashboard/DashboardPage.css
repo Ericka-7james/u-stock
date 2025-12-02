@@ -420,7 +420,26 @@
 
 @media (min-width: 1024px) {
   .dashboard-main {
-    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.6fr);
+    display: grid;
+    grid-template-columns: minmax(260px, 380px) minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    grid-template-areas:
+      "sentiment chart"
+      "filters   chart";
+    gap: 1.5rem;
+    align-items: flex-start;
+  }
+
+  .panel-filters {
+    grid-area: filters;
+  }
+
+  .panel-chart {
+    grid-area: chart;
+  }
+
+  .panel-sentiment {
+    grid-area: sentiment;
   }
 }
 
