@@ -16,7 +16,7 @@ export default function AppShell({ children }) {
   const location = useLocation();
 
   const isDashboard = location.pathname === "/";
-  const isDatasources = location.pathname.startsWith("/datasources");
+  const isDatasources = location.pathname.startsWith("/data-sources");
   const isIndexFunds = location.pathname.startsWith("/index-funds");
   const isAboutMe = location.pathname.startsWith("/about");
   const isFeedback = location.pathname.startsWith("/fedback");

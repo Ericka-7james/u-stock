@@ -1,6 +1,4 @@
-:root {
-  --ustock-green-main: #0f766e;
-}
+/* ========= DATA SOURCES PAGE ====================================== */
 
 /* Wrapper tweaks */
 .data-sources-page {
@@ -16,10 +14,16 @@
   padding: 20px 22px;
   margin-bottom: 24px;
   border-radius: 18px;
-  background: #ffffff;
+  background: radial-gradient(
+    circle at top left,
+    rgba(187, 247, 208, 0.18) 0%,
+    rgba(187, 247, 208, 0.08) 35%,
+    var(--ustock-bg-card) 100%
+  );
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
-  border: 1px solid rgba(148, 163, 184, 0.25);
+  border: 1px solid var(--ustock-border-card);
   border-top: 4px solid var(--ustock-green-main);
+  color: var(--ustock-text-main);
 }
 
 .data-hero-text h1.page-title {
@@ -30,7 +34,7 @@
 .data-hero-meta {
   margin-top: 8px;
   font-size: 13px;
-  color: #4b5563;
+  color: var(--ustock-text-muted);
 }
 
 .data-hero-meta span {
@@ -43,8 +47,8 @@
   align-items: center;
   padding: 8px 14px;
   border-radius: 999px;
-  border: 1px solid rgba(15, 118, 110, 0.15);
-  background: #ffffff;
+  border: 1px solid var(--ustock-border-card);
+  background: var(--ustock-bg-card-soft);
   color: var(--ustock-green-main);
   font-size: 13px;
   font-weight: 500;
@@ -56,25 +60,27 @@
 
 .back-link-pill:hover {
   transform: translateY(-1px);
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
-  background: #f9fafb;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.16);
+  background: var(--ustock-bg-card);
 }
 
-/* SUMMARY CARD */
+/* ========= SUMMARY CARD =========================================== */
+
 .data-summary-card {
-  background: #ffffff;
+  background: var(--ustock-bg-card);
   border-radius: 18px;
   padding: 18px 20px;
   margin-bottom: 20px;
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
-  border: 1px solid rgba(148, 163, 184, 0.25);
+  border: 1px solid var(--ustock-border-card);
   border-top: 4px solid var(--ustock-green-main);
+  color: var(--ustock-text-main);
 }
 
 .data-summary-card h2 {
   margin: 0 0 6px;
   font-size: 18px;
-  color: #0f172a;
+  color: var(--ustock-text-strong);
 }
 
 .loading-note {
@@ -82,7 +88,8 @@
   margin: 6px 0 12px;
 }
 
-/* GRID OF CATEGORY CARDS */
+/* ========= GRID OF CATEGORY CARDS ================================= */
+
 .data-section-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
@@ -92,23 +99,25 @@
 
 /* Each category card */
 .data-card {
-  background: #ffffff;
+  background: var(--ustock-bg-card);
   border-radius: 18px;
   padding: 16px 18px 18px;
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
-  border: 1px solid rgba(148, 163, 184, 0.26);
+  border: 1px solid var(--ustock-border-card);
   border-top: 4px solid var(--ustock-green-main);
+  color: var(--ustock-text-main);
 }
 
 .data-card h3 {
   margin: 0 0 6px;
   font-size: 16px;
-  color: #0f172a;
+  color: var(--ustock-text-strong);
 }
 
 .data-card .small {
   font-size: 12px;
   margin-bottom: 10px;
+  color: var(--ustock-text-muted);
 }
 
 /* List inside each category */
@@ -120,7 +129,7 @@
 
 .data-list li {
   padding: 8px 0;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.24);
+  border-bottom: 1px solid var(--ustock-border-card);
 }
 
 .data-list li:last-child {
@@ -134,13 +143,13 @@
   gap: 8px;
   font-size: 14px;
   font-weight: 600;
-  color: #111827;
+  color: var(--ustock-text-strong);
 }
 
 .data-item-notes {
   margin: 4px 0 0;
   font-size: 12px;
-  color: #4b5563;
+  color: var(--ustock-text-muted);
 }
 
 .data-item-link {
@@ -155,7 +164,7 @@
   text-decoration: underline;
 }
 
-/* pills for roles / tiers */
+/* Pills for roles / tiers (these can stay bright on both themes) */
 .data-pill {
   padding: 2px 8px;
   border-radius: 999px;
@@ -171,7 +180,8 @@
   border-color: rgba(15, 118, 110, 0.4);
 }
 
-/* Mobile tweaks */
+/* ========= Mobile tweaks ========================================== */
+
 @media (max-width: 768px) {
   .data-hero {
     flex-direction: column;
