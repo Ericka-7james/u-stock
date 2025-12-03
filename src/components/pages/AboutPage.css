@@ -1,3 +1,5 @@
+/* ========= ABOUT PAGE ================================================== */
+
 /* HERO CARD */
 .about-hero-card {
   display: flex;
@@ -7,10 +9,11 @@
   padding: 20px 22px;
   margin-bottom: 24px;
   border-radius: 18px;
-  background: #ffffff;
+  background: var(--ustock-bg-card);
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
-  border: 1px solid rgba(148, 163, 184, 0.25);
+  border: 1px solid var(--ustock-border-card);
   border-top: 4px solid var(--ustock-green-main);
+  color: var(--ustock-text-main);
 }
 
 .about-hero-text .page-title {
@@ -20,6 +23,27 @@
 
 .about-hero-text .muted {
   max-width: 560px;
+}
+
+/* back to dashboard pill link */
+.back-link-pill {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 14px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--ustock-green-main);
+  font-size: 13px;
+  text-decoration: none;
+  color: var(--ustock-green-main);
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+}
+
+.back-link-pill:hover {
+  background: var(--ustock-green-main);
+  color: #f9fafb;
 }
 
 /* HERO ASIDE (headshot + meta) */
@@ -38,13 +62,13 @@
   object-fit: cover;
   border: 2px solid var(--ustock-green-main);
   box-shadow: 0 8px 22px rgba(15, 23, 42, 0.12);
-  background: #f9fafb;
+  background: var(--ustock-bg-card-soft);
 }
 
 /* Meta info next to headshot */
 .about-meta {
   font-size: 12px;
-  color: #4b5563;
+  color: var(--ustock-text-muted);
 }
 
 .about-meta-row {
@@ -54,7 +78,7 @@
 
 .about-meta-row .label {
   font-weight: 600;
-  color: #111827;
+  color: var(--ustock-text-strong);
 }
 
 /* GRID SECTIONS */
@@ -65,18 +89,19 @@
 }
 
 .about-card {
-  background: #ffffff;
+  background: var(--ustock-bg-card);
   border-radius: 18px;
   padding: 18px 20px;
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
-  border: 1px solid rgba(148, 163, 184, 0.25);
+  border: 1px solid var(--ustock-border-card);
+  color: var(--ustock-text-main);
 }
 
 .about-card h2 {
   margin-top: 0;
   margin-bottom: 10px;
   font-size: 18px;
-  color: #0f172a;
+  color: var(--ustock-text-strong);
 }
 
 /* Text + lists */
@@ -84,7 +109,7 @@
   margin: 0;
   padding-left: 18px;
   font-size: 14px;
-  color: #374151;
+  color: var(--ustock-text-main);
 }
 
 .about-list li {
@@ -122,7 +147,7 @@
 
 .about-links a {
   font-size: 14px;
-  color: #0f766e;
+  color: var(--ustock-green-main);
   text-decoration: none;
   font-weight: 500;
 }

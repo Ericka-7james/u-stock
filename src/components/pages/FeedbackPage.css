@@ -1,21 +1,21 @@
-/* ========= SETTINGS PAGE LAYOUT ===================================== */
+/* ========= SETTINGS / FEEDBACK PAGE LAYOUT ========================== */
 
 /* Let .app-page handle padding + background, like on About */
 .settings-page {
-  /* no extra padding/background here so spacing matches other pages */
   min-height: auto;
 }
 
 /* Match hero/card styling from About page */
 .settings-card {
   width: 100%;
-  background: #ffffff;
+  background: var(--ustock-bg-card);
   border-radius: 18px;
   padding: 20px 22px; /* same as .about-hero-card */
   margin-bottom: 24px;
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
-  border: 1px solid rgba(148, 163, 184, 0.25);
+  border: 1px solid var(--ustock-border-card);
   border-top: 4px solid var(--ustock-green-main); /* green accent strip */
+  color: var(--ustock-text-main);
 }
 
 /* ========= HEADER =================================================== */
@@ -29,7 +29,7 @@
 
 .settings-subtitle {
   font-size: 14px;
-  color: #6b7280;
+  color: var(--ustock-text-muted);
   margin-bottom: 16px;
   max-width: 560px; /* same feel as hero muted text */
 }
@@ -51,26 +51,28 @@
 .settings-label {
   font-size: 14px;
   font-weight: 500;
-  color: #374151;
+  color: var(--ustock-text-main);
 }
 
-/* ✅ LIGHT SCHEMA INPUTS (match rest of app cards) */
+/* Inputs follow theme tokens so dark mode works */
 .settings-input,
 .settings-select,
 .settings-textarea {
-  background: #f9fafb; /* soft light slate, not blue/navy */
-  color: #0f172a;
-  border: 1px solid rgba(148, 163, 184, 0.9); /* same gray as other panels */
+  background: var(--ustock-bg-card-soft);
+  color: var(--ustock-text-main);
+  border: 1px solid var(--ustock-border-card);
   border-radius: 10px;
   padding: 10px 12px;
   font-size: 14px;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease,
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
     background-color 0.15s ease;
 }
 
 .settings-input::placeholder,
 .settings-textarea::placeholder {
-  color: #9ca3af;
+  color: var(--ustock-text-muted);
 }
 
 /* Nice focus state using your green */
@@ -80,7 +82,7 @@
   outline: none;
   border-color: var(--ustock-green-main);
   box-shadow: 0 0 0 1px rgba(15, 118, 110, 0.18);
-  background: #ffffff;
+  background: var(--ustock-bg-card);
 }
 
 .settings-textarea {
@@ -92,7 +94,7 @@
 .settings-hint,
 .settings-footer-hint {
   font-size: 13px;
-  color: #9ca3af;
+  color: var(--ustock-text-muted);
 }
 
 /* ========= BUTTONS ================================================= */
@@ -114,7 +116,7 @@
 
 /* Green primary button (same as other primary actions) */
 .settings-btn--primary {
-  background: #0f766e;
+  background: var(--ustock-green-main);
   color: #ffffff;
 }
 
@@ -125,7 +127,7 @@
 /* Ghost button matches site */
 .settings-btn--ghost {
   background: transparent;
-  color: #374151;
+  color: var(--ustock-text-main);
   border: 1px solid rgba(148, 163, 184, 0.4);
 }
 
@@ -136,7 +138,6 @@
 /* ========= MOBILE ================================================== */
 
 @media (max-width: 768px) {
-  /* IMPORTANT: no extra page padding here – .app-page already handles it */
   .settings-page {
     min-height: auto;
   }

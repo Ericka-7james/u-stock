@@ -242,7 +242,18 @@
 <a name='L177'></a><a href='#L177'>177</a>
 <a name='L178'></a><a href='#L178'>178</a>
 <a name='L179'></a><a href='#L179'>179</a>
-<a name='L180'></a><a href='#L180'>180</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L180'></a><a href='#L180'>180</a>
+<a name='L181'></a><a href='#L181'>181</a>
+<a name='L182'></a><a href='#L182'>182</a>
+<a name='L183'></a><a href='#L183'>183</a>
+<a name='L184'></a><a href='#L184'>184</a>
+<a name='L185'></a><a href='#L185'>185</a>
+<a name='L186'></a><a href='#L186'>186</a>
+<a name='L187'></a><a href='#L187'>187</a>
+<a name='L188'></a><a href='#L188'>188</a>
+<a name='L189'></a><a href='#L189'>189</a>
+<a name='L190'></a><a href='#L190'>190</a>
+<a name='L191'></a><a href='#L191'>191</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -421,9 +432,18 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">:root {
-  --ustock-green-main: #0f766e;
-}
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">/* ========= DATA SOURCES PAGE ====================================== */
 &nbsp;
 /* Wrapper tweaks */
 .data-sources-page {
@@ -439,10 +459,16 @@
   padding: 20px 22px;
   margin-bottom: 24px;
   border-radius: 18px;
-  background: #ffffff;
+  background: radial-gradient(
+    circle at top left,
+    rgba(187, 247, 208, 0.18) 0%,
+    rgba(187, 247, 208, 0.08) 35%,
+    var(--ustock-bg-card) 100%
+  );
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
-  border: 1px solid rgba(148, 163, 184, 0.25);
+  border: 1px solid var(--ustock-border-card);
   border-top: 4px solid var(--ustock-green-main);
+  color: var(--ustock-text-main);
 }
 &nbsp;
 .data-hero-text h1.page-title {
@@ -453,7 +479,7 @@
 .data-hero-meta {
   margin-top: 8px;
   font-size: 13px;
-  color: #4b5563;
+  color: var(--ustock-text-muted);
 }
 &nbsp;
 .data-hero-meta span {
@@ -466,8 +492,8 @@
   align-items: center;
   padding: 8px 14px;
   border-radius: 999px;
-  border: 1px solid rgba(15, 118, 110, 0.15);
-  background: #ffffff;
+  border: 1px solid var(--ustock-border-card);
+  background: var(--ustock-bg-card-soft);
   color: var(--ustock-green-main);
   font-size: 13px;
   font-weight: 500;
@@ -479,25 +505,27 @@
 &nbsp;
 .back-link-pill:hover {
   transform: translateY(-1px);
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
-  background: #f9fafb;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.16);
+  background: var(--ustock-bg-card);
 }
 &nbsp;
-/* SUMMARY CARD */
+/* ========= SUMMARY CARD =========================================== */
+&nbsp;
 .data-summary-card {
-  background: #ffffff;
+  background: var(--ustock-bg-card);
   border-radius: 18px;
   padding: 18px 20px;
   margin-bottom: 20px;
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
-  border: 1px solid rgba(148, 163, 184, 0.25);
+  border: 1px solid var(--ustock-border-card);
   border-top: 4px solid var(--ustock-green-main);
+  color: var(--ustock-text-main);
 }
 &nbsp;
 .data-summary-card h2 {
   margin: 0 0 6px;
   font-size: 18px;
-  color: #0f172a;
+  color: var(--ustock-text-strong);
 }
 &nbsp;
 .loading-note {
@@ -505,7 +533,8 @@
   margin: 6px 0 12px;
 }
 &nbsp;
-/* GRID OF CATEGORY CARDS */
+/* ========= GRID OF CATEGORY CARDS ================================= */
+&nbsp;
 .data-section-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
@@ -515,23 +544,25 @@
 &nbsp;
 /* Each category card */
 .data-card {
-  background: #ffffff;
+  background: var(--ustock-bg-card);
   border-radius: 18px;
   padding: 16px 18px 18px;
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
-  border: 1px solid rgba(148, 163, 184, 0.26);
+  border: 1px solid var(--ustock-border-card);
   border-top: 4px solid var(--ustock-green-main);
+  color: var(--ustock-text-main);
 }
 &nbsp;
 .data-card h3 {
   margin: 0 0 6px;
   font-size: 16px;
-  color: #0f172a;
+  color: var(--ustock-text-strong);
 }
 &nbsp;
 .data-card .small {
   font-size: 12px;
   margin-bottom: 10px;
+  color: var(--ustock-text-muted);
 }
 &nbsp;
 /* List inside each category */
@@ -543,7 +574,7 @@
 &nbsp;
 .data-list li {
   padding: 8px 0;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.24);
+  border-bottom: 1px solid var(--ustock-border-card);
 }
 &nbsp;
 .data-list li:last-child {
@@ -557,13 +588,13 @@
   gap: 8px;
   font-size: 14px;
   font-weight: 600;
-  color: #111827;
+  color: var(--ustock-text-strong);
 }
 &nbsp;
 .data-item-notes {
   margin: 4px 0 0;
   font-size: 12px;
-  color: #4b5563;
+  color: var(--ustock-text-muted);
 }
 &nbsp;
 .data-item-link {
@@ -578,7 +609,7 @@
   text-decoration: underline;
 }
 &nbsp;
-/* pills for roles / tiers */
+/* Pills for roles / tiers (these can stay bright on both themes) */
 .data-pill {
   padding: 2px 8px;
   border-radius: 999px;
@@ -594,20 +625,22 @@
   border-color: rgba(15, 118, 110, 0.4);
 }
 &nbsp;
-/* Mobile tweaks */
+/* ========= Mobile tweaks ========================================== */
+&nbsp;
 @media (max-width: 768px) {
   .data-hero {
     flex-direction: column;
     align-items: flex-start;
   }
-}</pre></td></tr></table></pre>
+}
+&nbsp;</pre></td></tr></table></pre>
 
                 <div class='push'></div><!-- for sticky footer -->
             </div><!-- /wrapper -->
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-12-03T00:06:25.361Z
+                at 2025-12-03T15:15:34.000Z
             </div>
         <script src="../../prettify.js"></script>
         <script>

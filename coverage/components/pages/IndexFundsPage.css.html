@@ -324,7 +324,11 @@
 <a name='L259'></a><a href='#L259'>259</a>
 <a name='L260'></a><a href='#L260'>260</a>
 <a name='L261'></a><a href='#L261'>261</a>
-<a name='L262'></a><a href='#L262'>262</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L262'></a><a href='#L262'>262</a>
+<a name='L263'></a><a href='#L263'>263</a>
+<a name='L264'></a><a href='#L264'>264</a>
+<a name='L265'></a><a href='#L265'>265</a>
+<a name='L266'></a><a href='#L266'>266</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -585,7 +589,13 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">/* Wrapper just for vertical spacing */
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">/* ========= INDEX FUNDS PAGE ======================================= */
+&nbsp;
+/* Wrapper just for vertical spacing */
 .index-funds-page {
   padding-bottom: 40px;
 }
@@ -600,11 +610,12 @@
   padding: 20px 22px;
   margin-bottom: 20px;
   border-radius: 18px;
-  background: #ffffff;
+  background: var(--ustock-bg-card);
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
-  border: 1px solid rgba(148, 163, 184, 0.25);
+  border: 1px solid var(--ustock-border-card);
   border-top: 4px solid var(--ustock-green-main);
   box-sizing: border-box;
+  color: var(--ustock-text-main);
 }
 &nbsp;
 .index-hero-text .page-title {
@@ -619,7 +630,7 @@
 .index-hero-meta {
   margin-top: 8px;
   font-size: 12px;
-  color: #6b7280;
+  color: var(--ustock-text-muted);
 }
 &nbsp;
 .index-hero-meta span {
@@ -627,14 +638,14 @@
   color: var(--ustock-green-main);
 }
 &nbsp;
-/* back link pill */
+/* Back link pill (shared look with data sources page) */
 .back-link-pill {
   display: inline-flex;
   align-items: center;
   padding: 8px 14px;
   border-radius: 999px;
-  border: 1px solid rgba(15, 118, 110, 0.15);
-  background: #ffffff;
+  border: 1px solid var(--ustock-border-card);
+  background: var(--ustock-bg-card-soft);
   color: var(--ustock-green-main);
   font-size: 13px;
   font-weight: 500;
@@ -646,8 +657,8 @@
 &nbsp;
 .back-link-pill:hover {
   transform: translateY(-1px);
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
-  background: #f9fafb;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.16);
+  background: var(--ustock-bg-card);
 }
 &nbsp;
 /* TABS ------------------------------------------------------------- */
@@ -664,12 +675,12 @@
 /* Base tab button */
 .tab-btn {
   border-radius: 18px;
-  border: 1px solid rgba(148, 163, 184, 0.7);
+  border: 1px solid var(--ustock-border-card);
   padding: 6px 14px;
   font-size: 13px;
-  background: #ffffff;
+  background: var(--ustock-bg-card-soft);
   cursor: pointer;
-  color: #4b5563;
+  color: var(--ustock-text-muted);
   text-decoration: none;
   transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease,
     border-color 0.15s ease, color 0.15s ease;
@@ -716,14 +727,15 @@
 &nbsp;
 /* Individual fund card */
 .fund-card {
-  background: #ffffff;
+  background: var(--ustock-bg-card);
   border-radius: 16px;
   padding: 12px 14px;
   box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
-  border: 1px solid rgba(148, 163, 184, 0.35);
+  border: 1px solid var(--ustock-border-card);
   border-top: 4px solid var(--ustock-green-main);
   transition: box-shadow 0.18s ease, transform 0.18s ease,
     border-color 0.18s ease;
+  color: var(--ustock-text-main);
 }
 &nbsp;
 .fund-card:hover {
@@ -742,17 +754,17 @@
 .fund-ticker {
   font-size: 18px;
   font-weight: 700;
-  color: #111827;
+  color: var(--ustock-text-strong);
 }
 &nbsp;
 .fund-name {
   font-size: 13px;
-  color: #4b5563;
+  color: var(--ustock-text-muted);
 }
 &nbsp;
 .fund-blurb {
   font-size: 13px;
-  color: #4b5563;
+  color: var(--ustock-text-muted);
   margin: 6px 0 10px;
 }
 &nbsp;
@@ -767,13 +779,13 @@
   margin-top: 0;
   margin-bottom: 10px;
   font-size: 20px;
-  color: #0f172a;
+  color: var(--ustock-text-strong);
 }
 &nbsp;
 .index-about-panel p {
   margin-bottom: 14px;
   font-size: 14px;
-  color: #4b5563;
+  color: var(--ustock-text-main);
 }
 &nbsp;
 .index-about-panel .about-list {
@@ -784,7 +796,7 @@
 .index-about-panel .about-list li {
   margin-bottom: 8px;
   font-size: 14px;
-  color: #374151;
+  color: var(--ustock-text-main);
 }
 &nbsp;
 .index-about-panel strong {
@@ -813,13 +825,13 @@
 &nbsp;
 .fund-metric-value {
   font-size: 15px;
-  color: #111827;
+  color: var(--ustock-text-strong);
 }
 &nbsp;
 /* Fundamentals explanation card in about tab ------------------------ */
 &nbsp;
 .fundamentals-title {
-  color: #0f172a;
+  color: var(--ustock-text-strong);
   margin-top: 0;
   margin-bottom: 10px;
   font-size: 20px;
@@ -828,7 +840,7 @@
 &nbsp;
 .fundamentals-explain p {
   font-size: 14px;
-  color: #374151;
+  color: var(--ustock-text-main);
   margin-bottom: 6px;
 }
 &nbsp;
@@ -836,7 +848,7 @@
   margin: 6px 0 12px;
   padding-left: 20px;
   font-size: 14px;
-  color: #4b5563;
+  color: var(--ustock-text-main);
 }
 &nbsp;
 .metrics-list li {
@@ -853,7 +865,7 @@
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-12-03T00:06:25.361Z
+                at 2025-12-03T15:15:34.000Z
             </div>
         <script src="../../prettify.js"></script>
         <script>

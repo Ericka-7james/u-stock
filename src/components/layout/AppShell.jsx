@@ -7,7 +7,11 @@ export default function AppShell({ children }) {
   const [navOpen, setNavOpen] = useState(false);
 
   // ✅ define dark-mode state
-  const [isDark, setIsDark] = useState(false);
+  const [isDark, setIsDark] = useState(() => {
+    if (typeof window === "undefined") return false;
+    const stored = window.localStorage.getItem("ustock-theme");
+    return stored === "dark";
+  });
 
   const location = useLocation();
 
@@ -26,11 +30,10 @@ export default function AppShell({ children }) {
 
   // ✅ sync the body class when dark mode changes
   useEffect(() => {
-    if (isDark) {
-      document.body.classList.add("ustock-dark");
-    } else {
-      document.body.classList.remove("ustock-dark");
-    }
+    const dark = isDark;
+    document.body.classList.toggle("ustock-dark", dark);
+    document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
+    window.localStorage.setItem("ustock-theme", dark ? "dark" : "light");
   }, [isDark]);
 
   // Any click in the main content area should close nav (nice for mobile)

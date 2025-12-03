@@ -52,8 +52,8 @@
   background: radial-gradient(
     circle at top left,
     var(--ustock-green-soft) 0%,
-    #ecfdf3 45%,
-    #ffffff 100%
+    var(--ustock-bg-card-soft) 35%,
+    var(--ustock-bg-card) 100%
   );
   padding: 10px 14px;
   border-radius: 12px;
@@ -73,14 +73,16 @@
 .card-header h2 {
   margin: 0;
   font-size: 18px;
-  color: #0f172a;
+  color: var(--ustock-text-main);
 }
 
 .card-subtitle {
   margin: 0;
   font-size: 12px;
-  color: #64748b;
+  color: var(--ustock-text-strong);
+  opacity: 1;
 }
+
 
 /* Make title + ? icon sit on one row */
 .card-title-row {
@@ -133,8 +135,8 @@
   background: radial-gradient(
     circle at top left,
     var(--ustock-green-soft) 0%,
-    #dcfce7 45%,
-    #ffffff 100%
+    var(--ustock-bg-card-soft) 45%,
+    var(--ustock-bg-card) 100%
   );
 }
 
@@ -142,9 +144,10 @@
   margin: 0 0 4px;
 }
 
-/* Data snapshots card can stay plain white */
+/* Data snapshots card can stay plain, but via variables */
 .filters-card--macro {
   border-top: none;
+  background: var(--ustock-bg-card);
 }
 
 /* Last updated footer within dashboard */
@@ -166,4 +169,17 @@
   .panel.panel-chart {
     padding: 16px 14px 18px;
   }
+}
+
+/* Make header text pop over the green blend in dark mode */
+body.ustock-dark .card-header h2,
+body.ustock-dark .card-header .card-subtitle {
+  text-shadow: 0 0 8px rgba(0, 0, 0, 0.7);
+}
+
+/* ⬇️ NEW: brighten the subtitle specifically in dark mode */
+body.ustock-dark .card-header .card-subtitle {
+  color: var(--ustock-text-strong);  /* bright white-ish */
+  opacity: 1;
+  text-shadow: 0 0 8px rgba(0, 0, 0, 0.65);
 }
