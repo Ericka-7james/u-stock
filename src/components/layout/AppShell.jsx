@@ -1,27 +1,30 @@
 // src/components/layout/AppShell.jsx
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import "./AppShell.css"; // ⬅️ shell CSS
+import "./AppShell.css";
 
 export default function AppShell({ children }) {
   const [navOpen, setNavOpen] = useState(false);
+
+  // ✅ define dark-mode state
   const [isDark, setIsDark] = useState(false);
+
   const location = useLocation();
 
   const isDashboard = location.pathname === "/";
-  const isDatasources = location.pathname.startsWith("/data-sources"); // <-- match your route
+  const isDatasources = location.pathname.startsWith("/data-sources");
   const isIndexFunds = location.pathname.startsWith("/index-funds");
   const isAboutMe = location.pathname.startsWith("/about");
-  const isSettings = location.pathname.startsWith("/settings");
+  const isFeedback = location.pathname.startsWith("/fedback");
 
   const closeNav = () => setNavOpen(false);
 
-  // Toggle dark theme
+  // ✅ define toggleTheme BEFORE you use it in JSX
   const toggleTheme = () => {
     setIsDark((prev) => !prev);
   };
 
-  // Attach a class to <body> so the rest of your theme can key off it
+  // ✅ sync the body class when dark mode changes
   useEffect(() => {
     if (isDark) {
       document.body.classList.add("ustock-dark");
@@ -102,14 +105,14 @@ export default function AppShell({ children }) {
           </Link>
 
           <Link
-            to="/settings"
+            to="/feedback"
             className={
-              "side-nav-item " + (isSettings ? "side-nav-item--active" : "")
+              "side-nav-item " + (isFeedback ? "side-nav-item--active" : "")
             }
             onClick={closeNav}
           >
             <span className="side-nav-item-dot" />
-            Settings
+            Feedback
           </Link>
         </nav>
 
@@ -140,7 +143,7 @@ export default function AppShell({ children }) {
           </div>
 
           <div className="topbar-right">
-            {/* Dark mode toggle pill */}
+            {/* ✅ dark mode toggle uses isDark + toggleTheme */}
             <button
               type="button"
               className={`theme-toggle ${isDark ? "theme-toggle--on" : ""}`}
@@ -161,7 +164,6 @@ export default function AppShell({ children }) {
         </header>
 
         <div className="app-content">
-          {/* AppShell controls padding & max-width via .app-page */}
           <main className="app-page">{children}</main>
         </div>
 

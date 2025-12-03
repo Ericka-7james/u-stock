@@ -1,6 +1,6 @@
 // src/components/settings/SettingsPage.jsx
 import AppShell from "../layout/AppShell";
-import "./SettingsPage.css";
+import "./FeedbackPage.css";
 
 export default function SettingsPage() {
   return (
@@ -8,7 +8,7 @@ export default function SettingsPage() {
       <div className="settings-page">
         <div className="settings-card">
           <header className="settings-header">
-            <h2 className="settings-title">General settings</h2>
+            <h2 className="settings-title">Feedback</h2>
             <p className="settings-subtitle">
               Share ideas, report issues, or ask questions about how U-Stock works.
               Messages here will be routed straight to my inbox.
