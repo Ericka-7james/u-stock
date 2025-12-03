@@ -1,0 +1,149 @@
+/* ========= SETTINGS PAGE LAYOUT ===================================== */
+
+/* Let .app-page handle padding + background, like on About */
+.settings-page {
+  /* no extra padding/background here so spacing matches other pages */
+  min-height: auto;
+}
+
+/* Match hero/card styling from About page */
+.settings-card {
+  width: 100%;
+  background: #ffffff;
+  border-radius: 18px;
+  padding: 20px 22px; /* same as .about-hero-card */
+  margin-bottom: 24px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-top: 4px solid var(--ustock-green-main); /* green accent strip */
+}
+
+/* ========= HEADER =================================================== */
+
+.settings-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--ustock-green-main); /* match About hero heading */
+  margin-bottom: 6px;
+}
+
+.settings-subtitle {
+  font-size: 14px;
+  color: #6b7280;
+  margin-bottom: 16px;
+  max-width: 560px; /* same feel as hero muted text */
+}
+
+/* ========= FORM FIELDS ============================================= */
+
+.settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settings-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+}
+
+/* ✅ LIGHT SCHEMA INPUTS (match rest of app cards) */
+.settings-input,
+.settings-select,
+.settings-textarea {
+  background: #f9fafb; /* soft light slate, not blue/navy */
+  color: #0f172a;
+  border: 1px solid rgba(148, 163, 184, 0.9); /* same gray as other panels */
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 14px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.settings-input::placeholder,
+.settings-textarea::placeholder {
+  color: #9ca3af;
+}
+
+/* Nice focus state using your green */
+.settings-input:focus,
+.settings-select:focus,
+.settings-textarea:focus {
+  outline: none;
+  border-color: var(--ustock-green-main);
+  box-shadow: 0 0 0 1px rgba(15, 118, 110, 0.18);
+  background: #ffffff;
+}
+
+.settings-textarea {
+  resize: vertical;
+  min-height: 140px;
+}
+
+/* Hint text matches your global style */
+.settings-hint,
+.settings-footer-hint {
+  font-size: 13px;
+  color: #9ca3af;
+}
+
+/* ========= BUTTONS ================================================= */
+
+.settings-actions {
+  margin-top: 4px;
+  display: flex;
+  gap: 14px;
+}
+
+.settings-btn {
+  border-radius: 999px;
+  padding: 9px 20px;
+  font-size: 14px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: 0.15s ease;
+}
+
+/* Green primary button (same as other primary actions) */
+.settings-btn--primary {
+  background: #0f766e;
+  color: #ffffff;
+}
+
+.settings-btn--primary:hover {
+  background: #0d5f58;
+}
+
+/* Ghost button matches site */
+.settings-btn--ghost {
+  background: transparent;
+  color: #374151;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+}
+
+.settings-btn--ghost:hover {
+  background: rgba(148, 163, 184, 0.08);
+}
+
+/* ========= MOBILE ================================================== */
+
+@media (max-width: 768px) {
+  /* IMPORTANT: no extra page padding here – .app-page already handles it */
+  .settings-page {
+    min-height: auto;
+  }
+
+  /* Slightly tighter padding but same style as hero/card */
+  .settings-card {
+    padding: 18px 18px 22px;
+    margin-bottom: 20px;
+  }
+}

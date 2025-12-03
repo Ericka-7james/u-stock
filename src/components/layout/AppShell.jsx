@@ -1,18 +1,37 @@
 // src/components/layout/AppShell.jsx
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import "./AppShell.css"; // ⬅️ shell CSS
+import "./AppShell.css";
 
 export default function AppShell({ children }) {
   const [navOpen, setNavOpen] = useState(false);
+
+  // ✅ define dark-mode state
+  const [isDark, setIsDark] = useState(false);
+
   const location = useLocation();
 
   const isDashboard = location.pathname === "/";
-  const isDatasources = location.pathname.startsWith("/datasources");
+  const isDatasources = location.pathname.startsWith("/data-sources");
   const isIndexFunds = location.pathname.startsWith("/index-funds");
   const isAboutMe = location.pathname.startsWith("/about");
+  const isFeedback = location.pathname.startsWith("/fedback");
 
   const closeNav = () => setNavOpen(false);
+
+  // ✅ define toggleTheme BEFORE you use it in JSX
+  const toggleTheme = () => {
+    setIsDark((prev) => !prev);
+  };
+
+  // ✅ sync the body class when dark mode changes
+  useEffect(() => {
+    if (isDark) {
+      document.body.classList.add("ustock-dark");
+    } else {
+      document.body.classList.remove("ustock-dark");
+    }
+  }, [isDark]);
 
   // Any click in the main content area should close nav (nice for mobile)
   const handleMainClick = () => {
@@ -52,7 +71,7 @@ export default function AppShell({ children }) {
           </Link>
 
           <Link
-            to="/datasources"
+            to="/data-sources"
             className={
               "side-nav-item " + (isDatasources ? "side-nav-item--active" : "")
             }
@@ -85,10 +104,16 @@ export default function AppShell({ children }) {
             About me
           </Link>
 
-          <button className="side-nav-item" type="button" onClick={closeNav}>
+          <Link
+            to="/feedback"
+            className={
+              "side-nav-item " + (isFeedback ? "side-nav-item--active" : "")
+            }
+            onClick={closeNav}
+          >
             <span className="side-nav-item-dot" />
-            Settings
-          </button>
+            Feedback
+          </Link>
         </nav>
 
         <div className="side-nav-footer">
@@ -112,16 +137,23 @@ export default function AppShell({ children }) {
               <span className="hamburger-lines" />
             </button>
 
-            <Link
-              to="/"
-              className="topbar-home-link"
-              onClick={closeNav}
-            >
+            <Link to="/" className="topbar-home-link" onClick={closeNav}>
               <span className="topbar-home-label">Home</span>
             </Link>
           </div>
 
           <div className="topbar-right">
+            {/* ✅ dark mode toggle uses isDark + toggleTheme */}
+            <button
+              type="button"
+              className={`theme-toggle ${isDark ? "theme-toggle--on" : ""}`}
+              onClick={toggleTheme}
+              aria-label="Toggle dark mode"
+            >
+              <span className="theme-toggle-thumb" />
+              <span className="theme-toggle-moon">☾</span>
+            </button>
+
             <button className="icon-btn">
               <span className="icon-search" />
             </button>
@@ -132,7 +164,6 @@ export default function AppShell({ children }) {
         </header>
 
         <div className="app-content">
-          {/* AppShell controls padding & max-width via .app-page */}
           <main className="app-page">{children}</main>
         </div>
 
