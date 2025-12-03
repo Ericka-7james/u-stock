@@ -385,3 +385,127 @@ body {
 .mini-list li + li {
   margin-top: 4px;
 }
+
+/* ========= DARK MODE TOGGLE (TOP NAV) =============================== */
+
+.theme-toggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(15, 118, 110, 0.4);
+  background: var(--ustock-green-main); /* main U-Stock green */
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
+  opacity: 0.95;
+}
+
+.theme-toggle:hover {
+  opacity: 1;
+  background: #0d5f58; /* slightly darker green */
+}
+
+.theme-toggle-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: #f9fafb;
+  transform: translateX(0);
+  transition: transform 0.2s ease;
+}
+
+.theme-toggle-moon {
+  font-size: 12px;
+  line-height: 1;
+  color: #f9fafb;
+}
+
+/* when dark mode ON, slide thumb to the right and darken green */
+.theme-toggle--on {
+  background: #022c22; /* deeper teal for "on" */
+  border-color: rgba(15, 23, 42, 0.45);
+}
+
+.theme-toggle--on .theme-toggle-thumb {
+  transform: translateX(14px);
+}
+
+/* ========= LIGHT THEME BASE ======================================== */
+
+body {
+  background: #f5f7ff;
+  color: #0f172a;
+}
+
+/* ========= DARK THEME OVERRIDES =================================== */
+
+body.ustock-dark {
+  background: #020617;
+  color: #e5e7eb;
+}
+
+/* main layout background */
+body.ustock-dark .app-shell {
+  background: #020617;
+}
+
+body.ustock-dark .app-main {
+  background: radial-gradient(
+    circle at top left,
+    #022c22 0%,
+    #020617 40%,
+    #020617 100%
+  );
+}
+
+/* sidebar */
+body.ustock-dark .side-nav {
+  background: #020617;
+  border-right: 1px solid rgba(148, 163, 184, 0.35);
+}
+
+body.ustock-dark .side-nav-name,
+body.ustock-dark .side-nav-tagline,
+body.ustock-dark .side-nav-item {
+  color: #e5e7eb;
+}
+
+body.ustock-dark .side-nav-item--active {
+  background: rgba(15, 118, 110, 0.35);
+}
+
+/* topbar */
+body.ustock-dark .topbar {
+  background: rgba(15, 23, 42, 0.95);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.35);
+}
+
+body.ustock-dark .topbar-home-label {
+  color: #e5e7eb;
+}
+
+/* cards / panels / settings form */
+body.ustock-dark .panel,
+body.ustock-dark .about-card,
+body.ustock-dark .about-hero-card,
+body.ustock-dark .settings-card {
+  background: #020617;
+  border-color: rgba(148, 163, 184, 0.4);
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.6);
+}
+
+body.ustock-dark .settings-input,
+body.ustock-dark .settings-select,
+body.ustock-dark .settings-textarea {
+  background: #020617;
+  color: #e5e7eb;
+  border-color: rgba(148, 163, 184, 0.7);
+}
+
+/* footer */
+body.ustock-dark .site-footer {
+  color: #9ca3af;
+}
+

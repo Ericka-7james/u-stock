@@ -23,7 +23,7 @@
 .settings-title {
   font-size: 20px;
   font-weight: 600;
-  color: #111827;
+  color: var(--ustock-green-main); /* match About hero heading */
   margin-bottom: 6px;
 }
 
@@ -31,6 +31,7 @@
   font-size: 14px;
   color: #6b7280;
   margin-bottom: 16px;
+  max-width: 560px; /* same feel as hero muted text */
 }
 
 /* ========= FORM FIELDS ============================================= */
@@ -53,21 +54,33 @@
   color: #374151;
 }
 
-/* Match your dark input style from Data Sources page */
+/* ✅ LIGHT SCHEMA INPUTS (match rest of app cards) */
 .settings-input,
 .settings-select,
 .settings-textarea {
-  background: #111827; 
-  color: #e5e7eb;
-  border: 1px solid rgba(148, 163, 184, 0.4);
+  background: #f9fafb; /* soft light slate, not blue/navy */
+  color: #0f172a;
+  border: 1px solid rgba(148, 163, 184, 0.9); /* same gray as other panels */
   border-radius: 10px;
   padding: 10px 12px;
   font-size: 14px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease,
+    background-color 0.15s ease;
 }
 
 .settings-input::placeholder,
 .settings-textarea::placeholder {
   color: #9ca3af;
+}
+
+/* Nice focus state using your green */
+.settings-input:focus,
+.settings-select:focus,
+.settings-textarea:focus {
+  outline: none;
+  border-color: var(--ustock-green-main);
+  box-shadow: 0 0 0 1px rgba(15, 118, 110, 0.18);
+  background: #ffffff;
 }
 
 .settings-textarea {
@@ -99,7 +112,7 @@
   transition: 0.15s ease;
 }
 
-/* Green primary button (same as your Data Sources connect button) */
+/* Green primary button (same as other primary actions) */
 .settings-btn--primary {
   background: #0f766e;
   color: #ffffff;
@@ -113,21 +126,24 @@
 .settings-btn--ghost {
   background: transparent;
   color: #374151;
-  border: 1px solid rgba(148,163,184,0.4);
+  border: 1px solid rgba(148, 163, 184, 0.4);
 }
 
 .settings-btn--ghost:hover {
-  background: rgba(148,163,184,0.08);
+  background: rgba(148, 163, 184, 0.08);
 }
 
 /* ========= MOBILE ================================================== */
 
 @media (max-width: 768px) {
+  /* IMPORTANT: no extra page padding here – .app-page already handles it */
   .settings-page {
-    padding: 16px 14px 28px;
+    min-height: auto;
   }
 
+  /* Slightly tighter padding but same style as hero/card */
   .settings-card {
-    padding: 20px 20px 26px;
+    padding: 18px 18px 22px;
+    margin-bottom: 20px;
   }
 }
