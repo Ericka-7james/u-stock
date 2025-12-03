@@ -11,6 +11,7 @@ export default function AppShell({ children }) {
   const isDatasources = location.pathname.startsWith("/datasources");
   const isIndexFunds = location.pathname.startsWith("/index-funds");
   const isAboutMe = location.pathname.startsWith("/about");
+  const isSettings = location.pathname.startsWith("/settings");
 
   const closeNav = () => setNavOpen(false);
 
@@ -85,10 +86,16 @@ export default function AppShell({ children }) {
             About me
           </Link>
 
-          <button className="side-nav-item" type="button" onClick={closeNav}>
+          <Link
+            to="/settings"
+            className={
+              "side-nav-item " + (isSettings ? "side-nav-item--active" : "")
+            }
+            onClick={closeNav}
+          >
             <span className="side-nav-item-dot" />
             Settings
-          </button>
+          </Link>
         </nav>
 
         <div className="side-nav-footer">
@@ -112,11 +119,7 @@ export default function AppShell({ children }) {
               <span className="hamburger-lines" />
             </button>
 
-            <Link
-              to="/"
-              className="topbar-home-link"
-              onClick={closeNav}
-            >
+            <Link to="/" className="topbar-home-link" onClick={closeNav}>
               <span className="topbar-home-label">Home</span>
             </Link>
           </div>
