@@ -1,7 +1,7 @@
 // src/components/layout/AppShell.jsx
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import "./AppShell.css"; // ⬅️ new shell CSS
+import "./AppShell.css"; // ⬅️ shell CSS
 
 export default function AppShell({ children }) {
   const [navOpen, setNavOpen] = useState(false);
@@ -11,6 +11,21 @@ export default function AppShell({ children }) {
   const isDatasources = location.pathname.startsWith("/datasources");
   const isIndexFunds = location.pathname.startsWith("/index-funds");
   const isAboutMe = location.pathname.startsWith("/about");
+
+  const closeNav = () => setNavOpen(false);
+
+  // Any click in the main content area should close nav (nice for mobile)
+  const handleMainClick = () => {
+    if (navOpen) {
+      closeNav();
+    }
+  };
+
+  // Stop clicks on the hamburger from bubbling up to app-main
+  const handleHamburgerClick = (event) => {
+    event.stopPropagation();
+    setNavOpen((open) => !open);
+  };
 
   return (
     <div className={`app-shell ${navOpen ? "app-shell--nav-open" : ""}`}>
@@ -30,6 +45,7 @@ export default function AppShell({ children }) {
             className={
               "side-nav-item " + (isDashboard ? "side-nav-item--active" : "")
             }
+            onClick={closeNav}
           >
             <span className="side-nav-item-dot" />
             Dashboard
@@ -40,6 +56,7 @@ export default function AppShell({ children }) {
             className={
               "side-nav-item " + (isDatasources ? "side-nav-item--active" : "")
             }
+            onClick={closeNav}
           >
             <span className="side-nav-item-dot" />
             Data Sources
@@ -51,6 +68,7 @@ export default function AppShell({ children }) {
               "side-nav-item " +
               (isIndexFunds ? "side-nav-item--active" : "")
             }
+            onClick={closeNav}
           >
             <span className="side-nav-item-dot" />
             Index Funds
@@ -61,12 +79,13 @@ export default function AppShell({ children }) {
             className={
               "side-nav-item " + (isAboutMe ? "side-nav-item--active" : "")
             }
+            onClick={closeNav}
           >
             <span className="side-nav-item-dot" />
             About me
           </Link>
 
-          <button className="side-nav-item" type="button">
+          <button className="side-nav-item" type="button" onClick={closeNav}>
             <span className="side-nav-item-dot" />
             Settings
           </button>
@@ -81,14 +100,14 @@ export default function AppShell({ children }) {
       </aside>
 
       {/* Main side: topbar + page content + footer */}
-      <div className="app-main">
+      <div className="app-main" onClick={handleMainClick}>
         <header className="topbar">
           <div className="topbar-left">
             <button
               className="hamburger-btn"
               type="button"
               aria-label="Open navigation"
-              onClick={() => setNavOpen((open) => !open)}
+              onClick={handleHamburgerClick}
             >
               <span className="hamburger-lines" />
             </button>
@@ -96,7 +115,7 @@ export default function AppShell({ children }) {
             <Link
               to="/"
               className="topbar-home-link"
-              onClick={() => setNavOpen(false)}
+              onClick={closeNav}
             >
               <span className="topbar-home-label">Home</span>
             </Link>
@@ -113,7 +132,7 @@ export default function AppShell({ children }) {
         </header>
 
         <div className="app-content">
-          {/* ⬇️ AppShell controls padding & max-width via .app-page */}
+          {/* AppShell controls padding & max-width via .app-page */}
           <main className="app-page">{children}</main>
         </div>
 
