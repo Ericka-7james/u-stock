@@ -44,7 +44,7 @@ export default function StatSummary({
   return (
     <div className="stat-row">
       {/* Card 1: signals universe (ranked tickers) */}
-      <div className="stat-card stat-card--accent-blue">
+      <div className="panel stat-card stat-card--accent-blue">
         <div className="stat-label">Signals universe</div>
         <div className="stat-value">{signalsUniverseSize}</div>
         <div className="stat-caption">
@@ -53,7 +53,7 @@ export default function StatSummary({
       </div>
 
       {/* Card 2: price coverage */}
-      <div className="stat-card stat-card--accent-orange">
+      <div className="panel stat-card stat-card--accent-orange">
         <div className="stat-label">Price coverage</div>
         <div className="stat-value">{pricesUniverseSize}</div>
         <div className="stat-caption">
@@ -62,7 +62,7 @@ export default function StatSummary({
       </div>
 
       {/* Card 3: last time *any* dataset was refreshed */}
-      <div className="stat-card stat-card--accent-teal">
+      <div className="panel stat-card stat-card--accent-teal">
         <div className="stat-label">Last data refresh</div>
         <div className="stat-value">
           {lastRun

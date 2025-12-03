@@ -24,28 +24,6 @@ export default function PriceChart({ ticker, data, loading, pricesMeta }) {
 
   return (
     <div className="chart-wrapper">
-      <div className="card-header">
-        <div>
-          <h2>{ticker} price action (daily)</h2>
-          <p className="card-subtitle">
-            Close price over time using your u-Stock data bot&apos;s daily OHLCV
-            snapshot.
-          </p>
-          {/* {snapshotTime && (
-            <p className="card-subtitle muted">
-              Snapshot as of{" "}
-              {snapshotTime.toLocaleString(undefined, {
-                month: "short",
-                day: "2-digit",
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
-              .
-            </p>
-          )} */}
-        </div>
-      </div>
-
       <ResponsiveContainer width="100%" height={320}>
         <LineChart data={data}>
           <CartesianGrid strokeDasharray="3 3" />

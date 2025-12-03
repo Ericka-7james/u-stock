@@ -1,0 +1,14 @@
+.top-signals-header {
+  display: flex;
+  align-items: center;
+}
+
+.top-signals-header h3 {
+  margin: 0; /* prevent weird spacing */
+  display: flex;
+  align-items: center;
+}
+
+.top-signals-card .help-icon-button {
+  margin-left: 8px;
+}

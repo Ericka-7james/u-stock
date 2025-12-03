@@ -2,6 +2,7 @@
 import AppShell from "../layout/AppShell";
 import "./AboutPage.css";
 import headshot from "../../assets/ericka-headshot.jpeg"; // ⬅ we'll add this file next
+import { Link } from "react-router-dom";
 
 export default function AboutPage() {
   return (
@@ -21,6 +22,10 @@ export default function AboutPage() {
               practice data engineering, quant-style thinking, and front-end
               craftsmanship in one space.
             </p>
+
+            <Link to="/" className="back-link-pill">
+            ← Back to dashboard
+          </Link>
           </div>
 
           <div className="about-hero-aside">

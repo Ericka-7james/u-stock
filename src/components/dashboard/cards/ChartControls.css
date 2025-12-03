@@ -145,8 +145,14 @@
   cursor: default;
 }
 
-/* Small screens: dropdown under subtitle, full width */
-@media (max-width: 768px) {
+/* Small / medium screens: dropdown under subtitle, full width */
+@media (max-width: 1024px) {
+  /* Stack header text + controls vertically */
+  .card-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
   .chart-controls {
     width: 100%;
     justify-content: flex-start;

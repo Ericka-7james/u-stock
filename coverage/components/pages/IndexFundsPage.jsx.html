@@ -318,27 +318,7 @@
 <a name='L253'></a><a href='#L253'>253</a>
 <a name='L254'></a><a href='#L254'>254</a>
 <a name='L255'></a><a href='#L255'>255</a>
-<a name='L256'></a><a href='#L256'>256</a>
-<a name='L257'></a><a href='#L257'>257</a>
-<a name='L258'></a><a href='#L258'>258</a>
-<a name='L259'></a><a href='#L259'>259</a>
-<a name='L260'></a><a href='#L260'>260</a>
-<a name='L261'></a><a href='#L261'>261</a>
-<a name='L262'></a><a href='#L262'>262</a>
-<a name='L263'></a><a href='#L263'>263</a>
-<a name='L264'></a><a href='#L264'>264</a>
-<a name='L265'></a><a href='#L265'>265</a>
-<a name='L266'></a><a href='#L266'>266</a>
-<a name='L267'></a><a href='#L267'>267</a>
-<a name='L268'></a><a href='#L268'>268</a>
-<a name='L269'></a><a href='#L269'>269</a>
-<a name='L270'></a><a href='#L270'>270</a>
-<a name='L271'></a><a href='#L271'>271</a>
-<a name='L272'></a><a href='#L272'>272</a>
-<a name='L273'></a><a href='#L273'>273</a>
-<a name='L274'></a><a href='#L274'>274</a>
-<a name='L275'></a><a href='#L275'>275</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L256'></a><a href='#L256'>256</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -394,7 +374,6 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">5x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">5x</span>
 <span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-yes">3x</span>
@@ -403,7 +382,6 @@
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">3x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">5x</span>
@@ -453,15 +431,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -603,14 +573,6 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">// src/components/pages/IndexFundsPage.jsx
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
@@ -618,7 +580,6 @@ import { Link } from "react-router-dom";
 import { useFundamentalsSnapshot } from "../../hooks/raw/useFundamentalsSnapshot";
 import AppShell from "../layout/AppShell";
 &nbsp;
-import "../dashboard/DashboardPage.css";
 import "./IndexFundsPage.css";
 &nbsp;
 const INDEX_FUNDS = [
@@ -668,7 +629,6 @@ export default function IndexFundsPage() {
     meta: fundamentalsMeta,
   } = useFundamentalsSnapshot();
 &nbsp;
-  // Map: ticker -&gt; fundamentals object
   const fundamentalsMap = useMemo(() =&gt; {
     const map = {};
     const data = Array.isArray(fundamentalsData) ? fundamentalsData : <span class="branch-1 cbranch-no" title="branch not covered" >[];</span>
@@ -679,7 +639,6 @@ export default function IndexFundsPage() {
     return map;
   }, [fundamentalsData]);
 &nbsp;
-  // Merge: index fund base info + fundamentals
   const fundsWithData = useMemo(
     () =&gt;
       INDEX_FUNDS.map((fund) =&gt; {
@@ -694,7 +653,7 @@ export default function IndexFundsPage() {
 &nbsp;
   return (
     &lt;AppShell&gt;
-      &lt;div className="dashboard index-funds-page"&gt;
+      &lt;div className="index-funds-page"&gt;
         {/* Hero card */}
         &lt;header className="index-hero"&gt;
           &lt;div className="index-hero-text"&gt;
@@ -703,16 +662,14 @@ export default function IndexFundsPage() {
               This page highlights broad index funds that often sit at the core
               of systematic trading and portfolio strategies. It combines simple
               fundamentals with educational context on how quants think about
-              diversified &amp;quot;building blocks&amp;quot; before hunting for
-              niche alpha.
+              diversified &amp;quot;building blocks&amp;quot; before hunting for niche
+              alpha.
             &lt;/p&gt;
             {fundamentalsMeta?.generatedAt &amp;&amp; (
               &lt;p className="index-hero-meta"&gt;
                 Fundamentals snapshot:{" "}
                 &lt;span&gt;
-                  {new Date(
-                    fundamentalsMeta.generatedAt,
-                  ).toLocaleString()}
+                  {new Date(fundamentalsMeta.generatedAt).toLocaleString()}
                 &lt;/span&gt;
               &lt;/p&gt;
             )}
@@ -728,20 +685,14 @@ export default function IndexFundsPage() {
           &lt;div className="tabs"&gt;
             &lt;button
               type="button"
-              className={
-                "tab-btn " +
-                (activeTab === "about" ? "tab-btn--active" : "")
-              }
+              className={"tab-btn " + (activeTab === "about" ? "tab-btn--active" : "")}
               onClick={<span class="fstat-no" title="function not covered" >() =&gt; <span class="cstat-no" title="statement not covered" >s</span>etActiveTab("about")}</span>
             &gt;
               Index funds &amp; core exposure
             &lt;/button&gt;
             &lt;button
               type="button"
-              className={
-                "tab-btn " +
-                (activeTab === "funds" ? "tab-btn--active" : "")
-              }
+              className={"tab-btn " + (activeTab === "funds" ? "tab-btn--active" : "")}
               onClick={() =&gt; setActiveTab("funds")}
             &gt;
               Funds in this snapshot
@@ -808,9 +759,9 @@ export default function IndexFundsPage() {
                     layer in quality and valuation.
                   &lt;/li&gt;
                   &lt;li&gt;
-                    &lt;strong&gt;Macro context:&lt;/strong&gt; inflation, rates, and
-                    growth data to explain why entire sectors or factors might
-                    move together.
+                    &lt;strong&gt;Macro context:&lt;/strong&gt; inflation, rates, and growth
+                    data to explain why entire sectors or factors might move
+                    together.
                   &lt;/li&gt;
                   &lt;li&gt;
                     &lt;strong&gt;Alternative data (future layer):&lt;/strong&gt; news,
@@ -852,25 +803,17 @@ export default function IndexFundsPage() {
                         &lt;span className="fund-metric-label"&gt;PE:&lt;/span&gt;
                         &lt;span className="fund-metric-value"&gt;
                           {fund.fundamentals?.pe != null &amp;&amp;
-                          Number.isFinite(
-                            Number(fund.fundamentals.pe),
-                          )
-                            ? Number(
-                                fund.fundamentals.pe,
-                              ).toFixed(1)
+                          Number.isFinite(Number(fund.fundamentals.pe))
+                            ? Number(fund.fundamentals.pe).toFixed(1)
                             : "N/A"}
                         &lt;/span&gt;
                       &lt;/div&gt;
 &nbsp;
                       &lt;div className="fund-metric"&gt;
-                        &lt;span className="fund-metric-label"&gt;
-                          Market Cap:
-                        &lt;/span&gt;
+                        &lt;span className="fund-metric-label"&gt;Market Cap:&lt;/span&gt;
                         &lt;span className="fund-metric-value"&gt;
                           {fund.fundamentals?.marketCap != null
-                            ? formatMarketCap(
-                                fund.fundamentals.marketCap,
-                              )
+                            ? formatMarketCap(fund.fundamentals.marketCap)
                             : "N/A"}
                         &lt;/span&gt;
                       &lt;/div&gt;
@@ -892,7 +835,7 @@ export default function IndexFundsPage() {
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-11-25T15:16:55.611Z
+                at 2025-12-03T00:06:25.361Z
             </div>
         <script src="../../prettify.js"></script>
         <script>
