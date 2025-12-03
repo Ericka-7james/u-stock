@@ -4,24 +4,46 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;           /* prevent overflow past card */
 }
 
 .chart-controls-label {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--ustock-text-muted);
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  white-space: nowrap;
+}
+
+/* Dark-theme tuning for dropdown */
+body.ustock-dark .chart-select-menu {
+  background: #020617;
+  border-color: rgba(148, 163, 184, 0.6);
+}
+
+body.ustock-dark .chart-select-option {
+  color: #e5e7eb;
+}
+
+body.ustock-dark .chart-select-option:hover {
+  background: rgba(15, 23, 42, 0.9);
+}
+
+/* still keep the same green for the selected row, but with bright text */
+body.ustock-dark .chart-select-option--active {
+  background: #ecfdf3;
+  color: #065f46;
 }
 
 /* Base “select-style” button, reused by sentiment VIEW dropdown too */
 .chart-select {
   border-radius: 999px;
-  border: 1px solid rgba(148, 163, 184, 0.9);
+  border: 1px solid var(--ustock-border-card);
   padding: 4px 10px;
   font-size: 12px;
-  background: #ffffff;
-  color: #111827;
+  background: var(--ustock-bg-card-soft);
+  color: var(--ustock-text-main);
   cursor: pointer;
 }
 
@@ -31,6 +53,7 @@
   position: relative;
   display: inline-block;
   width: 180px;
+  min-width: 0; /* allow shrink on small screens */
 }
 
 .chart-select.chart-select--button {
@@ -40,17 +63,19 @@
   width: 100%;
   padding: 6px 10px;
   border-radius: 999px;
-  border: 1px solid rgba(148, 163, 184, 0.9);
-  background: #ffffff;
+  border: 1px solid var(--ustock-border-card);
+  background: var(--ustock-bg-card-soft);
   font-size: 0.9rem;
   cursor: pointer;
   outline: none;
+  color: var(--ustock-text-main);
 }
 
 .chart-select-label {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  min-width: 0;
 }
 
 .chart-select-caret {
@@ -65,9 +90,9 @@
   left: 0;
   z-index: 20;
   width: 100%;
-  background: #ffffff;
+  background: var(--ustock-bg-card);
   border-radius: 12px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--ustock-border-card);
   box-shadow: 0 10px 25px rgba(15, 23, 42, 0.12);
   padding: 8px 0 6px;
 }
@@ -78,7 +103,7 @@
   margin: 0 8px 6px;
   padding: 6px 10px;
   border-radius: 999px;
-  border: 1px solid #bbf7d0;
+  border: 1px solid var(--ustock-green-soft);
   font-size: 0.85rem;
   outline: none;
   background: #ecfdf3;
@@ -90,7 +115,7 @@
 }
 
 .chart-search-input:focus {
-  border-color: #0f766e;
+  border-color: var(--ustock-green-main);
   box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.25);
 }
 
@@ -109,7 +134,7 @@
 }
 
 .chart-select-options::-webkit-scrollbar-track {
-  background: #f3f4f6;
+  background: var(--ustock-bg-card-soft);
   border-radius: 999px;
 }
 
@@ -127,6 +152,7 @@
   font-size: 0.85rem;
   cursor: pointer;
   white-space: nowrap;
+  color: var(--ustock-text-main);
 }
 
 .chart-select-option:hover {
@@ -134,7 +160,8 @@
 }
 
 .chart-select-option--active {
-  background: #ecfdf3;
+  background: #ecfdf3;     /* mint green */
+  color: #065f46;          /* deep green text so it's readable */
   font-weight: 500;
 }
 
@@ -147,7 +174,7 @@
 
 /* Small / medium screens: dropdown under subtitle, full width */
 @media (max-width: 1024px) {
-  /* Stack header text + controls vertically */
+  /* Stack header text + controls vertically (card-header defined in DashboardPage.css) */
   .card-header {
     flex-direction: column;
     align-items: flex-start;

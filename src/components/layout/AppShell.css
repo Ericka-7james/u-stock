@@ -3,8 +3,17 @@
   --ustock-green-main: #0f766e;
   --ustock-green-soft: #bbf7d0;
 
+  /* light theme defaults */
   --ustock-bg-page: #f5f7ff;
+  --ustock-bg-card: #ffffff;
+  --ustock-bg-card-soft: #f9fafb;
+  --ustock-border-card: rgba(148, 163, 184, 0.25);
+
+  --ustock-text-main: #0f172a;
+  --ustock-text-strong: #0b1120;
   --ustock-text-muted: #6b7280;
+
+  --ustock-card-chip-bg: #ecfdf5;
 }
 
 /* Base document background */
@@ -15,6 +24,7 @@ body {
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
   background: var(--ustock-bg-page);
+  color: var(--ustock-text-main);
 }
 
 /* ========= APP SHELL (top bar + slide-out nav) ===================== */
@@ -353,18 +363,19 @@ body {
 
 /* Base “panel/card” style used across the app */
 .panel {
-  background: #ffffff;
+  background: var(--ustock-bg-card);
   border-radius: 18px;
   padding: 18px 20px;
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
-  border: 1px solid rgba(148, 163, 184, 0.25);
+  border: 1px solid var(--ustock-border-card);
+  color: var(--ustock-text-main);
 }
 
 /* Shared title + text helpers other pages can reuse */
 .panel-title {
   font-size: 15px;
   font-weight: 600;
-  color: #111827;
+  color: var(--ustock-text-strong);
   margin: 0;
 }
 
@@ -432,21 +443,32 @@ body {
   transform: translateX(14px);
 }
 
-/* ========= LIGHT THEME BASE ======================================== */
+/* ========= LIGHT / DARK THEME TOKENS =============================== */
 
+/* light theme is already encoded in :root; just restate for clarity */
 body {
-  background: #f5f7ff;
-  color: #0f172a;
+  background: var(--ustock-bg-page);
+  color: var(--ustock-text-main);
 }
 
-/* ========= DARK THEME OVERRIDES =================================== */
-
+/* Override tokens when the dark class is present */
 body.ustock-dark {
   background: #020617;
   color: #e5e7eb;
+
+  --ustock-bg-page: #020617;
+  --ustock-bg-card: #020617;
+  --ustock-bg-card-soft: #020617;
+  --ustock-border-card: rgba(148, 163, 184, 0.4);
+
+  --ustock-text-main: #e5e7eb;
+  --ustock-text-strong: #f9fafb;
+  --ustock-text-muted: #9ca3af;
+
+  --ustock-card-chip-bg: rgba(15, 118, 110, 0.25);
 }
 
-/* main layout background */
+/* main layout background tweak for dark */
 body.ustock-dark .app-shell {
   background: #020617;
 }
@@ -460,7 +482,7 @@ body.ustock-dark .app-main {
   );
 }
 
-/* sidebar */
+/* sidebar in dark */
 body.ustock-dark .side-nav {
   background: #020617;
   border-right: 1px solid rgba(148, 163, 184, 0.35);
@@ -476,7 +498,7 @@ body.ustock-dark .side-nav-item--active {
   background: rgba(15, 118, 110, 0.35);
 }
 
-/* topbar */
+/* topbar in dark */
 body.ustock-dark .topbar {
   background: rgba(15, 23, 42, 0.95);
   border-bottom: 1px solid rgba(148, 163, 184, 0.35);
@@ -486,21 +508,19 @@ body.ustock-dark .topbar-home-label {
   color: #e5e7eb;
 }
 
-/* cards / panels / settings form */
+/* cards / panels / settings form – background/border via tokens now */
 body.ustock-dark .panel,
 body.ustock-dark .about-card,
 body.ustock-dark .about-hero-card,
 body.ustock-dark .settings-card {
-  background: #020617;
-  border-color: rgba(148, 163, 184, 0.4);
   box-shadow: 0 18px 45px rgba(0, 0, 0, 0.6);
 }
 
 body.ustock-dark .settings-input,
 body.ustock-dark .settings-select,
 body.ustock-dark .settings-textarea {
-  background: #020617;
-  color: #e5e7eb;
+  background: var(--ustock-bg-card);
+  color: var(--ustock-text-main);
   border-color: rgba(148, 163, 184, 0.7);
 }
 
@@ -508,4 +528,3 @@ body.ustock-dark .settings-textarea {
 body.ustock-dark .site-footer {
   color: #9ca3af;
 }
-

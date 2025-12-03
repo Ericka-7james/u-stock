@@ -2,11 +2,12 @@
 
 .sentiment-card {
   margin-top: 1rem;
-  background: #ffffff;
+  background: var(--ustock-bg-card);
   border-radius: 12px;
   padding: 1rem 1.25rem;
   box-shadow: 0 8px 20px rgba(15, 118, 110, 0.06);
-  border: 1px solid rgba(15, 118, 110, 0.06);
+  border: 1px solid var(--ustock-border-card);
+  color: var(--ustock-text-main);
 }
 
 .sentiment-card__header {
@@ -21,27 +22,32 @@
   font-size: 1rem;
   font-weight: 600;
   margin: 0;
+  color: var(--ustock-text-strong);
 }
 
 .sentiment-card__ticker {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
     "Liberation Mono", "Courier New", monospace;
+  color: var(--ustock-text-strong);
 }
 
 .sentiment-card__subtitle {
   margin: 0.25rem 0 0;
   font-size: 0.85rem;
-  color: #4b5563;
+  color: var(--ustock-text-muted);
 }
 
 .sentiment-card__overall {
   font-weight: 600;
+  color: var(--ustock-text-strong);
 }
 
 .sentiment-card__overall-score {
   font-size: 0.8rem;
-  color: #6b7280;
+  color: var(--ustock-text-muted);
 }
+
+/* Mode Select */
 
 .sentiment-card__mode-select {
   display: flex;
@@ -54,18 +60,19 @@
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: #6b7280;
+  color: var(--ustock-text-muted);
 }
 
 .sentiment-card__mode-input {
   font-size: 0.85rem;
   padding: 0.35rem 0.5rem;
   border-radius: 999px;
-  border: 1px solid #d1d5db;
-  background: #f9fafb;
+  border: 1px solid var(--ustock-border-card);
+  background: var(--ustock-bg-card-soft);
+  color: var(--ustock-text-main);
 }
 
-/* Card body / sections */
+/* Card Sections */
 
 .sentiment-card__body {
   display: grid;
@@ -76,7 +83,7 @@
 .sentiment-section {
   padding: 0.75rem 0.75rem;
   border-radius: 10px;
-  background: #f9fafb;
+  background: var(--ustock-bg-card-soft);
   border: 1px dashed rgba(15, 118, 110, 0.15);
 }
 
@@ -84,10 +91,12 @@
   font-size: 0.9rem;
   font-weight: 600;
   margin: 0 0 0.35rem;
+  color: var(--ustock-text-strong);
 }
 
 .sentiment-section__label {
   margin: 0 0 0.5rem;
+  color: var(--ustock-text-main);
 }
 
 /* Chips */
@@ -101,6 +110,7 @@
   font-weight: 600;
 }
 
+/* Chip colors stay as semantic signals */
 .sentiment-chip--price {
   background: #ecfdf3;
   color: #166534;
@@ -133,7 +143,7 @@
 
 .sentiment-metric dt {
   font-size: 0.72rem;
-  color: #6b7280;
+  color: var(--ustock-text-muted);
   margin-bottom: 0.15rem;
 }
 
@@ -141,9 +151,10 @@
   margin: 0;
   font-size: 0.85rem;
   font-weight: 500;
+  color: var(--ustock-text-main);
 }
 
-/* Pct coloring */
+/* Pct coloring stays semantic */
 
 .sentiment-pct {
   font-weight: 600;
@@ -178,11 +189,7 @@
     grid-template-columns: 1fr;
   }
 
-  /* Align the sentiment dropdown with the chart dropdown style */
-  .sentiment-mode-dropdown {
-    min-width: 180px;
-  }
-
+  /* optional extra chips for mobile */
   .sentiment-chip--style {
     background: #eef2ff;
     color: #3730a3;
