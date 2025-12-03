@@ -1,19 +1,34 @@
 // src/components/layout/AppShell.jsx
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import "./AppShell.css"; // ⬅️ shell CSS
 
 export default function AppShell({ children }) {
   const [navOpen, setNavOpen] = useState(false);
+  const [isDark, setIsDark] = useState(false);
   const location = useLocation();
 
   const isDashboard = location.pathname === "/";
-  const isDatasources = location.pathname.startsWith("/datasources");
+  const isDatasources = location.pathname.startsWith("/data-sources"); // <-- match your route
   const isIndexFunds = location.pathname.startsWith("/index-funds");
   const isAboutMe = location.pathname.startsWith("/about");
   const isSettings = location.pathname.startsWith("/settings");
 
   const closeNav = () => setNavOpen(false);
+
+  // Toggle dark theme
+  const toggleTheme = () => {
+    setIsDark((prev) => !prev);
+  };
+
+  // Attach a class to <body> so the rest of your theme can key off it
+  useEffect(() => {
+    if (isDark) {
+      document.body.classList.add("ustock-dark");
+    } else {
+      document.body.classList.remove("ustock-dark");
+    }
+  }, [isDark]);
 
   // Any click in the main content area should close nav (nice for mobile)
   const handleMainClick = () => {
@@ -53,7 +68,7 @@ export default function AppShell({ children }) {
           </Link>
 
           <Link
-            to="/datasources"
+            to="/data-sources"
             className={
               "side-nav-item " + (isDatasources ? "side-nav-item--active" : "")
             }
@@ -125,6 +140,17 @@ export default function AppShell({ children }) {
           </div>
 
           <div className="topbar-right">
+            {/* Dark mode toggle pill */}
+            <button
+              type="button"
+              className={`theme-toggle ${isDark ? "theme-toggle--on" : ""}`}
+              onClick={toggleTheme}
+              aria-label="Toggle dark mode"
+            >
+              <span className="theme-toggle-thumb" />
+              <span className="theme-toggle-moon">☾</span>
+            </button>
+
             <button className="icon-btn">
               <span className="icon-search" />
             </button>

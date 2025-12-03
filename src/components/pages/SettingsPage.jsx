@@ -1,123 +1,91 @@
-import { useEffect, useState } from "react";
+// src/components/settings/SettingsPage.jsx
+import AppShell from "../layout/AppShell";
 import "./SettingsPage.css";
 
 export default function SettingsPage() {
-  const [theme, setTheme] = useState(() => {
-    if (typeof window === "undefined") return "light";
-    return localStorage.getItem("ustock-theme") || "light";
-  });
-
-  useEffect(() => {
-    if (typeof document === "undefined") return;
-    document.documentElement.setAttribute("data-theme", theme);
-    localStorage.setItem("ustock-theme", theme);
-  }, [theme]);
-
-  const handleThemeToggle = () => {
-    setTheme((prev) => (prev === "light" ? "dark" : "light"));
-  };
-
-  const [message, setMessage] = useState("");
-  const [status, setStatus] = useState("idle"); // idle | sending | success | error
-
-  const handleSubmit = async (event) => {
-    event.preventDefault();
-    if (!message.trim()) return;
-
-    setStatus("sending");
-
-    try {
-      const res = await fetch("/api/feedback", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message }),
-      });
-
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
-      }
-
-      setStatus("success");
-      setMessage("");
-    } catch (err) {
-      console.error("Failed to send feedback:", err);
-      setStatus("error");
-    }
-  };
-
   return (
-    <section className="settings-page">
-      <header className="settings-header">
-        <h1 className="settings-title">Settings</h1>
-        <p className="settings-subtitle">
-          Tweak your U-Stock experience or send feedback directly to the
-          creator.
-        </p>
-      </header>
-
-      <section className="settings-section">
-        <h2 className="settings-section-title">Appearance</h2>
-        <div className="settings-row">
-          <div className="settings-row-text">
-            <p className="settings-row-label">Dark mode</p>
-            <p className="settings-row-help">
-              Switch between light and dark themes for the entire app.
+    <AppShell title="Settings">
+      <div className="settings-page">
+        <div className="settings-card">
+          <header className="settings-header">
+            <h2 className="settings-title">General settings</h2>
+            <p className="settings-subtitle">
+              Share ideas, report issues, or ask questions about how U-Stock works.
+              Messages here will be routed straight to my inbox.
             </p>
-          </div>
+          </header>
 
-          <label className="toggle-wrapper">
-            <span className="toggle-label">
-              {theme === "dark" ? "On" : "Off"}
-            </span>
-            <input
-              type="checkbox"
-              checked={theme === "dark"}
-              onChange={handleThemeToggle}
-            />
-          </label>
+          <form className="settings-form">
+            <div className="settings-field">
+              <label className="settings-label" htmlFor="name">
+                Name
+              </label>
+              <input
+                id="name"
+                type="text"
+                className="settings-input"
+                placeholder="Your name"
+              />
+            </div>
+
+            <div className="settings-field">
+              <label className="settings-label" htmlFor="email">
+                Contact email
+              </label>
+              <input
+                id="email"
+                type="email"
+                className="settings-input"
+                placeholder="you@example.com"
+              />
+              <p className="settings-hint">
+                I&apos;ll use this if I need to follow up about your feedback.
+              </p>
+            </div>
+
+            <div className="settings-field">
+              <label className="settings-label" htmlFor="feedbackType">
+                Feedback type
+              </label>
+              <select id="feedbackType" className="settings-select">
+                <option value="feature">Feature idea</option>
+                <option value="bug">Bug report</option>
+                <option value="question">Question</option>
+                <option value="other">Something else</option>
+              </select>
+            </div>
+
+            <div className="settings-field">
+              <label className="settings-label" htmlFor="message">
+                Message
+              </label>
+              <textarea
+                id="message"
+                className="settings-textarea"
+                placeholder="Tell me what you’d like to learn, improve, or fix in U-Stock."
+                rows={6}
+              />
+            </div>
+
+            <p className="settings-footer-hint">
+              Think of this as your suggestion box. I use these notes to decide what
+              to build next.
+            </p>
+
+            <div className="settings-actions">
+              <button type="submit" className="settings-btn settings-btn--primary">
+                Send feedback
+              </button>
+              <button
+                type="button"
+                className="settings-btn settings-btn--ghost"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
         </div>
-      </section>
-
-      <section className="settings-section">
-        <h2 className="settings-section-title">Suggestion box</h2>
-        <p className="settings-section-intro">
-          Share ideas, bugs, or feature requests. Messages are forwarded to
-          Ericka&apos;s inbox.
-        </p>
-
-        <form className="settings-form" onSubmit={handleSubmit}>
-          <label className="settings-field">
-            <span className="settings-field-label">Your message</span>
-            <textarea
-              rows={4}
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              placeholder="Tell me what would make U-Stock better…"
-              required
-            />
-          </label>
-
-          <button
-            type="submit"
-            className="settings-submit-btn"
-            disabled={status === "sending"}
-          >
-            {status === "sending" ? "Sending…" : "Send feedback"}
-          </button>
-
-          {status === "success" && (
-            <p className="settings-status settings-status--success">
-              Thanks — feedback sent! 💌
-            </p>
-          )}
-          {status === "error" && (
-            <p className="settings-status settings-status--error">
-              Something went wrong sending your message. Please try again
-              later.
-            </p>
-          )}
-        </form>
-      </section>
-    </section>
+      </div>
+    </AppShell>
   );
 }

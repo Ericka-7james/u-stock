@@ -1,0 +1,133 @@
+/* ========= SETTINGS PAGE LAYOUT ===================================== */
+
+/* Let .app-page handle padding + background, like on About */
+.settings-page {
+  /* no extra padding/background here so spacing matches other pages */
+  min-height: auto;
+}
+
+/* Match hero/card styling from About page */
+.settings-card {
+  width: 100%;
+  background: #ffffff;
+  border-radius: 18px;
+  padding: 20px 22px; /* same as .about-hero-card */
+  margin-bottom: 24px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-top: 4px solid var(--ustock-green-main); /* green accent strip */
+}
+
+/* ========= HEADER =================================================== */
+
+.settings-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 6px;
+}
+
+.settings-subtitle {
+  font-size: 14px;
+  color: #6b7280;
+  margin-bottom: 16px;
+}
+
+/* ========= FORM FIELDS ============================================= */
+
+.settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settings-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+}
+
+/* Match your dark input style from Data Sources page */
+.settings-input,
+.settings-select,
+.settings-textarea {
+  background: #111827; 
+  color: #e5e7eb;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 14px;
+}
+
+.settings-input::placeholder,
+.settings-textarea::placeholder {
+  color: #9ca3af;
+}
+
+.settings-textarea {
+  resize: vertical;
+  min-height: 140px;
+}
+
+/* Hint text matches your global style */
+.settings-hint,
+.settings-footer-hint {
+  font-size: 13px;
+  color: #9ca3af;
+}
+
+/* ========= BUTTONS ================================================= */
+
+.settings-actions {
+  margin-top: 4px;
+  display: flex;
+  gap: 14px;
+}
+
+.settings-btn {
+  border-radius: 999px;
+  padding: 9px 20px;
+  font-size: 14px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: 0.15s ease;
+}
+
+/* Green primary button (same as your Data Sources connect button) */
+.settings-btn--primary {
+  background: #0f766e;
+  color: #ffffff;
+}
+
+.settings-btn--primary:hover {
+  background: #0d5f58;
+}
+
+/* Ghost button matches site */
+.settings-btn--ghost {
+  background: transparent;
+  color: #374151;
+  border: 1px solid rgba(148,163,184,0.4);
+}
+
+.settings-btn--ghost:hover {
+  background: rgba(148,163,184,0.08);
+}
+
+/* ========= MOBILE ================================================== */
+
+@media (max-width: 768px) {
+  .settings-page {
+    padding: 16px 14px 28px;
+  }
+
+  .settings-card {
+    padding: 20px 20px 26px;
+  }
+}
