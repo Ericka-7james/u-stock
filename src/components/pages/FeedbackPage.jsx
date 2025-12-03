@@ -15,7 +15,14 @@ export default function SettingsPage() {
             </p>
           </header>
 
-          <form className="settings-form">
+          {/* Updated: Add onSubmit handler */}
+          <form
+            className="settings-form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              alert("Feedback submission is coming soon!");
+            }}
+          >
             <div className="settings-field">
               <label className="settings-label" htmlFor="name">
                 Name
