@@ -1,4 +1,6 @@
-# src/data_scout/data_layer/providers/alpaca_provider.py
+# data_scout/data_layer/providers/alpaca_provider.py
+from __future__ import annotations
+
 from datetime import datetime
 from typing import Iterable, List
 
@@ -8,7 +10,7 @@ from data_scout.data_layer.providers.base import PriceDataProvider
 from data_scout.data_layer.types import Candle, PriceInterval
 
 
-_INTERVAL_TO_TIMEFRAME = {
+_INTERVAL_TO_TIMEFRAME: dict[PriceInterval, TimeFrame] = {
     "1m": TimeFrame.Minute,
     "5m": TimeFrame(5, "Min"),
     "15m": TimeFrame(15, "Min"),
@@ -29,6 +31,7 @@ class AlpacaPriceDataProvider(PriceDataProvider):
         interval: PriceInterval = "1d",
     ) -> List[Candle]:
         timeframe = _INTERVAL_TO_TIMEFRAME[interval]
+
         request = StockBarsRequest(
             symbol_or_symbols=list(symbols),
             timeframe=timeframe,
@@ -43,8 +46,8 @@ class AlpacaPriceDataProvider(PriceDataProvider):
             for bar in bars:
                 candles.append(
                     Candle(
-                        symbol=symbol,
-                        timestamp=bar.timestamp,
+                        symbol=symbol.upper(),
+                        timestamp=bar.timestamp,  # already datetime
                         open=float(bar.open),
                         high=float(bar.high),
                         low=float(bar.low),
@@ -60,8 +63,20 @@ class AlpacaPriceDataProvider(PriceDataProvider):
         symbols: Iterable[str],
         interval: PriceInterval = "1m",
     ) -> List[Candle]:
-        # Simplest: request a small history window and take the last bar
         now = datetime.utcnow()
-        # For intraday you might use now - 1 day, etc.
-        candles = self.fetch_history(symbols, start=now.replace(hour=0, minute=0, second=0, microsecond=0), end=now, interval=interval)
-        return candles
+        start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+        history = self.fetch_history(
+            symbols=symbols,
+            start=start_of_day,
+            end=now,
+            interval=interval,
+        )
+
+        latest_by_symbol: dict[str, Candle] = {}
+        for c in history:
+            prev = latest_by_symbol.get(c["symbol"])
+            if prev is None or c["timestamp"] > prev["timestamp"]:
+                latest_by_symbol[c["symbol"]] = c
+
+        return list(latest_by_symbol.values())

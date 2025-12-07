@@ -218,7 +218,32 @@
 <a name='L153'></a><a href='#L153'>153</a>
 <a name='L154'></a><a href='#L154'>154</a>
 <a name='L155'></a><a href='#L155'>155</a>
-<a name='L156'></a><a href='#L156'>156</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L156'></a><a href='#L156'>156</a>
+<a name='L157'></a><a href='#L157'>157</a>
+<a name='L158'></a><a href='#L158'>158</a>
+<a name='L159'></a><a href='#L159'>159</a>
+<a name='L160'></a><a href='#L160'>160</a>
+<a name='L161'></a><a href='#L161'>161</a>
+<a name='L162'></a><a href='#L162'>162</a>
+<a name='L163'></a><a href='#L163'>163</a>
+<a name='L164'></a><a href='#L164'>164</a>
+<a name='L165'></a><a href='#L165'>165</a>
+<a name='L166'></a><a href='#L166'>166</a>
+<a name='L167'></a><a href='#L167'>167</a>
+<a name='L168'></a><a href='#L168'>168</a>
+<a name='L169'></a><a href='#L169'>169</a>
+<a name='L170'></a><a href='#L170'>170</a>
+<a name='L171'></a><a href='#L171'>171</a>
+<a name='L172'></a><a href='#L172'>172</a>
+<a name='L173'></a><a href='#L173'>173</a>
+<a name='L174'></a><a href='#L174'>174</a>
+<a name='L175'></a><a href='#L175'>175</a>
+<a name='L176'></a><a href='#L176'>176</a>
+<a name='L177'></a><a href='#L177'>177</a>
+<a name='L178'></a><a href='#L178'>178</a>
+<a name='L179'></a><a href='#L179'>179</a>
+<a name='L180'></a><a href='#L180'>180</a>
+<a name='L181'></a><a href='#L181'>181</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -373,7 +398,34 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">/* HERO CARD */
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">/* ========= ABOUT PAGE ================================================== */
+&nbsp;
+/* HERO CARD */
 .about-hero-card {
   display: flex;
   justify-content: space-between;
@@ -382,10 +434,11 @@
   padding: 20px 22px;
   margin-bottom: 24px;
   border-radius: 18px;
-  background: #ffffff;
+  background: var(--ustock-bg-card);
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
-  border: 1px solid rgba(148, 163, 184, 0.25);
+  border: 1px solid var(--ustock-border-card);
   border-top: 4px solid var(--ustock-green-main);
+  color: var(--ustock-text-main);
 }
 &nbsp;
 .about-hero-text .page-title {
@@ -395,6 +448,27 @@
 &nbsp;
 .about-hero-text .muted {
   max-width: 560px;
+}
+&nbsp;
+/* back to dashboard pill link */
+.back-link-pill {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 14px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--ustock-green-main);
+  font-size: 13px;
+  text-decoration: none;
+  color: var(--ustock-green-main);
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+}
+&nbsp;
+.back-link-pill:hover {
+  background: var(--ustock-green-main);
+  color: #f9fafb;
 }
 &nbsp;
 /* HERO ASIDE (headshot + meta) */
@@ -413,13 +487,13 @@
   object-fit: cover;
   border: 2px solid var(--ustock-green-main);
   box-shadow: 0 8px 22px rgba(15, 23, 42, 0.12);
-  background: #f9fafb;
+  background: var(--ustock-bg-card-soft);
 }
 &nbsp;
 /* Meta info next to headshot */
 .about-meta {
   font-size: 12px;
-  color: #4b5563;
+  color: var(--ustock-text-muted);
 }
 &nbsp;
 .about-meta-row {
@@ -429,7 +503,7 @@
 &nbsp;
 .about-meta-row .label {
   font-weight: 600;
-  color: #111827;
+  color: var(--ustock-text-strong);
 }
 &nbsp;
 /* GRID SECTIONS */
@@ -440,18 +514,19 @@
 }
 &nbsp;
 .about-card {
-  background: #ffffff;
+  background: var(--ustock-bg-card);
   border-radius: 18px;
   padding: 18px 20px;
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
-  border: 1px solid rgba(148, 163, 184, 0.25);
+  border: 1px solid var(--ustock-border-card);
+  color: var(--ustock-text-main);
 }
 &nbsp;
 .about-card h2 {
   margin-top: 0;
   margin-bottom: 10px;
   font-size: 18px;
-  color: #0f172a;
+  color: var(--ustock-text-strong);
 }
 &nbsp;
 /* Text + lists */
@@ -459,7 +534,7 @@
   margin: 0;
   padding-left: 18px;
   font-size: 14px;
-  color: #374151;
+  color: var(--ustock-text-main);
 }
 &nbsp;
 .about-list li {
@@ -497,7 +572,7 @@
 &nbsp;
 .about-links a {
   font-size: 14px;
-  color: #0f766e;
+  color: var(--ustock-green-main);
   text-decoration: none;
   font-weight: 500;
 }
@@ -535,7 +610,7 @@
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-12-03T15:15:34.000Z
+                at 2025-12-07T02:27:36.645Z
             </div>
         <script src="../../prettify.js"></script>
         <script>

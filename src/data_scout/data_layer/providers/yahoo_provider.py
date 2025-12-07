@@ -1,11 +1,13 @@
 # data_scout/data_layer/providers/yahoo_provider.py
+from __future__ import annotations
+
 from datetime import datetime
 from typing import Iterable, List
 
 import yfinance as yf
 
 from data_scout.data_layer.providers.base import PriceDataProvider
-from data_scout.data_layer.types import Candle
+from data_scout.data_layer.types import Candle, PriceInterval
 
 
 class YahooPriceDataProvider(PriceDataProvider):
@@ -14,23 +16,25 @@ class YahooPriceDataProvider(PriceDataProvider):
         symbols: Iterable[str],
         start: datetime,
         end: datetime,
-        interval: str = "1d",
+        interval: PriceInterval = "1d",
     ) -> List[Candle]:
         candles: List[Candle] = []
+
         for symbol in symbols:
             df = yf.download(
                 symbol,
                 start=start,
                 end=end,
-                interval=interval,
+                interval=interval,  # yfinance understands "1m", "5m", "1d", etc.
                 progress=False,
             )
             df = df.dropna()
+
             for ts, row in df.iterrows():
                 candles.append(
                     Candle(
-                        symbol=symbol,
-                        timestamp=ts.to_pydatetime(),
+                        symbol=symbol.upper(),
+                        timestamp=ts.to_pydatetime(),  # usually already UTC
                         open=float(row["Open"]),
                         high=float(row["High"]),
                         low=float(row["Low"]),
@@ -38,21 +42,30 @@ class YahooPriceDataProvider(PriceDataProvider):
                         volume=float(row["Volume"]),
                     )
                 )
+
         return candles
 
     def fetch_latest(
         self,
         symbols: Iterable[str],
-        interval: str = "1m",
+        interval: PriceInterval = "1m",
     ) -> List[Candle]:
-        # Simple version: use last row from a recent history fetch
+        # Simple version: fetch today's history and keep last bar per symbol.
         now = datetime.utcnow()
-        # e.g. fetch last day and take last candle per symbol
-        candles = self.fetch_history(
+        start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+        history = self.fetch_history(
             symbols=symbols,
-            start=now.replace(hour=0, minute=0, second=0, microsecond=0),
+            start=start_of_day,
             end=now,
             interval=interval,
         )
-        # Could compress to latest per symbol, but keep simple for now
-        return candles
+
+        # Compress to the latest bar per symbol
+        latest_by_symbol: dict[str, Candle] = {}
+        for c in history:
+            prev = latest_by_symbol.get(c["symbol"])
+            if prev is None or c["timestamp"] > prev["timestamp"]:
+                latest_by_symbol[c["symbol"]] = c
+
+        return list(latest_by_symbol.values())

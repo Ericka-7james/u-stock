@@ -1,4 +1,6 @@
-# src/data_scout/data_layer/providers/polygon_provider.py
+# data_scout/data_layer/providers/polygon_provider.py
+from __future__ import annotations
+
 from datetime import datetime
 from typing import Iterable, List
 
@@ -6,6 +8,22 @@ from polygon import RESTClient
 
 from data_scout.data_layer.providers.base import PriceDataProvider
 from data_scout.data_layer.types import Candle, PriceInterval
+
+
+def _interval_to_polygon(interval: PriceInterval) -> tuple[int, str]:
+    """
+    Map internal PriceInterval to Polygon multiplier + timespan.
+    """
+    if interval == "1m":
+        return 1, "minute"
+    if interval == "5m":
+        return 5, "minute"
+    if interval == "15m":
+        return 15, "minute"
+    if interval == "1h":
+        return 1, "hour"
+    # default
+    return 1, "day"
 
 
 class PolygonPriceDataProvider(PriceDataProvider):
@@ -20,23 +38,23 @@ class PolygonPriceDataProvider(PriceDataProvider):
         interval: PriceInterval = "1d",
     ) -> List[Candle]:
         candles: List[Candle] = []
-        timespan = "minute" if interval in ("1m", "5m", "15m") else "day"
+        multiplier, timespan = _interval_to_polygon(interval)
 
         for symbol in symbols:
-            # NOTE: you’d need to translate interval -> multiplier + timespan properly
             resp = self.client.list_aggs(
                 ticker=symbol,
-                multiplier=1,
+                multiplier=multiplier,
                 timespan=timespan,
                 from_=start.date().isoformat(),
                 to=end.date().isoformat(),
-                limit=50000,
+                limit=50_000,
             )
+
             for bar in resp:
                 candles.append(
                     Candle(
-                        symbol=symbol,
-                        timestamp=bar.timestamp,  # may need datetime conversion
+                        symbol=symbol.upper(),
+                        timestamp=bar.timestamp,  # might be int → you can normalize later
                         open=float(bar.open),
                         high=float(bar.high),
                         low=float(bar.low),
@@ -52,7 +70,20 @@ class PolygonPriceDataProvider(PriceDataProvider):
         symbols: Iterable[str],
         interval: PriceInterval = "1m",
     ) -> List[Candle]:
-        # Same idea: query recent aggs, take last per symbol.
         now = datetime.utcnow()
-        candles = self.fetch_history(symbols, start=now.replace(hour=0, minute=0, second=0, microsecond=0), end=now, interval=interval)
-        return candles
+        start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+        history = self.fetch_history(
+            symbols=symbols,
+            start=start_of_day,
+            end=now,
+            interval=interval,
+        )
+
+        latest_by_symbol: dict[str, Candle] = {}
+        for c in history:
+            prev = latest_by_symbol.get(c["symbol"])
+            if prev is None or c["timestamp"] > prev["timestamp"]:
+                latest_by_symbol[c["symbol"]] = c
+
+        return list(latest_by_symbol.values())

@@ -145,7 +145,55 @@
 <a name='L80'></a><a href='#L80'>80</a>
 <a name='L81'></a><a href='#L81'>81</a>
 <a name='L82'></a><a href='#L82'>82</a>
-<a name='L83'></a><a href='#L83'>83</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L83'></a><a href='#L83'>83</a>
+<a name='L84'></a><a href='#L84'>84</a>
+<a name='L85'></a><a href='#L85'>85</a>
+<a name='L86'></a><a href='#L86'>86</a>
+<a name='L87'></a><a href='#L87'>87</a>
+<a name='L88'></a><a href='#L88'>88</a>
+<a name='L89'></a><a href='#L89'>89</a>
+<a name='L90'></a><a href='#L90'>90</a>
+<a name='L91'></a><a href='#L91'>91</a>
+<a name='L92'></a><a href='#L92'>92</a>
+<a name='L93'></a><a href='#L93'>93</a>
+<a name='L94'></a><a href='#L94'>94</a>
+<a name='L95'></a><a href='#L95'>95</a>
+<a name='L96'></a><a href='#L96'>96</a>
+<a name='L97'></a><a href='#L97'>97</a>
+<a name='L98'></a><a href='#L98'>98</a>
+<a name='L99'></a><a href='#L99'>99</a>
+<a name='L100'></a><a href='#L100'>100</a>
+<a name='L101'></a><a href='#L101'>101</a>
+<a name='L102'></a><a href='#L102'>102</a>
+<a name='L103'></a><a href='#L103'>103</a>
+<a name='L104'></a><a href='#L104'>104</a>
+<a name='L105'></a><a href='#L105'>105</a>
+<a name='L106'></a><a href='#L106'>106</a>
+<a name='L107'></a><a href='#L107'>107</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -229,19 +277,10 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">/* ========= TOP SIGNALS CARD (uses .filters-card--index) ============= */
 &nbsp;
-/* Card container (Top signals only) */
+/* Base card in LIGHT MODE: behave like a normal panel with green accent */
 .filters-card.filters-card--index {
-  /* softer green blend so text is readable */
-  background: radial-gradient(
-    circle at top left,
-    rgba(187, 247, 208, 0.26) 0%,
-    rgba(187, 247, 208, 0.10) 35%,
-    var(--ustock-bg-card) 100%
-  );
   border-top: 4px solid var(--ustock-green-main);
-  border-radius: 18px;
-  color: var(--ustock-text-strong);
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+  /* background, shadow, radius come from .panel / .filters-card */
 }
 &nbsp;
 /* Header row with title + help icon – match Price action viewer */
@@ -251,51 +290,84 @@
   justify-content: space-between;
 }
 &nbsp;
-/* Make "Top signals" look like "Price action viewer" */
+/* Make "Top signals" same size as "Price action viewer" */
 .filters-card--index .filters-card-header .panel-title {
   margin: 0;
-  font-size: 18px;            /* same size as chart header */
+  font-size: 18px; /* match chart header */
   font-weight: 700;
   color: var(--ustock-text-strong);
-  text-shadow: 0 0 8px rgba(0, 0, 0, 0.7);
 }
 &nbsp;
-/* Help icon pop on dark blend */
-.filters-card--index .help-icon-button {
-  margin-left: 8px;
-  filter: drop-shadow(0 0 4px rgba(0, 0, 0, 0.75));
-}
-&nbsp;
-/* ===== Table text inside the card ================================== */
+/* ===== Table text inside the card (both themes) ==================== */
 &nbsp;
 /* Column headers ("Ticker", "Score", etc.) */
 .filters-card--index .mini-table thead th {
   color: var(--ustock-text-strong);
-  text-shadow: 0 0 6px rgba(0, 0, 0, 0.55);
 }
 &nbsp;
 /* Body cells */
 .filters-card--index .mini-table tbody td {
-  color: var(--ustock-text-strong);
+  color: var(--ustock-text-main);
 }
 &nbsp;
-/* Active row highlight can still use whatever you had before,
-   but make sure the text stays bright */
+/* Active row: keep text strong */
 .filters-card--index .mini-table-row--active td {
   color: var(--ustock-text-strong);
 }
 &nbsp;
-/* Bottom caption (ranking description) – force to white-ish */
+/* Bottom caption */
 .filters-card--index .mini-table-caption {
-  color: var(--ustock-text-strong) !important;
-  opacity: 0.92;
+  color: var(--ustock-text-muted);
+  opacity: 0.9;
+}
+&nbsp;
+/* Muted text inside this card */
+.filters-card--index .muted {
+  color: var(--ustock-text-muted);
+  opacity: 0.9;
+}
+&nbsp;
+/* ===== DARK MODE OVERRIDES ======================================== */
+&nbsp;
+body.ustock-dark .filters-card.filters-card--index {
+  /* softer green blend so text is readable */
+  background: radial-gradient(
+    circle at top left,
+    rgba(187, 247, 208, 0.26) 0%,
+    rgba(187, 247, 208, 0.10) 35%,
+    var(--ustock-bg-card) 100%
+  );
+  border-radius: 18px;
+  color: var(--ustock-text-strong);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+}
+&nbsp;
+/* Add glow only in dark mode */
+body.ustock-dark .filters-card--index .filters-card-header .panel-title {
+  text-shadow: 0 0 8px rgba(0, 0, 0, 0.7);
+}
+&nbsp;
+/* Help icon pop on dark blend */
+body.ustock-dark .filters-card--index .help-icon-button {
+  margin-left: 8px;
+  filter: drop-shadow(0 0 4px rgba(0, 0, 0, 0.75));
+}
+&nbsp;
+/* Dark-mode table tweaks */
+body.ustock-dark .filters-card--index .mini-table thead th {
+  color: var(--ustock-text-strong);
   text-shadow: 0 0 6px rgba(0, 0, 0, 0.55);
 }
 &nbsp;
-/* Any .muted text inside this card should still be readable */
-.filters-card--index .muted {
+body.ustock-dark .filters-card--index .mini-table tbody td {
   color: var(--ustock-text-strong);
-  opacity: 0.85;
+}
+&nbsp;
+body.ustock-dark .filters-card--index .mini-table-caption,
+body.ustock-dark .filters-card--index .muted {
+  color: var(--ustock-text-strong);
+  opacity: 0.9;
+  text-shadow: 0 0 6px rgba(0, 0, 0, 0.55);
 }
 &nbsp;
 /* ===== Responsive tweaks =========================================== */
@@ -316,7 +388,7 @@
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-12-03T15:15:34.000Z
+                at 2025-12-07T02:27:36.645Z
             </div>
         <script src="../../../prettify.js"></script>
         <script>

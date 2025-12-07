@@ -244,7 +244,10 @@ def test_fetch_company_fundamentals_slim_happy_path(monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr(fundamentals_module, "Ticker", _FakeTickerFundamentals)
 
     symbols = ["AAPL", "MSFT"]
-    nested, df_flat = fundamentals_module.fetch_company_fundamentals_slim(symbols)
+    nested, df_flat = fundamentals_module.fetch_company_fundamentals_slim(
+        symbols,
+        include_institution_ownership=True,  # ✅ request inst ownership
+    )
 
     # --- nested JSON-like structure ---
     assert set(nested.keys()) == {"AAPL", "MSFT"}
@@ -374,7 +377,7 @@ def test_main_with_non_empty_df_triggers_both_saves(tmp_path: Path, monkeypatch:
     monkeypatch.setattr(fundamentals_module, "get_project_root", lambda: tmp_path)
 
     # Fake fetch that returns a non-empty nested dict + non-empty df
-    def fake_fetch_company_fundamentals_slim(symbols: List[str]):
+    def fake_fetch_company_fundamentals_slim(symbols: List[str], **kwargs):
         nested = {"AAPL": {"company_profile": {"sector": "Technology"}}}
         df_flat = pd.DataFrame([{"symbol": "AAPL", "sector": "Technology"}])
         return nested, df_flat
@@ -414,7 +417,7 @@ def test_main_with_empty_df_skips_parquet(tmp_path: Path, monkeypatch: pytest.Mo
     monkeypatch.setattr(fundamentals_module, "get_project_root", lambda: tmp_path)
 
     # Fake fetch that returns nested dict + empty DataFrame
-    def fake_fetch_empty(symbols: List[str]):
+    def fake_fetch_empty(symbols: List[str], **kwargs):
         nested = {"AAPL": {"company_profile": {"sector": "Technology"}}}
         df_flat = pd.DataFrame()  # empty
         return nested, df_flat

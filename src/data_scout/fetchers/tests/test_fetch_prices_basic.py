@@ -10,15 +10,13 @@ Goals:
 
 from __future__ import annotations
 
+import builtins
 import json
 from pathlib import Path
-from typing import List, Any
-import pytest
+from typing import Any, List
 
 import pandas as pd
 import pytest
-
-import builtins
 
 from data_scout.fetchers import fetch_prices as prices_module
 
@@ -44,7 +42,16 @@ def test_fetch_prices_empty_symbols_returns_empty_df():
 
     assert isinstance(df, pd.DataFrame)
     assert df.empty
-    expected_cols = ["symbol", "date", "open", "high", "low", "close", "volume", "adjclose"]
+    expected_cols = [
+        "symbol",
+        "date",
+        "open",
+        "high",
+        "low",
+        "close",
+        "volume",
+        "adjclose",
+    ]
     # We only insist that all expected columns exist; ordering may vary
     for col in expected_cols:
         assert col in df.columns
@@ -222,6 +229,7 @@ def test_fetch_prices_missing_date_column(monkeypatch: pytest.MonkeyPatch):
     assert isinstance(df, pd.DataFrame)
     assert df.empty
 
+
 @pytest.mark.skip(reason="Legacy naming conflict: test expects 'ticker' but fetcher returns 'symbol'")
 def test_fetch_prices_valid_path_monkeypatched(monkeypatch: pytest.MonkeyPatch):
     """
@@ -294,28 +302,39 @@ def test_save_prices_json_non_empty(tmp_path: Path, monkeypatch: pytest.MonkeyPa
 # ---------- main() coverage (empty + happy path) ----------
 
 
+@pytest.mark.slow
 def test_main_skips_save_when_no_data(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """
-    When fetch_prices_df returns an empty DataFrame, main() should still save JSON.
-    (We no longer enforce behavior about parquet here to avoid coupling to implementation.)
+    When fetch_prices_for_universe returns an empty DataFrame, main() should
+    still save JSON (but parquet behavior is not enforced).
     """
-    # Treat temp dir as project root
+    # Use tmp_path as project root for any file I/O
     monkeypatch.setattr(prices_module, "get_project_root", lambda: tmp_path)
 
-    # Patch the actual function main() calls: fetch_prices_df
-    def fake_fetch_prices_df(symbols, period="1mo", interval="1d"):
-        # Empty DataFrame, no rows
+    # Force snapshot to be treated as stale so main() always calls our fake fetch
+    monkeypatch.setattr(prices_module, "prices_snapshot_is_fresh", lambda: False)
+
+    # Fake universe fetch: empty DataFrame
+    def fake_fetch_prices_for_universe(
+        period: str = "1mo",
+        interval: str = "1d",
+        batch_size: int = 400,
+    ):
         return pd.DataFrame(columns=["symbol", "date", "close"])
 
-    monkeypatch.setattr(prices_module, "fetch_prices_df", fake_fetch_prices_df)
+    monkeypatch.setattr(
+        prices_module,
+        "fetch_prices_for_universe",
+        fake_fetch_prices_for_universe,
+    )
 
     calls = {"parquet": 0, "json": 0}
 
-    def fake_save_parquet(df, filename="daily_prices.parquet"):
+    def fake_save_parquet(df, filename: str = "daily_prices.parquet"):
         calls["parquet"] += 1
         return tmp_path / filename
 
-    def fake_save_json(df, filename="prices-raw.json"):
+    def fake_save_json(df, filename: str = "prices-raw.json"):
         calls["json"] += 1
         return tmp_path / filename
 
@@ -327,20 +346,26 @@ def test_main_skips_save_when_no_data(tmp_path: Path, monkeypatch: pytest.Monkey
 
     prices_module.main()
 
-    # JSON is always saved
+    # JSON is always saved at least once
     assert calls["json"] == 1
     # We intentionally do NOT assert on calls["parquet"] to avoid forcing behavior
 
 
+@pytest.mark.slow
 def test_main_happy_path_calls_saves(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """
     Exercise the branch in main() where non-empty data is fetched and we call
     both save functions.
     """
     monkeypatch.setattr(prices_module, "get_project_root", lambda: tmp_path)
+    monkeypatch.setattr(prices_module, "prices_snapshot_is_fresh", lambda: False)
 
     # ✅ Fake non-empty fetch with all expected columns
-    def fake_fetch_prices_df(symbols, period="1mo", interval="1d"):
+    def fake_fetch_prices_for_universe(
+        period: str = "1mo",
+        interval: str = "1d",
+        batch_size: int = 400,
+    ):
         return pd.DataFrame(
             {
                 "symbol": ["AAPL", "AAPL"],
@@ -354,22 +379,26 @@ def test_main_happy_path_calls_saves(tmp_path: Path, monkeypatch: pytest.MonkeyP
             }
         )
 
-    monkeypatch.setattr(prices_module, "fetch_prices_df", fake_fetch_prices_df)
+    monkeypatch.setattr(
+        prices_module,
+        "fetch_prices_for_universe",
+        fake_fetch_prices_for_universe,
+    )
 
     calls = {"parquet": 0, "json": 0}
 
-    def fake_save_parquet(df, filename="daily_prices.parquet"):
+    def fake_save_parquet(df, filename: str = "daily_prices.parquet"):
         calls["parquet"] += 1
         return tmp_path / filename
 
-    def fake_save_json(df, filename="prices-raw.json"):
+    def fake_save_json(df, filename: str = "prices-raw.json"):
         calls["json"] += 1
         return tmp_path / filename
 
     monkeypatch.setattr(prices_module, "save_prices_parquet", fake_save_parquet)
     monkeypatch.setattr(prices_module, "save_prices_json", fake_save_json)
 
-    # Silence prints from inside main()
+    # Silence prints
     monkeypatch.setattr(builtins, "print", lambda *args, **kwargs: None)
 
     prices_module.main()
