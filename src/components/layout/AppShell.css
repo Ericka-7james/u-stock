@@ -528,3 +528,82 @@ body.ustock-dark .settings-textarea {
 body.ustock-dark .site-footer {
   color: #9ca3af;
 }
+
+
+/* -------- TOPBAR USER MENU ----------------------------------------- */
+
+.topbar-user {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.topbar-user-btn {
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.topbar-user-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: var(--ustock-bg-card);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.18);
+}
+
+.topbar-user-menu {
+  position: absolute;
+  right: 0;
+  top: 40px;
+  min-width: 180px;
+  background: var(--ustock-bg-card);
+  border-radius: 14px;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.28);
+  border: 1px solid var(--ustock-border-card);
+  padding: 6px 0;
+  z-index: 50;
+}
+
+.topbar-user-menu-item {
+  width: 100%;
+  padding: 8px 14px;
+  font-size: 13px;
+  text-align: left;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--ustock-text-main);
+}
+
+.topbar-user-menu-item:hover {
+  background: var(--ustock-bg-card-soft);
+}
+
+.topbar-user-menu-meta {
+  cursor: default;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.topbar-user-menu-email {
+  font-size: 12px;
+  color: var(--ustock-text-muted);
+}
+
+/* Dark mode tweaks */
+body.ustock-dark .topbar-user-avatar {
+  background: #020617;
+}
+
+body.ustock-dark .topbar-user-menu {
+  background: #020617;
+  border-color: rgba(148, 163, 184, 0.5);
+}

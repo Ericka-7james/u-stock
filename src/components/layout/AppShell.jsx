@@ -1,57 +1,73 @@
 // src/components/layout/AppShell.jsx
 import { useEffect, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
 import "./AppShell.css";
 
 export default function AppShell({ children }) {
   const [navOpen, setNavOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
 
-  // ✅ define dark-mode state
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // ✅ dark-mode state
   const [isDark, setIsDark] = useState(() => {
     if (typeof window === "undefined") return false;
     const stored = window.localStorage.getItem("ustock-theme");
     return stored === "dark";
   });
 
-  const location = useLocation();
-
   const isDashboard = location.pathname === "/";
   const isDatasources = location.pathname.startsWith("/data-sources");
   const isIndexFunds = location.pathname.startsWith("/index-funds");
   const isAboutMe = location.pathname.startsWith("/about");
-  const isFeedback = location.pathname.startsWith("/fedback");
+  const isFeedback = location.pathname.startsWith("/feedback");
 
   const closeNav = () => setNavOpen(false);
 
-  // ✅ define toggleTheme BEFORE you use it in JSX
   const toggleTheme = () => {
     setIsDark((prev) => !prev);
   };
 
-  // ✅ sync the body class when dark mode changes
   useEffect(() => {
     const dark = isDark;
     document.body.classList.toggle("ustock-dark", dark);
-    document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
+    document.documentElement.setAttribute(
+      "data-theme",
+      dark ? "dark" : "light"
+    );
     window.localStorage.setItem("ustock-theme", dark ? "dark" : "light");
   }, [isDark]);
 
-  // Any click in the main content area should close nav (nice for mobile)
   const handleMainClick = () => {
-    if (navOpen) {
-      closeNav();
-    }
+    if (navOpen) setNavOpen(false);
+    if (userMenuOpen) setUserMenuOpen(false);
   };
 
-  // Stop clicks on the hamburger from bubbling up to app-main
   const handleHamburgerClick = (event) => {
     event.stopPropagation();
     setNavOpen((open) => !open);
   };
 
+  const handleAvatarClick = (event) => {
+    event.stopPropagation();
+    setUserMenuOpen((open) => !open);
+  };
+
+  const handleLogout = () => {
+    // Clear auth + navigate to "/" inside AuthContext
+    logout();
+    setUserMenuOpen(false);
+    // ❌ do NOT navigate("/auth") here
+    // If you really want to be explicit you *could*:
+    // navigate("/", { replace: true });
+  };
+
   return (
     <div className={`app-shell ${navOpen ? "app-shell--nav-open" : ""}`}>
-      {/* Side nav (U-Stock brand) */}
+      {/* Side nav */}
       <aside className="side-nav">
         <div className="side-nav-brand">
           <div className="side-nav-logo-circle">U</div>
@@ -127,7 +143,7 @@ export default function AppShell({ children }) {
         </div>
       </aside>
 
-      {/* Main side: topbar + page content + footer */}
+      {/* Main area */}
       <div className="app-main" onClick={handleMainClick}>
         <header className="topbar">
           <div className="topbar-left">
@@ -146,7 +162,7 @@ export default function AppShell({ children }) {
           </div>
 
           <div className="topbar-right">
-            {/* ✅ dark mode toggle uses isDark + toggleTheme */}
+            {/* dark mode toggle */}
             <button
               type="button"
               className={`theme-toggle ${isDark ? "theme-toggle--on" : ""}`}
@@ -157,12 +173,53 @@ export default function AppShell({ children }) {
               <span className="theme-toggle-moon">☾</span>
             </button>
 
-            <button className="icon-btn">
+            <button
+              className="icon-btn"
+              type="button"
+              onClick={() => alert("Coming soon")}
+            >
               <span className="icon-search" />
             </button>
-            <button className="icon-btn">
+            <button
+              className="icon-btn"
+              type="button"
+              onClick={() => alert("Coming soon")}
+            >
               <span className="icon-bell" />
             </button>
+
+            {/* User avatar + logout menu */}
+            {user && (
+              <div className="topbar-user">
+                <button
+                  type="button"
+                  className="topbar-user-btn"
+                  onClick={handleAvatarClick}
+                  aria-label="Open user menu"
+                >
+                  <span className="topbar-user-avatar">
+                    {user.avatar || "👤"}
+                  </span>
+                </button>
+
+                {userMenuOpen && (
+                  <div className="topbar-user-menu">
+                    <div className="topbar-user-menu-item topbar-user-menu-meta">
+                      <div className="topbar-user-menu-email">
+                        {user.email}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className="topbar-user-menu-item"
+                      onClick={handleLogout}
+                    >
+                      Sign out
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </header>
 

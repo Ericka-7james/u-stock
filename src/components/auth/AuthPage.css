@@ -10,7 +10,7 @@
 /* LEFT: login */
 .auth-left {
   flex: 1;
-  background: var(--ustock-bg-page);
+  background: var(--ustock-bg-card);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -64,6 +64,16 @@
 
 .auth-field input::placeholder {
   color: var(--ustock-text-muted);
+}
+
+/* Make sure autofill doesn't add a gray/yellow background */
+.auth-field input:-webkit-autofill,
+.auth-field input:-webkit-autofill:hover,
+.auth-field input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px #ffffff inset;
+  box-shadow: 0 0 0 1000px #ffffff inset;
+  -webkit-text-fill-color: var(--ustock-text-main);
+  transition: background-color 9999s ease-out;
 }
 
 /* Login button */

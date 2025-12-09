@@ -1,6 +1,7 @@
 // src/context/AuthContext.jsx
 import { createContext, useContext, useEffect, useState } from "react";
 import { API_BASE } from "../config/config"; // 👈 central config
+import { useNavigate } from "react-router-dom";
 
 const AuthContext = createContext(null);
 const STORAGE_KEY = "ustock_auth";
@@ -39,6 +40,8 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);   // { id, email, avatar }
   const [token, setToken] = useState(null); // JWT
   const [loading, setLoading] = useState(true);
+
+  const navigate = useNavigate();
 
   // Restore auth from localStorage on first load
   useEffect(() => {
@@ -93,6 +96,7 @@ export function AuthProvider({ children }) {
 
   const logout = () => {
     clearAuth();
+    navigate("/", { replace: true });
   };
 
   return (

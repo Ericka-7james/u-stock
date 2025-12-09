@@ -1,14 +1,12 @@
 // src/components/auth/AuthPage.jsx
 import { useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import "./AuthPage.css";
 
-const AVATARS = ["📈", "📊", "🤖", "💡"];
-
 export default function AuthPage() {
-  const { login, signup } = useAuth();
-  const [searchParams] = useSearchParams();
+  const { login } = useAuth();
+  const navigate = useNavigate();
 
   // --- LOGIN STATE ---
   const [loginEmail, setLoginEmail] = useState("");
@@ -16,24 +14,13 @@ export default function AuthPage() {
   const [loginError, setLoginError] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
 
-  // --- SIGNUP STATE ---
-  const initialMode = searchParams.get("mode") === "signup";
-  const [showSignupForm, setShowSignupForm] = useState(initialMode);
-
-  const [signName, setSignName] = useState("");
-  const [signEmail, setSignEmail] = useState("");
-  const [signPhone, setSignPhone] = useState("");
-  const [signPassword, setSignPassword] = useState("");
-  const [signAvatar, setSignAvatar] = useState(AVATARS[0]);
-  const [signError, setSignError] = useState("");
-  const [signLoading, setSignLoading] = useState(false);
-
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoginError("");
     setLoginLoading(true);
     try {
       await login(loginEmail.trim(), loginPassword);
+      // if login succeeds, AuthGate / routes will take user to dashboard
     } catch (err) {
       setLoginError(err.message || "Unable to sign in");
     } finally {
@@ -41,28 +28,8 @@ export default function AuthPage() {
     }
   };
 
-  const handleSignup = async (e) => {
-    e.preventDefault();
-    setSignError("");
-    setSignLoading(true);
-    try {
-      await signup({
-        name: signName.trim(),
-        email: signEmail.trim(),
-        phone: signPhone.trim(),
-        password: signPassword,
-        avatar: signAvatar,
-      });
-    } catch (err) {
-      setSignError(err.message || "Unable to sign up");
-    } finally {
-      setSignLoading(false);
-    }
-  };
-
-  const handleBackFromSignup = () => {
-    setShowSignupForm(false);
-    setSignError("");
+  const goToSignup = () => {
+    navigate("/auth/signup");
   };
 
   return (
@@ -70,9 +37,7 @@ export default function AuthPage() {
       {/* LEFT: Sign in */}
       <section className="auth-left">
         <div className="auth-left-inner">
-          <h1 className="auth-title">
-            {showSignupForm ? "Already have an account?" : "Welcome back"}
-          </h1>
+          <h1 className="auth-title">Welcome back</h1>
 
           <form className="auth-form" onSubmit={handleLogin}>
             <label className="auth-field">
@@ -116,116 +81,43 @@ export default function AuthPage() {
               🐦
             </button>
           </div>
+
+          <div style={{ marginTop: 16, textAlign: "center", fontSize: 13 }}>
+            <span>New here? </span>
+            <button
+              type="button"
+              onClick={goToSignup}
+              style={{
+                border: "none",
+                background: "transparent",
+                color: "var(--ustock-green-main)",
+                cursor: "pointer",
+                fontWeight: 600,
+              }}
+            >
+              Create an account →
+            </button>
+          </div>
         </div>
       </section>
 
-      {/* RIGHT: Sign up */}
+      {/* RIGHT: keep your green panel as a static welcome blurb */}
       <section className="auth-right">
         <div className="auth-right-inner">
-          {!showSignupForm ? (
-            <>
-              <h2 className="auth-right-title">New here?</h2>
-              <p className="auth-right-text">
-                Sign up and discover a new way to explore U-Stock insights.
-              </p>
+          <h2 className="auth-right-title">U-Stock Radar Suite</h2>
+          <p className="auth-right-text">
+            Log in to see your market dashboard, signals, and sentiment in one
+            place.
+          </p>
 
-              <button
-                type="button"
-                className="auth-secondary-btn"
-                onClick={() => setShowSignupForm(true)}
-              >
-                Sign Up
-              </button>
-            </>
-          ) : (
-            <>
-              <h2 className="auth-right-title">Create your account</h2>
-              <p className="auth-right-text">
-                Tell us a bit about you and choose an icon.
-              </p>
+          <button
+            type="button"
+            className="auth-secondary-btn"
+            onClick={goToSignup}
+          >
+            Sign Up
+          </button>
 
-              <form className="auth-signup-form" onSubmit={handleSignup}>
-                <label className="auth-signup-field">
-                  <span className="auth-signup-label">Name</span>
-                  <input
-                    type="text"
-                    value={signName}
-                    onChange={(e) => setSignName(e.target.value)}
-                    required
-                  />
-                </label>
-
-                <label className="auth-signup-field">
-                  <span className="auth-signup-label">Email</span>
-                  <input
-                    type="email"
-                    value={signEmail}
-                    onChange={(e) => setSignEmail(e.target.value)}
-                    required
-                  />
-                </label>
-
-                <label className="auth-signup-field">
-                  <span className="auth-signup-label">Phone number</span>
-                  <input
-                    type="tel"
-                    value={signPhone}
-                    onChange={(e) => setSignPhone(e.target.value)}
-                    placeholder="(555) 555-5555"
-                  />
-                </label>
-
-                <label className="auth-signup-field">
-                  <span className="auth-signup-label">Password</span>
-                  <input
-                    type="password"
-                    value={signPassword}
-                    onChange={(e) => setSignPassword(e.target.value)}
-                    required
-                  />
-                </label>
-
-                <div className="auth-avatar-section">
-                  <span className="auth-signup-label">Choose your icon</span>
-                  <div className="auth-avatar-grid">
-                    {AVATARS.map((icon) => (
-                      <button
-                        key={icon}
-                        type="button"
-                        className={
-                          "auth-avatar-chip" +
-                          (icon === signAvatar ? " auth-avatar-chip--active" : "")
-                        }
-                        onClick={() => setSignAvatar(icon)}
-                      >
-                        {icon}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {signError && (
-                  <p className="auth-error auth-error--light">{signError}</p>
-                )}
-
-                <button
-                  type="submit"
-                  className="auth-secondary-btn"
-                  disabled={signLoading}
-                >
-                  {signLoading ? "Creating account…" : "Sign Up"}
-                </button>
-
-                <button
-                  type="button"
-                  className="auth-back-to-login"
-                  onClick={handleBackFromSignup}
-                >
-                  ← Back
-                </button>
-              </form>
-            </>
-          )}
         </div>
       </section>
     </div>
