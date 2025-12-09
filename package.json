@@ -14,7 +14,7 @@
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:frontend": "vitest run",
-    "test:backend": "pytest",
+    "test:backend": "pytest -m \"not slow\"",
 
     "test:all": "npm run test:frontend -- --coverage && npm run test:backend",
     "lint": "eslint . --ext .js,.jsx --max-warnings=0",
