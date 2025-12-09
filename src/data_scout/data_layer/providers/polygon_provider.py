@@ -1,7 +1,7 @@
 # data_scout/data_layer/providers/polygon_provider.py
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Iterable, List
 
 from polygon import RESTClient
@@ -51,10 +51,16 @@ class PolygonPriceDataProvider(PriceDataProvider):
             )
 
             for bar in resp:
+                # Polygon timestamps are usually ms since epoch
+                if isinstance(bar.timestamp, (int, float)):
+                    ts = datetime.fromtimestamp(bar.timestamp / 1000, tz=timezone.utc)
+                else:
+                    ts = bar.timestamp
+
                 candles.append(
                     Candle(
                         symbol=symbol.upper(),
-                        timestamp=bar.timestamp,  # might be int → you can normalize later
+                        timestamp=ts,
                         open=float(bar.open),
                         high=float(bar.high),
                         low=float(bar.low),

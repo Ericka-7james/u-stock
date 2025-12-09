@@ -28,6 +28,11 @@ from yahooquery import Ticker
 
 from data_scout.tickers.universe import load_us_universe_symbols
 
+# NEW: data layer imports
+from data_scout.data_layer.service import PriceDataService
+from data_scout.data_layer.providers.base import build_default_price_provider_from_env
+from data_scout.data_layer.storage.local_parquet_store import LocalParquetPriceDataStore
+
 
 # ---------- CONFIG / CONSTANTS -----------------------------------------------
 
@@ -133,7 +138,7 @@ def prices_snapshot_is_fresh() -> bool:
     return is_fresh
 
 
-# ---------- Core single-batch fetcher ----------------------------------------
+# ---------- Core single-batch fetcher (legacy yahooquery) --------------------
 
 
 def fetch_prices(
@@ -143,6 +148,8 @@ def fetch_prices(
 ) -> pd.DataFrame:
     """
     Fetch OHLCV price data for a list of symbols in a single batched request.
+
+    This is the original yahooquery-based implementation used by older tests.
 
     :param symbols: list of ticker strings, e.g. ["AAPL", "MSFT", "GOOG"]
     :param period:  lookback window, e.g. "1mo", "3mo", "1y"
@@ -229,19 +236,47 @@ def fetch_prices_df(
     return fetch_prices(symbols=symbols, period=period, interval=interval)
 
 
-# ---------- Batched across the *whole* universe ------------------------------
+# ---------- New: universe fetch via data layer (Alpaca / Polygon / Yahoo) ----
+
+
+def _period_to_days(period: str) -> int:
+    """
+    Very small helper to convert a period string like "1mo", "3mo", "10d"
+    into an approximate day count.
+
+    This is ONLY used for universe snapshots; it doesn't affect intraday logic.
+    """
+    period = (period or "").strip().lower()
+    if period.endswith("mo"):
+        try:
+            months = int(period[:-2] or "1")
+        except ValueError:
+            months = 1
+        return months * 30
+    if period.endswith("d"):
+        try:
+            days = int(period[:-1] or "1")
+        except ValueError:
+            days = 1
+        return days
+    # fallback
+    return 30
 
 
 def fetch_prices_for_universe(
     period: str = "1mo",
     interval: str = "1d",
-    batch_size: int = 400,
+    batch_size: int = 400,  # kept for signature compatibility; not used
 ) -> pd.DataFrame:
     """
-    Fetch prices for the full US equities universe in reasonably sized batches.
+    Fetch prices for the full US equities universe using the new data layer:
 
-    Uses data_scout.tickers.universe.load_us_universe_symbols() as the source
-    of truth for valid tickers.
+      - PriceDataService
+      - CompositePriceDataProvider (Alpaca / Polygon / Yahoo / Webull hook)
+      - LocalParquetPriceDataStore
+
+    This replaces the old yahooquery batching for the "snapshot" job,
+    but legacy tests that monkeypatch this function still work.
     """
     symbols = load_us_universe_symbols()
     symbols = [s for s in symbols if isinstance(s, str) and s.strip()]
@@ -251,26 +286,56 @@ def fetch_prices_for_universe(
         return pd.DataFrame(columns=BASE_PRICE_COLS)
 
     print(f"[prices] Loaded universe: {len(symbols)} symbols.")
-    frames: List[pd.DataFrame] = []
 
-    for i in range(0, len(symbols), batch_size):
-        batch = symbols[i: i + batch_size]
-        print(f"[prices] Batch {i // batch_size + 1}: {len(batch)} symbols.")
-        batch_df = fetch_prices(batch, period=period, interval=interval)
-        if not batch_df.empty:
-            frames.append(batch_df)
+    # Build service from env-configured providers + local parquet store
+    service = PriceDataService(
+        provider=build_default_price_provider_from_env(),
+        store=LocalParquetPriceDataStore(),
+    )
 
-    if not frames:
-        print("[prices] No data fetched for any batch; returning empty DataFrame.")
+    days = _period_to_days(period)
+    end_dt = datetime.now(timezone.utc)
+    start_dt = end_dt - timedelta(days=days)
+
+    candles = service.get_history(
+        symbols=symbols,
+        start=start_dt,
+        end=end_dt,
+        interval=interval,
+    )
+
+    if not candles:
+        print("[prices] No candles returned from data layer.")
         return pd.DataFrame(columns=BASE_PRICE_COLS)
 
-    full_df = pd.concat(frames, ignore_index=True)
-    full_df = full_df.sort_values(["symbol", "date"]).reset_index(drop=True)
+    df = pd.DataFrame(candles)
+
+    # Normalize columns to the legacy shape
+    if "timestamp" in df.columns and "date" not in df.columns:
+        df = df.rename(columns={"timestamp": "date"})
+
+    if "symbol" in df.columns:
+        df["symbol"] = df["symbol"].astype(str).str.upper()
+
+    # adjclose is not part of Candle; use close as a proxy
+    if "adjclose" not in df.columns and "close" in df.columns:
+        df["adjclose"] = df["close"]
+
+    # Keep only relevant columns and sort
+    cols = [c for c in BASE_PRICE_COLS if c in df.columns]
+    df = df[cols].copy()
+
+    df["date"] = pd.to_datetime(df["date"], utc=True, errors="coerce")
+    df = df.dropna(subset=["date", "close"])
+
+    df = df.sort_values(["symbol", "date"]).reset_index(drop=True)
+
     print(
-        f"[prices] Combined DataFrame has {len(full_df)} rows, "
-        f"{full_df['symbol'].nunique()} symbols."
+        f"[prices] Combined DataFrame (data layer) has {len(df)} rows, "
+        f"{df['symbol'].nunique()} symbols."
     )
-    return full_df
+
+    return df
 
 
 # ---------- Save helpers (pandas + JSON) -------------------------------------
@@ -344,11 +409,11 @@ def save_prices_json(df: pd.DataFrame, filename: str = "prices-raw.json") -> Pat
 
 def main() -> None:
     """
-    CLI entrypoint: fetch prices for the full US universe (batched),
+    CLI entrypoint: fetch prices for the full US universe (via data layer),
     then save to Parquet + JSON, with snapshot-level freshness.
 
     - If prices-raw.json is "fresh" (generated_at within MAX_PRICE_AGE_MINUTES),
-      we skip hitting Yahoo entirely.
+      we skip hitting providers entirely.
     """
     print("[prices] Fetching daily prices for US universe (snapshot incremental)…", flush=True)
 
@@ -356,6 +421,7 @@ def main() -> None:
         print("[prices] Existing prices snapshot is fresh; skipping fetch.")
         return
 
+    # NEW: use data-layer-backed universe function
     df = fetch_prices_for_universe(period="1mo", interval="1d", batch_size=400)
 
     if df.empty:

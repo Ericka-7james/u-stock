@@ -11,6 +11,14 @@ from data_scout.data_layer.types import Candle, PriceInterval
 
 
 class YahooPriceDataProvider(PriceDataProvider):
+    """
+    Simple provider backed by yfinance.
+
+    Good for:
+      - Historical daily / intraday bars
+      - Fallback when "real" market data APIs aren't configured
+    """
+
     def fetch_history(
         self,
         symbols: Iterable[str],
@@ -31,10 +39,13 @@ class YahooPriceDataProvider(PriceDataProvider):
             df = df.dropna()
 
             for ts, row in df.iterrows():
+                # yfinance timestamps are usually timezone-aware already
+                ts_dt = ts.to_pydatetime()
+
                 candles.append(
                     Candle(
                         symbol=symbol.upper(),
-                        timestamp=ts.to_pydatetime(),  # usually already UTC
+                        timestamp=ts_dt,
                         open=float(row["Open"]),
                         high=float(row["High"]),
                         low=float(row["Low"]),

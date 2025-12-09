@@ -20,6 +20,13 @@ _INTERVAL_TO_TIMEFRAME: dict[PriceInterval, TimeFrame] = {
 
 
 class AlpacaPriceDataProvider(PriceDataProvider):
+    """
+    Real-time-ish market data via Alpaca's data API.
+
+    Requires:
+      - ALPACA_API_KEY / ALPACA_API_SECRET (handled in builder)
+    """
+
     def __init__(self, api_key: str, api_secret: str):
         self.client = StockHistoricalDataClient(api_key, api_secret)
 
