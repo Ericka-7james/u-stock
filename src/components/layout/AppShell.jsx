@@ -137,9 +137,6 @@ export default function AppShell({ children }) {
 
         <div className="side-nav-footer">
           <span className="side-nav-footer-name">Made by Ericka James</span>
-          <span className="side-nav-footer-email">
-            james7.ericka@gmail.com
-          </span>
         </div>
       </aside>
 

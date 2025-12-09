@@ -73,15 +73,6 @@ export default function AuthPage() {
             </button>
           </form>
 
-          <div className="auth-social-row">
-            <button type="button" className="auth-social-btn" disabled>
-              ⧉
-            </button>
-            <button type="button" className="auth-social-btn" disabled>
-              🐦
-            </button>
-          </div>
-
           <div style={{ marginTop: 16, textAlign: "center", fontSize: 13 }}>
             <span>New here? </span>
             <button

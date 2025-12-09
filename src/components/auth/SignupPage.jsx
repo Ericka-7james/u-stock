@@ -1,8 +1,7 @@
-// src/components/auth/SignupPage.jsx
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import "./AuthPage.css";
+import "./SignupPage.css";
 
 const AVATARS = ["📈", "📊", "🤖", "💡"];
 
@@ -22,6 +21,7 @@ export default function SignupPage() {
     e.preventDefault();
     setSignError("");
     setSignLoading(true);
+
     try {
       await signup({
         name: signName.trim(),
@@ -31,7 +31,7 @@ export default function SignupPage() {
         avatar: signAvatar,
       });
 
-      navigate("/"); // go straight to dashboard/landing
+      navigate("/");
     } catch (err) {
       setSignError(err.message || "Unable to sign up");
     } finally {
@@ -40,42 +40,17 @@ export default function SignupPage() {
   };
 
   return (
-    <div
-      className="auth-page"
-      style={{
-        background: "var(--ustock-green-main)",
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        minHeight: "100vh",
-        padding: "32px 16px",
-      }}
-    >
-      <div
-        className="auth-right-inner"
-        style={{
-          background: "rgba(255,255,255,0.1)",
-          borderRadius: "20px",
-          padding: "40px 28px",
-          maxWidth: "420px",
-          width: "100%",
-          textAlign: "center",
-        }}
-      >
-        <h2
-          className="auth-right-title"
-          style={{ marginBottom: 4, color: "white" }}
-        >
-          Create your account
-        </h2>
+    <div className="signup-page">
+      <div className="signup-card">
 
-        <p className="auth-right-text" style={{ marginBottom: 24 }}>
+        <h1 className="signup-title">Create your account</h1>
+        <p className="signup-subtitle">
           Tell us a bit about yourself — pick an icon and get started!
         </p>
 
-        <form className="auth-signup-form" onSubmit={handleSignup}>
-          <label className="auth-signup-field">
-            <span className="auth-signup-label">Name</span>
+        <form className="signup-form" onSubmit={handleSignup}>
+          <label className="signup-field">
+            <span>Name</span>
             <input
               type="text"
               value={signName}
@@ -84,8 +59,8 @@ export default function SignupPage() {
             />
           </label>
 
-          <label className="auth-signup-field">
-            <span className="auth-signup-label">Email</span>
+          <label className="signup-field">
+            <span>Email</span>
             <input
               type="email"
               value={signEmail}
@@ -94,8 +69,8 @@ export default function SignupPage() {
             />
           </label>
 
-          <label className="auth-signup-field">
-            <span className="auth-signup-label">Phone number</span>
+          <label className="signup-field">
+            <span>Phone number</span>
             <input
               type="tel"
               value={signPhone}
@@ -104,8 +79,8 @@ export default function SignupPage() {
             />
           </label>
 
-          <label className="auth-signup-field">
-            <span className="auth-signup-label">Password</span>
+          <label className="signup-field">
+            <span>Password</span>
             <input
               type="password"
               value={signPassword}
@@ -114,18 +89,16 @@ export default function SignupPage() {
             />
           </label>
 
-          <div className="auth-avatar-section" style={{ marginTop: 6 }}>
-            <span className="auth-signup-label" style={{ color: "white" }}>
-              Choose your icon
-            </span>
-            <div className="auth-avatar-grid">
+          <div className="signup-avatar-section">
+            <span>Choose your icon</span>
+            <div className="signup-avatar-grid">
               {AVATARS.map((icon) => (
                 <button
                   key={icon}
                   type="button"
                   className={
-                    "auth-avatar-chip" +
-                    (icon === signAvatar ? " auth-avatar-chip--active" : "")
+                    "signup-avatar-chip" +
+                    (signAvatar === icon ? " signup-avatar-chip--active" : "")
                   }
                   onClick={() => setSignAvatar(icon)}
                 >
@@ -135,37 +108,18 @@ export default function SignupPage() {
             </div>
           </div>
 
-          {signError && (
-            <p className="auth-error auth-error--light">{signError}</p>
-          )}
+          {signError && <p className="auth-error">{signError}</p>}
 
-          <button
-            type="submit"
-            className="auth-secondary-btn"
-            disabled={signLoading}
-            style={{
-              marginTop: 20,
-              background: "white",
-              color: "var(--ustock-green-main)",
-            }}
-          >
+          <button type="submit" className="signup-btn" disabled={signLoading}>
             {signLoading ? "Creating account…" : "Sign Up"}
           </button>
 
-          <p style={{ marginTop: 20, fontSize: 14, color: "#e5e7eb" }}>
+          <div className="signup-alt">
             Already registered?{" "}
-            <Link
-              to="/auth"
-              style={{
-                color: "white",
-                fontWeight: 600,
-                textDecoration: "underline",
-              }}
-            >
-              Sign in here →
-            </Link>
-          </p>
+            <Link to="/auth">Sign in here →</Link>
+          </div>
         </form>
+
       </div>
     </div>
   );
