@@ -540,4 +540,102 @@ body.ustock-dark .site-footer {
   color: #9ca3af;
 }
 
+/* ====== USER AVATAR DROPDOWN (overlay) ============================ */
+
+.topbar-user {
+  position: relative;
+}
+
+.topbar-user-btn {
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+}
+
+.topbar-user-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  background: var(--ustock-bg-card);
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.15);
+}
+
+.topbar-user-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 190px;
+  background: var(--ustock-bg-card);
+  border-radius: 12px;
+  padding: 8px 0;
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.25);
+  border: 1px solid var(--ustock-border-card);
+  z-index: 60;
+}
+
+.topbar-user-menu-item {
+  width: 100%;
+  padding: 8px 14px;
+  background: transparent;
+  border: none;
+  text-align: left;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.topbar-user-menu-item:hover {
+  background: rgba(15, 118, 110, 0.06);
+}
+
+.topbar-user-menu-meta {
+  font-size: 12px;
+  color: var(--ustock-text-muted);
+  cursor: default;
+}
+
+/* ====== SUPER-SMALL NAV (≤ 480px) ================================ */
+
+@media (max-width: 480px) {
+  .topbar {
+    padding: 0 12px;
+  }
+
+  .topbar-left {
+    gap: 8px;
+  }
+
+  .topbar-home-label {
+    font-size: 16px;
+  }
+
+  .topbar-right {
+    gap: 8px;
+  }
+
+  /* slightly smaller toggle so everything fits comfortably */
+  .theme-toggle {
+    padding: 2px 8px;
+  }
+
+  .theme-toggle-thumb {
+    width: 14px;
+    height: 14px;
+  }
+
+  .theme-toggle--on .theme-toggle-thumb {
+    transform: translateX(10px);
+  }
+
+  /* nudge icons down just a bit in size */
+  .icon-search,
+  .icon-bell {
+    width: 16px;
+    height: 16px;
+  }
+}
 

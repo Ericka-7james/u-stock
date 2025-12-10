@@ -1,63 +1,68 @@
-/* ========= SETTINGS / FEEDBACK PAGE LAYOUT ========================== */
+/* ========= FEEDBACK PAGE LAYOUT ==================================== */
 
-/* Let .app-page handle padding + background, like on About */
-.settings-page {
-  min-height: auto;
+/* Let .app-page handle outer padding/background */
+.feedback-page {
+  padding-bottom: 40px;
 }
 
-/* Match hero/card styling from About page */
-.settings-card {
+/* Single centered card, modeled after .data-summary-card */
+.feedback-card {
   width: 100%;
+  max-width: 720px;
+  margin: 0 auto 24px;
   background: var(--ustock-bg-card);
   border-radius: 18px;
-  padding: 20px 22px; /* same as .about-hero-card */
-  margin-bottom: 24px;
+  padding: 20px 22px;
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
   border: 1px solid var(--ustock-border-card);
-  border-top: 4px solid var(--ustock-green-main); /* green accent strip */
+  border-top: 4px solid var(--ustock-green-main);
   color: var(--ustock-text-main);
 }
 
 /* ========= HEADER =================================================== */
 
-.settings-title {
+.feedback-header {
+  margin-bottom: 8px;
+}
+
+.feedback-title {
   font-size: 20px;
   font-weight: 600;
-  color: var(--ustock-green-main); /* match About hero heading */
+  color: var(--ustock-green-main);
   margin-bottom: 6px;
 }
 
-.settings-subtitle {
+.feedback-subtitle {
   font-size: 14px;
   color: var(--ustock-text-muted);
   margin-bottom: 16px;
-  max-width: 560px; /* same feel as hero muted text */
+  max-width: 560px;
 }
 
 /* ========= FORM FIELDS ============================================= */
 
-.settings-form {
+.feedback-form {
   display: flex;
   flex-direction: column;
   gap: 20px;
 }
 
-.settings-field {
+.feedback-field {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.settings-label {
+.feedback-label {
   font-size: 14px;
   font-weight: 500;
   color: var(--ustock-text-main);
 }
 
 /* Inputs follow theme tokens so dark mode works */
-.settings-input,
-.settings-select,
-.settings-textarea {
+.feedback-input,
+.feedback-select,
+.feedback-textarea {
   background: var(--ustock-bg-card-soft);
   color: var(--ustock-text-main);
   border: 1px solid var(--ustock-border-card);
@@ -70,42 +75,43 @@
     background-color 0.15s ease;
 }
 
-.settings-input::placeholder,
-.settings-textarea::placeholder {
+.feedback-input::placeholder,
+.feedback-textarea::placeholder {
   color: var(--ustock-text-muted);
 }
 
-/* Nice focus state using your green */
-.settings-input:focus,
-.settings-select:focus,
-.settings-textarea:focus {
+/* Focus state using your green */
+.feedback-input:focus,
+.feedback-select:focus,
+.feedback-textarea:focus {
   outline: none;
   border-color: var(--ustock-green-main);
   box-shadow: 0 0 0 1px rgba(15, 118, 110, 0.18);
   background: var(--ustock-bg-card);
 }
 
-.settings-textarea {
+.feedback-textarea {
   resize: vertical;
   min-height: 140px;
 }
 
-/* Hint text matches your global style */
-.settings-hint,
-.settings-footer-hint {
+/* Hint text */
+.feedback-hint,
+.feedback-footer-hint {
   font-size: 13px;
   color: var(--ustock-text-muted);
 }
 
 /* ========= BUTTONS ================================================= */
 
-.settings-actions {
+.feedback-actions {
   margin-top: 4px;
   display: flex;
   gap: 14px;
+  flex-wrap: wrap;
 }
 
-.settings-btn {
+.feedback-btn {
   border-radius: 999px;
   padding: 9px 20px;
   font-size: 14px;
@@ -114,36 +120,32 @@
   transition: 0.15s ease;
 }
 
-/* Green primary button (same as other primary actions) */
-.settings-btn--primary {
+/* Green primary button */
+.feedback-btn--primary {
   background: var(--ustock-green-main);
   color: #ffffff;
 }
 
-.settings-btn--primary:hover {
+.feedback-btn--primary:hover {
   background: #0d5f58;
 }
 
-/* Ghost button matches site */
-.settings-btn--ghost {
+/* Ghost button */
+.feedback-btn--ghost {
   background: transparent;
   color: var(--ustock-text-main);
   border: 1px solid rgba(148, 163, 184, 0.4);
 }
 
-.settings-btn--ghost:hover {
+.feedback-btn--ghost:hover {
   background: rgba(148, 163, 184, 0.08);
 }
 
 /* ========= MOBILE ================================================== */
 
 @media (max-width: 768px) {
-  .settings-page {
-    min-height: auto;
-  }
-
-  /* Slightly tighter padding but same style as hero/card */
-  .settings-card {
+  .feedback-card {
+    max-width: 100%;
     padding: 18px 18px 22px;
     margin-bottom: 20px;
   }
