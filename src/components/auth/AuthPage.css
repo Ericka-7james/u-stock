@@ -1,15 +1,25 @@
 /* AUTH PAGE – U-Stock theme */
 
-/* Full container */
+/* Full container (inside .app-page) */
 .auth-page {
   display: flex;
-  min-height: 100vh;
+  justify-content: center;
+  min-height: calc(100vh - 64px); /* leave room for fixed topbar */
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Inter", sans-serif;
   margin: 0 auto;
 }
 
+/* Wrapper that holds left + right panels */
+.auth-page-inner {
+  display: flex;
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  min-height: calc(100vh - 64px);
+}
 
-/* LEFT: login */
+/* LEFT: login ------------------------------------------------------ */
+
 .auth-left {
   flex: 1;
   background: var(--ustock-bg-card);
@@ -106,7 +116,7 @@
   box-shadow: none;
 }
 
-/* Social icons */
+/* Social icons (optional) */
 .auth-social-row {
   margin-top: 20px;
   display: flex;
@@ -127,7 +137,8 @@
   color: var(--ustock-text-muted);
 }
 
-/* RIGHT: signup */
+/* RIGHT: green hero / signup -------------------------------------- */
+
 .auth-right {
   flex: 1;
   background: var(--ustock-green-main);
@@ -157,7 +168,7 @@
   margin-bottom: 24px;
 }
 
-/* Signup form */
+/* Signup form (used on /auth/signup) */
 .auth-signup-form {
   display: flex;
   flex-direction: column;
@@ -213,65 +224,70 @@
   transform: translateY(-1px);
 }
 
-/* Mobile layout */
-/* Mobile layout */
-@media (max-width: 768px) {
-  .auth-page {
-    flex-direction: column;
-    overflow-x: hidden;
+/* ================= DESKTOP TWEAKS (≥ 769px) ======================= */
+
+@media (min-width: 769px) {
+  .auth-page-inner {
+    flex-direction: row;
+    align-items: stretch;
   }
 
-  /* LOGIN SECTION — more balanced vertical spacing */
+  .auth-left-inner,
+  .auth-right-inner {
+    padding-top: 56px; /* keeps content clear of fixed nav and nicely centered */
+  }
+}
+
+/* ================= MOBILE LAYOUT (≤ 768px) ======================== */
+
+@media (max-width: 768px) {
+  .auth-page {
+    min-height: calc(100vh - 64px);
+  }
+
+  .auth-page-inner {
+    flex-direction: column;
+    min-height: calc(100vh - 64px);
+  }
+
+  /* LOGIN SECTION — slightly shorter so green panel peeks into view */
   .auth-left {
-    min-height: 65vh;
-    display: flex;
-
-    /* tighter and cleaner top/bottom padding */
-    padding-top: 24px;
-    padding-bottom: 16px;
-
+    min-height: 55vh;          /* was 60vh */
+    padding-top: 35px;         /* was 72px – keeps it below fixed nav but tighter */
+    padding-bottom: 8px;       /* a bit less spacing at the bottom */
+    align-items: flex-start;
     justify-content: center;
-    align-items: flex-start; /* content sits higher */
   }
 
   .auth-left-inner {
     width: 100%;
     max-width: 360px;
-
     display: flex;
     flex-direction: column;
     gap: 20px;
-
-    /* Pushes content upward slightly */
-    margin-top: 12px;
   }
 
   .auth-title {
     margin-bottom: 4px;
-    text-align: center;
-  }
-
-  .auth-form {
-    gap: 12px;
+    text-align: left;
   }
 
   .auth-social-row {
     margin-top: 4px;
   }
 
-  /* SIGNUP SECTION — fix top padding + center content nicely */
+  /* SIGNUP SECTION — no rounded top, comes into view sooner */
   .auth-right {
-    background: var(--ustock-green-main);
-    border-radius: 32px 32px 0 0;
-
-    padding-top: 32px;  /* raises the title up */
+    border-radius: 0;          /* FIX: remove rounded top */
+    padding-top: 24px;         /* slightly tighter so text is higher */
     padding-bottom: 32px;
+    min-height: 45vh;          /* was 40vh */
+    justify-content: flex-start;
   }
 
   .auth-right-inner {
     max-width: 360px;
     margin: 0 auto;
-
     display: flex;
     flex-direction: column;
     gap: 16px;
@@ -284,7 +300,7 @@
   }
 }
 
-/* Top back button */
+/* Top back button (if used on signup page) */
 .auth-top-bar {
   position: absolute;
   top: 16px;
@@ -374,4 +390,3 @@ body.ustock-dark .auth-secondary-btn {
   border: 1px solid var(--ustock-border-card);
   box-shadow: 0 16px 36px rgba(0, 0, 0, 0.75);
 }
-
