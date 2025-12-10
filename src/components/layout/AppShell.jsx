@@ -7,7 +7,7 @@ export default function AppShell({ children }) {
   const [navOpen, setNavOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
 
-  // ✅ dark-mode state (kept here so it applies app-wide)
+  // dark-mode state (kept here so it applies app-wide)
   const [isDark, setIsDark] = useState(() => {
     if (typeof window === "undefined") return false;
     const stored = window.localStorage.getItem("ustock-theme");
@@ -21,14 +21,17 @@ export default function AppShell({ children }) {
     window.localStorage.setItem("ustock-theme", dark ? "dark" : "light");
   }, [isDark]);
 
-  const handleMainClick = () => {
-    // clicking in main content closes any open overlays
+  // 👇 global click handler – closes nav + user dropdown
+  const handleGlobalClick = () => {
     if (navOpen) setNavOpen(false);
     if (userMenuOpen) setUserMenuOpen(false);
   };
 
   return (
-    <div className={`app-shell ${navOpen ? "app-shell--nav-open" : ""}`}>
+    <div
+      className={`app-shell ${navOpen ? "app-shell--nav-open" : ""}`}
+      onClick={handleGlobalClick}
+    >
       <NavBar
         navOpen={navOpen}
         setNavOpen={setNavOpen}
@@ -38,7 +41,8 @@ export default function AppShell({ children }) {
         onToggleTheme={() => setIsDark((prev) => !prev)}
       />
 
-      <div className="app-main" onClick={handleMainClick}>
+      {/* main content no longer needs its own onClick */}
+      <div className="app-main">
         <div className="app-content">
           <main className="app-page">{children}</main>
         </div>

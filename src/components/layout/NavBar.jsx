@@ -35,6 +35,7 @@ export default function NavBar({
   const handleLogout = () => {
     logout();
     setUserMenuOpen(false);
+    setNavOpen(false);
   };
 
   return (
@@ -50,69 +51,88 @@ export default function NavBar({
         </div>
 
         <nav className="side-nav-menu">
-          <Link
-            to="/"
-            className={
-              "side-nav-item " + (isDashboard ? "side-nav-item--active" : "")
-            }
-            onClick={closeNav}
-          >
-            <span className="side-nav-item-dot" />
-            Dashboard
-          </Link>
+            <Link
+                to="/"
+                className={
+                "side-nav-item " + (isDashboard ? "side-nav-item--active" : "")
+                }
+                onClick={closeNav}
+            >
+                <span className="side-nav-item-dot" />
+                Dashboard
+            </Link>
 
-          <Link
-            to="/data-sources"
-            className={
-              "side-nav-item " + (isDatasources ? "side-nav-item--active" : "")
-            }
-            onClick={closeNav}
-          >
-            <span className="side-nav-item-dot" />
-            Data Sources
-          </Link>
+            <Link
+                to="/data-sources"
+                className={
+                "side-nav-item " + (isDatasources ? "side-nav-item--active" : "")
+                }
+                onClick={closeNav}
+            >
+                <span className="side-nav-item-dot" />
+                Data Sources
+            </Link>
 
-          <Link
-            to="/index-funds"
-            className={
-              "side-nav-item " +
-              (isIndexFunds ? "side-nav-item--active" : "")
-            }
-            onClick={closeNav}
-          >
-            <span className="side-nav-item-dot" />
-            Index Funds
-          </Link>
+            <Link
+                to="/index-funds"
+                className={
+                "side-nav-item " + (isIndexFunds ? "side-nav-item--active" : "")
+                }
+                onClick={closeNav}
+            >
+                <span className="side-nav-item-dot" />
+                Index Funds
+            </Link>
 
-          <Link
-            to="/about"
-            className={
-              "side-nav-item " + (isAboutMe ? "side-nav-item--active" : "")
-            }
-            onClick={closeNav}
-          >
-            <span className="side-nav-item-dot" />
-            About me
-          </Link>
+            <Link
+                to="/about"
+                className={
+                "side-nav-item " + (isAboutMe ? "side-nav-item--active" : "")
+                }
+                onClick={closeNav}
+            >
+                <span className="side-nav-item-dot" />
+                About me
+            </Link>
 
-          <Link
-            to="/feedback"
-            className={
-              "side-nav-item " + (isFeedback ? "side-nav-item--active" : "")
-            }
-            onClick={closeNav}
-          >
-            <span className="side-nav-item-dot" />
-            Feedback
-          </Link>
-        </nav>
+            <Link
+                to="/feedback"
+                className={
+                "side-nav-item " + (isFeedback ? "side-nav-item--active" : "")
+                }
+                onClick={closeNav}
+            >
+                <span className="side-nav-item-dot" />
+                Feedback
+            </Link>
+
+            {/* ✅ NEW — Sign Out directly under Feedback */}
+            {user && (
+                <button
+                type="button"
+                className="side-nav-item side-nav-signout"
+                onClick={() => {
+                    handleLogout();
+                    closeNav();
+                }}
+                >
+                <span className="side-nav-item-dot" />
+                Sign out
+                </button>
+            )}
+            </nav>
+
 
         <div className="side-nav-footer">
-          <span className="side-nav-footer-name">Made by Ericka James</span>
-        </div>
+            <div className="side-nav-footer-divider" />
+
+            <span className="side-nav-footer-name">Made by Ericka James</span>
+            </div>
       </aside>
 
       {/* Top bar */}
+      {/* ...topbar JSX stays the same, but Sign out there still uses handleLogout... */}
+
       <header className="topbar">
         <div className="topbar-left">
           <button
@@ -144,19 +164,25 @@ export default function NavBar({
           <button
             className="icon-btn"
             type="button"
-            onClick={() => alert("Coming soon")}
+            onClick={() => {
+              setUserMenuOpen(false);
+              alert("Coming soon");
+            }}
           >
             <span className="icon-search" />
           </button>
+
           <button
             className="icon-btn"
             type="button"
-            onClick={() => alert("Coming soon")}
+            onClick={() => {
+              setUserMenuOpen(false);
+              alert("Coming soon");
+            }}
           >
             <span className="icon-bell" />
           </button>
 
-          {/* User avatar + logout menu */}
           {user && (
             <div className="topbar-user">
               <button
