@@ -27,7 +27,7 @@ body {
   color: var(--ustock-text-main);
 }
 
-/* ========= APP SHELL (top bar + slide-out nav) ===================== */
+/* ========= APP SHELL LAYOUT ======================================== */
 
 .app-shell {
   min-height: 100vh;
@@ -48,6 +48,9 @@ body {
   flex-direction: column;
   align-items: stretch;
   transition: margin-left 0.23s ease-out;
+
+  /* 👇 make room for fixed topbar */
+  padding-top: 64px;
 }
 
 /* Wraps each page's content area */
@@ -76,22 +79,26 @@ body {
 /* Mobile */
 @media (max-width: 768px) {
   .app-page {
-    padding: 16px 24px 32px; /* top | sides | bottom – sides match topbar */
+    padding: 16px 24px 32px;
   }
 
-  /* on very small screens, let the nav slide over content */
   .app-shell--nav-open .app-main {
     margin-left: 0;
+  }
+
+  /* slightly smaller gap on small screens if you want */
+  .app-main {
+    padding-top: 60px;
   }
 }
 
 /* Extra-small mobile: make the main column fill the viewport exactly */
 @media (max-width: 480px) {
   .app-page {
-    max-width: none;       /* stop trying to center a 1280px column */
-    width: 100vw;          /* match the viewport width */
-    margin: 0;             /* no auto-centering margins */
-    padding: 16px 16px 32px; /* symmetric side padding */
+    max-width: none;          /* stop trying to center a 1280px column */
+    width: 100vw;             /* match the viewport width */
+    margin: 0;                /* no auto-centering margins */
+    padding: 16px 16px 32px;  /* symmetric side padding */
     box-sizing: border-box;
   }
 }
@@ -105,259 +112,6 @@ body {
   color: var(--ustock-text-muted);
   padding: 14px 0 0;
   opacity: 0.9;
-}
-
-/* -------- SIDE NAV ------------------------------------------------- */
-
-.side-nav {
-  position: fixed;
-  inset: 0 auto 0 0;
-  width: 260px;
-  background: linear-gradient(180deg, #0f766e 0%, #022c22 100%);
-  color: #ffffff;
-  padding: 24px 20px;
-  box-sizing: border-box;
-  transform: translateX(-100%);
-  transition: transform 0.23s ease-out;
-  z-index: 40;
-  display: flex;
-  flex-direction: column;
-}
-
-.app-shell--nav-open .side-nav {
-  transform: translateX(0);
-}
-
-.side-nav-brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 32px;
-}
-
-.side-nav-logo-circle {
-  width: 32px;
-  height: 32px;
-  border-radius: 999px;
-  background: #22c55e;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 800;
-  color: #022c22;
-  font-size: 16px;
-}
-
-.side-nav-brand-text {
-  display: flex;
-  flex-direction: column;
-}
-
-.side-nav-name {
-  font-size: 18px;
-  font-weight: 700;
-}
-
-.side-nav-tagline {
-  font-size: 11px;
-  opacity: 0.8;
-}
-
-.side-nav-menu {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.side-nav-item {
-  background: transparent;
-  border: none;
-  text-align: left;
-  padding: 10px 10px;
-  border-radius: 999px;
-  cursor: pointer;
-  color: #e5e7eb;
-  font-size: 14px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  transition: background 0.18s ease, color 0.18s ease, transform 0.18s ease;
-  text-decoration: none;
-}
-
-.side-nav-item-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  background: rgba(248, 250, 252, 0.4);
-}
-
-.side-nav-item--active {
-  background: #22c55e;
-  color: #022c22;
-  font-weight: 600;
-  transform: translateX(2px);
-}
-
-.side-nav-item--active .side-nav-item-dot {
-  background: #022c22;
-}
-
-.side-nav-item:hover:not(.side-nav-item--active) {
-  background: rgba(15, 118, 110, 0.6);
-}
-
-/* Side nav footer at bottom */
-.side-nav-footer {
-  margin-top: auto;
-  width: 100%;
-  padding: 18px 0 14px;
-  border-top: 1px solid rgba(255, 255, 255, 0.18);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-}
-
-.side-nav-footer-name {
-  font-size: 13px;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.95);
-}
-
-.side-nav-footer-email {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.75);
-}
-
-/* -------- TOP BAR -------------------------------------------------- */
-
-.topbar {
-  height: 64px;
-  padding: 0 24px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: var(--ustock-bg-page);
-  box-shadow: none;
-}
-
-.topbar-left {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-}
-
-.hamburger-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  padding: 0;
-  border-radius: 999px;
-}
-
-.hamburger-btn:hover {
-  background: rgba(15, 118, 110, 0.06);
-}
-
-.hamburger-lines,
-.hamburger-lines::before,
-.hamburger-lines::after {
-  width: 22px;
-  height: 3px;
-  background-color: var(--ustock-green-main);
-  border-radius: 3px;
-  display: block;
-  position: relative;
-  content: "";
-}
-
-.hamburger-lines::before {
-  position: absolute;
-  top: -7px;
-}
-
-.hamburger-lines::after {
-  position: absolute;
-  top: 7px;
-}
-
-.topbar-home-link {
-  text-decoration: none;
-  color: inherit;
-  display: inline-flex;
-  align-items: center;
-}
-
-.topbar-home-label {
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--ustock-green-main);
-}
-
-.topbar-right {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.icon-btn {
-  background: none;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-}
-
-/* SEARCH ICON */
-.icon-search {
-  position: relative;
-  width: 18px;
-  height: 18px;
-  border: 2px solid var(--ustock-green-main);
-  border-radius: 50%;
-  display: inline-block;
-}
-
-.icon-search::after {
-  content: "";
-  position: absolute;
-  width: 10px;
-  height: 2px;
-  background: var(--ustock-green-main);
-  bottom: -4px;
-  right: -4px;
-  transform: rotate(45deg);
-  border-radius: 1px;
-}
-
-/* BELL ICON */
-.icon-bell {
-  width: 18px;
-  height: 18px;
-  border: 2px solid var(--ustock-green-main);
-  border-bottom-left-radius: 10px;
-  border-bottom-right-radius: 10px;
-  border-top-left-radius: 50%;
-  border-top-right-radius: 50%;
-  position: relative;
-  display: inline-block;
-}
-
-.icon-bell::after {
-  content: "";
-  position: absolute;
-  bottom: -3px;
-  left: 50%;
-  width: 4px;
-  height: 4px;
-  background: var(--ustock-green-main);
-  transform: translateX(-50%);
-  border-radius: 50%;
 }
 
 /* -------- GLOBAL UTILITIES ---------------------------------------- */
@@ -408,52 +162,6 @@ body {
   margin-top: 4px;
 }
 
-/* ========= DARK MODE TOGGLE (TOP NAV) =============================== */
-
-.theme-toggle {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 10px;
-  border-radius: 999px;
-  border: 1px solid rgba(15, 118, 110, 0.4);
-  background: var(--ustock-green-main); /* main U-Stock green */
-  cursor: pointer;
-  transition: background 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
-  opacity: 0.95;
-}
-
-.theme-toggle:hover {
-  opacity: 1;
-  background: #0d5f58; /* slightly darker green */
-}
-
-.theme-toggle-thumb {
-  width: 18px;
-  height: 18px;
-  border-radius: 999px;
-  background: #f9fafb;
-  transform: translateX(0);
-  transition: transform 0.2s ease;
-}
-
-.theme-toggle-moon {
-  font-size: 12px;
-  line-height: 1;
-  color: #f9fafb;
-}
-
-/* when dark mode ON, slide thumb to the right and darken green */
-.theme-toggle--on {
-  background: #022c22; /* deeper teal for "on" */
-  border-color: rgba(15, 23, 42, 0.45);
-}
-
-.theme-toggle--on .theme-toggle-thumb {
-  transform: translateX(14px);
-}
-
 /* ========= LIGHT / DARK THEME TOKENS =============================== */
 
 /* light theme is already encoded in :root; just restate for clarity */
@@ -493,33 +201,7 @@ body.ustock-dark .app-main {
   );
 }
 
-/* sidebar in dark */
-body.ustock-dark .side-nav {
-  background: #020617;
-  border-right: 1px solid rgba(148, 163, 184, 0.35);
-}
-
-body.ustock-dark .side-nav-name,
-body.ustock-dark .side-nav-tagline,
-body.ustock-dark .side-nav-item {
-  color: #e5e7eb;
-}
-
-body.ustock-dark .side-nav-item--active {
-  background: rgba(15, 118, 110, 0.35);
-}
-
-/* topbar in dark */
-body.ustock-dark .topbar {
-  background: rgba(15, 23, 42, 0.95);
-  border-bottom: 1px solid rgba(148, 163, 184, 0.35);
-}
-
-body.ustock-dark .topbar-home-label {
-  color: #e5e7eb;
-}
-
-/* cards / panels / settings form – background/border via tokens now */
+/* cards / panels / settings form – extra depth in dark */
 body.ustock-dark .panel,
 body.ustock-dark .about-card,
 body.ustock-dark .about-hero-card,
@@ -535,107 +217,7 @@ body.ustock-dark .settings-textarea {
   border-color: rgba(148, 163, 184, 0.7);
 }
 
-/* footer */
+/* footer in dark */
 body.ustock-dark .site-footer {
   color: #9ca3af;
 }
-
-/* ====== USER AVATAR DROPDOWN (overlay) ============================ */
-
-.topbar-user {
-  position: relative;
-}
-
-.topbar-user-btn {
-  border: none;
-  background: transparent;
-  padding: 0;
-  cursor: pointer;
-}
-
-.topbar-user-avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 999px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 18px;
-  background: var(--ustock-bg-card);
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.15);
-}
-
-.topbar-user-menu {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  min-width: 190px;
-  background: var(--ustock-bg-card);
-  border-radius: 12px;
-  padding: 8px 0;
-  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.25);
-  border: 1px solid var(--ustock-border-card);
-  z-index: 60;
-}
-
-.topbar-user-menu-item {
-  width: 100%;
-  padding: 8px 14px;
-  background: transparent;
-  border: none;
-  text-align: left;
-  font-size: 13px;
-  cursor: pointer;
-}
-
-.topbar-user-menu-item:hover {
-  background: rgba(15, 118, 110, 0.06);
-}
-
-.topbar-user-menu-meta {
-  font-size: 12px;
-  color: var(--ustock-text-muted);
-  cursor: default;
-}
-
-/* ====== SUPER-SMALL NAV (≤ 480px) ================================ */
-
-@media (max-width: 480px) {
-  .topbar {
-    padding: 0 12px;
-  }
-
-  .topbar-left {
-    gap: 8px;
-  }
-
-  .topbar-home-label {
-    font-size: 16px;
-  }
-
-  .topbar-right {
-    gap: 8px;
-  }
-
-  /* slightly smaller toggle so everything fits comfortably */
-  .theme-toggle {
-    padding: 2px 8px;
-  }
-
-  .theme-toggle-thumb {
-    width: 14px;
-    height: 14px;
-  }
-
-  .theme-toggle--on .theme-toggle-thumb {
-    transform: translateX(10px);
-  }
-
-  /* nudge icons down just a bit in size */
-  .icon-search,
-  .icon-bell {
-    width: 16px;
-    height: 16px;
-  }
-}
-
