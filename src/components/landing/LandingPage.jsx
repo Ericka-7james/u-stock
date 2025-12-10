@@ -2,6 +2,7 @@
 import { useNavigate } from "react-router-dom";
 import "./LandingPage.css";
 import landingIllustration from "../../assets/landing-illustration.jpg";
+import AppShell from "../layout/AppShell";
 
 export default function LandingPage() {
   const navigate = useNavigate();
@@ -9,6 +10,7 @@ export default function LandingPage() {
   const goAuth = () => navigate("/auth");
 
   return (
+    <AppShell>
     <div className="landing-page">
       {/* HERO */}
       <section className="landing-hero">
@@ -122,11 +124,7 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
-
-      {/* FOOTER */}
-      <section className="landing-footer">
-        <p>U-Stock · built as a personal trading lab.</p>
-      </section>
     </div>
+    </AppShell>
   );
 }

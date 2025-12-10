@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import "./AuthPage.css";
+import AppShell from "../layout/AppShell";
 
 export default function AuthPage() {
   const { login } = useAuth();
@@ -33,6 +34,7 @@ export default function AuthPage() {
   };
 
   return (
+    <AppShell>
     <div className="auth-page">
       {/* LEFT: Sign in */}
       <section className="auth-left">
@@ -112,5 +114,6 @@ export default function AuthPage() {
         </div>
       </section>
     </div>
+    </AppShell>
   );
 }

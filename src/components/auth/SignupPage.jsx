@@ -1,7 +1,9 @@
+// src/components/auth/SignupPage.jsx
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import "./SignupPage.css";
+import AppShell from "../layout/AppShell";
 
 const AVATARS = ["📈", "📊", "🤖", "💡"];
 
@@ -40,87 +42,93 @@ export default function SignupPage() {
   };
 
   return (
-    <div className="signup-page">
-      <div className="signup-card">
+    <AppShell>
+      {/* 🔥 Use shared app-page padding from AppShell */}
+      <div className="app-page signup-page">
+        <div className="signup-card">
+          <h1 className="signup-title">Create your account</h1>
+          <p className="signup-subtitle">
+            Tell us a bit about yourself — pick an icon and get started!
+          </p>
 
-        <h1 className="signup-title">Create your account</h1>
-        <p className="signup-subtitle">
-          Tell us a bit about yourself — pick an icon and get started!
-        </p>
+          <form className="signup-form" onSubmit={handleSignup}>
+            <label className="signup-field">
+              <span>Name</span>
+              <input
+                type="text"
+                value={signName}
+                onChange={(e) => setSignName(e.target.value)}
+                required
+              />
+            </label>
 
-        <form className="signup-form" onSubmit={handleSignup}>
-          <label className="signup-field">
-            <span>Name</span>
-            <input
-              type="text"
-              value={signName}
-              onChange={(e) => setSignName(e.target.value)}
-              required
-            />
-          </label>
+            <label className="signup-field">
+              <span>Email</span>
+              <input
+                type="email"
+                value={signEmail}
+                onChange={(e) => setSignEmail(e.target.value)}
+                required
+              />
+            </label>
 
-          <label className="signup-field">
-            <span>Email</span>
-            <input
-              type="email"
-              value={signEmail}
-              onChange={(e) => setSignEmail(e.target.value)}
-              required
-            />
-          </label>
+            <label className="signup-field">
+              <span>Phone number</span>
+              <input
+                type="tel"
+                value={signPhone}
+                onChange={(e) => setSignPhone(e.target.value)}
+                placeholder="(555) 555-5555"
+              />
+            </label>
 
-          <label className="signup-field">
-            <span>Phone number</span>
-            <input
-              type="tel"
-              value={signPhone}
-              onChange={(e) => setSignPhone(e.target.value)}
-              placeholder="(555) 555-5555"
-            />
-          </label>
+            <label className="signup-field">
+              <span>Password</span>
+              <input
+                type="password"
+                value={signPassword}
+                onChange={(e) => setSignPassword(e.target.value)}
+                required
+              />
+            </label>
 
-          <label className="signup-field">
-            <span>Password</span>
-            <input
-              type="password"
-              value={signPassword}
-              onChange={(e) => setSignPassword(e.target.value)}
-              required
-            />
-          </label>
-
-          <div className="signup-avatar-section">
-            <span>Choose your icon</span>
-            <div className="signup-avatar-grid">
-              {AVATARS.map((icon) => (
-                <button
-                  key={icon}
-                  type="button"
-                  className={
-                    "signup-avatar-chip" +
-                    (signAvatar === icon ? " signup-avatar-chip--active" : "")
-                  }
-                  onClick={() => setSignAvatar(icon)}
-                >
-                  {icon}
-                </button>
-              ))}
+            <div className="signup-avatar-section">
+              <span>Choose your icon</span>
+              <div className="signup-avatar-grid">
+                {AVATARS.map((icon) => (
+                  <button
+                    key={icon}
+                    type="button"
+                    className={
+                      "signup-avatar-chip" +
+                      (signAvatar === icon
+                        ? " signup-avatar-chip--active"
+                        : "")
+                    }
+                    onClick={() => setSignAvatar(icon)}
+                  >
+                    {icon}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
 
-          {signError && <p className="auth-error">{signError}</p>}
+            {signError && <p className="auth-error">{signError}</p>}
 
-          <button type="submit" className="signup-btn" disabled={signLoading}>
-            {signLoading ? "Creating account…" : "Sign Up"}
-          </button>
+            <button
+              type="submit"
+              className="signup-btn"
+              disabled={signLoading}
+            >
+              {signLoading ? "Creating account…" : "Sign Up"}
+            </button>
 
-          <div className="signup-alt">
-            Already registered?{" "}
-            <Link to="/auth">Sign in here →</Link>
-          </div>
-        </form>
-
+            <div className="signup-alt">
+              Already registered? <Link to="/auth">Sign in here →</Link>
+            </div>
+          </form>
+        </div>
       </div>
-    </div>
+    </AppShell>
   );
 }
