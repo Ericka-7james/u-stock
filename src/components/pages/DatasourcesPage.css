@@ -2,7 +2,17 @@
 
 /* Wrapper tweaks */
 .data-sources-page {
-  padding-bottom: 40px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+  align-items: flex-start;
+}
+
+.dashboard-main {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+  align-items: flex-start;
 }
 
 /* HERO – like a big card */

@@ -5,7 +5,9 @@
   display: flex;
   min-height: 100vh;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Inter", sans-serif;
+  margin: 0 auto;
 }
+
 
 /* LEFT: login */
 .auth-left {
@@ -307,3 +309,69 @@
   color: #b91c1c;
   font-size: 12px;
 }
+
+/* ========== DARK MODE OVERRIDES FOR AUTH ==================== */
+
+/* left panel background & headings */
+body.ustock-dark .auth-left {
+  background: var(--ustock-bg-page);
+}
+
+body.ustock-dark .auth-title {
+  color: var(--ustock-text-strong);
+}
+
+/* login field pill + text */
+body.ustock-dark .auth-field {
+  background: var(--ustock-bg-card);
+  border-color: var(--ustock-border-card);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.6);
+}
+
+body.ustock-dark .auth-input-icon {
+  color: var(--ustock-text-muted);
+}
+
+body.ustock-dark .auth-field input {
+  background: transparent;
+  color: var(--ustock-text-main);
+}
+
+body.ustock-dark .auth-field input::placeholder {
+  color: var(--ustock-text-muted);
+}
+
+/* autofill should match dark pill */
+body.ustock-dark .auth-field input:-webkit-autofill,
+body.ustock-dark .auth-field input:-webkit-autofill:hover,
+body.ustock-dark .auth-field input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px var(--ustock-bg-card) inset;
+  box-shadow: 0 0 0 1000px var(--ustock-bg-card) inset;
+  -webkit-text-fill-color: var(--ustock-text-main);
+}
+
+/* primary login button – same treatment in dark */
+body.ustock-dark .auth-primary-btn {
+  background: var(--ustock-green-main);
+  color: #f9fafb;
+  box-shadow: 0 14px 34px rgba(15, 118, 110, 0.55);
+}
+
+/* right green hero panel keeps green bg, but button/text adapt */
+body.ustock-dark .auth-right {
+  background: var(--ustock-green-main);
+}
+
+body.ustock-dark .auth-right-title,
+body.ustock-dark .auth-right-text {
+  color: #f9fafb;
+}
+
+/* signup pill on the green card in dark mode */
+body.ustock-dark .auth-secondary-btn {
+  background: #020617;
+  color: #f9fafb;
+  border: 1px solid var(--ustock-border-card);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.75);
+}
+

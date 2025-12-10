@@ -35,85 +35,92 @@ export default function AuthPage() {
 
   return (
     <AppShell>
-    <div className="auth-page">
-      {/* LEFT: Sign in */}
-      <section className="auth-left">
-        <div className="auth-left-inner">
-          <h1 className="auth-title">Welcome back</h1>
+      <div className="auth-page">
+        <div className="auth-page-inner">
+          {/* LEFT: Sign in */}
+          <section className="auth-left">
+            <div className="auth-left-inner">
+              <h1 className="auth-title">Welcome back</h1>
 
-          <form className="auth-form" onSubmit={handleLogin}>
-            <label className="auth-field">
-              <span className="auth-input-icon">📧</span>
-              <input
-                type="email"
-                placeholder="Email"
-                value={loginEmail}
-                onChange={(e) => setLoginEmail(e.target.value)}
-                required
-              />
-            </label>
+              <form className="auth-form" onSubmit={handleLogin}>
+                <label className="auth-field">
+                  <span className="auth-input-icon">📧</span>
+                  <input
+                    type="email"
+                    placeholder="Email"
+                    value={loginEmail}
+                    onChange={(e) => setLoginEmail(e.target.value)}
+                    required
+                  />
+                </label>
 
-            <label className="auth-field">
-              <span className="auth-input-icon">🔒</span>
-              <input
-                type="password"
-                placeholder="Password"
-                value={loginPassword}
-                onChange={(e) => setLoginPassword(e.target.value)}
-                required
-              />
-            </label>
+                <label className="auth-field">
+                  <span className="auth-input-icon">🔒</span>
+                  <input
+                    type="password"
+                    placeholder="Password"
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
+                    required
+                  />
+                </label>
 
-            {loginError && <p className="auth-error">{loginError}</p>}
+                {loginError && <p className="auth-error">{loginError}</p>}
 
-            <button
-              type="submit"
-              className="auth-primary-btn"
-              disabled={loginLoading}
-            >
-              {loginLoading ? "Signing in…" : "Sign In →"}
-            </button>
-          </form>
+                <button
+                  type="submit"
+                  className="auth-primary-btn"
+                  disabled={loginLoading}
+                >
+                  {loginLoading ? "Signing in…" : "Sign In →"}
+                </button>
+              </form>
 
-          <div style={{ marginTop: 16, textAlign: "center", fontSize: 13 }}>
-            <span>New here? </span>
-            <button
-              type="button"
-              onClick={goToSignup}
-              style={{
-                border: "none",
-                background: "transparent",
-                color: "var(--ustock-green-main)",
-                cursor: "pointer",
-                fontWeight: 600,
-              }}
-            >
-              Create an account →
-            </button>
-          </div>
+              <div
+                style={{
+                  marginTop: 16,
+                  textAlign: "center",
+                  fontSize: 13,
+                }}
+              >
+                <span>New here? </span>
+                <button
+                  type="button"
+                  onClick={goToSignup}
+                  style={{
+                    border: "none",
+                    background: "transparent",
+                    color: "var(--ustock-green-main)",
+                    cursor: "pointer",
+                    fontWeight: 600,
+                  }}
+                >
+                  Create an account →
+                </button>
+              </div>
+            </div>
+          </section>
+
+          {/* RIGHT: keep your green panel as a static welcome blurb */}
+          <section className="auth-right">
+            <div className="auth-right-inner">
+              <h2 className="auth-right-title">U-Stock Radar Suite</h2>
+              <p className="auth-right-text">
+                Log in to see your market dashboard, signals, and sentiment in
+                one place.
+              </p>
+
+              <button
+                type="button"
+                className="auth-secondary-btn"
+                onClick={goToSignup}
+              >
+                Sign Up
+              </button>
+            </div>
+          </section>
         </div>
-      </section>
-
-      {/* RIGHT: keep your green panel as a static welcome blurb */}
-      <section className="auth-right">
-        <div className="auth-right-inner">
-          <h2 className="auth-right-title">U-Stock Radar Suite</h2>
-          <p className="auth-right-text">
-            Log in to see your market dashboard, signals, and sentiment in one
-            place.
-          </p>
-
-          <button
-            type="button"
-            className="auth-secondary-btn"
-            onClick={goToSignup}
-          >
-            Sign Up
-          </button>
-
-        </div>
-      </section>
-    </div>
+      </div>
     </AppShell>
   );
 }

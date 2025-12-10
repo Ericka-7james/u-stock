@@ -1,5 +1,5 @@
 .landing-page {
-  background: #ffffff;
+  background: var(--ustock-bg-page);
   color: var(--ustock-text-main);
 }
 
@@ -291,4 +291,46 @@
   .landing-hero-right {
     display: none;
   }
+}
+
+/* ========== DARK MODE OVERRIDES FOR LANDING ================ */
+
+body.ustock-dark .landing-hero {
+  background: linear-gradient(
+    135deg,
+    #022c22 0%,
+    #0f766e 45%,
+    #1d4ed8 100%
+  );
+}
+
+/* feature + roadmap cards pick up dark tokens */
+body.ustock-dark .landing-feature-card,
+body.ustock-dark .landing-roadmap-card {
+  background: var(--ustock-bg-card);
+  border-color: var(--ustock-border-card);
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.75);
+}
+
+body.ustock-dark .landing-section-title {
+  color: var(--ustock-green-soft);
+}
+
+body.ustock-dark .landing-section-text,
+body.ustock-dark .landing-feature-card p,
+body.ustock-dark .landing-roadmap-list,
+body.ustock-dark .landing-roadmap-steps {
+  color: var(--ustock-text-muted);
+}
+
+/* CTA outline button shouldn’t be bright white in dark mode */
+body.ustock-dark .landing-cta-outline {
+  background: transparent;
+  color: var(--ustock-green-soft);
+  border-color: var(--ustock-green-soft);
+}
+
+/* hero mock card already uses tokens; just deepen the chip bg */
+body.ustock-dark .landing-hero-card {
+  background: var(--ustock-bg-card);
 }
