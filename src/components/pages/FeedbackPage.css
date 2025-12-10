@@ -1,18 +1,11 @@
 /* ========= FEEDBACK PAGE LAYOUT ==================================== */
 
-/* Let .app-page handle outer padding/background */
-.feedback-page {
-  padding-bottom: 40px;
-}
-
-/* Single centered card, modeled after .data-summary-card */
+/* Single card modeled after .data-summary-card */
 .feedback-card {
-  width: 100%;
-  max-width: 720px;
-  margin: 0 auto 24px;
   background: var(--ustock-bg-card);
   border-radius: 18px;
-  padding: 20px 22px;
+  padding: 18px 20px;
+  margin-bottom: 20px;
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
   border: 1px solid var(--ustock-border-card);
   border-top: 4px solid var(--ustock-green-main);
@@ -145,7 +138,6 @@
 
 @media (max-width: 768px) {
   .feedback-card {
-    max-width: 100%;
     padding: 18px 18px 22px;
     margin-bottom: 20px;
   }
