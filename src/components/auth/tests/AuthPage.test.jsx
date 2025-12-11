@@ -1,0 +1,190 @@
+// src/components/auth/tests/AuthPage.test.jsx
+import React from "react";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
+import { describe, test, expect, vi, beforeEach } from "vitest";
+import AuthPage from "../AuthPage";
+
+// --- Mocks ---
+
+const mockLogin = vi.fn();
+const mockNavigate = vi.fn();
+
+// Mock AuthContext so AuthPage/AppShell can call useAuth()
+vi.mock("../../../context/AuthContext", () => ({
+  useAuth: () => ({
+    user: null,
+    login: mockLogin,
+    logout: vi.fn(),
+  }),
+}));
+
+// Partially mock react-router-dom to override useNavigate but keep real stuff
+vi.mock("react-router-dom", async () => {
+  const actual = await vi.importActual("react-router-dom");
+  return {
+    ...actual,
+    useNavigate: () => mockNavigate,
+  };
+});
+
+function renderAuth() {
+  return render(
+    <MemoryRouter>
+      <AuthPage />
+    </MemoryRouter>
+  );
+}
+
+describe("AuthPage", () => {
+  beforeEach(() => {
+    mockLogin.mockReset();
+    mockNavigate.mockReset();
+  });
+
+  test("renders the login form and right-hand panel", () => {
+    renderAuth();
+
+    // Left side basics
+    expect(
+      screen.getByRole("heading", { name: /welcome back/i })
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByPlaceholderText(/email/i)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByPlaceholderText(/password/i)
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByRole("button", { name: /sign in →/i })
+    ).toBeInTheDocument();
+
+    // Right side
+    expect(
+      screen.getByRole("heading", { name: /u-stock radar suite/i })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/log in to see your market dashboard/i)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /^sign up$/i })
+    ).toBeInTheDocument();
+  });
+
+  test("calls login with trimmed email and password on submit", async () => {
+    const user = userEvent.setup();
+    mockLogin.mockResolvedValueOnce();
+
+    renderAuth();
+
+    await user.type(
+      screen.getByPlaceholderText(/email/i),
+      "  test@example.com  "
+    );
+    await user.type(
+      screen.getByPlaceholderText(/password/i),
+      "MySecretPass!"
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: /sign in →/i })
+    );
+
+    await waitFor(() => {
+      expect(mockLogin).toHaveBeenCalledTimes(1);
+    });
+
+    expect(mockLogin).toHaveBeenCalledWith(
+      "test@example.com", // trimmed
+      "MySecretPass!"
+    );
+  });
+
+  test("shows backend error message when login fails", async () => {
+    const user = userEvent.setup();
+    mockLogin.mockRejectedValueOnce(new Error("Invalid credentials"));
+
+    renderAuth();
+
+    await user.type(
+      screen.getByPlaceholderText(/email/i),
+      "test@example.com"
+    );
+    await user.type(
+      screen.getByPlaceholderText(/password/i),
+      "wrongpass!"
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: /sign in →/i })
+    );
+
+    expect(
+      await screen.findByText(/invalid credentials/i)
+    ).toBeInTheDocument();
+  });
+
+  test("shows loading state while login is in progress", async () => {
+    const user = userEvent.setup();
+    let resolveLogin;
+    mockLogin.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveLogin = resolve;
+        })
+    );
+
+    renderAuth();
+
+    await user.type(
+      screen.getByPlaceholderText(/email/i),
+      "test@example.com"
+    );
+    await user.type(
+      screen.getByPlaceholderText(/password/i),
+      "MySecretPass!"
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: /sign in →/i })
+    );
+
+    // Button should switch text and be disabled
+    const loadingButton = screen.getByRole("button", {
+      name: /signing in…/i,
+    });
+    expect(loadingButton).toBeDisabled();
+
+    // Finish the pending login so test can exit cleanly
+    resolveLogin();
+  });
+
+  test('clicking "Create an account →" navigates to /auth/signup', async () => {
+    const user = userEvent.setup();
+    renderAuth();
+
+    const createAccountButton = screen.getByRole("button", {
+      name: /create an account →/i,
+    });
+
+    await user.click(createAccountButton);
+
+    expect(mockNavigate).toHaveBeenCalledWith("/auth/signup");
+  });
+
+  test('clicking right-panel "Sign Up" navigates to /auth/signup', async () => {
+    const user = userEvent.setup();
+    renderAuth();
+
+    const signUpButton = screen.getByRole("button", {
+      name: /^sign up$/i,
+    });
+
+    await user.click(signUpButton);
+
+    expect(mockNavigate).toHaveBeenCalledWith("/auth/signup");
+  });
+});
