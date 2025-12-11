@@ -1,7 +1,7 @@
 // src/components/dashboard/DashboardPage.jsx
 import { useMemo, useState } from "react";
 
-import AppShell from "../layout/AppShell";
+import AppShell from "../layout/AppShell.jsx";
 
 // Dashboard cards
 import StatSummary from "./cards/StatSummary.jsx";
@@ -11,9 +11,9 @@ import TopSignalsCard from "./cards/TopSignalsCard.jsx";
 import DataSnapshotsCard from "./cards/DataSnapshotsCard.jsx";
 
 // Data hooks
-import { useSignalsSnapshot } from "../../hooks/raw/useSignalsSnapshot";
-import { useDailyPricesHistory } from "../../hooks/raw/useDailyPricesHistory";
-import { useSentimentSnapshot } from "../../hooks/raw/useSentimentSnapshot";
+import { useSignalsSnapshot } from "../../hooks/raw/useSignalsSnapshot.js";
+import { useDailyPricesHistory } from "../../hooks/raw/useDailyPricesHistory.js";
+import { useSentimentSnapshot } from "../../hooks/raw/useSentimentSnapshot.js";
 
 // Styles
 import "./DashboardPage.css";

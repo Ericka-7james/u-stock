@@ -1,49 +1,113 @@
 // src/components/auth/SignupPage.jsx
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
+import AppShell from "../layout/AppShell";
 import { useAuth } from "../../context/AuthContext";
 import "./SignupPage.css";
-import AppShell from "../layout/AppShell";
-
-const AVATARS = ["📈", "📊", "🤖", "💡"];
 
 export default function SignupPage() {
   const { signup } = useAuth();
-  const navigate = useNavigate();
 
-  const [signName, setSignName] = useState("");
-  const [signEmail, setSignEmail] = useState("");
-  const [signPhone, setSignPhone] = useState("");
-  const [signPassword, setSignPassword] = useState("");
-  const [signAvatar, setSignAvatar] = useState(AVATARS[0]);
-  const [signError, setSignError] = useState("");
-  const [signLoading, setSignLoading] = useState(false);
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [password, setPassword] = useState("");
+  const [avatar, setAvatar] = useState("📈");
+  const [errors, setErrors] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    password: "",
+    backend: "",
+  });
+  const [loading, setLoading] = useState(false);
 
-  const handleSignup = async (e) => {
+  const avatars = ["📈", "📊", "🤖", "💡"];
+
+  const validate = () => {
+    const nextErrors = {
+      name: "",
+      email: "",
+      phone: "",
+      password: "",
+      backend: "",
+    };
+
+    // --- Name: required ---
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      nextErrors.name = "Please enter your name.";
+    }
+
+    // --- Email: required + basic pattern ---
+    const trimmedEmail = email.trim();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!trimmedEmail || !emailRegex.test(trimmedEmail)) {
+      nextErrors.email = "Please enter a valid email address.";
+    }
+
+    // --- Phone: required, 10–15 digits (ignore formatting chars) ---
+    const trimmedPhone = phone.trim();
+    const phoneDigits = trimmedPhone.replace(/\D/g, "");
+    if (!trimmedPhone || phoneDigits.length < 10 || phoneDigits.length > 15) {
+      nextErrors.phone =
+        "Please enter a valid phone number (10–15 digits).";
+    }
+
+    // --- Password: required, min length, at least one special char ---
+    if (!password || password.length < 8) {
+      nextErrors.password =
+        "Password must be at least 8 characters long.";
+    } else {
+      const specialCharRegex = /[^A-Za-z0-9]/;
+      if (!specialCharRegex.test(password)) {
+        nextErrors.password =
+          "Password must include at least one special character.";
+      }
+    }
+
+    setErrors(nextErrors);
+
+    const hasClientError =
+      !!nextErrors.name ||
+      !!nextErrors.email ||
+      !!nextErrors.phone ||
+      !!nextErrors.password;
+
+    return !hasClientError;
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    setSignError("");
-    setSignLoading(true);
 
+    // Clear any previous backend error
+    setErrors((prev) => ({ ...prev, backend: "" }));
+
+    const ok = validate();
+    if (!ok) return;
+
+    setLoading(true);
     try {
       await signup({
-        name: signName.trim(),
-        email: signEmail.trim(),
-        phone: signPhone.trim(),
-        password: signPassword,
-        avatar: signAvatar,
+        name: name.trim(),
+        email: email.trim(),
+        phone: phone.trim(),
+        password,
+        avatar,
       });
-
-      navigate("/");
+      // Optional: redirect or show success here
     } catch (err) {
-      setSignError(err.message || "Unable to sign up");
+      const message =
+        err?.message ||
+        "Something went wrong while creating your account.";
+      setErrors((prev) => ({ ...prev, backend: message }));
     } finally {
-      setSignLoading(false);
+      setLoading(false);
     }
   };
 
   return (
     <AppShell>
-      {/* 🔥 Use shared app-page padding from AppShell */}
       <div className="app-page signup-page">
         <div className="signup-card">
           <h1 className="signup-title">Create your account</h1>
@@ -51,61 +115,90 @@ export default function SignupPage() {
             Tell us a bit about yourself — pick an icon and get started!
           </p>
 
-          <form className="signup-form" onSubmit={handleSignup}>
+          {errors.backend && (
+            <p className="signup-error signup-error--backend">
+              {errors.backend}
+            </p>
+          )}
+
+          <form
+            className="signup-form"
+            onSubmit={handleSubmit}
+            // Disable browser native validation so we always show our own messages
+            noValidate
+          >
+            {/* Name */}
             <label className="signup-field">
               <span>Name</span>
               <input
                 type="text"
-                value={signName}
-                onChange={(e) => setSignName(e.target.value)}
                 required
+                value={name}
+                onChange={(e) => setName(e.target.value)}
               />
+              {errors.name && (
+                <p className="signup-error">{errors.name}</p>
+              )}
             </label>
 
+            {/* Email */}
             <label className="signup-field">
               <span>Email</span>
               <input
                 type="email"
-                value={signEmail}
-                onChange={(e) => setSignEmail(e.target.value)}
                 required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
               />
+              {errors.email && (
+                <p className="signup-error">{errors.email}</p>
+              )}
             </label>
 
+            {/* Phone */}
             <label className="signup-field">
               <span>Phone number</span>
               <input
                 type="tel"
-                value={signPhone}
-                onChange={(e) => setSignPhone(e.target.value)}
+                required
                 placeholder="(555) 555-5555"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
               />
+              {errors.phone && (
+                <p className="signup-error">{errors.phone}</p>
+              )}
             </label>
 
+            {/* Password */}
             <label className="signup-field">
               <span>Password</span>
               <input
                 type="password"
-                value={signPassword}
-                onChange={(e) => setSignPassword(e.target.value)}
                 required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
               />
+              {errors.password && (
+                <p className="signup-error">{errors.password}</p>
+              )}
             </label>
 
+            {/* Avatar selection */}
             <div className="signup-avatar-section">
               <span>Choose your icon</span>
               <div className="signup-avatar-grid">
-                {AVATARS.map((icon) => (
+                {avatars.map((icon) => (
                   <button
                     key={icon}
                     type="button"
                     className={
                       "signup-avatar-chip" +
-                      (signAvatar === icon
+                      (avatar === icon
                         ? " signup-avatar-chip--active"
                         : "")
                     }
-                    onClick={() => setSignAvatar(icon)}
+                    onClick={() => setAvatar(icon)}
                   >
                     {icon}
                   </button>
@@ -113,18 +206,18 @@ export default function SignupPage() {
               </div>
             </div>
 
-            {signError && <p className="auth-error">{signError}</p>}
-
+            {/* Submit */}
             <button
               type="submit"
               className="signup-btn"
-              disabled={signLoading}
+              disabled={loading}
             >
-              {signLoading ? "Creating account…" : "Sign Up"}
+              {loading ? "Creating account…" : "Sign Up"}
             </button>
 
             <div className="signup-alt">
-              Already registered? <Link to="/auth">Sign in here →</Link>
+              Already registered?{" "}
+              <Link to="/auth">Sign in here →</Link>
             </div>
           </form>
         </div>

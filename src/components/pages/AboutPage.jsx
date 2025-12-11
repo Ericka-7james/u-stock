@@ -20,7 +20,7 @@ export default function AboutPage() {
             <p className="muted small">
               This project is part playground, part proof-of-concept: a place to
               practice data engineering, quant-style thinking, and front-end
-              craftsmanship in one space.
+              craftsmanshipq in one space.
             </p>
 
             <Link to="/" className="back-link-pill">
