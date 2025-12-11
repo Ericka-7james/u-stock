@@ -161,13 +161,26 @@
 
 /* Mobile: tighter horizontal padding comes from .app-page; just stack */
 @media (max-width: 768px) {
-  .card-header {
-    flex-direction: column;
-    align-items: flex-start;
+  .dashboard-main {
+    grid-template-columns: minmax(260px, 380px) minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    grid-template-areas:
+      "filters chart"
+      "filters sentiment";
+    gap: 1.5rem;
   }
 
-  .panel.panel-chart {
-    padding: 16px 14px 18px;
+  .panel-filters {
+    grid-area: filters;
+    transform: none !important;
+  }
+
+  .panel-chart {
+    grid-area: chart;
+  }
+
+  .panel-sentiment {
+    grid-area: sentiment;
   }
 }
 

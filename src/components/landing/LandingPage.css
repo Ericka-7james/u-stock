@@ -276,6 +276,13 @@
   .landing-hero-right {
     justify-content: flex-start;
   }
+
+  /* Hide hero image on mobile */
+  @media (max-width: 910px) {
+    .landing-hero-right {
+      display: none;
+    }
+  }
 }
 
 .landing-hero-img {
