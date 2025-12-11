@@ -1,0 +1,106 @@
+/* ========= TOP SIGNALS CARD (uses .filters-card--index) ============= */
+
+/* Base card in LIGHT MODE: behave like a normal panel with green accent */
+.filters-card.filters-card--index {
+  border-top: 4px solid var(--ustock-green-main);
+  /* background, shadow, radius come from .panel / .filters-card */
+}
+
+/* Header row with title + help icon – match Price action viewer */
+.filters-card--index .filters-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* Make "Top signals" same size as "Price action viewer" */
+.filters-card--index .filters-card-header .panel-title {
+  margin: 0;
+  font-size: 18px; /* match chart header */
+  font-weight: 700;
+  color: var(--ustock-text-strong);
+}
+
+/* ===== Table text inside the card (both themes) ==================== */
+
+/* Column headers ("Ticker", "Score", etc.) */
+.filters-card--index .mini-table thead th {
+  color: var(--ustock-text-strong);
+}
+
+/* Body cells */
+.filters-card--index .mini-table tbody td {
+  color: var(--ustock-text-main);
+}
+
+/* Active row: keep text strong */
+.filters-card--index .mini-table-row--active td {
+  color: var(--ustock-text-strong);
+}
+
+/* Bottom caption */
+.filters-card--index .mini-table-caption {
+  color: var(--ustock-text-muted);
+  opacity: 0.9;
+}
+
+/* Muted text inside this card */
+.filters-card--index .muted {
+  color: var(--ustock-text-muted);
+  opacity: 0.9;
+}
+
+/* ===== DARK MODE OVERRIDES ======================================== */
+
+body.ustock-dark .filters-card.filters-card--index {
+  /* softer green blend so text is readable */
+  background: radial-gradient(
+    circle at top left,
+    rgba(187, 247, 208, 0.26) 0%,
+    rgba(187, 247, 208, 0.10) 35%,
+    var(--ustock-bg-card) 100%
+  );
+  border-radius: 18px;
+  color: var(--ustock-text-strong);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+}
+
+/* Add glow only in dark mode */
+body.ustock-dark .filters-card--index .filters-card-header .panel-title {
+  text-shadow: 0 0 8px rgba(0, 0, 0, 0.7);
+}
+
+/* Help icon pop on dark blend */
+body.ustock-dark .filters-card--index .help-icon-button {
+  margin-left: 8px;
+  filter: drop-shadow(0 0 4px rgba(0, 0, 0, 0.75));
+}
+
+/* Dark-mode table tweaks */
+body.ustock-dark .filters-card--index .mini-table thead th {
+  color: var(--ustock-text-strong);
+  text-shadow: 0 0 6px rgba(0, 0, 0, 0.55);
+}
+
+body.ustock-dark .filters-card--index .mini-table tbody td {
+  color: var(--ustock-text-strong);
+}
+
+body.ustock-dark .filters-card--index .mini-table-caption,
+body.ustock-dark .filters-card--index .muted {
+  color: var(--ustock-text-strong);
+  opacity: 0.9;
+  text-shadow: 0 0 6px rgba(0, 0, 0, 0.55);
+}
+
+/* ===== Responsive tweaks =========================================== */
+
+@media (max-width: 768px) {
+  .filters-card.filters-card--index {
+    padding: 14px 16px;
+  }
+
+  .filters-card--index .filters-card-header .panel-title {
+    font-size: 17px;
+  }
+}

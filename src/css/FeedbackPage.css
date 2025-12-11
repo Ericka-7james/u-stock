@@ -1,0 +1,144 @@
+/* ========= FEEDBACK PAGE LAYOUT ==================================== */
+
+/* Single card modeled after .data-summary-card */
+.feedback-card {
+  background: var(--ustock-bg-card);
+  border-radius: 18px;
+  padding: 18px 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+  border: 1px solid var(--ustock-border-card);
+  border-top: 4px solid var(--ustock-green-main);
+  color: var(--ustock-text-main);
+}
+
+/* ========= HEADER =================================================== */
+
+.feedback-header {
+  margin-bottom: 8px;
+}
+
+.feedback-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--ustock-green-main);
+  margin-bottom: 6px;
+}
+
+.feedback-subtitle {
+  font-size: 14px;
+  color: var(--ustock-text-muted);
+  margin-bottom: 16px;
+  max-width: 560px;
+}
+
+/* ========= FORM FIELDS ============================================= */
+
+.feedback-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.feedback-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.feedback-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ustock-text-main);
+}
+
+/* Inputs follow theme tokens so dark mode works */
+.feedback-input,
+.feedback-select,
+.feedback-textarea {
+  background: var(--ustock-bg-card-soft);
+  color: var(--ustock-text-main);
+  border: 1px solid var(--ustock-border-card);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 14px;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.feedback-input::placeholder,
+.feedback-textarea::placeholder {
+  color: var(--ustock-text-muted);
+}
+
+/* Focus state using your green */
+.feedback-input:focus,
+.feedback-select:focus,
+.feedback-textarea:focus {
+  outline: none;
+  border-color: var(--ustock-green-main);
+  box-shadow: 0 0 0 1px rgba(15, 118, 110, 0.18);
+  background: var(--ustock-bg-card);
+}
+
+.feedback-textarea {
+  resize: vertical;
+  min-height: 140px;
+}
+
+/* Hint text */
+.feedback-hint,
+.feedback-footer-hint {
+  font-size: 13px;
+  color: var(--ustock-text-muted);
+}
+
+/* ========= BUTTONS ================================================= */
+
+.feedback-actions {
+  margin-top: 4px;
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.feedback-btn {
+  border-radius: 999px;
+  padding: 9px 20px;
+  font-size: 14px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: 0.15s ease;
+}
+
+/* Green primary button */
+.feedback-btn--primary {
+  background: var(--ustock-green-main);
+  color: #ffffff;
+}
+
+.feedback-btn--primary:hover {
+  background: #0d5f58;
+}
+
+/* Ghost button */
+.feedback-btn--ghost {
+  background: transparent;
+  color: var(--ustock-text-main);
+  border: 1px solid rgba(148, 163, 184, 0.4);
+}
+
+.feedback-btn--ghost:hover {
+  background: rgba(148, 163, 184, 0.08);
+}
+
+/* ========= MOBILE ================================================== */
+
+@media (max-width: 768px) {
+  .feedback-card {
+    padding: 18px 18px 22px;
+    margin-bottom: 20px;
+  }
+}

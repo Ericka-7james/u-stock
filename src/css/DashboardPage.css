@@ -4,7 +4,7 @@
 
 .dashboard-main {
   display: grid;
-  grid-template-columns: 1fr;   /* mobile & tablet: single column */
+  grid-template-columns: 1fr;
   gap: 20px;
   align-items: flex-start;
 }
@@ -83,6 +83,7 @@
   opacity: 1;
 }
 
+
 /* Make title + ? icon sit on one row */
 .card-title-row {
   display: flex;
@@ -158,6 +159,31 @@
   margin-top: 20px;
 }
 
+/* Mobile: tighter horizontal padding comes from .app-page; just stack */
+@media (max-width: 768px) {
+  .dashboard-main {
+    grid-template-columns: minmax(260px, 380px) minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    grid-template-areas:
+      "filters chart"
+      "filters sentiment";
+    gap: 1.5rem;
+  }
+
+  .panel-filters {
+    grid-area: filters;
+    transform: none !important;
+  }
+
+  .panel-chart {
+    grid-area: chart;
+  }
+
+  .panel-sentiment {
+    grid-area: sentiment;
+  }
+}
+
 /* Make header text pop over the green blend in dark mode */
 body.ustock-dark .card-header h2,
 body.ustock-dark .card-header .card-subtitle {
@@ -170,3 +196,4 @@ body.ustock-dark .card-header .card-subtitle {
   opacity: 1;
   text-shadow: 0 0 8px rgba(0, 0, 0, 0.65);
 }
+

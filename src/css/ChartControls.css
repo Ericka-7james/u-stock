@@ -1,0 +1,191 @@
+/* ========= CHART CONTROLS + TICKER DROPDOWN ======================== */
+
+.chart-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;           /* prevent overflow past card */
+}
+
+.chart-controls-label {
+  font-size: 12px;
+  color: var(--ustock-text-muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+/* Dark-theme tuning for dropdown */
+body.ustock-dark .chart-select-menu {
+  background: #020617;
+  border-color: rgba(148, 163, 184, 0.6);
+}
+
+body.ustock-dark .chart-select-option {
+  color: #e5e7eb;
+}
+
+body.ustock-dark .chart-select-option:hover {
+  background: rgba(15, 23, 42, 0.9);
+}
+
+/* still keep the same green for the selected row, but with bright text */
+body.ustock-dark .chart-select-option--active {
+  background: #ecfdf3;
+  color: #065f46;
+}
+
+/* Base “select-style” button, reused by sentiment VIEW dropdown too */
+.chart-select {
+  border-radius: 999px;
+  border: 1px solid var(--ustock-border-card);
+  padding: 4px 10px;
+  font-size: 12px;
+  background: var(--ustock-bg-card-soft);
+  color: var(--ustock-text-main);
+  cursor: pointer;
+}
+
+/* === Searchable Ticker Dropdown ==================================== */
+
+.chart-search-dropdown {
+  position: relative;
+  display: inline-block;
+  width: 180px;
+  min-width: 0; /* allow shrink on small screens */
+}
+
+.chart-select.chart-select--button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--ustock-border-card);
+  background: var(--ustock-bg-card-soft);
+  font-size: 0.9rem;
+  cursor: pointer;
+  outline: none;
+  color: var(--ustock-text-main);
+}
+
+.chart-select-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.chart-select-caret {
+  margin-left: 8px;
+  font-size: 0.7rem;
+}
+
+/* Floating menu so card size doesn’t change */
+.chart-select-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 20;
+  width: 100%;
+  background: var(--ustock-bg-card);
+  border-radius: 12px;
+  border: 1px solid var(--ustock-border-card);
+  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.12);
+  padding: 8px 0 6px;
+}
+
+/* Search pill inside the menu */
+.chart-search-input {
+  width: calc(100% - 16px);
+  margin: 0 8px 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--ustock-green-soft);
+  font-size: 0.85rem;
+  outline: none;
+  background: #ecfdf3;
+  color: #065f46;
+}
+
+.chart-search-input::placeholder {
+  color: #9ca3af;
+}
+
+.chart-search-input:focus {
+  border-color: var(--ustock-green-main);
+  box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.25);
+}
+
+/* Scrollable list of options */
+.chart-select-options {
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+/* Green-ish scrollbar */
+.chart-select-options::-webkit-scrollbar {
+  width: 6px;
+}
+
+.chart-select-options::-webkit-scrollbar-track {
+  background: var(--ustock-bg-card-soft);
+  border-radius: 999px;
+}
+
+.chart-select-options::-webkit-scrollbar-thumb {
+  background: #bbf7d0;
+  border-radius: 999px;
+}
+
+.chart-select-options::-webkit-scrollbar-thumb:hover {
+  background: #6ee7b7;
+}
+
+.chart-select-option {
+  padding: 6px 10px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  white-space: nowrap;
+  color: var(--ustock-text-main);
+}
+
+.chart-select-option:hover {
+  background: #f3f4f6;
+}
+
+.chart-select-option--active {
+  background: #ecfdf3;     /* mint green */
+  color: #065f46;          /* deep green text so it's readable */
+  font-weight: 500;
+}
+
+.chart-select-option--empty {
+  padding: 6px 10px;
+  font-size: 0.8rem;
+  color: #9ca3af;
+  cursor: default;
+}
+
+/* Small / medium screens: dropdown under subtitle, full width */
+@media (max-width: 1024px) {
+  /* Stack header text + controls vertically (card-header defined in DashboardPage.css) */
+  .card-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .chart-controls {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .chart-search-dropdown {
+    width: 100%;
+  }
+}

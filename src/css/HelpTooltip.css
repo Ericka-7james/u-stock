@@ -1,0 +1,102 @@
+/* ========= HELP ICON + FULL-SCREEN MODAL =========================== */
+
+/* Circular question mark button */
+/* Circular question mark button — bold, thick, identical to reference */
+.help-icon-button {
+  height: 18px;
+  width: 18px;
+  min-height: 20px;
+  min-width: 20px;
+
+  border-radius: 999px;
+  border: 3px solid #111;        /* thick black circle */
+  
+  background: #ffffff;
+  color: #111;                   /* black question mark */
+  font-weight: 700;              /* thick question mark */
+  font-size: 0.9rem;             /* slightly bigger */
+  line-height: 1;                /* exact center */
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  cursor: pointer;
+  padding: 0;
+
+  transition: background 0.15s ease;
+}
+
+.help-icon-button:hover {
+  background: #f3f4f6;
+}
+
+/* Full-screen dark overlay */
+/* Full-screen dark overlay */
+.help-popover-backdrop {
+  position: fixed;
+  inset: 0;
+  width: 100vw;   /* make sure it spans the viewport */
+  height: 100vh;  /* some browsers like this explicitly */
+
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  z-index: 9999;  /* raise above any panels/cards/dropdowns */
+}
+
+/* Centered white card */
+.help-popover {
+  position: relative;
+  background: #ffffff;
+  border-radius: 18px;
+  padding: 1.6rem 1.9rem;
+  width: min(480px, 90vw);
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.25);
+}
+
+.help-popover__close {
+  position: absolute;
+  top: 0.85rem;
+  right: 0.9rem;
+  border: none;
+  background: transparent;
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+  color: #4b5563;
+}
+
+.help-popover__title {
+  margin: 0 0 0.5rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.help-popover__text {
+  margin: 0 0 0.75rem;
+  font-size: 0.9rem;
+  color: #4b5563;
+}
+
+.help-popover__list {
+  margin: 0 0 0.75rem;
+  padding-left: 1.1rem;
+  font-size: 0.88rem;
+  color: #374151;
+}
+
+.help-popover__note {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+/* Let sentiment card reuse the same title-with-icon pattern */
+.sentiment-card__title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
