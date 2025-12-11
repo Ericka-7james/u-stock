@@ -19,6 +19,7 @@ export default function NavBar({
   const isIndexFunds = location.pathname.startsWith("/index-funds");
   const isAboutMe = location.pathname.startsWith("/about");
   const isFeedback = location.pathname.startsWith("/feedback");
+  const isResume = location.pathname.startsWith("/resume"); // ✅ you already had this
 
   const closeNav = () => setNavOpen(false);
 
@@ -51,88 +52,97 @@ export default function NavBar({
         </div>
 
         <nav className="side-nav-menu">
-            <Link
-                to="/"
-                className={
-                "side-nav-item " + (isDashboard ? "side-nav-item--active" : "")
-                }
-                onClick={closeNav}
+          {/* 🔹 NEW: Resume link (public) */}
+          <Link
+            to="/resume"
+            className={
+              "side-nav-item " + (isResume ? "side-nav-item--active" : "")
+            }
+            onClick={closeNav}
+          >
+            <span className="side-nav-item-dot" />
+            Resume
+          </Link>
+
+          <Link
+            to="/"
+            className={
+              "side-nav-item " + (isDashboard ? "side-nav-item--active" : "")
+            }
+            onClick={closeNav}
+          >
+            <span className="side-nav-item-dot" />
+            Dashboard
+          </Link>
+
+          <Link
+            to="/data-sources"
+            className={
+              "side-nav-item " +
+              (isDatasources ? "side-nav-item--active" : "")
+            }
+            onClick={closeNav}
+          >
+            <span className="side-nav-item-dot" />
+            Data Sources
+          </Link>
+
+          <Link
+            to="/index-funds"
+            className={
+              "side-nav-item " + (isIndexFunds ? "side-nav-item--active" : "")
+            }
+            onClick={closeNav}
+          >
+            <span className="side-nav-item-dot" />
+            Index Funds
+          </Link>
+
+          <Link
+            to="/about"
+            className={
+              "side-nav-item " + (isAboutMe ? "side-nav-item--active" : "")
+            }
+            onClick={closeNav}
+          >
+            <span className="side-nav-item-dot" />
+            About me
+          </Link>
+
+          <Link
+            to="/feedback"
+            className={
+              "side-nav-item " + (isFeedback ? "side-nav-item--active" : "")
+            }
+            onClick={closeNav}
+          >
+            <span className="side-nav-item-dot" />
+            Feedback
+          </Link>
+
+          {/* Sign Out stays the same */}
+          {user && (
+            <button
+              type="button"
+              className="side-nav-item side-nav-signout"
+              onClick={() => {
+                handleLogout();
+                closeNav();
+              }}
             >
-                <span className="side-nav-item-dot" />
-                Dashboard
-            </Link>
-
-            <Link
-                to="/data-sources"
-                className={
-                "side-nav-item " + (isDatasources ? "side-nav-item--active" : "")
-                }
-                onClick={closeNav}
-            >
-                <span className="side-nav-item-dot" />
-                Data Sources
-            </Link>
-
-            <Link
-                to="/index-funds"
-                className={
-                "side-nav-item " + (isIndexFunds ? "side-nav-item--active" : "")
-                }
-                onClick={closeNav}
-            >
-                <span className="side-nav-item-dot" />
-                Index Funds
-            </Link>
-
-            <Link
-                to="/about"
-                className={
-                "side-nav-item " + (isAboutMe ? "side-nav-item--active" : "")
-                }
-                onClick={closeNav}
-            >
-                <span className="side-nav-item-dot" />
-                About me
-            </Link>
-
-            <Link
-                to="/feedback"
-                className={
-                "side-nav-item " + (isFeedback ? "side-nav-item--active" : "")
-                }
-                onClick={closeNav}
-            >
-                <span className="side-nav-item-dot" />
-                Feedback
-            </Link>
-
-            {/* ✅ NEW — Sign Out directly under Feedback */}
-            {user && (
-                <button
-                type="button"
-                className="side-nav-item side-nav-signout"
-                onClick={() => {
-                    handleLogout();
-                    closeNav();
-                }}
-                >
-                <span className="side-nav-item-dot" />
-                Sign out
-                </button>
-            )}
-            </nav>
-
+              <span className="side-nav-item-dot" />
+              Sign out
+            </button>
+          )}
+        </nav>
 
         <div className="side-nav-footer">
-            <div className="side-nav-footer-divider" />
-
-            <span className="side-nav-footer-name">Made by Ericka James</span>
-            </div>
+          <div className="side-nav-footer-divider" />
+          <span className="side-nav-footer-name">Made by Ericka James</span>
+        </div>
       </aside>
 
-      {/* Top bar */}
-      {/* ...topbar JSX stays the same, but Sign out there still uses handleLogout... */}
-
+      {/* Top bar stays exactly as you had it */}
       <header className="topbar">
         <div className="topbar-left">
           <button
