@@ -69,7 +69,7 @@ function App() {
     <Routes>
       {/* Root: landing vs dashboard based on auth */}
       <Route path="/" element={<HomeChooser />} />
-      <Route path="/resume" element={<ResumePage />} />
+      {/* <Route path="/resume" element={<ResumePage />} /> */}
 
       {/* Auth routes */}
       <Route path="/auth" element={<AuthGate />} />

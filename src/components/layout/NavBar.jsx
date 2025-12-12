@@ -19,7 +19,7 @@ export default function NavBar({
   const isIndexFunds = location.pathname.startsWith("/index-funds");
   const isAboutMe = location.pathname.startsWith("/about");
   const isFeedback = location.pathname.startsWith("/feedback");
-  const isResume = location.pathname.startsWith("/resume"); // ✅ you already had this
+  // const isResume = location.pathname.startsWith("/resume"); // ✅ you already had this
 
   const closeNav = () => setNavOpen(false);
 
@@ -53,7 +53,7 @@ export default function NavBar({
 
         <nav className="side-nav-menu">
           {/* 🔹 NEW: Resume link (public) */}
-          <Link
+          {/* <Link
             to="/resume"
             className={
               "side-nav-item " + (isResume ? "side-nav-item--active" : "")
@@ -62,7 +62,7 @@ export default function NavBar({
           >
             <span className="side-nav-item-dot" />
             Resume
-          </Link>
+          </Link> */}
 
           <Link
             to="/"
