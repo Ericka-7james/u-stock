@@ -6,6 +6,7 @@ import DatasourcesPage from "./components/pages/DatasourcesPage";
 import IndexFundsPage from "./components/pages/IndexFundsPage";
 import AboutPage from "./components/pages/AboutPage";
 import FeebackPage from "./components/pages/FeedbackPage";
+import ResumePage from "./components/pages/ResumePage";
 
 import AuthPage from "./components/auth/AuthPage";
 import SignupPage from "./components/auth/SignupPage";
@@ -68,6 +69,7 @@ function App() {
     <Routes>
       {/* Root: landing vs dashboard based on auth */}
       <Route path="/" element={<HomeChooser />} />
+      {/* <Route path="/resume" element={<ResumePage />} /> */}
 
       {/* Auth routes */}
       <Route path="/auth" element={<AuthGate />} />

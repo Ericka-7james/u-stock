@@ -26,10 +26,6 @@
 .index-hero-text .page-title {
   margin-bottom: 4px;
   color: var(--ustock-green-main);
-  font-size: 32px;
-  line-height: 1.1;
-  overflow-wrap: break-word;
-  word-break: break-word;
 }
 
 .index-hero-text .muted {
@@ -131,14 +127,6 @@
 @media (min-width: 769px) and (max-width: 1024px) {
   .fund-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-/* Smaller H1 on very small screens */
-@media (max-width: 480px) {
-  .index-hero-text .page-title {
-    font-size: 24px;
-    line-height: 1.15;
   }
 }
 

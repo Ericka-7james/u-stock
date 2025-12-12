@@ -80,7 +80,7 @@ export default function IndexFundsPage() {
     <AppShell>
       <div className="index-funds-page">
         {/* Hero card */}
-        <header className="index-hero">
+        <header className="panel index-hero">
           <div className="index-hero-text">
             <h1 className="page-title">Index Funds & Quant Foundations</h1>
             <p className="muted">

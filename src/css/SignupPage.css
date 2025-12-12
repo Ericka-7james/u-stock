@@ -1,0 +1,200 @@
+/* ========= SIGNUP PAGE (U-Stock Style) ============================ */
+
+/* Wrapper lives *inside* .app-page now */
+.signup-page {
+  width: 100%;
+  min-height: calc(100vh - 64px); /* below the topbar */
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+/* Green card container */
+.signup-card {
+  width: 100%;
+  max-width: 100%;
+  background: var(--ustock-green-main);
+  color: #ffffff;
+  padding: 16px 16px;
+  border-radius: 26px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.14);
+}
+
+/* Title + subtitle */
+.signup-title {
+  font-size: 26px;
+  font-weight: 700;
+  margin-bottom: 6px;
+  text-align: center;
+}
+
+.signup-subtitle {
+  font-size: 14px;
+  text-align: center;
+  margin-bottom: 28px;
+  opacity: 0.9;
+}
+
+/* Vertical form layout */
+.signup-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* Input wrapper */
+.signup-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.signup-field span {
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.signup-field input {
+  width: 100%;
+  padding: 8px 8px;
+  box-sizing: border-box;  
+  border: none;
+  border-radius: 999px;
+  background: #ffffff;
+  font-size: 14px;
+  color: #111827;
+  box-shadow: 0 6px 16px rgba(255, 255, 255, 0.2);
+}
+
+/* Avatar section */
+.signup-avatar-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 28px;
+}
+
+.signup-avatar-grid {
+  margin-top: 8px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 9px;
+}
+
+.signup-avatar-chip {
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  cursor: pointer;
+  transition: 0.15s ease;
+}
+
+.signup-avatar-chip--active {
+  background: #ffffff;
+  color: var(--ustock-green-main);
+  border-color: #ffffff;
+}
+
+/* Submit button */
+.signup-btn {
+  width: 100%;
+  padding: 12px 16px;
+  border-radius: 999px;
+  border: none;
+  font-weight: 700;
+  font-size: 16px;
+  background: #ffffff;
+  color: var(--ustock-green-main);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.15);
+  cursor: pointer;
+  transition: transform 0.15s ease;
+  margin-top: 8px;
+}
+
+.signup-btn:hover {
+  transform: translateY(-2px);
+}
+
+/* "Already registered" row */
+.signup-alt {
+  text-align: center;
+  margin-top: 18px;
+  font-size: 14px;
+}
+
+.signup-alt a {
+  color: #ffffff;
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .signup-page {
+    align-items: flex-start;
+  }
+
+  .signup-card {
+    max-width: 100%;
+    padding: 32px 16px;
+    border-radius: 22px;
+  }
+
+  .signup-field,
+  .signup-avatar-section {
+    padding: 0; /* instead of 0 0x; */
+  }
+}
+
+@media (max-width: 480px) {
+  .signup-card {
+    padding: 28px 16px;
+  }
+
+  .signup-avatar-chip {
+    width: 40px;
+    height: 40px;
+  }
+}
+
+/* ===== DARK MODE TWEAKS FOR SIGNUP =============================== */
+
+body.ustock-dark .signup-card {
+  /* let it follow your dark theme instead of bright teal */
+  background: var(--ustock-bg-card);
+  color: var(--ustock-text-main);
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.7);
+}
+
+/* labels + headings stay readable */
+body.ustock-dark .signup-title,
+body.ustock-dark .signup-subtitle,
+body.ustock-dark .signup-field span,
+body.ustock-dark .signup-alt a {
+  color: var(--ustock-text-strong);
+}
+
+/* inputs match other cards in dark mode */
+body.ustock-dark .signup-field input {
+  background: var(--ustock-bg-card-soft);
+  color: var(--ustock-text-main);
+  box-shadow: 0 0 0 1px var(--ustock-border-card);
+}
+
+/* button becomes green-on-dark instead of white pill */
+body.ustock-dark .signup-btn {
+  background: var(--ustock-green-main);
+  color: #f9fafb;
+  box-shadow: 0 14px 34px rgba(15, 118, 110, 0.5);
+}
+
