@@ -5,6 +5,7 @@ export default function ResumePage() {
   return (
     <div className="resume-container">
       <header className="resume-header">
+        <h1>Linkedin : Fullstack Lab</h1>
         <h1>Ericka James</h1>
         <p>Software Engineer • FinTech • AI/ML • Full-Stack Developer</p>
       </header>
