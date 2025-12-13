@@ -198,3 +198,8 @@ body.ustock-dark .signup-btn {
   box-shadow: 0 14px 34px rgba(15, 118, 110, 0.5);
 }
 
+.form-error {
+  color: #dc2626;
+  font-weight: 700;
+  margin-top: 8px;
+}
