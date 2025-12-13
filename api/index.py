@@ -8,6 +8,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
 from supabase import create_client, Client
 
+import re
+
 # Load repo-root .env for local dev; in Vercel this is harmless.
 ROOT = Path(__file__).resolve().parents[1]
 load_dotenv(ROOT / ".env")
@@ -61,9 +63,32 @@ def debug_env():
         "ENV": ENV,
     }
 
+PASSWORD_MIN_LEN = 12
+
+def validate_password(password: str, email: str, username: str | None = None) -> None:
+    if len(password) < PASSWORD_MIN_LEN:
+        raise HTTPException(status_code=400, detail=f"Password must be at least {PASSWORD_MIN_LEN} characters.")
+
+    if not re.search(r"[A-Z]", password):
+        raise HTTPException(status_code=400, detail="Password must include at least 1 uppercase letter.")
+    if not re.search(r"[a-z]", password):
+        raise HTTPException(status_code=400, detail="Password must include at least 1 lowercase letter.")
+    if not re.search(r"\d", password):
+        raise HTTPException(status_code=400, detail="Password must include at least 1 number.")
+    if not re.search(r"[^\w\s]", password):
+        raise HTTPException(status_code=400, detail="Password must include at least 1 special character.")
+
+    email_local = email.split("@")[0].lower()
+    if email_local and email_local in password.lower():
+        raise HTTPException(status_code=400, detail="Password must not contain your email.")
+
+    if username and username.lower() in password.lower():
+        raise HTTPException(status_code=400, detail="Password must not contain your username.")
+
 class SignupBody(BaseModel):
     email: EmailStr
     password: str
+    username: Optional[str] = None
     avatar: Optional[str] = None
 
 class LoginBody(BaseModel):
@@ -82,6 +107,7 @@ class AuthResponse(BaseModel):
 
 @app.post("/auth/signup", response_model=AuthResponse)
 def signup(body: SignupBody):
+    validate_password(body.password, body.email, body.username)
     sb = get_supabase()
     try:
         res = sb.auth.sign_up({"email": body.email, "password": body.password})
