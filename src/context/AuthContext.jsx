@@ -61,14 +61,20 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
-  const persist = (nextUser, nextToken) => {
-    setUser(nextUser);
-    setToken(nextToken);
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({ user: nextUser, token: nextToken })
-    );
+  const persist = (user, accessToken, refreshToken = null) => {
+    setUser(user);
+    setToken(accessToken);
+
+    localStorage.setItem("ustock_user", JSON.stringify(user));
+    localStorage.setItem("ustock_token", accessToken);
+
+    if (refreshToken) {
+      localStorage.setItem("ustock_refresh_token", refreshToken);
+    } else {
+      localStorage.removeItem("ustock_refresh_token");
+    }
   };
+
 
   const clearAuth = () => {
     setUser(null);
@@ -85,13 +91,14 @@ export function AuthProvider({ children }) {
     persist(data.user, data.token);
   };
 
-  const signup = async ({ name, email, phone, password, avatar }) => {
+  const signup = async ({ username, email, password, avatar }) => {
     const data = await apiRequest("/auth/signup", {
       method: "POST",
-      body: { name, email, phone, password, avatar },
+      body: { username, email, password, avatar },
     });
-    // auto-login after sign up
-    persist(data.user, data.token);
+
+    // store what backend actually returns
+    persist(data.user, data.access_token, data.refresh_token);
   };
 
   const logout = () => {

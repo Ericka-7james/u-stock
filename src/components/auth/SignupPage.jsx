@@ -8,11 +8,12 @@ import "./SignupPage.css";
 export default function SignupPage() {
   const { signup } = useAuth();
 
-  const [name, setName] = useState("");
+  const [name, setName] = useState(""); // maps to username for backend
   const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
+  const [phone, setPhone] = useState(""); // optional UI only for now
   const [password, setPassword] = useState("");
   const [avatar, setAvatar] = useState("📈");
+
   const [errors, setErrors] = useState({
     name: "",
     email: "",
@@ -20,6 +21,7 @@ export default function SignupPage() {
     password: "",
     backend: "",
   });
+
   const [loading, setLoading] = useState(false);
 
   const avatars = ["📈", "📊", "🤖", "💡"];
@@ -33,46 +35,54 @@ export default function SignupPage() {
       backend: "",
     };
 
-    // --- Name: required ---
     const trimmedName = name.trim();
+    const trimmedEmail = email.trim();
+    const trimmedPhone = phone.trim();
+
+    // --- Name (username): required ---
     if (!trimmedName) {
       nextErrors.name = "Please enter your name.";
     }
 
     // --- Email: required + basic pattern ---
-    const trimmedEmail = email.trim();
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!trimmedEmail || !emailRegex.test(trimmedEmail)) {
       nextErrors.email = "Please enter a valid email address.";
     }
 
-    // --- Phone: required, 10–15 digits (ignore formatting chars) ---
-    const trimmedPhone = phone.trim();
-    const phoneDigits = trimmedPhone.replace(/\D/g, "");
-    if (!trimmedPhone || phoneDigits.length < 10 || phoneDigits.length > 15) {
-      nextErrors.phone =
-        "Please enter a valid phone number (10–15 digits).";
+    // --- Phone: OPTIONAL (if provided, validate digits length) ---
+    if (trimmedPhone) {
+      const phoneDigits = trimmedPhone.replace(/\D/g, "");
+      if (phoneDigits.length < 10 || phoneDigits.length > 15) {
+        nextErrors.phone = "Please enter a valid phone number (10–15 digits).";
+      }
     }
 
-    // --- Password: required, min length, at least one special char ---
-    if (!password || password.length < 8) {
-      nextErrors.password =
-        "Password must be at least 8 characters long.";
-    } else {
-      const specialCharRegex = /[^A-Za-z0-9]/;
-      if (!specialCharRegex.test(password)) {
-        nextErrors.password =
-          "Password must include at least one special character.";
-      }
+    // --- Password: must match backend rules ---
+    const emailLocal = trimmedEmail.includes("@")
+      ? trimmedEmail.split("@")[0].toLowerCase()
+      : "";
+
+    if (!password || password.length < 12) {
+      nextErrors.password = "Password must be at least 12 characters long.";
+    } else if (!/[A-Z]/.test(password)) {
+      nextErrors.password = "Password must include at least 1 uppercase letter.";
+    } else if (!/[a-z]/.test(password)) {
+      nextErrors.password = "Password must include at least 1 lowercase letter.";
+    } else if (!/\d/.test(password)) {
+      nextErrors.password = "Password must include at least 1 number.";
+    } else if (!/[^\w\s]/.test(password)) {
+      nextErrors.password = "Password must include at least 1 special character.";
+    } else if (emailLocal && password.toLowerCase().includes(emailLocal)) {
+      nextErrors.password = "Password must not contain your email.";
+    } else if (trimmedName && password.toLowerCase().includes(trimmedName.toLowerCase())) {
+      nextErrors.password = "Password must not contain your name/username.";
     }
 
     setErrors(nextErrors);
 
     const hasClientError =
-      !!nextErrors.name ||
-      !!nextErrors.email ||
-      !!nextErrors.phone ||
-      !!nextErrors.password;
+      !!nextErrors.name || !!nextErrors.email || !!nextErrors.phone || !!nextErrors.password;
 
     return !hasClientError;
   };
@@ -80,7 +90,6 @@ export default function SignupPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // Clear any previous backend error
     setErrors((prev) => ({ ...prev, backend: "" }));
 
     const ok = validate();
@@ -88,18 +97,19 @@ export default function SignupPage() {
 
     setLoading(true);
     try {
+      // IMPORTANT: backend expects `username`, not `name`
       await signup({
-        name: name.trim(),
+        username: name.trim(),
         email: email.trim(),
-        phone: phone.trim(),
         password,
         avatar,
       });
+
       // Optional: redirect or show success here
+      // e.g. navigate("/dashboard")
     } catch (err) {
       const message =
-        err?.message ||
-        "Something went wrong while creating your account.";
+        err?.message || "Something went wrong while creating your account.";
       setErrors((prev) => ({ ...prev, backend: message }));
     } finally {
       setLoading(false);
@@ -115,18 +125,10 @@ export default function SignupPage() {
             Tell us a bit about yourself — pick an icon and get started!
           </p>
 
-          {errors.backend && (
-            <p className="signup-error signup-error--backend">
-              {errors.backend}
-            </p>
-          )}
+          {/* backend errors */}
+          {errors.backend && <p className="form-error">{errors.backend}</p>}
 
-          <form
-            className="signup-form"
-            onSubmit={handleSubmit}
-            // Disable browser native validation so we always show our own messages
-            noValidate
-          >
+          <form className="signup-form" onSubmit={handleSubmit} noValidate>
             {/* Name */}
             <label className="signup-field">
               <span>Name</span>
@@ -136,9 +138,7 @@ export default function SignupPage() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
               />
-              {errors.name && (
-                <p className="signup-error">{errors.name}</p>
-              )}
+              {errors.name && <p className="signup-error">{errors.name}</p>}
             </label>
 
             {/* Email */}
@@ -150,24 +150,19 @@ export default function SignupPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
-              {errors.email && (
-                <p className="signup-error">{errors.email}</p>
-              )}
+              {errors.email && <p className="signup-error">{errors.email}</p>}
             </label>
 
-            {/* Phone */}
+            {/* Phone (optional) */}
             <label className="signup-field">
-              <span>Phone number</span>
+              <span>Phone number (optional)</span>
               <input
                 type="tel"
-                required
                 placeholder="(555) 555-5555"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
               />
-              {errors.phone && (
-                <p className="signup-error">{errors.phone}</p>
-              )}
+              {errors.phone && <p className="signup-error">{errors.phone}</p>}
             </label>
 
             {/* Password */}
@@ -179,9 +174,7 @@ export default function SignupPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
-              {errors.password && (
-                <p className="signup-error">{errors.password}</p>
-              )}
+              {errors.password && <p className="signup-error">{errors.password}</p>}
             </label>
 
             {/* Avatar selection */}
@@ -194,9 +187,7 @@ export default function SignupPage() {
                     type="button"
                     className={
                       "signup-avatar-chip" +
-                      (avatar === icon
-                        ? " signup-avatar-chip--active"
-                        : "")
+                      (avatar === icon ? " signup-avatar-chip--active" : "")
                     }
                     onClick={() => setAvatar(icon)}
                   >
@@ -207,17 +198,12 @@ export default function SignupPage() {
             </div>
 
             {/* Submit */}
-            <button
-              type="submit"
-              className="signup-btn"
-              disabled={loading}
-            >
+            <button type="submit" className="signup-btn" disabled={loading}>
               {loading ? "Creating account…" : "Sign Up"}
             </button>
 
             <div className="signup-alt">
-              Already registered?{" "}
-              <Link to="/auth">Sign in here →</Link>
+              Already registered? <Link to="/auth">Sign in here →</Link>
             </div>
           </form>
         </div>
