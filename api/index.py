@@ -8,6 +8,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
 from supabase import create_client, Client
 
+from fastapi import Depends
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+
 import re
 
 # Load repo-root .env for local dev; in Vercel this is harmless.
@@ -43,6 +46,24 @@ def get_supabase() -> Client:
     if not SUPABASE_ANON_KEY:
         raise HTTPException(status_code=500, detail="SUPABASE_ANON_KEY is missing")
     return create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
+
+def require_token(creds: HTTPAuthorizationCredentials | None = Depends(bearer)) -> str:
+    if not creds or not creds.credentials:
+        raise HTTPException(status_code=401, detail="Missing bearer token")
+    return creds.credentials
+
+
+@app.get("/integrations")
+def list_integrations(token: str = Depends(require_token)):
+    # ✅ Stub response for now (no DB yet).
+    # Later this will read from Supabase table `public.integrations` (per-user).
+    return {
+        "apps": [
+            {"provider": "alpaca", "status": "not_connected"},
+            {"provider": "polygon", "status": "not_connected"},
+            {"provider": "tradingview", "status": "not_connected"},
+        ]
+    }
 
 @app.get("/")
 def root():

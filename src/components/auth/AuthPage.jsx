@@ -58,6 +58,7 @@ export default function AuthPage() {
                   <span className="auth-input-icon">🔒</span>
                   <input
                     type="password"
+                    autoComplete="current-password"
                     placeholder="Password"
                     value={loginPassword}
                     onChange={(e) => setLoginPassword(e.target.value)}

@@ -20,6 +20,7 @@ export default function NavBar({
   const isAboutMe = location.pathname.startsWith("/about");
   const isFeedback = location.pathname.startsWith("/feedback");
   // const isResume = location.pathname.startsWith("/resume"); // ✅ you already had this
+  const isConnectedApps = location.pathname.startsWith("/connected-apps");
 
   const closeNav = () => setNavOpen(false);
 
@@ -118,6 +119,17 @@ export default function NavBar({
           >
             <span className="side-nav-item-dot" />
             Feedback
+          </Link>
+
+          <Link
+            to="/connected-apps"
+            className={
+              "side-nav-item " + (isConnectedApps ? "side-nav-item--active" : "")
+            }
+            onClick={closeNav}
+          >
+            <span className="side-nav-item-dot" />
+            Connected Apps
           </Link>
 
           {/* Sign Out stays the same */}

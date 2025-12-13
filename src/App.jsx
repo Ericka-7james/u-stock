@@ -13,6 +13,7 @@ import SignupPage from "./components/auth/SignupPage";
 import LandingPage from "./components/landing/LandingPage";
 
 import { useAuth } from "./context/AuthContext";
+import ConnectedAppsPage from "./components/apps/ConnectedAppsPage";
 
 import "./App.css";
 
@@ -107,6 +108,14 @@ function App() {
             <FeebackPage />
           </RequireAuth>
         }
+      />
+      <Route 
+        path="/connected-apps" 
+        element={
+          <RequireAuth>
+            <ConnectedAppsPage />
+          </RequireAuth>
+        } 
       />
 
       {/* Fallback */}

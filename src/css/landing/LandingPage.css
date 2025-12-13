@@ -1,0 +1,381 @@
+.landing-page {
+  background: var(--ustock-bg-page);
+  color: var(--ustock-text-main);
+}
+
+/* HERO */
+
+.landing-hero {
+  background: linear-gradient(
+    135deg,
+    var(--ustock-green-main) 0%,
+    #0f766e 45%,
+    #2563eb 100%
+  );
+  color: #ffffff;
+  padding: 72px 24px 80px;
+}
+
+.landing-hero-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+  gap: 40px;
+  align-items: center;
+}
+
+.landing-hero-title {
+  font-size: 40px;
+  line-height: 1.1;
+  margin: 0 0 16px;
+}
+
+.landing-hero-subtitle {
+  font-size: 15px;
+  max-width: 480px;
+  opacity: 0.95;
+  margin: 0 0 24px;
+}
+
+.landing-hero-ctas {
+  display: flex;
+  gap: 12px;
+}
+
+.landing-cta-primary {
+  border: none;
+  border-radius: 999px;
+  padding: 10px 22px;
+  background: #fbbf24;
+  color: #1f2933;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.landing-cta-secondary {
+  border-radius: 999px;
+  padding: 10px 22px;
+  background: transparent;
+  border: 1px solid rgba(248, 250, 252, 0.7);
+  color: #e5e7eb;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+/* hero mock card */
+
+.landing-hero-right {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.landing-hero-card {
+  width: 100%;
+  max-width: 380px;
+  background: var(--ustock-bg-card);
+  border-radius: 20px;
+  padding: 16px 16px 18px;
+  box-shadow: 0 20px 45px rgba(15, 23, 42, 0.35);
+}
+
+.landing-hero-card.small {
+  max-width: 320px;
+}
+
+.landing-hero-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.landing-hero-label {
+  font-size: 12px;
+  color: var(--ustock-text-muted);
+}
+
+.landing-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--ustock-card-chip-bg);
+  font-size: 11px;
+}
+
+.landing-hero-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.landing-hero-mock-chart {
+  height: 120px;
+  border-radius: 16px;
+  background: radial-gradient(
+    circle at top left,
+    var(--ustock-green-soft) 0%,
+    var(--ustock-bg-card-soft) 40%,
+    var(--ustock-bg-card) 100%
+  );
+}
+
+.landing-hero-mock-row {
+  height: 26px;
+  border-radius: 999px;
+  background: var(--ustock-bg-card-soft);
+}
+
+.landing-hero-mock-row.thin {
+  height: 18px;
+  width: 70%;
+}
+
+/* SECTIONS */
+
+.landing-section {
+  padding: 64px 24px;
+}
+
+.landing-section-inner {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.landing-section-title {
+  font-size: 24px;
+  font-weight: 700;
+  margin: 0 0 8px;
+  color: var(--ustock-green-main);
+}
+
+.landing-section-text {
+  max-width: 620px;
+  font-size: 14px;
+  color: var(--ustock-text-muted);
+  margin: 0 0 24px;
+}
+
+.landing-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.landing-feature-card {
+  background: var(--ustock-bg-card);
+  border-radius: 18px;
+  padding: 16px 18px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+  border: 1px solid var(--ustock-border-card);
+}
+
+.landing-feature-card h3 {
+  margin: 0 0 6px;
+  font-size: 15px;
+  color: var(--ustock-text-strong);
+}
+
+.landing-feature-card p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ustock-text-muted);
+}
+
+/* ROADMAP */
+
+.landing-roadmap-inner {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 32px;
+  align-items: start;
+}
+
+.landing-roadmap-left {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.landing-roadmap-right {
+  display: flex;
+  justify-content: center;
+}
+
+.landing-roadmap-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 18px;
+  font-size: 13px;
+  color: var(--ustock-text-main);
+}
+
+.landing-roadmap-list li + li {
+  margin-top: 4px;
+}
+
+.landing-cta-outline {
+  border-radius: 999px;
+  padding: 8px 20px;
+  border: 1px solid var(--ustock-green-main);
+  background: #ffffff;
+  color: var(--ustock-green-main);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.landing-roadmap-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--ustock-card-chip-bg);
+  font-size: 11px;
+  margin-bottom: 12px;
+}
+
+.landing-roadmap-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--ustock-text-main);
+}
+
+.landing-roadmap-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.landing-step-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--ustock-green-main);
+}
+
+/* ROADMAP CARD (used by dark mode too) */
+.landing-roadmap-card {
+  width: 100%;
+  max-width: 520px;
+  background: var(--ustock-bg-card);
+  border-radius: 18px;
+  padding: 18px 18px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+  border: 1px solid var(--ustock-border-card);
+}
+
+/* Keep text looking natural inside cards (not narrow columns) */
+.landing-roadmap-card .landing-section-text {
+  max-width: none;
+  margin: 0 0 12px;
+}
+
+.landing-roadmap-card--left .landing-section-text {
+  margin-bottom: 18px;
+}
+
+/* FOOTER */
+
+.landing-footer {
+  padding: 20px 24px 28px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--ustock-text-muted);
+}
+
+/* RESPONSIVE */
+
+@media (max-width: 900px) {
+  .landing-hero-inner {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 18px;
+  }
+
+  .landing-hero-title {
+    font-size: 32px;
+  }
+
+  .landing-grid-3 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .landing-roadmap-inner {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 18px;
+    align-items: stretch;
+  }
+
+  .landing-roadmap-right {
+    justify-content: flex-start;
+  }
+
+  .landing-roadmap-card {
+    max-width: none;
+    width: 100%;
+  }
+
+  /* Hide hero image on mobile/tablet */
+  .landing-hero-right {
+    display: none;
+  }
+}
+
+.landing-hero-img {
+  width: 100%;
+  max-width: 520px;
+  object-fit: contain;
+  border-radius: 16px;
+  box-shadow: 0 20px 55px rgba(15, 23, 42, 0.25);
+}
+
+/* Hide hero image on smaller screens */
+@media (max-width: 768px) {
+  .landing-hero-right {
+    display: none;
+  }
+}
+
+/* ========== DARK MODE OVERRIDES FOR LANDING ================ */
+
+body.ustock-dark .landing-hero {
+  background: linear-gradient(
+    135deg,
+    #022c22 0%,
+    #0f766e 45%,
+    #1d4ed8 100%
+  );
+}
+
+body.ustock-dark .landing-feature-card,
+body.ustock-dark .landing-roadmap-card {
+  background: var(--ustock-bg-card);
+  border-color: var(--ustock-border-card);
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.75);
+}
+
+body.ustock-dark .landing-section-title {
+  color: var(--ustock-green-soft);
+}
+
+body.ustock-dark .landing-section-text,
+body.ustock-dark .landing-feature-card p,
+body.ustock-dark .landing-roadmap-list,
+body.ustock-dark .landing-roadmap-steps {
+  color: var(--ustock-text-muted);
+}
+
+body.ustock-dark .landing-cta-outline {
+  background: transparent;
+  color: var(--ustock-green-soft);
+  border-color: var(--ustock-green-soft);
+}
+
+body.ustock-dark .landing-hero-card {
+  background: var(--ustock-bg-card);
+}
