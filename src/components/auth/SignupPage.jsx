@@ -170,6 +170,7 @@ export default function SignupPage() {
               <span>Password</span>
               <input
                 type="password"
+                autoComplete="current-password"
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
