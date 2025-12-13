@@ -8,11 +8,18 @@ from core.config import settings
 from core.db import get_db, engine, Base
 from core.security import hash_password, verify_password, create_token
 from models.user import User
+from sqlalchemy import text
 
 # Create tables (for simple deployments; later use Alembic migrations)
-Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
+
+@app.on_event("startup")
+def on_startup():
+    try:
+        Base.metadata.create_all(bind=engine)
+    except Exception as e:
+        print("DB init failed:", repr(e))
 
 app.add_middleware(
     CORSMiddleware,
@@ -24,7 +31,16 @@ app.add_middleware(
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("select 1"))
+        return {"status": "ok", "db": "ok"}
+    except Exception as e:
+        return {"status": "ok", "db": "error", "detail": str(e)[:200]}
+
+@app.get("/")
+def root():
+    return {"name": "u-stock-backend", "status": "running"}
 
 class SignupBody(BaseModel):
     name: Optional[str] = None
