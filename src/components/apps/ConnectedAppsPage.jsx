@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import AppShell from "../layout/AppShell";
 import "../../css/apps/ConnectedAppsPage.css";
 import { useAuth } from "../../context/AuthContext";
+import ConnectProviderModal from "./ConnectProviderModal";
+import { useNavigate } from "react-router-dom";
 
 const PROVIDERS = [
   {
@@ -9,96 +11,181 @@ const PROVIDERS = [
     name: "Alpaca",
     desc: "Paper trading + live market data (great for prototyping).",
     tags: ["Paper trading", "Market data"],
+    docsUrl: "https://docs.alpaca.markets/",
   },
   {
     key: "polygon",
     name: "Polygon.io",
     desc: "Professional-grade market data + aggregates.",
     tags: ["Intraday candles", "Real-time"],
+    docsUrl: "https://polygon.io/docs",
   },
   {
     key: "tradingview",
     name: "TradingView",
     desc: "Charts + alerts (usually via webhooks).",
     tags: ["Alerts", "Webhooks"],
+    docsUrl: "https://www.tradingview.com/rest-api-spec/",
   },
 ];
 
 export default function ConnectedAppsPage() {
-  const { token } = useAuth(); // assuming you store access_token in auth context
-  const [loading, setLoading] = useState(true);
+  const { isAuthed, authFetch, logout } = useAuth();
+  const navigate = useNavigate();
+
+  const [loading, setLoading] = useState(false);
   const [apps, setApps] = useState([]);
   const [error, setError] = useState("");
 
-  const apiBase = import.meta.env.VITE_API_BASE_URL;
+  const [dismissed, setDismissed] = useState({
+    notSignedIn: false,
+    genericError: false,
+  });
 
-  console.log("API BASE:", apiBase);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [activeProviderKey, setActiveProviderKey] = useState(null);
 
-  const headers = useMemo(() => {
-    const h = { "Content-Type": "application/json" };
-    if (token) h.Authorization = `Bearer ${token}`;
-    return h;
-  }, [token]);
+  const activeProvider = useMemo(
+    () => PROVIDERS.find((p) => p.key === activeProviderKey) || null,
+    [activeProviderKey]
+  );
 
   async function loadConnections() {
     setError("");
+    setDismissed((d) => ({ ...d, genericError: false }));
+
+    if (!isAuthed) {
+      setApps([]);
+      return;
+    }
+
     setLoading(true);
     try {
-      // Backend endpoint you’ll add soon:
-      // GET /integrations
-      const res = await fetch(`${apiBase}/integrations`, { headers });
+      const res = await authFetch("/integrations", { method: "GET" });
+
+      if (res.status === 401) {
+        // session cookie missing/expired
+        setApps([]);
+        throw new Error("Session expired — please sign in again.");
+      }
       if (!res.ok) {
         const msg = await safeErrorMessage(res);
         throw new Error(msg);
       }
+
       const data = await res.json();
+
+      // Debug: uncomment if you want to see exactly what backend returns
+      // console.log("integrations response:", data);
+
       setApps(Array.isArray(data?.apps) ? data.apps : []);
     } catch (e) {
-      setError(e.message || "Could not load connected apps.");
+      setApps([]);
+      setError(e?.message || "Could not load connected apps.");
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    // If user is not logged in, we still show the page but disable actions.
     loadConnections();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [isAuthed]);
 
-  const connectedSet = useMemo(() => {
-    return new Set(apps.map((a) => a.provider));
+  // ✅ Stronger than a Set: always use status field
+  const statusByProvider = useMemo(() => {
+    const map = new Map();
+    for (const a of apps) {
+      // Normalize just in case backend changes later
+      const provider = String(a?.provider || "").toLowerCase();
+      const status = String(a?.status || "not_connected").toLowerCase();
+      if (provider) map.set(provider, status);
+    }
+    return map;
   }, [apps]);
 
-  const handleConnect = async (provider) => {
-    // For now: you can route to a “Connect” modal/page later.
-    // Long-term: POST /integrations/:provider/connect should return a URL (OAuth) or instructions (API key).
-    alert(
-      `Connect flow for "${provider}" will be wired next.\n\nFor now, we’ll build the backend endpoint + Supabase table.`
-    );
+  const providerCount = PROVIDERS.length;
+  const notSignedInCopy =
+    providerCount === 1
+      ? `You’re not signed in. Sign in to connect ${PROVIDERS[0].name}.`
+      : "You’re not signed in. Sign in to connect and manage apps.";
+
+  const openConnectModal = (providerKey) => {
+    setActiveProviderKey(providerKey);
+    setModalOpen(true);
   };
 
-  const handleDisconnect = async (provider) => {
-    // Long-term: DELETE /integrations/:provider
-    alert(`Disconnect flow for "${provider}" will be wired next.`);
+  const closeModal = () => {
+    setModalOpen(false);
+    setActiveProviderKey(null);
+  };
+
+  const goSignIn = () => {
+    closeModal();
+    navigate("/auth");
+  };
+
+  const dismissBanner = (key) => {
+    setDismissed((d) => ({ ...d, [key]: true }));
+  };
+
+  const openDocs = (providerKey) => {
+    const p = PROVIDERS.find((x) => x.key === providerKey);
+    if (p?.docsUrl) window.open(p.docsUrl, "_blank", "noreferrer");
+    else openConnectModal(providerKey);
+  };
+
+  const handleLogout = async () => {
+    // Clears cookie session (your cookie-auth backend supports this)
+    await logout?.();
+    // after logout, statuses should clear
+    setApps([]);
   };
 
   return (
     <AppShell title="Connected Apps">
       <div className="connected-page">
         <header className="connected-header">
-          <h2 className="connected-title">Connected Apps</h2>
-          <p className="connected-subtitle">
-            Manage integrations for market data and trading. Your keys stay on
-            the server — never in the browser.
-          </p>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+            <div>
+              <h2 className="connected-title">Connected Apps</h2>
+              <p className="connected-subtitle">
+                Manage integrations for market data and trading. Your credentials stay
+                on the server — never in the browser.
+              </p>
+            </div>
+
+            {/* Handy while you’re testing cookie sessions */}
+            {isAuthed && (
+              <button
+                className="connected-btn connected-btn--secondary"
+                onClick={handleLogout}
+                title="Clears the HttpOnly cookie session"
+                style={{ height: 40, alignSelf: "flex-start" }}
+              >
+                Log out
+              </button>
+            )}
+          </div>
+
+          {!isAuthed && !dismissed.notSignedIn && (
+            <CloseableBanner onClose={() => dismissBanner("notSignedIn")}>
+              {notSignedInCopy}
+            </CloseableBanner>
+          )}
         </header>
 
-        {error && <div className="connected-error">{error}</div>}
+        {!!error && !dismissed.genericError && (
+          <CloseableBanner onClose={() => dismissBanner("genericError")}>
+            {error}
+          </CloseableBanner>
+        )}
 
         <div className="connected-grid">
           {PROVIDERS.map((p) => {
-            const isConnected = connectedSet.has(p.key);
+            const status = statusByProvider.get(p.key) || "not_connected";
+            const isConnected = status === "connected";
+
             return (
               <div className="connected-card" key={p.key}>
                 <div className="connected-card-top">
@@ -114,6 +201,7 @@ export default function ConnectedAppsPage() {
                         ? "connected-status--on"
                         : "connected-status--off")
                     }
+                    title={`backend status: ${status}`}
                   >
                     {isConnected ? "Connected" : "Not connected"}
                   </span>
@@ -132,15 +220,17 @@ export default function ConnectedAppsPage() {
                     <>
                       <button
                         className="connected-btn connected-btn--secondary"
-                        onClick={() => handleDisconnect(p.key)}
-                        disabled={!token}
-                        title={!token ? "Sign in to manage connections" : ""}
+                        onClick={() => alert("Disconnect flow will be wired next.")}
+                        disabled={!isAuthed}
+                        title={!isAuthed ? "Sign in to manage connections" : ""}
                       >
                         Disconnect
                       </button>
                       <button
                         className="connected-btn connected-btn--primary"
                         onClick={loadConnections}
+                        disabled={!isAuthed}
+                        title={!isAuthed ? "Sign in first" : ""}
                       >
                         Refresh
                       </button>
@@ -149,17 +239,14 @@ export default function ConnectedAppsPage() {
                     <>
                       <button
                         className="connected-btn connected-btn--primary"
-                        onClick={() => handleConnect(p.key)}
-                        disabled={!token}
-                        title={!token ? "Sign in to connect apps" : ""}
+                        onClick={() => openConnectModal(p.key)}
                       >
                         Connect
                       </button>
+
                       <button
                         className="connected-btn connected-btn--secondary"
-                        onClick={() => handleConnect(p.key)}
-                        disabled={!token}
-                        title={!token ? "Sign in to connect apps" : ""}
+                        onClick={() => openDocs(p.key)}
                       >
                         Learn more
                       </button>
@@ -181,8 +268,40 @@ export default function ConnectedAppsPage() {
         </section>
 
         {loading && <div className="connected-loading">Loading…</div>}
+
+        <ConnectProviderModal
+          open={modalOpen}
+          provider={activeProvider}
+          onClose={closeModal}
+          onGoSignIn={goSignIn}
+        />
       </div>
     </AppShell>
+  );
+}
+
+function CloseableBanner({ children, onClose }) {
+  return (
+    <div className="connected-error" style={{ whiteSpace: "pre-wrap" }}>
+      <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+        <div style={{ flex: 1 }}>{children}</div>
+        <button
+          onClick={onClose}
+          aria-label="Dismiss"
+          style={{
+            border: 0,
+            background: "transparent",
+            color: "inherit",
+            cursor: "pointer",
+            opacity: 0.85,
+            fontSize: 16,
+            lineHeight: 1,
+          }}
+        >
+          ✕
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -197,10 +316,6 @@ async function safeErrorMessage(res) {
     }
   }
 
-  // non-JSON (likely HTML)
   const text = await res.text();
-  return `Backend returned non-JSON (${res.status}). This usually means the API base URL is wrong or the route doesn't exist. First 60 chars: ${text.slice(
-    0,
-    60
-  )}`;
+  return `Backend returned non-JSON (${res.status}). First 60 chars: ${text.slice(0, 60)}`;
 }

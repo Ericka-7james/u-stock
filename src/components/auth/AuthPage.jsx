@@ -51,6 +51,7 @@ export default function AuthPage() {
                     value={loginEmail}
                     onChange={(e) => setLoginEmail(e.target.value)}
                     required
+                    autoComplete="username"
                   />
                 </label>
 
