@@ -274,6 +274,7 @@ export default function ConnectedAppsPage() {
           provider={activeProvider}
           onClose={closeModal}
           onGoSignIn={goSignIn}
+          onConnected={loadConnections} 
         />
       </div>
     </AppShell>

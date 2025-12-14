@@ -29,34 +29,68 @@ CORS_ORIGINS = [
 
 ENV = os.getenv("ENV", "development").strip().lower()
 
-# Cookie config
 COOKIE_NAME = os.getenv("USTOCK_COOKIE_NAME", "access_token").strip()
-
-# Dev: Secure=False + SameSite=Lax (works on localhost)
-# Prod (cross-site cookie): SameSite=None + Secure=True required
 COOKIE_SECURE = ENV == "production"
 COOKIE_SAMESITE = "none" if ENV == "production" else "lax"
-COOKIE_MAX_AGE = int(os.getenv("USTOCK_COOKIE_MAX_AGE", "604800"))  # 7 days in seconds
+COOKIE_MAX_AGE = int(os.getenv("USTOCK_COOKIE_MAX_AGE", "604800"))  # 7 days seconds
 
 app = FastAPI(title="u-stock-auth-backend")
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
-    allow_credentials=True,  # REQUIRED for cookies
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["set-cookie"],
 )
 
+# ---------- Models ----------
+class AlpacaKeys(BaseModel):
+    api_key: str
+    api_secret: str
+    mode: str = "paper"  # "paper" or "live"
 
-# ---------- Supabase client ----------
-def get_supabase() -> Client:
+class PolygonKeys(BaseModel):
+    api_key: str
+
+class SignupBody(BaseModel):
+    email: EmailStr
+    password: str
+    username: Optional[str] = None
+    avatar: Optional[str] = None
+
+class LoginBody(BaseModel):
+    email: EmailStr
+    password: str
+
+class UserOut(BaseModel):
+    id: str
+    email: EmailStr
+    avatar: Optional[str] = None
+
+class AuthResponse(BaseModel):
+    user: UserOut
+    ok: bool = True
+
+# ---------- Supabase clients ----------
+def get_supabase_anon() -> Client:
+    """Anon client used for auth endpoints."""
     if not SUPABASE_URL:
         raise HTTPException(status_code=500, detail="SUPABASE_URL is missing")
     if not SUPABASE_ANON_KEY:
         raise HTTPException(status_code=500, detail="SUPABASE_ANON_KEY is missing")
     return create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
 
+def get_supabase_user(jwt_token: str) -> Client:
+    """
+    User-scoped client for RLS-protected DB operations.
+    This makes PostgREST enforce policies using auth.uid().
+    """
+    sb = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
+    # Attach JWT to this client
+    sb.postgrest.auth(jwt_token)
+    return sb
 
 # ---------- Cookie helpers ----------
 def set_auth_cookie(response: Response, access_token: str) -> None:
@@ -65,33 +99,28 @@ def set_auth_cookie(response: Response, access_token: str) -> None:
         value=access_token,
         httponly=True,
         secure=COOKIE_SECURE,
-        samesite=COOKIE_SAMESITE,  # "lax" (dev) or "none" (prod cross-site)
+        samesite=COOKIE_SAMESITE,
         max_age=COOKIE_MAX_AGE,
         path="/",
     )
 
-
 def clear_auth_cookie(response: Response) -> None:
     response.delete_cookie(key=COOKIE_NAME, path="/")
 
-
-def require_user_id(request: Request) -> str:
-    """
-    Cookie-auth guard.
-    Validates the Supabase access_token stored in HttpOnly cookie by calling Supabase.
-    Returns the Supabase user id (uuid string).
-    """
+def get_cookie_token(request: Request) -> str:
     token = request.cookies.get(COOKIE_NAME)
     if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
+    return token
 
-    sb = get_supabase()
+def require_user_id(request: Request) -> str:
+    token = get_cookie_token(request)
+    sb = get_supabase_anon()
     try:
         res = sb.auth.get_user(token)
     except Exception as e:
         raise HTTPException(status_code=401, detail=f"Invalid session: {repr(e)}")
 
-    # supabase-py versions differ slightly; handle both object + dict responses
     user = getattr(res, "user", None) if res is not None else None
     if user is None and isinstance(res, dict):
         user = res.get("user")
@@ -105,25 +134,20 @@ def require_user_id(request: Request) -> str:
 
     return user_id
 
+def _normalize_provider(p: str) -> str:
+    return (p or "").strip().lower()
 
 # ---------- Health / debug ----------
 @app.get("/")
 def root():
     return {"name": "u-stock-auth-backend", "status": "running", "env": ENV}
 
-
 @app.get("/health")
 def health():
-    return {
-        "status": "ok",
-        "supabase_url_set": bool(SUPABASE_URL),
-        "env": ENV,
-    }
-
+    return {"status": "ok", "supabase_url_set": bool(SUPABASE_URL), "env": ENV}
 
 @app.get("/debug/env")
 def debug_env():
-    # keep for now; remove later
     return {
         "SUPABASE_URL_set": bool(SUPABASE_URL),
         "SUPABASE_ANON_KEY_set": bool(SUPABASE_ANON_KEY),
@@ -134,74 +158,32 @@ def debug_env():
         "COOKIE_NAME": COOKIE_NAME,
     }
 
-
 # ---------- Password rules ----------
 PASSWORD_MIN_LEN = 12
 
-
 def validate_password(password: str, email: str, username: str | None = None) -> None:
     if len(password) < PASSWORD_MIN_LEN:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Password must be at least {PASSWORD_MIN_LEN} characters.",
-        )
-
+        raise HTTPException(status_code=400, detail=f"Password must be at least {PASSWORD_MIN_LEN} characters.")
     if not re.search(r"[A-Z]", password):
-        raise HTTPException(
-            status_code=400,
-            detail="Password must include at least 1 uppercase letter.",
-        )
+        raise HTTPException(status_code=400, detail="Password must include at least 1 uppercase letter.")
     if not re.search(r"[a-z]", password):
-        raise HTTPException(
-            status_code=400,
-            detail="Password must include at least 1 lowercase letter.",
-        )
+        raise HTTPException(status_code=400, detail="Password must include at least 1 lowercase letter.")
     if not re.search(r"\d", password):
         raise HTTPException(status_code=400, detail="Password must include at least 1 number.")
     if not re.search(r"[^\w\s]", password):
-        raise HTTPException(
-            status_code=400,
-            detail="Password must include at least 1 special character.",
-        )
+        raise HTTPException(status_code=400, detail="Password must include at least 1 special character.")
 
     email_local = email.split("@")[0].lower()
     if email_local and email_local in password.lower():
         raise HTTPException(status_code=400, detail="Password must not contain your email.")
-
     if username and username.lower() in password.lower():
         raise HTTPException(status_code=400, detail="Password must not contain your username.")
 
-
-# ---------- Schemas ----------
-class SignupBody(BaseModel):
-    email: EmailStr
-    password: str
-    username: Optional[str] = None
-    avatar: Optional[str] = None
-
-
-class LoginBody(BaseModel):
-    email: EmailStr
-    password: str
-
-
-class UserOut(BaseModel):
-    id: str
-    email: EmailStr
-    avatar: Optional[str] = None
-
-
-class AuthResponse(BaseModel):
-    user: UserOut
-    ok: bool = True
-
-
-# ---------- Auth endpoints (COOKIE VERSION) ----------
+# ---------- Auth endpoints ----------
 @app.post("/auth/signup", response_model=AuthResponse)
 def signup(body: SignupBody, response: Response):
     validate_password(body.password, body.email, body.username)
-    sb = get_supabase()
-
+    sb = get_supabase_anon()
     try:
         res = sb.auth.sign_up({"email": body.email, "password": body.password})
     except Exception as e:
@@ -210,8 +192,7 @@ def signup(body: SignupBody, response: Response):
     if not res or not res.user:
         raise HTTPException(status_code=400, detail=f"Signup failed. Raw response: {res}")
 
-    # If Supabase returns a session immediately, set cookie.
-    # If email confirmation is required, res.session may be None.
+    # If session exists immediately, set cookie
     if getattr(res, "session", None) and res.session and getattr(res.session, "access_token", None):
         set_auth_cookie(response, res.session.access_token)
 
@@ -220,11 +201,9 @@ def signup(body: SignupBody, response: Response):
         ok=True,
     )
 
-
 @app.post("/auth/login", response_model=AuthResponse)
 def login(body: LoginBody, response: Response):
-    sb = get_supabase()
-
+    sb = get_supabase_anon()
     try:
         res = sb.auth.sign_in_with_password({"email": body.email, "password": body.password})
     except Exception as e:
@@ -233,7 +212,6 @@ def login(body: LoginBody, response: Response):
     if not res.user or not res.session:
         raise HTTPException(status_code=401, detail="Invalid email/password or email not confirmed")
 
-    # ✅ Store JWT in HttpOnly cookie (frontend never sees it)
     set_auth_cookie(response, res.session.access_token)
 
     return AuthResponse(
@@ -245,41 +223,82 @@ def login(body: LoginBody, response: Response):
         ok=True,
     )
 
-
 @app.post("/auth/logout")
 def logout(response: Response):
     clear_auth_cookie(response)
     return {"ok": True}
 
-
 @app.get("/auth/me")
 def me(user_id: str = Depends(require_user_id)):
     return {"user_id": user_id}
 
-
-# ---------- Integrations (Protected) ----------
+# ---------- Integrations (RLS-friendly) ----------
 @app.get("/integrations")
-def list_integrations(user_id: str = Depends(require_user_id)):
-    # Stub response for now (no DB yet).
-    # Later: read from Supabase table `public.integrations` per user_id.
-    return {
-        "user_id": user_id,
-        "apps": [
-            {"provider": "alpaca", "status": "not_connected"},
-            {"provider": "polygon", "status": "not_connected"},
-            {"provider": "tradingview", "status": "not_connected"},
-        ],
-    }
+def list_integrations(request: Request, user_id: str = Depends(require_user_id)):
+    token = get_cookie_token(request)
+    sb = get_supabase_user(token)
 
+    # RLS policy should allow: select where user_id = auth.uid()
+    res = sb.table("integrations").select("provider,status").execute()
+    rows = getattr(res, "data", None) or (res.get("data", []) if isinstance(res, dict) else [])
+    existing = {r["provider"]: r.get("status", "connected") for r in rows}
 
-@app.post("/integrations/{provider}/connect")
-def connect_provider(provider: str, user_id: str = Depends(require_user_id)):
-    # TODO: implement OAuth or API-key saving flow per provider.
-    # For now: just return a stub.
-    return {"ok": True, "provider": provider, "user_id": user_id}
+    apps = []
+    for p in ["alpaca", "polygon", "tradingview"]:
+        apps.append({"provider": p, "status": existing.get(p, "not_connected")})
 
+    return {"user_id": user_id, "apps": apps}
 
-@app.post("/integrations/{provider}/disconnect")
-def disconnect_provider(provider: str, user_id: str = Depends(require_user_id)):
-    # TODO: delete stored tokens/keys for provider for this user.
-    return {"ok": True, "provider": provider, "user_id": user_id}
+@app.post("/integrations/alpaca/keys")
+def save_alpaca_keys(payload: AlpacaKeys, request: Request, user_id: str = Depends(require_user_id)):
+    token = get_cookie_token(request)
+    sb = get_supabase_user(token)
+
+    mode = (payload.mode or "paper").strip().lower()
+    if mode not in ("paper", "live"):
+        raise HTTPException(status_code=400, detail="mode must be 'paper' or 'live'")
+
+    sb.table("integrations").upsert(
+        {
+            "user_id": user_id,
+            "provider": "alpaca",
+            "status": "connected",
+            "config": {
+                "mode": mode,
+                "api_key": payload.api_key.strip(),
+                "api_secret": payload.api_secret.strip(),
+            },
+        },
+        on_conflict="user_id,provider",
+    ).execute()
+
+    return {"ok": True}
+
+@app.post("/integrations/polygon/keys")
+def save_polygon_keys(payload: PolygonKeys, request: Request, user_id: str = Depends(require_user_id)):
+    token = get_cookie_token(request)
+    sb = get_supabase_user(token)
+
+    sb.table("integrations").upsert(
+        {
+            "user_id": user_id,
+            "provider": "polygon",
+            "status": "connected",
+            "config": {"api_key": payload.api_key.strip()},
+        },
+        on_conflict="user_id,provider",
+    ).execute()
+
+    return {"ok": True}
+
+@app.delete("/integrations/{provider}")
+def disconnect_provider(provider: str, request: Request, user_id: str = Depends(require_user_id)):
+    token = get_cookie_token(request)
+    sb = get_supabase_user(token)
+
+    provider = _normalize_provider(provider)
+    if provider not in ("alpaca", "polygon", "tradingview"):
+        raise HTTPException(status_code=400, detail="Unknown provider")
+
+    sb.table("integrations").delete().eq("provider", provider).execute()
+    return {"ok": True, "provider": provider}

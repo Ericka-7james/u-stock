@@ -7,11 +7,25 @@ export default function ConnectProviderModal({
   provider,
   onClose,
   onGoSignIn,
+  onConnected, // ✅ add this so ConnectedAppsPage can refresh after save
 }) {
   const { isAuthed, authFetch } = useAuth();
 
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+
+  // ✅ form state
+  const [mode, setMode] = useState("paper"); // alpaca only
+  const [apiKey, setApiKey] = useState("");
+  const [apiSecret, setApiSecret] = useState(""); // alpaca only
+
+  const docsUrl = useMemo(
+    () => provider?.docsUrl || provider?.learnMoreUrl,
+    [provider]
+  );
+
+  const isAlpaca = provider?.key === "alpaca";
+  const isPolygon = provider?.key === "polygon";
 
   // Escape key closes
   useEffect(() => {
@@ -28,9 +42,10 @@ export default function ConnectProviderModal({
     if (!open) return;
     setBusy(false);
     setErr("");
+    setMode("paper");
+    setApiKey("");
+    setApiSecret("");
   }, [open, provider?.key]);
-
-  const docsUrl = useMemo(() => provider?.docsUrl || provider?.learnMoreUrl, [provider]);
 
   if (!open || !provider) return null;
 
@@ -40,30 +55,55 @@ export default function ConnectProviderModal({
   };
 
   const handleConnect = async () => {
-    if (!provider?.key) return;
     setErr("");
+
+    // basic validation
+    if (!apiKey.trim()) {
+      setErr("API key is required.");
+      return;
+    }
+    if (isAlpaca && !apiSecret.trim()) {
+      setErr("API secret is required for Alpaca.");
+      return;
+    }
+
     setBusy(true);
-
     try {
-      // Cookie-auth: authFetch already sends credentials: "include"
-      const res = await authFetch(`/integrations/${provider.key}/connect`, {
-        method: "POST",
-      });
+      let path = "";
+      let body = {};
 
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.detail || "Unable to start connection.");
-
-      // OAuth-style: backend returns redirect URL
-      if (data?.url) {
-        window.location.assign(data.url);
+      if (isAlpaca) {
+        path = "/integrations/alpaca/keys";
+        body = {
+          api_key: apiKey.trim(),
+          api_secret: apiSecret.trim(),
+          mode,
+        };
+      } else if (isPolygon) {
+        path = "/integrations/polygon/keys";
+        body = {
+          api_key: apiKey.trim(),
+        };
+      } else {
+        setErr("This provider does not support API key connections yet.");
+        setBusy(false);
         return;
       }
 
-      // API-key style fallback (if you implement it later)
-      // If backend returns ok without url, just close for now.
+      const res = await authFetch(path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.detail || "Failed to save API keys.");
+
+      await onConnected?.(); // ✅ refresh list
       onClose?.();
     } catch (e) {
-      setErr(e.message || "Connect failed.");
+      setErr(e?.message || "Failed to connect.");
+    } finally {
       setBusy(false);
     }
   };
@@ -109,14 +149,49 @@ export default function ConnectProviderModal({
           ) : (
             <>
               <div className="cp-section">
-                <h4 className="cp-section-title">How connection will work</h4>
-                <ul className="cp-list">
-                  <li>
-                    We’ll start the provider connection from the server for {provider.name}.
-                  </li>
-                  <li>Session is cookie-based (no tokens stored in the browser).</li>
-                  <li>You can disconnect any time.</li>
-                </ul>
+                <h4 className="cp-section-title">API keys</h4>
+
+                {isAlpaca && (
+                  <div className="cp-field">
+                    <label className="cp-label">Mode</label>
+                    <select
+                      className="cp-input"
+                      value={mode}
+                      onChange={(e) => setMode(e.target.value)}
+                    >
+                      <option value="paper">Paper</option>
+                      <option value="live">Live</option>
+                    </select>
+                  </div>
+                )}
+
+                <div className="cp-field">
+                  <label className="cp-label">API Key</label>
+                  <input
+                    className="cp-input"
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    placeholder="Paste your API key"
+                    autoComplete="off"
+                  />
+                </div>
+
+                {isAlpaca && (
+                  <div className="cp-field">
+                    <label className="cp-label">API Secret</label>
+                    <input
+                      className="cp-input"
+                      value={apiSecret}
+                      onChange={(e) => setApiSecret(e.target.value)}
+                      placeholder="Paste your API secret"
+                      autoComplete="off"
+                    />
+                  </div>
+                )}
+
+                <p className="cp-muted">
+                  Keys are stored server-side (not in the browser). You can disconnect any time.
+                </p>
               </div>
 
               {err && (
@@ -132,7 +207,7 @@ export default function ConnectProviderModal({
                   onClick={handleConnect}
                   disabled={busy}
                 >
-                  {busy ? "Connecting…" : "Connect"}
+                  {busy ? "Saving…" : "Save & Connect"}
                 </button>
 
                 <button
