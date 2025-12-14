@@ -1,6 +1,7 @@
-// src/components/dashboard/cards/StatSummary.test.jsx
+// src/components/dashboard/tests/StatSummary.test.jsx
 import { render, screen, within } from "@testing-library/react";
-import StatSummary from "../StatSummary.jsx";
+import { describe, it, expect } from "vitest";
+import StatSummary from "../cards/StatSummary.jsx";
 
 describe("StatSummary", () => {
   it("renders fallback values when signals + meta are empty", () => {
@@ -13,29 +14,32 @@ describe("StatSummary", () => {
       />
     );
 
-    // Card 1: Signals universe
-    const signalsLabel = screen.getByText(/Signals universe/i);
-    const signalsCard = signalsLabel.closest(".stat-card");
+    // Card 1: Signals universe -> 0
+    const signalsCard = screen
+      .getByText(/signals universe/i)
+      .closest(".stat-card");
     expect(signalsCard).not.toBeNull();
     expect(within(signalsCard).getByText("0")).toBeInTheDocument();
 
-    // Card 2: Price coverage
-    const pricesLabel = screen.getByText(/Price coverage/i);
-    const pricesCard = pricesLabel.closest(".stat-card");
+    // Card 2: Price coverage -> 0
+    const pricesCard = screen
+      .getByText(/price coverage/i)
+      .closest(".stat-card");
     expect(pricesCard).not.toBeNull();
     expect(within(pricesCard).getByText("0")).toBeInTheDocument();
 
-    // Card 3: Last data refresh
-    const refreshLabel = screen.getByText(/Last data refresh/i);
-    const refreshCard = refreshLabel.closest(".stat-card");
+    // Card 3: Last data refresh -> "—" + caption
+    const refreshCard = screen
+      .getByText(/last data refresh/i)
+      .closest(".stat-card");
     expect(refreshCard).not.toBeNull();
-    expect(within(refreshCard).getByText("—")).toBeInTheDocument();
+    expect(within(refreshCard).getAllByText("—").length).toBeGreaterThan(0);
     expect(
-      within(refreshCard).getByText(/Run fetchers \+ indicators/i)
+      within(refreshCard).getByText(/run fetchers \+ indicators/i)
     ).toBeInTheDocument();
   });
 
-  it("renders non-zero universe sizes when meta.universe is present", () => {
+  it("uses meta.universe sizes when present (signals + prices)", () => {
     const signalsMeta = {
       universe: ["AAPL", "MSFT", "GOOG"],
       generatedAt: "2024-01-01T10:00:00Z",
@@ -54,28 +58,55 @@ describe("StatSummary", () => {
           { ticker: "GOOG", score: 0.5 },
         ]}
         pricesMeta={pricesMeta}
-        // Longer list, but component should prefer pricesMeta.universe
+        // Should be ignored because pricesMeta.universe exists
         priceSymbols={["AAPL", "MSFT", "TSLA"]}
       />
     );
 
     const signalsCard = screen
-      .getByText(/Signals universe/i)
+      .getByText(/signals universe/i)
       .closest(".stat-card");
     const pricesCard = screen
-      .getByText(/Price coverage/i)
+      .getByText(/price coverage/i)
       .closest(".stat-card");
 
     expect(signalsCard).not.toBeNull();
     expect(pricesCard).not.toBeNull();
 
-    // 3 from signalsMeta.universe
     expect(within(signalsCard).getByText("3")).toBeInTheDocument();
-    // 2 from pricesMeta.universe
     expect(within(pricesCard).getByText("2")).toBeInTheDocument();
   });
 
-  it("renders last refresh when meta.generatedAt exists", () => {
+  it("falls back to signalsData length + priceSymbols length when meta.universe missing", () => {
+    render(
+      <StatSummary
+        signalsMeta={{}}
+        signalsData={[
+          { ticker: "AAPL", score: 1.2 },
+          { ticker: "MSFT", score: 0.8 },
+        ]}
+        pricesMeta={{}}
+        priceSymbols={["AAPL", "MSFT", "TSLA"]}
+      />
+    );
+
+    const signalsCard = screen
+      .getByText(/signals universe/i)
+      .closest(".stat-card");
+    const pricesCard = screen
+      .getByText(/price coverage/i)
+      .closest(".stat-card");
+
+    expect(signalsCard).not.toBeNull();
+    expect(pricesCard).not.toBeNull();
+
+    // signalsData length = 2
+    expect(within(signalsCard).getByText("2")).toBeInTheDocument();
+    // priceSymbols length = 3
+    expect(within(pricesCard).getByText("3")).toBeInTheDocument();
+  });
+
+  it("renders last refresh time/date using the latest generatedAt across signals + prices", () => {
     const signalsMeta = { generatedAt: "2024-01-01T07:00:00Z" };
     const pricesMeta = { generatedAt: "2024-01-01T12:00:00Z" }; // later
 
@@ -96,10 +127,12 @@ describe("StatSummary", () => {
     );
 
     const refreshCard = screen
-      .getByText(/Last data refresh/i)
+      .getByText(/last data refresh/i)
       .closest(".stat-card");
 
     expect(refreshCard).not.toBeNull();
+
+    // Assert within card to avoid collisions elsewhere
     expect(within(refreshCard).getByText(expectedTime)).toBeInTheDocument();
     expect(within(refreshCard).getByText(expectedDate)).toBeInTheDocument();
   });

@@ -1,9 +1,8 @@
-// src/components/pages/tests/AboutPage.test.jsx
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { vi } from "vitest";
 
-// 👇 Mock AuthContext so NavBar/AppShell don't throw
+// Mock AuthContext so NavBar/AppShell don't throw
 vi.mock("../../../context/AuthContext", () => ({
   useAuth: () => ({
     user: null,
@@ -16,38 +15,41 @@ vi.mock("../../../context/AuthContext", () => ({
 import AboutPage from "../AboutPage";
 
 describe("AboutPage", () => {
-  it("renders the hero heading and headshot avatar", () => {
-    render(
+  function renderAbout() {
+    return render(
       <MemoryRouter>
         <AboutPage />
       </MemoryRouter>
     );
+  }
 
-    // Hero heading
+  it("renders the hero heading and headshot avatar", () => {
+    renderAbout();
+
     expect(
       screen.getByRole("heading", { name: /about the author/i })
     ).toBeInTheDocument();
 
-    // Headshot image
-    expect(
-      screen.getByAltText(/ericka james headshot/i)
-    ).toBeInTheDocument();
+    const img = screen.getByAltText(/ericka james headshot/i);
+    expect(img).toBeInTheDocument();
+    // optional but nice: confirms you’re using the new headshot styling
+    expect(img).toHaveClass("about-avatar-image");
+  });
+
+  it('renders the "Back to dashboard" internal link', () => {
+    renderAbout();
+
+    const backLink = screen.getByRole("link", { name: /back to dashboard/i });
+    expect(backLink).toHaveAttribute("href", "/");
   });
 
   it("renders GitHub and LinkedIn links with correct hrefs", () => {
-    render(
-      <MemoryRouter>
-        <AboutPage />
-      </MemoryRouter>
-    );
+    renderAbout();
 
     const githubLink = screen.getByRole("link", {
       name: /github → ericka-7james/i,
     });
-    expect(githubLink).toHaveAttribute(
-      "href",
-      "https://github.com/ericka-7james"
-    );
+    expect(githubLink).toHaveAttribute("href", "https://github.com/ericka-7james");
 
     const linkedinLink = screen.getByRole("link", {
       name: /linkedin → erickasmileyjames/i,
