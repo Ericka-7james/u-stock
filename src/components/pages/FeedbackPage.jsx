@@ -1,5 +1,5 @@
 import AppShell from "../layout/AppShell";
-import "./FeedbackPage.css";
+import "../../css/pages/FeedbackPage.css";
 
 export default function FeedbackPage() {
   return (

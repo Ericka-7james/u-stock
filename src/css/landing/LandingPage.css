@@ -27,7 +27,7 @@
 
 .landing-hero-title {
   font-size: 40px;
-  line-height: 1.1;
+  line-height: 1.1;           
   margin: 0 0 16px;
 }
 
@@ -192,17 +192,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
   gap: 32px;
-  align-items: start;
-}
-
-.landing-roadmap-left {
-  display: flex;
-  justify-content: flex-start;
-}
-
-.landing-roadmap-right {
-  display: flex;
-  justify-content: center;
+  align-items: center;
 }
 
 .landing-roadmap-list {
@@ -228,14 +218,9 @@
   cursor: pointer;
 }
 
-.landing-roadmap-pill {
-  display: inline-flex;
-  align-items: center;
-  padding: 4px 10px;
-  border-radius: 999px;
-  background: var(--ustock-card-chip-bg);
-  font-size: 11px;
-  margin-bottom: 12px;
+.landing-roadmap-right {
+  display: flex;
+  justify-content: center;
 }
 
 .landing-roadmap-steps {
@@ -259,27 +244,6 @@
   background: var(--ustock-green-main);
 }
 
-/* ROADMAP CARD (used by dark mode too) */
-.landing-roadmap-card {
-  width: 100%;
-  max-width: 520px;
-  background: var(--ustock-bg-card);
-  border-radius: 18px;
-  padding: 18px 18px;
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
-  border: 1px solid var(--ustock-border-card);
-}
-
-/* Keep text looking natural inside cards (not narrow columns) */
-.landing-roadmap-card .landing-section-text {
-  max-width: none;
-  margin: 0 0 12px;
-}
-
-.landing-roadmap-card--left .landing-section-text {
-  margin-bottom: 18px;
-}
-
 /* FOOTER */
 
 .landing-footer {
@@ -294,7 +258,7 @@
 @media (max-width: 900px) {
   .landing-hero-inner {
     grid-template-columns: minmax(0, 1fr);
-    gap: 18px;
+    gap: 32px;
   }
 
   .landing-hero-title {
@@ -307,22 +271,17 @@
 
   .landing-roadmap-inner {
     grid-template-columns: minmax(0, 1fr);
-    gap: 18px;
-    align-items: stretch;
   }
 
-  .landing-roadmap-right {
+  .landing-hero-right {
     justify-content: flex-start;
   }
 
-  .landing-roadmap-card {
-    max-width: none;
-    width: 100%;
-  }
-
-  /* Hide hero image on mobile/tablet */
-  .landing-hero-right {
-    display: none;
+  /* Hide hero image on mobile */
+  @media (max-width: 910px) {
+    .landing-hero-right {
+      display: none;
+    }
   }
 }
 
@@ -334,7 +293,7 @@
   box-shadow: 0 20px 55px rgba(15, 23, 42, 0.25);
 }
 
-/* Hide hero image on smaller screens */
+/* Hide hero image on mobile */
 @media (max-width: 768px) {
   .landing-hero-right {
     display: none;
@@ -352,6 +311,7 @@ body.ustock-dark .landing-hero {
   );
 }
 
+/* feature + roadmap cards pick up dark tokens */
 body.ustock-dark .landing-feature-card,
 body.ustock-dark .landing-roadmap-card {
   background: var(--ustock-bg-card);
@@ -370,12 +330,14 @@ body.ustock-dark .landing-roadmap-steps {
   color: var(--ustock-text-muted);
 }
 
+/* CTA outline button shouldn’t be bright white in dark mode */
 body.ustock-dark .landing-cta-outline {
   background: transparent;
   color: var(--ustock-green-soft);
   border-color: var(--ustock-green-soft);
 }
 
+/* hero mock card already uses tokens; just deepen the chip bg */
 body.ustock-dark .landing-hero-card {
   background: var(--ustock-bg-card);
 }

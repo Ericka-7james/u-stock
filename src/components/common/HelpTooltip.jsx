@@ -1,5 +1,5 @@
 import { useState } from "react";
-import "./HelpTooltip.css";
+import "../../css/common/HelpTooltip.css";
 
 export default function HelpTooltip({ title = "Help", children }) {
   const [open, setOpen] = useState(false);

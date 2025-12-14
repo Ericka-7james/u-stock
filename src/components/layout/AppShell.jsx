@@ -1,6 +1,6 @@
 // src/components/layout/AppShell.jsx
 import { useEffect, useState } from "react";
-import "./AppShell.css";
+import "../../css/layout/AppShell.css";
 import NavBar from "./NavBar";
 
 export default function AppShell({ children }) {

@@ -1,5 +1,5 @@
 // src/pages/ResumePage.jsx
-import "./ResumePage.css";
+import "../../css/pages/ResumePage.css";
 
 export default function ResumePage() {
   return (

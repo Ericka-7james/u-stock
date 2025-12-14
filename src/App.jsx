@@ -6,7 +6,7 @@ import DatasourcesPage from "./components/pages/DatasourcesPage";
 import IndexFundsPage from "./components/pages/IndexFundsPage";
 import AboutPage from "./components/pages/AboutPage";
 import FeebackPage from "./components/pages/FeedbackPage";
-import ResumePage from "./components/pages/ResumePage";
+// import ResumePage from "./components/pages/ResumePage";
 
 import AuthPage from "./components/auth/AuthPage";
 import SignupPage from "./components/auth/SignupPage";
@@ -15,51 +15,49 @@ import LandingPage from "./components/landing/LandingPage";
 import { useAuth } from "./context/AuthContext";
 import ConnectedAppsPage from "./components/apps/ConnectedAppsPage";
 
-import "./App.css";
+import FullPageLoader from "./components/common/FullPageLoader";
+
+import "./css/App.css";
 
 function RequireAuth({ children }) {
   const { user, loading } = useAuth();
 
   if (loading) {
-    return <div className="app-loading">Loading…</div>;
+    return <FullPageLoader label="Loading…" />;
   }
 
   if (!user) {
-    // 👇 send them to "/" (HomeChooser decides: dashboard vs landing)
     return <Navigate to="/" replace />;
   }
 
   return children;
 }
 
-// "/" – if logged in show dashboard, otherwise landing page
 function HomeChooser() {
   const { user, loading } = useAuth();
 
   if (loading) {
-    return <div className="app-loading">Loading…</div>;
+    return <FullPageLoader label="Loading…" />;
   }
 
   return user ? <DashboardPage /> : <LandingPage />;
 }
 
-// "/auth" – if logged in, bounce to dashboard
 function AuthGate() {
   const { user, loading } = useAuth();
 
   if (loading) {
-    return <div className="app-loading">Loading…</div>;
+    return <FullPageLoader label="Loading…" />;
   }
 
   return user ? <Navigate to="/" replace /> : <AuthPage />;
 }
 
-// "/auth/signup" – separate gate
 function SignupGate() {
   const { user, loading } = useAuth();
 
   if (loading) {
-    return <div className="app-loading">Loading…</div>;
+    return <FullPageLoader label="Loading…" />;
   }
 
   return user ? <Navigate to="/" replace /> : <SignupPage />;
@@ -68,15 +66,11 @@ function SignupGate() {
 function App() {
   return (
     <Routes>
-      {/* Root: landing vs dashboard based on auth */}
       <Route path="/" element={<HomeChooser />} />
-      {/* <Route path="/resume" element={<ResumePage />} /> */}
 
-      {/* Auth routes */}
       <Route path="/auth" element={<AuthGate />} />
       <Route path="/auth/signup" element={<SignupGate />} />
 
-      {/* Protected routes */}
       <Route
         path="/data-sources"
         element={
@@ -109,16 +103,15 @@ function App() {
           </RequireAuth>
         }
       />
-      <Route 
-        path="/connected-apps" 
+      <Route
+        path="/connected-apps"
         element={
           <RequireAuth>
             <ConnectedAppsPage />
           </RequireAuth>
-        } 
+        }
       />
 
-      {/* Fallback */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

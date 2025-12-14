@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 
 import AppShell from "../layout/AppShell";
 
-import './DatasourcesPage.css';
+import '../../css/pages/DatasourcesPage.css';
 
 
 import { PRICE_SOURCES } from "../../config/raw/pricesSources";

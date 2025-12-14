@@ -1,6 +1,6 @@
 // src/components/landing/LandingPage.jsx
 import { useNavigate } from "react-router-dom";
-import "./LandingPage.css";
+import "../../css/landing/LandingPage.css";
 import landingIllustration from "../../assets/images/LandingPageImage.png";
 import AppShell from "../layout/AppShell";
 

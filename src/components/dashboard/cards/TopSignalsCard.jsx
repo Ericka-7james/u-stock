@@ -1,5 +1,5 @@
 import HelpTooltip from "../../common/HelpTooltip";
-import "./TopSignalsCard.css";
+import "../../../css/dashboard/cards/TopSignalsCard.css";
 
 export default function TopSignalsCard({
   signals,

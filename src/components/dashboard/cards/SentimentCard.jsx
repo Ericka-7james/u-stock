@@ -1,6 +1,6 @@
 // src/components/dashboard/SentimentCard.jsx
 import { useMemo, useState } from "react";
-import "./SentimentCard.css";
+import "../../../css/dashboard/cards/SentimentCard.css";
 
 const SENTIMENT_MODES = [
   { value: "ALL", label: "All" },
