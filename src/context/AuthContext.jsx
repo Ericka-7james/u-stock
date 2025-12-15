@@ -1,114 +1,124 @@
 // src/context/AuthContext.jsx
-import { createContext, useContext, useEffect, useState } from "react";
-import { API_BASE } from "../config/config"; // 👈 central config
-import { useNavigate } from "react-router-dom";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { API_BASE, API_PREFIX } from "../config/config";
 
 const AuthContext = createContext(null);
-const STORAGE_KEY = "ustock_auth";
 
-/**
- * Small helper = "frontend middleware":
- * - prefixes API_BASE
- * - attaches JSON headers
- * - injects Authorization bearer token if present
- * - throws an Error with the response text when !res.ok
- */
-async function apiRequest(path, { method = "GET", body, token } = {}) {
-  const headers = {
-    "Content-Type": "application/json",
-  };
-
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
+async function safeJson(res) {
+  try {
+    return await res.json();
+  } catch {
+    return {};
   }
-
-  const res = await fetch(`${API_BASE}${path}`, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-  });
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || `Request failed with status ${res.status}`);
-  }
-
-  return res.json();
 }
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);   // { id, email, avatar }
-  const [token, setToken] = useState(null); // JWT
+  const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [isAuthed, setIsAuthed] = useState(false);
 
-  const navigate = useNavigate();
+  const authFetch = useMemo(() => {
+    return async (path, options = {}) => {
+      const method = (options.method || "GET").toUpperCase();
+      const headers = new Headers(options.headers || {});
 
-  // Restore auth from localStorage on first load
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed?.user && parsed?.token) {
-          setUser(parsed.user);
-          setToken(parsed.token);
-        }
+      const hasBody = options.body !== undefined && options.body !== null;
+      if (hasBody && !headers.has("Content-Type")) {
+        headers.set("Content-Type", "application/json");
       }
-    } catch (e) {
-      console.error("Failed to restore auth", e);
-    } finally {
-      setLoading(false);
-    }
+
+      const p = path.startsWith("/") ? path : `/${path}`;
+
+      return fetch(`${API_BASE}${API_PREFIX}${p}`, {
+        ...options,
+        method,
+        credentials: "include",
+        headers,
+      });
+    };
   }, []);
 
-  const persist = (user, accessToken, refreshToken = null) => {
-    setUser(user);
-    setToken(accessToken);
+  const refreshSession = async () => {
+    try {
+      const res = await authFetch("auth/me", { method: "GET" });
 
-    localStorage.setItem("ustock_user", JSON.stringify(user));
-    localStorage.setItem("ustock_token", accessToken);
+      if (!res.ok) {
+        setIsAuthed(false);
+        setUser(null);
+        return false;
+      }
 
-    if (refreshToken) {
-      localStorage.setItem("ustock_refresh_token", refreshToken);
-    } else {
-      localStorage.removeItem("ustock_refresh_token");
+      const data = await safeJson(res);
+
+      setUser((prev) => ({
+        ...(prev || {}),
+        id: data.user_id,
+      }));
+      setIsAuthed(true);
+      return true;
+    } catch {
+      setIsAuthed(false);
+      setUser(null);
+      return false;
     }
   };
 
-
-  const clearAuth = () => {
-    setUser(null);
-    setToken(null);
-    localStorage.removeItem(STORAGE_KEY);
-  };
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      await refreshSession();
+      setLoading(false);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const login = async (email, password) => {
-    const data = await apiRequest("/auth/login", {
+    const res = await authFetch("auth/login", {
       method: "POST",
-      body: { email, password },
+      body: JSON.stringify({ email, password }),
     });
-    // data: { user, token }
-    persist(data.user, data.token);
+
+    const data = await safeJson(res);
+    if (!res.ok) throw new Error(data?.detail || "Login failed");
+
+    setUser(data.user || null);
+    setIsAuthed(true);
+
+    // confirm cookie is actually valid
+    await refreshSession();
   };
 
   const signup = async ({ username, email, password, avatar }) => {
-    const data = await apiRequest("/auth/signup", {
+    const res = await authFetch("auth/signup", {
       method: "POST",
-      body: { username, email, password, avatar },
+      body: JSON.stringify({ username, email, password, avatar }),
     });
 
-    // store what backend actually returns
-    persist(data.user, data.access_token, data.refresh_token);
+    const data = await safeJson(res);
+    if (!res.ok) throw new Error(data?.detail || "Signup failed");
+
+    setUser(data.user || null);
+    await refreshSession();
   };
 
-  const logout = () => {
-    clearAuth();
-    navigate("/", { replace: true });
+  const logout = async () => {
+    await authFetch("auth/logout", { method: "POST" });
+    setUser(null);
+    setIsAuthed(false);
   };
 
   return (
     <AuthContext.Provider
-      value={{ user, token, loading, login, signup, logout }}
+      value={{
+        user,
+        loading,
+        isAuthed,
+        login,
+        signup,
+        logout,
+        authFetch,
+        refreshSession,
+      }}
     >
       {children}
     </AuthContext.Provider>

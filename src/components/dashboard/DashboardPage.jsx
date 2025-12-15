@@ -16,9 +16,9 @@ import { useDailyPricesHistory } from "../../hooks/raw/useDailyPricesHistory.js"
 import { useSentimentSnapshot } from "../../hooks/raw/useSentimentSnapshot.js";
 
 // Styles
-import "./DashboardPage.css";
-import "./cards/ChartControls.css";
-import "./cards/CardShared.css";
+import "../../css/dashboard/DashboardPage.css";
+import "../../css/dashboard/cards/ChartControls.css";
+import "../../css/dashboard/cards/CardShared.css";
 
 export default function DashboardPage() {
   // Ranked signals from your Python signal_engine

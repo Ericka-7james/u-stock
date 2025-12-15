@@ -1,126 +1,155 @@
-// src/components/pages/tests/IndexFundsPage.test.jsx
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
-// --- Mock AuthContext so AppShell/NavBar can safely use useAuth ---
+// Mock AuthContext so AppShell/NavBar can safely use useAuth
 vi.mock("../../../context/AuthContext", () => ({
   useAuth: () => ({
-    user: { email: "test@example.com", avatar: "📈" },
+    user: null, // logged out is fine for this page
     login: vi.fn(),
     signup: vi.fn(),
     logout: vi.fn(),
   }),
 }));
 
-// --- Mock fundamentals hook ---
-vi.mock("../../../hooks/raw/useFundamentalsSnapshot", () => {
-  const mockUseFundamentalsSnapshot = vi.fn();
-  return {
-    useFundamentalsSnapshot: mockUseFundamentalsSnapshot,
-    mockUseFundamentalsSnapshot,
-  };
-});
+// Mock fundamentals hook
+vi.mock("../../../hooks/raw/useFundamentalsSnapshot", () => ({
+  useFundamentalsSnapshot: vi.fn(),
+}));
 
 import IndexFundsPage from "../IndexFundsPage";
-import { mockUseFundamentalsSnapshot } from "../../../hooks/raw/useFundamentalsSnapshot";
+import { useFundamentalsSnapshot } from "../../../hooks/raw/useFundamentalsSnapshot";
+
+function renderPage() {
+  return render(
+    <MemoryRouter initialEntries={["/index-funds"]}>
+      <IndexFundsPage />
+    </MemoryRouter>
+  );
+}
 
 describe("IndexFundsPage", () => {
-  it("renders the about tab by default", () => {
-    mockUseFundamentalsSnapshot.mockReturnValue({
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("renders the hero title and shows the About tab by default", () => {
+    useFundamentalsSnapshot.mockReturnValue({
       data: [],
       loading: false,
-      error: null,
       meta: null,
     });
 
-    render(
-      <MemoryRouter initialEntries={["/index-funds"]}>
-        <IndexFundsPage />
-      </MemoryRouter>
-    );
+    renderPage();
 
-    // The "about" tab is actually labeled "Index funds & core exposure"
+    // Hero title
+    expect(
+      screen.getByRole("heading", { name: /index funds & quant foundations/i })
+    ).toBeInTheDocument();
+
+    // About tab active by default
     const aboutTab = screen.getByRole("button", {
       name: /index funds & core exposure/i,
     });
-
-    expect(aboutTab).toBeInTheDocument();
-    // Uses CSS class for active state, not aria-pressed
     expect(aboutTab.className).toContain("tab-btn--active");
 
-    // Sanity check: content from the about panel
+    // About content should be visible
+    expect(screen.getByText(/how index funds work/i)).toBeInTheDocument();
     expect(
-      screen.getByText(/how index funds work/i)
+      screen.getByText(/how quants source data & find "the gold mine"/i)
     ).toBeInTheDocument();
   });
 
-  it("shows loading message when switching to Funds tab", () => {
-    mockUseFundamentalsSnapshot.mockReturnValue({
+  it("shows snapshot meta line when fundamentalsMeta.generatedAt is present", () => {
+    const generatedAt = "2025-11-24T12:00:00Z";
+
+    useFundamentalsSnapshot.mockReturnValue({
+      data: [],
+      loading: false,
+      meta: { generatedAt },
+    });
+
+    renderPage();
+
+    expect(
+      screen.getByText(/fundamentals snapshot:/i)
+    ).toBeInTheDocument();
+
+    // locale-safe: compute the expected string the same way the component does
+    const expected = new Date(generatedAt).toLocaleString();
+    expect(screen.getByText(expected)).toBeInTheDocument();
+  });
+
+  it("shows loading message when switching to Funds tab while loading", () => {
+    useFundamentalsSnapshot.mockReturnValue({
       data: [],
       loading: true,
-      error: null,
       meta: null,
     });
 
-    render(
-      <MemoryRouter initialEntries={["/index-funds"]}>
-        <IndexFundsPage />
-      </MemoryRouter>
+    renderPage();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /funds in this snapshot/i })
     );
 
-    // Click the "Funds in this snapshot" tab explicitly
-    const fundsTab = screen.getByRole("button", {
-      name: /funds in this snapshot/i,
-    });
-    fireEvent.click(fundsTab);
-
-    // Adjust this text if your loading copy is different
-    expect(screen.getByText(/loading/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/loading fundamentals snapshot \(pe, market cap\)…/i)
+    ).toBeInTheDocument();
   });
 
-  it("renders fund cards when data is present", () => {
-    mockUseFundamentalsSnapshot.mockReturnValue({
+  it("renders fund cards in Funds tab and formats PE + Market Cap when data exists", () => {
+    useFundamentalsSnapshot.mockReturnValue({
       loading: false,
-      error: null,
       meta: { generatedAt: "2025-11-24T12:00:00Z" },
       data: [
-        {
-          symbol: "VTI",
-          name: "Vanguard Total Stock Market ETF",
-          expenseRatio: 0.03,
-          aum: 1000000000,
-        },
-        {
-          symbol: "VOO",
-          name: "Vanguard S&P 500 ETF",
-          expenseRatio: 0.03,
-          aum: 900000000,
-        },
+        { ticker: "VTI", pe: 20.11, marketCap: 1_250_000_000_000 }, // 1.3T (toFixed(1))
+        { ticker: "VOO", pe: 19.9, marketCap: 900_000_000_000 },     // 900.0B
       ],
     });
 
-    render(
-      <MemoryRouter initialEntries={["/index-funds"]}>
-        <IndexFundsPage />
-      </MemoryRouter>
+    renderPage();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /funds in this snapshot/i })
     );
 
-    // Click the "Funds in this snapshot" tab explicitly
-    const fundsTab = screen.getByRole("button", {
-      name: /funds in this snapshot/i,
-    });
-    fireEvent.click(fundsTab);
+    // Cards should exist (INDEX_FUNDS is 5 items)
+    const cards = document.querySelectorAll(".fund-card");
+    expect(cards.length).toBe(5);
 
-    // Cards for both funds should render
-    const vtiMatches = screen.getAllByText(/VTI/);
-    expect(vtiMatches.length).toBeGreaterThan(0);
-
+    // VTI visible + correct name
+    expect(screen.getByText("VTI")).toBeInTheDocument();
     expect(
-      screen.getByText(/Vanguard Total Stock Market ETF/i)
+      screen.getByText(/vanguard total stock market etf/i)
     ).toBeInTheDocument();
 
-    const vooMatches = screen.getAllByText(/VOO/);
-    expect(vooMatches.length).toBeGreaterThan(0);
+    // PE formatting: toFixed(1)
+    expect(screen.getByText("20.1")).toBeInTheDocument();
+    expect(screen.getByText("19.9")).toBeInTheDocument();
+
+    // Market cap formatting: T/B/M with 1 decimal
+    expect(screen.getByText("1.3T")).toBeInTheDocument();
+    expect(screen.getByText("900.0B")).toBeInTheDocument();
+  });
+
+  it("shows N/A for PE and Market Cap when fundamentals are missing", () => {
+    // Return no fundamentals data → all funds will have fundamentals:null
+    useFundamentalsSnapshot.mockReturnValue({
+      data: [],
+      loading: false,
+      meta: null,
+    });
+
+    renderPage();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /funds in this snapshot/i })
+    );
+
+    // There are 5 funds; each card has PE + Market Cap values.
+    // We should see several "N/A" values.
+    const na = screen.getAllByText("N/A");
+    expect(na.length).toBeGreaterThanOrEqual(5); // at least one per card
   });
 });

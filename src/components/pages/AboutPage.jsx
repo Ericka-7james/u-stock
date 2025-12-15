@@ -1,6 +1,6 @@
 // src/components/pages/AboutPage.jsx
 import AppShell from "../layout/AppShell";
-import "./AboutPage.css";
+import "../../css/pages/AboutPage.css";
 import headshot from "../../assets/ericka-headshot.jpeg"; // ⬅ we'll add this file next
 import { Link } from "react-router-dom";
 

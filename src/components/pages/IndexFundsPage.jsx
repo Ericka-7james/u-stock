@@ -5,7 +5,7 @@ import { Link } from "react-router-dom";
 import { useFundamentalsSnapshot } from "../../hooks/raw/useFundamentalsSnapshot";
 import AppShell from "../layout/AppShell";
 
-import "./IndexFundsPage.css";
+import "../../css/pages/IndexFundsPage.css";
 
 const INDEX_FUNDS = [
   {

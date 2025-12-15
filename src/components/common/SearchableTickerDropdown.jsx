@@ -1,6 +1,6 @@
 // src/components/common/SearchableTickerDropdown.jsx
 import { useMemo, useState, useRef, useEffect } from "react";
-import "./SearchableTickerDropdown.css";
+import "../../css/SearchableTickerDropdown.css";
 const MAX_VISIBLE_OPTIONS = 300;
 
 export default function SearchableTickerDropdown({

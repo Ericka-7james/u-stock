@@ -51,6 +51,7 @@ export default function AuthPage() {
                     value={loginEmail}
                     onChange={(e) => setLoginEmail(e.target.value)}
                     required
+                    autoComplete="username"
                   />
                 </label>
 
@@ -58,6 +59,7 @@ export default function AuthPage() {
                   <span className="auth-input-icon">🔒</span>
                   <input
                     type="password"
+                    autoComplete="current-password"
                     placeholder="Password"
                     value={loginPassword}
                     onChange={(e) => setLoginPassword(e.target.value)}

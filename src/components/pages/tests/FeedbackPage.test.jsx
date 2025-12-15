@@ -1,5 +1,4 @@
-// src/components/pages/tests/FeedbackPage.test.jsx
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
@@ -16,80 +15,90 @@ vi.mock("../../../context/AuthContext", () => ({
 import FeedbackPage from "../FeedbackPage";
 
 describe("FeedbackPage", () => {
-  it("renders the feedback header and core fields", () => {
-    render(
+  let alertSpy;
+
+  beforeEach(() => {
+    alertSpy = vi.spyOn(window, "alert").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    alertSpy.mockRestore();
+  });
+
+  function renderPage() {
+    return render(
       <MemoryRouter>
         <FeedbackPage />
       </MemoryRouter>
     );
+  }
+
+  it("renders the feedback header and core fields", () => {
+    renderPage();
 
     // Heading
     expect(
-      screen.getByRole("heading", { name: /feedback/i })
+      screen.getByRole("heading", { name: /^feedback$/i })
     ).toBeInTheDocument();
 
-    // Name field
-    expect(screen.getByLabelText(/name/i)).toBeInTheDocument();
+    // Subtitle text
+    expect(
+      screen.getByText(/share ideas, report issues, or ask questions/i)
+    ).toBeInTheDocument();
 
-    // Contact email field
+    // Fields
+    expect(screen.getByLabelText(/^name$/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/contact email/i)).toBeInTheDocument();
-
-    // Feedback type select
     expect(screen.getByLabelText(/feedback type/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^message$/i)).toBeInTheDocument();
 
-    // Message textarea
-    expect(screen.getByLabelText(/message/i)).toBeInTheDocument();
-
-    // Primary action button
+    // Buttons
     expect(
       screen.getByRole("button", { name: /send feedback/i })
     ).toBeInTheDocument();
-
-    // Cancel button
     expect(
       screen.getByRole("button", { name: /cancel/i })
     ).toBeInTheDocument();
   });
 
   it("shows an alert when the form is submitted", () => {
-    const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => {});
+    renderPage();
 
-    render(
-      <MemoryRouter>
-        <FeedbackPage />
-      </MemoryRouter>
-    );
+    // submit the form (more accurate than only clicking the button)
+    const form = screen.getByLabelText(/^name$/i).closest("form");
+    expect(form).not.toBeNull();
 
-    const sendButton = screen.getByRole("button", {
-      name: /send feedback/i,
-    });
+    fireEvent.submit(form);
 
-    // Click primary submit button
-    fireEvent.click(sendButton);
-
-    expect(alertSpy).toHaveBeenCalledWith(
-      "Feedback submission is coming soon!"
-    );
-
-    alertSpy.mockRestore();
+    expect(alertSpy).toHaveBeenCalledTimes(1);
+    expect(alertSpy).toHaveBeenCalledWith("Feedback submission is coming soon!");
   });
 
   it("does not submit when Cancel is clicked", () => {
-    const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => {});
+    renderPage();
 
-    render(
-      <MemoryRouter>
-        <FeedbackPage />
-      </MemoryRouter>
-    );
-
-    const cancelButton = screen.getByRole("button", { name: /cancel/i });
-
-    // Cancel is type="button", so submit handler shouldn't fire
-    fireEvent.click(cancelButton);
+    fireEvent.click(screen.getByRole("button", { name: /cancel/i }));
 
     expect(alertSpy).not.toHaveBeenCalled();
+  });
 
-    alertSpy.mockRestore();
+  it("lets the user type into the inputs (smoke test)", () => {
+    renderPage();
+
+    fireEvent.change(screen.getByLabelText(/^name$/i), {
+      target: { value: "Ericka" },
+    });
+    fireEvent.change(screen.getByLabelText(/contact email/i), {
+      target: { value: "test@example.com" },
+    });
+    fireEvent.change(screen.getByLabelText(/^message$/i), {
+      target: { value: "Love the dashboard — add backtests next!" },
+    });
+
+    expect(screen.getByLabelText(/^name$/i)).toHaveValue("Ericka");
+    expect(screen.getByLabelText(/contact email/i)).toHaveValue("test@example.com");
+    expect(screen.getByLabelText(/^message$/i)).toHaveValue(
+      "Love the dashboard — add backtests next!"
+    );
   });
 });
