@@ -19,6 +19,15 @@ import FullPageLoader from "./components/common/FullPageLoader";
 
 import "./css/App.css";
 
+import f1 from "./assets/loading/LoadingScreen1.png";
+import f2 from "./assets/loading/LoadingScreen2.png";
+import f3 from "./assets/loading/LoadingScreen3.png";
+
+[f1, f2, f3].forEach((src) => {
+  const img = new Image();
+  img.src = src;
+});
+
 function RequireAuth({ children }) {
   const { user, loading } = useAuth();
 

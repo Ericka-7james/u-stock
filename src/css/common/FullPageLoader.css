@@ -1,37 +1,29 @@
 .fpl-wrap {
   position: fixed;
   inset: 0;
+  background: var(--bg, #f9fafb);
   display: grid;
   place-items: center;
-  background: var(--bg, #0b0f14); /* uses your theme if you have --bg */
   z-index: 9999;
 }
 
 .fpl-card {
-  display: grid;
-  gap: 12px;
-  justify-items: center;
-  padding: 18px 20px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.10);
-  backdrop-filter: blur(8px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
 }
 
-.fpl-spinner {
-  width: 42px;
-  height: 42px;
-  border-radius: 999px;
-  border: 4px solid rgba(255, 255, 255, 0.15);
-  border-top-color: rgba(255, 255, 255, 0.85);
-  animation: fpl-spin 0.9s linear infinite;
+.fpl-loader-image {
+  width: 220px;
+  height: 220px;
+  object-fit: contain;
+  user-select: none;
+  pointer-events: none;
 }
 
 .fpl-text {
-  font-size: 14px;
-  opacity: 0.85;
-}
-
-@keyframes fpl-spin {
-  to { transform: rotate(360deg); }
+  font-size: 0.95rem;
+  color: #4b5563;
+  letter-spacing: 0.02em;
 }
