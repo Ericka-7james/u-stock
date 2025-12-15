@@ -2,15 +2,15 @@
 import os
 import re
 from pathlib import Path
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
 
+import requests
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, HTTPException, Response, Request
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Response, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
 from supabase import Client, create_client
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
-import requests
 
 # Load repo-root .env for local dev; in Vercel this is harmless.
 ROOT = Path(__file__).resolve().parents[1]
@@ -36,6 +36,8 @@ COOKIE_SECURE = ENV == "production"
 COOKIE_SAMESITE = "none" if ENV == "production" else "lax"
 COOKIE_MAX_AGE = int(os.getenv("USTOCK_COOKIE_MAX_AGE", "604800"))  # 7 days seconds
 
+API_PREFIX = "/api"
+
 app = FastAPI(title="u-stock-auth-backend")
 
 app.add_middleware(
@@ -46,6 +48,8 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["set-cookie"],
 )
+
+api = APIRouter(prefix=API_PREFIX)
 
 # ---------- Models ----------
 class AlpacaKeys(BaseModel):
@@ -90,7 +94,6 @@ def get_supabase_user(jwt_token: str) -> Client:
     This makes PostgREST enforce policies using auth.uid().
     """
     sb = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
-    # Attach JWT to this client
     sb.postgrest.auth(jwt_token)
     return sb
 
@@ -148,7 +151,11 @@ def root():
 def health():
     return {"status": "ok", "supabase_url_set": bool(SUPABASE_URL), "env": ENV}
 
-@app.get("/debug/env")
+@api.get("/_debug/routes")
+def debug_routes():
+    return sorted([r.path for r in app.routes])
+
+@api.get("/debug/env")
 def debug_env():
     return {
         "SUPABASE_URL_set": bool(SUPABASE_URL),
@@ -182,7 +189,7 @@ def validate_password(password: str, email: str, username: str | None = None) ->
         raise HTTPException(status_code=400, detail="Password must not contain your username.")
 
 # ---------- Auth endpoints ----------
-@app.post("/auth/signup", response_model=AuthResponse)
+@api.post("/auth/signup", response_model=AuthResponse)
 def signup(body: SignupBody, response: Response):
     validate_password(body.password, body.email, body.username)
     sb = get_supabase_anon()
@@ -194,7 +201,6 @@ def signup(body: SignupBody, response: Response):
     if not res or not res.user:
         raise HTTPException(status_code=400, detail=f"Signup failed. Raw response: {res}")
 
-    # If session exists immediately, set cookie
     if getattr(res, "session", None) and res.session and getattr(res.session, "access_token", None):
         set_auth_cookie(response, res.session.access_token)
 
@@ -203,7 +209,7 @@ def signup(body: SignupBody, response: Response):
         ok=True,
     )
 
-@app.post("/auth/login", response_model=AuthResponse)
+@api.post("/auth/login", response_model=AuthResponse)
 def login(body: LoginBody, response: Response):
     sb = get_supabase_anon()
     try:
@@ -225,22 +231,21 @@ def login(body: LoginBody, response: Response):
         ok=True,
     )
 
-@app.post("/auth/logout")
+@api.post("/auth/logout")
 def logout(response: Response):
     clear_auth_cookie(response)
     return {"ok": True}
 
-@app.get("/auth/me")
+@api.get("/auth/me")
 def me(user_id: str = Depends(require_user_id)):
     return {"user_id": user_id}
 
 # ---------- Integrations (RLS-friendly) ----------
-@app.get("/integrations")
+@api.get("/integrations")
 def list_integrations(request: Request, user_id: str = Depends(require_user_id)):
     token = get_cookie_token(request)
     sb = get_supabase_user(token)
 
-    # RLS policy should allow: select where user_id = auth.uid()
     res = sb.table("integrations").select("provider,status").execute()
     rows = getattr(res, "data", None) or (res.get("data", []) if isinstance(res, dict) else [])
     existing = {r["provider"]: r.get("status", "connected") for r in rows}
@@ -251,7 +256,7 @@ def list_integrations(request: Request, user_id: str = Depends(require_user_id))
 
     return {"user_id": user_id, "apps": apps}
 
-@app.post("/integrations/alpaca/keys")
+@api.post("/integrations/alpaca/keys")
 def save_alpaca_keys(payload: AlpacaKeys, request: Request, user_id: str = Depends(require_user_id)):
     token = get_cookie_token(request)
     sb = get_supabase_user(token)
@@ -276,7 +281,7 @@ def save_alpaca_keys(payload: AlpacaKeys, request: Request, user_id: str = Depen
 
     return {"ok": True}
 
-@app.post("/integrations/polygon/keys")
+@api.post("/integrations/polygon/keys")
 def save_polygon_keys(payload: PolygonKeys, request: Request, user_id: str = Depends(require_user_id)):
     token = get_cookie_token(request)
     sb = get_supabase_user(token)
@@ -293,7 +298,7 @@ def save_polygon_keys(payload: PolygonKeys, request: Request, user_id: str = Dep
 
     return {"ok": True}
 
-@app.delete("/integrations/{provider}")
+@api.delete("/integrations/{provider}")
 def disconnect_provider(provider: str, request: Request, user_id: str = Depends(require_user_id)):
     token = get_cookie_token(request)
     sb = get_supabase_user(token)
@@ -305,13 +310,10 @@ def disconnect_provider(provider: str, request: Request, user_id: str = Depends(
     sb.table("integrations").delete().eq("provider", provider).execute()
     return {"ok": True, "provider": provider}
 
+# ---------- Market latest ----------
 ALPACA_DATA_BASE = "https://data.alpaca.markets"
 
 def _get_alpaca_keys_from_db(request: Request) -> Dict[str, str]:
-    """
-    Pull user's Alpaca keys from Supabase integrations.config (RLS enforced).
-    Expects integrations row: provider='alpaca', config={ api_key, api_secret, mode }
-    """
     token = get_cookie_token(request)
     sb = get_supabase_user(token)
 
@@ -338,7 +340,6 @@ def _iso_to_ms(ts: str | None) -> int:
     if not ts:
         return int(datetime.now(timezone.utc).timestamp() * 1000)
     try:
-        # Alpaca returns ISO8601 timestamps
         dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
         return int(dt.timestamp() * 1000)
     except Exception:
@@ -376,7 +377,7 @@ def _normalize_crypto_trade(symbol: str, raw: Dict[str, Any]) -> Dict[str, Any] 
         "kind": "trade",
     }
 
-@app.get("/market/latest/stocks")
+@api.get("/market/latest/stocks")
 def latest_stocks(symbols: str, request: Request, user_id: str = Depends(require_user_id)):
     keys = _get_alpaca_keys_from_db(request)
     sym_list = [s.strip().upper() for s in symbols.split(",") if s.strip()]
@@ -394,7 +395,7 @@ def latest_stocks(symbols: str, request: Request, user_id: str = Depends(require
     if r.status_code >= 400:
         raise HTTPException(status_code=r.status_code, detail=r.text)
 
-    data = r.json()  # { "trades": { "AAPL": { "trade": {...}} ... } }
+    data = r.json()
     trades = (data or {}).get("trades") or {}
 
     ticks: List[Dict[str, Any]] = []
@@ -405,10 +406,9 @@ def latest_stocks(symbols: str, request: Request, user_id: str = Depends(require
 
     return {"ticks": ticks, "symbols": sym_list}
 
-@app.get("/market/latest/crypto")
+@api.get("/market/latest/crypto")
 def latest_crypto(symbols: str, request: Request, loc: str = "us", user_id: str = Depends(require_user_id)):
     keys = _get_alpaca_keys_from_db(request)
-    # crypto symbols look like BTC/USD, ETH/USD (keep as-is but strip spaces)
     sym_list = [s.strip().upper() for s in symbols.split(",") if s.strip()]
     if not sym_list:
         raise HTTPException(status_code=400, detail="symbols is required")
@@ -425,7 +425,7 @@ def latest_crypto(symbols: str, request: Request, loc: str = "us", user_id: str 
     if r.status_code >= 400:
         raise HTTPException(status_code=r.status_code, detail=r.text)
 
-    data = r.json()  # { "trades": { "BTC/USD": { "trade": {...}} ... } }
+    data = r.json()
     trades = (data or {}).get("trades") or {}
 
     ticks: List[Dict[str, Any]] = []
@@ -435,3 +435,6 @@ def latest_crypto(symbols: str, request: Request, loc: str = "us", user_id: str 
             ticks.append(t)
 
     return {"ticks": ticks, "symbols": sym_list, "loc": loc}
+
+# IMPORTANT: mount the /api router
+app.include_router(api)

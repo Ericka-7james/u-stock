@@ -3,7 +3,7 @@ import AppShell from "../layout/AppShell";
 import { usePollingCandles } from "../../hooks/usePollingCandles";
 import { fetchLatestStocks, fetchLatestCrypto } from "../../lib/market/fetchLatest";
 import CandleChart from "../charts/CandleChart";
-
+import "../../css/charts/CandlesPage.css"; // adjust path if needed
 
 function CandleCard({
   title,
@@ -11,26 +11,17 @@ function CandleCard({
   symbols,
   onAddSymbol,
   onRemoveSymbol,
-  candles1m,
+  activeSymbol,
+  onSelectSymbol,
+  candlesForActive,
 }) {
-  const [activeStock, setActiveStock] = useState("AAPL");
-  const [activeCrypto, setActiveCrypto] = useState("BTC/USD");
-
-
   return (
     <div className="card">
       <div className="cardHeader">
         <div>
           <h2 style={{ margin: 0 }}>{title}</h2>
-
           {subtitle && (
-            <div
-              style={{
-                marginTop: 4,
-                fontSize: 12,
-                opacity: 0.7,
-              }}
-            >
+            <div style={{ marginTop: 4, fontSize: 12, opacity: 0.7 }}>
               {subtitle}
             </div>
           )}
@@ -40,11 +31,24 @@ function CandleCard({
           {symbols.map((s) => (
             <button
               key={s}
-              className="chip"
+              className={`chip ${s === activeSymbol ? "active" : ""}`}
+              onClick={() => onSelectSymbol(s)}
+              title="Select"
+              style={{ marginRight: 8 }}
+            >
+              {s}
+            </button>
+          ))}
+
+          {/* quick remove list (simple for now) */}
+          {symbols.map((s) => (
+            <button
+              key={`${s}-remove`}
+              className="chipRemove"
               onClick={() => onRemoveSymbol(s)}
               title="Remove"
             >
-              {s} ✕
+              ✕
             </button>
           ))}
         </div>
@@ -53,13 +57,13 @@ function CandleCard({
       <div className="cardBody">
         <AddSymbolRow onAdd={onAddSymbol} />
 
+        <div style={{ marginBottom: 12 }}>
+          <CandleChart candles={candlesForActive} />
+        </div>
+
         <div className="miniGrid">
           {symbols.map((s) => (
-            <MiniCandlePreview
-              key={s}
-              symbol={s}
-              candles={candles1m[s] || []}
-            />
+            <MiniCandlePreview key={s} symbol={s} candles={candlesForActive} />
           ))}
         </div>
       </div>
@@ -113,9 +117,12 @@ function MiniCandlePreview({ symbol, candles }) {
 }
 
 export default function CandlesPage() {
-  // defaults
   const [stockSymbols, setStockSymbols] = useState(["AAPL", "TSLA"]);
   const [cryptoSymbols, setCryptoSymbols] = useState(["BTC/USD", "ETH/USD"]);
+
+  // ✅ These MUST live here (parent), not inside CandleCard
+  const [activeStock, setActiveStock] = useState("AAPL");
+  const [activeCrypto, setActiveCrypto] = useState("BTC/USD");
 
   const stocksFetcher = useMemo(() => async (symbols) => {
     const res = await fetchLatestStocks(symbols);
@@ -127,26 +134,27 @@ export default function CandlesPage() {
     return { ticks: res.ticks };
   }, []);
 
-  // Two independent pipelines
   const stocks = usePollingCandles({
     symbols: stockSymbols,
     fetcher: stocksFetcher,
-    enable1s: false,      // keep off until websockets
+    enable1s: false,
     maxSymbols: 10,
-    pollIntervalMs: 2500, // stocks: slightly slower is fine on free
+    pollIntervalMs: 2500,
   });
 
   const crypto = usePollingCandles({
     symbols: cryptoSymbols,
     fetcher: cryptoFetcher,
-    enable1s: false,     // later, websockets -> you can consider true
+    enable1s: false,
     maxSymbols: 10,
-    pollIntervalMs: 1500 // crypto: faster polling makes it feel “live”
+    pollIntervalMs: 1500,
   });
 
   return (
     <AppShell>
       <div style={{ display: "grid", gap: 16 }}>
+        {stocks.error ? <div className="errorBanner">{stocks.error}</div> : null}
+
         <CandleCard
           title="Stocks (1m candles)"
           subtitle="Stocks: IEX-only on Free"
@@ -157,8 +165,12 @@ export default function CandlesPage() {
           onRemoveSymbol={(s) =>
             setStockSymbols((prev) => prev.filter((x) => x !== s))
           }
-          candles1m={stocks.candles1m[activeStock] || []}
+          activeSymbol={activeStock}
+          onSelectSymbol={setActiveStock}
+          candlesForActive={stocks.candles1m[activeStock] || []}
         />
+
+        {crypto.error ? <div className="errorBanner">{crypto.error}</div> : null}
 
         <CandleCard
           title="Crypto (1m candles — demo-friendly)"
@@ -170,7 +182,9 @@ export default function CandlesPage() {
           onRemoveSymbol={(s) =>
             setCryptoSymbols((prev) => prev.filter((x) => x !== s))
           }
-          candles1m={crypto.candles1m[activeCrypto] || []}
+          activeSymbol={activeCrypto}
+          onSelectSymbol={setActiveCrypto}
+          candlesForActive={crypto.candles1m[activeCrypto] || []}
         />
       </div>
     </AppShell>

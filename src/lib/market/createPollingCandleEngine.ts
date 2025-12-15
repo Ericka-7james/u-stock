@@ -20,6 +20,9 @@ export function createPollingCandleEngine(opts: {
 
   onTicks?: (ticks: MarketTick[]) => void;
   onCandles?: (symbol: string, candles1m: Candle[], candles1s?: Candle[]) => void;
+
+  // ✅ ADD THIS
+  onError?: (err: any) => void;
 }) {
   const cap = new SymbolCap(opts.maxSymbols);
   const bucket = new TokenBucket(opts.burst, opts.requestsPerSecond);
@@ -44,20 +47,16 @@ export function createPollingCandleEngine(opts: {
     const symbols = cap.list();
     if (!symbols.length) return;
 
-    // Throttle requests (rate-limit guard)
     await bucket.consumeOrWait(1);
 
-    // Backoff on 429/5xx/network
     const payload = await withBackoff(() => opts.fetcher(symbols));
 
-    // Normalize is already done by backend; we just ingest
     for (const tick of payload.ticks) {
       buf.push(tick);
       agg1m.ingest(tick);
       if (agg1s) agg1s.ingest(tick);
     }
 
-    // Prune memory
     agg1m.pruneOlderThan(24 * 60 * 60 * 1000);
     if (agg1s) agg1s.pruneOlderThan(2 * 60 * 60 * 1000);
   }
@@ -76,7 +75,15 @@ export function createPollingCandleEngine(opts: {
 
   function start() {
     if (pollTimer) return;
-    pollTimer = setInterval(() => pollOnce().catch(() => {}), opts.pollIntervalMs);
+
+    // ✅ CHANGE THIS LINE (don’t swallow errors)
+    pollTimer = setInterval(() => {
+      pollOnce().catch((err) => {
+        opts.onError?.(err);
+        console.error("pollOnce error:", err);
+      });
+    }, opts.pollIntervalMs);
+
     flushTimer = setInterval(() => flushUI(), opts.uiFlushMs);
   }
 

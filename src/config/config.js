@@ -10,7 +10,8 @@ const LOCAL_API = "http://localhost:8000";
 const PROD_API = "https://u-stock-backend.vercel.app";
 
 // 👇 Named export that AuthContext.jsx imports
-export const API_BASE = isDev ? LOCAL_API : PROD_API;
+export const API_BASE = PROD_API;
+export const API_PREFIX = "/api";
 
 // Optional: version + feature flags if you want them later
 export const APP_VERSION = "1.0.0";

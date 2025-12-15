@@ -1,39 +1,46 @@
 // src/context/AuthContext.jsx
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { API_BASE } from "../config/config";
+import { API_BASE, API_PREFIX } from "../config/config";
 
 const AuthContext = createContext(null);
 
+async function safeJson(res) {
+  try {
+    return await res.json();
+  } catch {
+    return {};
+  }
+}
+
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null); // { id, email?, avatar? }
+  const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isAuthed, setIsAuthed] = useState(false);
 
-  // Always includes cookies. Does NOT force Content-Type for GET.
   const authFetch = useMemo(() => {
     return async (path, options = {}) => {
-      const headers = new Headers(options.headers || {});
       const method = (options.method || "GET").toUpperCase();
+      const headers = new Headers(options.headers || {});
 
-      // Only set JSON headers when we actually send a JSON body
       const hasBody = options.body !== undefined && options.body !== null;
       if (hasBody && !headers.has("Content-Type")) {
         headers.set("Content-Type", "application/json");
       }
 
-      return fetch(`${API_BASE}${path}`, {
+      const p = path.startsWith("/") ? path : `/${path}`;
+
+      return fetch(`${API_BASE}${API_PREFIX}${p}`, {
         ...options,
         method,
-        credentials: "include", // 🔑 cookie auth
+        credentials: "include",
         headers,
       });
     };
   }, []);
 
   const refreshSession = async () => {
-    // Checks cookie session and restores user state.
     try {
-      const res = await authFetch("/auth/me", { method: "GET" });
+      const res = await authFetch("auth/me", { method: "GET" });
 
       if (!res.ok) {
         setIsAuthed(false);
@@ -41,10 +48,8 @@ export function AuthProvider({ children }) {
         return false;
       }
 
-      const data = await res.json().catch(() => ({}));
+      const data = await safeJson(res);
 
-      // We at least store user_id so app survives refresh.
-      // (You can add email later by having /auth/me return email too.)
       setUser((prev) => ({
         ...(prev || {}),
         id: data.user_id,
@@ -52,13 +57,12 @@ export function AuthProvider({ children }) {
       setIsAuthed(true);
       return true;
     } catch {
-      // Network/server down: do NOT hard log out. Keep last known state.
-      // (Prevents "random kicks" during reload when backend restarts.)
-      return isAuthed;
+      setIsAuthed(false);
+      setUser(null);
+      return false;
     }
   };
 
-  // On boot: check session
   useEffect(() => {
     (async () => {
       setLoading(true);
@@ -69,39 +73,36 @@ export function AuthProvider({ children }) {
   }, []);
 
   const login = async (email, password) => {
-    const res = await authFetch("/auth/login", {
+    const res = await authFetch("auth/login", {
       method: "POST",
       body: JSON.stringify({ email, password }),
     });
 
-    const data = await res.json().catch(() => ({}));
+    const data = await safeJson(res);
     if (!res.ok) throw new Error(data?.detail || "Login failed");
 
-    // Cookie is set by backend automatically; confirm session
     setUser(data.user || null);
     setIsAuthed(true);
 
-    // Optional: verify cookie actually stuck (helps detect Secure/SameSite issues)
+    // confirm cookie is actually valid
     await refreshSession();
   };
 
   const signup = async ({ username, email, password, avatar }) => {
-    const res = await authFetch("/auth/signup", {
+    const res = await authFetch("auth/signup", {
       method: "POST",
       body: JSON.stringify({ username, email, password, avatar }),
     });
 
-    const data = await res.json().catch(() => ({}));
+    const data = await safeJson(res);
     if (!res.ok) throw new Error(data?.detail || "Signup failed");
 
     setUser(data.user || null);
-
-    // If email confirmation is required, cookie may not exist yet.
     await refreshSession();
   };
 
   const logout = async () => {
-    await authFetch("/auth/logout", { method: "POST" });
+    await authFetch("auth/logout", { method: "POST" });
     setUser(null);
     setIsAuthed(false);
   };
@@ -116,7 +117,7 @@ export function AuthProvider({ children }) {
         signup,
         logout,
         authFetch,
-        refreshSession, // helpful for pages that want to re-check auth
+        refreshSession,
       }}
     >
       {children}

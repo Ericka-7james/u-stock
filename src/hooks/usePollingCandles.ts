@@ -13,8 +13,14 @@ export function usePollingCandles(opts: {
   const [ticks, setTicks] = useState<MarketTick[]>([]);
   const [candles1m, setCandles1m] = useState<Record<string, Candle[]>>({});
   const [candles1s, setCandles1s] = useState<Record<string, Candle[]>>({});
+  const [error, setError] = useState<string>("");
 
   const engineRef = useRef<ReturnType<typeof createPollingCandleEngine> | null>(null);
+
+  // ✅ Reset visible error when core inputs change (useEffect, not useMemo)
+  useEffect(() => {
+    setError("");
+  }, [opts.fetcher, opts.enable1s, opts.maxSymbols, opts.pollIntervalMs]);
 
   const engine = useMemo(() => {
     return createPollingCandleEngine({
@@ -32,6 +38,12 @@ export function usePollingCandles(opts: {
         setCandles1m((prev) => ({ ...prev, [symbol]: c1m }));
         if (c1s) setCandles1s((prev) => ({ ...prev, [symbol]: c1s }));
       },
+
+      onError: (err) => {
+        const msg = err?.message || "Polling failed";
+        setError(msg);
+        console.error("Polling engine error:", err);
+      },
     });
   }, [opts.fetcher, opts.enable1s, opts.maxSymbols, opts.pollIntervalMs]);
 
@@ -45,11 +57,8 @@ export function usePollingCandles(opts: {
     const eng = engineRef.current;
     if (!eng) return;
 
-    // subscribe
     for (const s of opts.symbols) eng.addSymbol(s);
-
-    // (simple version) no unsubscribe tracking here yet; good enough for v1
   }, [opts.symbols]);
 
-  return { ticks, candles1m, candles1s };
+  return { ticks, candles1m, candles1s, error };
 }
