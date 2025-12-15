@@ -2,13 +2,15 @@
 import os
 import re
 from pathlib import Path
-from typing import Optional
 
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Response, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
 from supabase import Client, create_client
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
+import requests
 
 # Load repo-root .env for local dev; in Vercel this is harmless.
 ROOT = Path(__file__).resolve().parents[1]
@@ -302,3 +304,134 @@ def disconnect_provider(provider: str, request: Request, user_id: str = Depends(
 
     sb.table("integrations").delete().eq("provider", provider).execute()
     return {"ok": True, "provider": provider}
+
+ALPACA_DATA_BASE = "https://data.alpaca.markets"
+
+def _get_alpaca_keys_from_db(request: Request) -> Dict[str, str]:
+    """
+    Pull user's Alpaca keys from Supabase integrations.config (RLS enforced).
+    Expects integrations row: provider='alpaca', config={ api_key, api_secret, mode }
+    """
+    token = get_cookie_token(request)
+    sb = get_supabase_user(token)
+
+    res = (
+        sb.table("integrations")
+        .select("config,status")
+        .eq("provider", "alpaca")
+        .limit(1)
+        .execute()
+    )
+    rows = getattr(res, "data", None) or (res.get("data", []) if isinstance(res, dict) else [])
+    if not rows:
+        raise HTTPException(status_code=400, detail="Alpaca not connected. Add keys in Connected Apps.")
+
+    cfg = rows[0].get("config") or {}
+    api_key = (cfg.get("api_key") or "").strip()
+    api_secret = (cfg.get("api_secret") or "").strip()
+    if not api_key or not api_secret:
+        raise HTTPException(status_code=400, detail="Alpaca keys missing. Reconnect Alpaca integration.")
+
+    return {"api_key": api_key, "api_secret": api_secret}
+
+def _iso_to_ms(ts: str | None) -> int:
+    if not ts:
+        return int(datetime.now(timezone.utc).timestamp() * 1000)
+    try:
+        # Alpaca returns ISO8601 timestamps
+        dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        return int(dt.timestamp() * 1000)
+    except Exception:
+        return int(datetime.now(timezone.utc).timestamp() * 1000)
+
+def _normalize_stock_trade(symbol: str, raw: Dict[str, Any]) -> Dict[str, Any] | None:
+    trade = raw.get("trade") if isinstance(raw, dict) else None
+    if not trade:
+        return None
+    price = trade.get("p")
+    if price is None:
+        return None
+    return {
+        "source": "alpaca",
+        "symbol": symbol,
+        "ts": _iso_to_ms(trade.get("t")),
+        "price": float(price),
+        "size": float(trade.get("s") or 0),
+        "kind": "trade",
+    }
+
+def _normalize_crypto_trade(symbol: str, raw: Dict[str, Any]) -> Dict[str, Any] | None:
+    trade = raw.get("trade") if isinstance(raw, dict) else None
+    if not trade:
+        return None
+    price = trade.get("p")
+    if price is None:
+        return None
+    return {
+        "source": "alpaca",
+        "symbol": symbol,
+        "ts": _iso_to_ms(trade.get("t")),
+        "price": float(price),
+        "size": float(trade.get("s") or 0),
+        "kind": "trade",
+    }
+
+@app.get("/market/latest/stocks")
+def latest_stocks(symbols: str, request: Request, user_id: str = Depends(require_user_id)):
+    keys = _get_alpaca_keys_from_db(request)
+    sym_list = [s.strip().upper() for s in symbols.split(",") if s.strip()]
+    if not sym_list:
+        raise HTTPException(status_code=400, detail="symbols is required")
+
+    url = f"{ALPACA_DATA_BASE}/v2/stocks/trades/latest"
+    headers = {
+        "APCA-API-KEY-ID": keys["api_key"],
+        "APCA-API-SECRET-KEY": keys["api_secret"],
+    }
+    params = {"symbols": ",".join(sym_list)}
+
+    r = requests.get(url, headers=headers, params=params, timeout=10)
+    if r.status_code >= 400:
+        raise HTTPException(status_code=r.status_code, detail=r.text)
+
+    data = r.json()  # { "trades": { "AAPL": { "trade": {...}} ... } }
+    trades = (data or {}).get("trades") or {}
+
+    ticks: List[Dict[str, Any]] = []
+    for s in sym_list:
+        t = _normalize_stock_trade(s, trades.get(s) or {})
+        if t:
+            ticks.append(t)
+
+    return {"ticks": ticks, "symbols": sym_list}
+
+@app.get("/market/latest/crypto")
+def latest_crypto(symbols: str, request: Request, loc: str = "us", user_id: str = Depends(require_user_id)):
+    keys = _get_alpaca_keys_from_db(request)
+    # crypto symbols look like BTC/USD, ETH/USD (keep as-is but strip spaces)
+    sym_list = [s.strip().upper() for s in symbols.split(",") if s.strip()]
+    if not sym_list:
+        raise HTTPException(status_code=400, detail="symbols is required")
+
+    loc = (loc or "us").strip().lower()
+    url = f"{ALPACA_DATA_BASE}/v1beta3/crypto/{loc}/latest/trades"
+    headers = {
+        "APCA-API-KEY-ID": keys["api_key"],
+        "APCA-API-SECRET-KEY": keys["api_secret"],
+    }
+    params = {"symbols": ",".join(sym_list)}
+
+    r = requests.get(url, headers=headers, params=params, timeout=10)
+    if r.status_code >= 400:
+        raise HTTPException(status_code=r.status_code, detail=r.text)
+
+    data = r.json()  # { "trades": { "BTC/USD": { "trade": {...}} ... } }
+    trades = (data or {}).get("trades") or {}
+
+    ticks: List[Dict[str, Any]] = []
+    for s in sym_list:
+        t = _normalize_crypto_trade(s, trades.get(s) or {})
+        if t:
+            ticks.append(t)
+
+    return {"ticks": ticks, "symbols": sym_list, "loc": loc}

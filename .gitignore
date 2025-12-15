@@ -26,3 +26,6 @@ dist-ssr
 # dotenv environment variables
 .env
 .env.local
+
+__pycache__/
+*.pyc

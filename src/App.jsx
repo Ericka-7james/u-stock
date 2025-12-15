@@ -7,6 +7,7 @@ import IndexFundsPage from "./components/pages/IndexFundsPage";
 import AboutPage from "./components/pages/AboutPage";
 import FeebackPage from "./components/pages/FeedbackPage";
 // import ResumePage from "./components/pages/ResumePage";
+import CandlesPage from "./components/pages/CandlesPage";
 
 import AuthPage from "./components/auth/AuthPage";
 import SignupPage from "./components/auth/SignupPage";
@@ -117,6 +118,14 @@ function App() {
         element={
           <RequireAuth>
             <ConnectedAppsPage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/candles"
+        element={
+          <RequireAuth>
+            <CandlesPage />
           </RequireAuth>
         }
       />

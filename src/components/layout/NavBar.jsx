@@ -21,6 +21,7 @@ export default function NavBar({
   const isFeedback = location.pathname.startsWith("/feedback");
   // const isResume = location.pathname.startsWith("/resume"); // ✅ you already had this
   const isConnectedApps = location.pathname.startsWith("/connected-apps");
+  const isCandles = location.pathname.startsWith("/candles");
 
   const closeNav = () => setNavOpen(false);
 
@@ -130,6 +131,17 @@ export default function NavBar({
           >
             <span className="side-nav-item-dot" />
             Connected Apps
+          </Link>
+
+          <Link
+            to="/candles"
+            className={
+              "side-nav-item " + (isCandles ? "side-nav-item--active" : "")
+            }
+            onClick={closeNav}
+          >
+            <span className="side-nav-item-dot" />
+            Candles
           </Link>
 
           {/* Sign Out stays the same */}
