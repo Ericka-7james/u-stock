@@ -39,21 +39,28 @@ export function AuthProvider({ children }) {
   }, []);
 
   const refreshSession = async () => {
-    try {
+    const attempt = async () => {
       const res = await authFetch("auth/me", { method: "GET" });
+      if (!res.ok) return null;
+      return await safeJson(res);
+    };
 
-      if (!res.ok) {
+    try {
+      let data = await attempt();
+
+      // Safari fallback: short retry once before giving up
+      if (!data) {
+        await new Promise((r) => setTimeout(r, 300));
+        data = await attempt();
+      }
+
+      if (!data) {
         setIsAuthed(false);
         setUser(null);
         return false;
       }
 
-      const data = await safeJson(res);
-
-      setUser((prev) => ({
-        ...(prev || {}),
-        id: data.user_id,
-      }));
+      setUser((prev) => ({ ...(prev || {}), id: data.user_id }));
       setIsAuthed(true);
       return true;
     } catch {

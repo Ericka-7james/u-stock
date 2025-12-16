@@ -12,6 +12,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
 from supabase import Client, create_client
 
+from fastapi.responses import JSONResponse
+from fastapi import Request
+
 # Load repo-root .env for local dev; in Vercel this is harmless.
 ROOT = Path(__file__).resolve().parents[1]
 load_dotenv(ROOT / ".env")
@@ -103,8 +106,8 @@ def set_auth_cookie(response: Response, access_token: str) -> None:
         key=COOKIE_NAME,
         value=access_token,
         httponly=True,
-        secure=COOKIE_SECURE,
-        samesite=COOKIE_SAMESITE,
+        secure=True,        # MUST be true when SameSite=None
+        samesite="none",    # REQUIRED for cross-site
         max_age=COOKIE_MAX_AGE,
         path="/",
     )
@@ -159,6 +162,13 @@ def debug_routes():
         if p:
             out.append(p)
     return sorted(out)
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Server error", "error": repr(exc)},
+    )
 
 @api.get("/debug/env")
 def debug_env():
