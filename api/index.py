@@ -467,28 +467,27 @@ def latest_crypto(symbols: str, request: Request, loc: str = "us", user_id: str 
 
     return {"ticks": ticks, "symbols": sym_list, "loc": loc}
 
-# IMPORTANT: mount the /api router
-app.include_router(api)
-
+# ---------- Feedback ----------
 @api.post("/feedback")
-    def submit_feedback(payload: FeedbackIn, request: Request):
-        sb = get_supabase_anon()
+def submit_feedback(payload: FeedbackIn, request: Request):
+    sb = get_supabase_anon()
 
-        row = {
-            "name": payload.name,
-            "email": payload.email,
-            "feedback_type": payload.feedback_type,
-            "message": payload.message,
-            "user_id": payload.user_id,
-            "user_agent": payload.user_agent,
-            "page_url": payload.page_url,
-        }
+    row = {
+        "name": payload.name,
+        "email": payload.email,
+        "feedback_type": payload.feedback_type,
+        "message": payload.message,
+        "user_id": payload.user_id,
+        "user_agent": payload.user_agent,
+        "page_url": payload.page_url,
+    }
 
-        sb.table("feedback").insert(row).execute()
+    sb.table("feedback").insert(row).execute()
 
-        # ---- SEND EMAIL ----
-        if RESEND_API_KEY and FEEDBACK_TO_EMAIL:
-            resend.Emails.send({
+    # ---- SEND EMAIL ----
+    if RESEND_API_KEY and FEEDBACK_TO_EMAIL:
+        resend.Emails.send(
+            {
                 "from": "U-Stock Feedback <onboarding@resend.dev>",
                 "to": FEEDBACK_TO_EMAIL,
                 "subject": f"📬 New Feedback ({payload.feedback_type})",
@@ -500,12 +499,19 @@ app.include_router(api)
                     <p><b>User ID:</b> {payload.user_id or "Anonymous"}</p>
                     <hr />
                     <pre style="white-space:pre-wrap;font-family:system-ui;">
-        {payload.message}
+{payload.message}
                     </pre>
                     <hr />
                     <small>
                     {payload.page_url or ""}<br/>
                     {payload.user_agent or ""}
                     </small>
-                """
-            })
+                """,
+            }
+        )
+
+    return {"ok": True}
+
+
+# IMPORTANT: mount the /api router
+app.include_router(api)
