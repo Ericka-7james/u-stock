@@ -153,7 +153,12 @@ def health():
 
 @api.get("/_debug/routes")
 def debug_routes():
-    return sorted([r.path for r in app.routes])
+    out = []
+    for r in app.routes:
+        p = getattr(r, "path", None)
+        if p:
+            out.append(p)
+    return sorted(out)
 
 @api.get("/debug/env")
 def debug_env():
