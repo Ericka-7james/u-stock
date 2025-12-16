@@ -14,6 +14,7 @@ from supabase import Client, create_client
 
 from fastapi.responses import JSONResponse
 from fastapi import Request
+import resend
 
 # Load repo-root .env for local dev; in Vercel this is harmless.
 ROOT = Path(__file__).resolve().parents[1]
@@ -41,6 +42,9 @@ COOKIE_MAX_AGE = int(os.getenv("USTOCK_COOKIE_MAX_AGE", "604800"))  # 7 days sec
 
 API_PREFIX = "/api"
 
+RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
+FEEDBACK_TO_EMAIL = os.getenv("FEEDBACK_TO_EMAIL", "")
+
 app = FastAPI(title="u-stock-auth-backend")
 
 app.add_middleware(
@@ -53,6 +57,9 @@ app.add_middleware(
 )
 
 api = APIRouter(prefix=API_PREFIX)
+
+if RESEND_API_KEY:
+    resend.api_key = RESEND_API_KEY
 
 # ---------- Models ----------
 class AlpacaKeys(BaseModel):
@@ -81,6 +88,15 @@ class UserOut(BaseModel):
 class AuthResponse(BaseModel):
     user: UserOut
     ok: bool = True
+
+class FeedbackIn(BaseModel):
+    name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    feedback_type: str
+    message: str
+    user_id: Optional[str] = None  # optional if logged in
+    user_agent: Optional[str] = None
+    page_url: Optional[str] = None
 
 # ---------- Supabase clients ----------
 def get_supabase_anon() -> Client:
@@ -453,3 +469,45 @@ def latest_crypto(symbols: str, request: Request, loc: str = "us", user_id: str 
 
 # IMPORTANT: mount the /api router
 app.include_router(api)
+
+@api.post("/feedback")
+    def submit_feedback(payload: FeedbackIn, request: Request):
+        sb = get_supabase_anon()
+
+        row = {
+            "name": payload.name,
+            "email": payload.email,
+            "feedback_type": payload.feedback_type,
+            "message": payload.message,
+            "user_id": payload.user_id,
+            "user_agent": payload.user_agent,
+            "page_url": payload.page_url,
+        }
+
+        sb.table("feedback").insert(row).execute()
+
+        # ---- SEND EMAIL ----
+        if RESEND_API_KEY and FEEDBACK_TO_EMAIL:
+            resend.Emails.send({
+                "from": "U-Stock Feedback <onboarding@resend.dev>",
+                "to": FEEDBACK_TO_EMAIL,
+                "subject": f"📬 New Feedback ({payload.feedback_type})",
+                "html": f"""
+                    <h2>New Feedback</h2>
+                    <p><b>Type:</b> {payload.feedback_type}</p>
+                    <p><b>Name:</b> {payload.name or "Anonymous"}</p>
+                    <p><b>Email:</b> {payload.email or "Not provided"}</p>
+                    <p><b>User ID:</b> {payload.user_id or "Anonymous"}</p>
+                    <hr />
+                    <pre style="white-space:pre-wrap;font-family:system-ui;">
+    {payload.message}
+                    </pre>
+                    <hr />
+                    <small>
+                    {payload.page_url or ""}<br/>
+                    {payload.user_agent or ""}
+                    </small>
+                """
+            })
+
+        return {"ok": True}
