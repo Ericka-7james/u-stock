@@ -1,24 +1,35 @@
 # api/index.py
 import os
 import re
+import time
 from pathlib import Path
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from datetime import timezone
+from typing import Any, Dict, List, Optional, Tuple
 
 import requests
 from dotenv import load_dotenv
-from fastapi import APIRouter, Depends, FastAPI, HTTPException, Response, Request
+from fastapi import APIRouter, FastAPI, HTTPException, Response, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr
 from supabase import Client, create_client
 
-from fastapi.responses import JSONResponse
-from fastapi import Request
 import resend
 
-# Load repo-root .env for local dev; in Vercel this is harmless.
-ROOT = Path(__file__).resolve().parents[1]
-load_dotenv(ROOT / ".env")
+# -------------------------
+# Load env (support both root .env and api/.env)
+# -------------------------
+THIS_DIR = Path(__file__).resolve().parent          # .../api
+PROJECT_ROOT = THIS_DIR.parent                      # .../u-stock
+
+for env_path in [
+    PROJECT_ROOT / ".env",
+    PROJECT_ROOT / ".env.local",
+    THIS_DIR / ".env",
+    THIS_DIR / ".env.local",
+]:
+    if env_path.exists():
+        load_dotenv(env_path, override=False)
 
 # ---- Settings ----
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip()
@@ -34,16 +45,25 @@ CORS_ORIGINS = [
 ]
 
 ENV = os.getenv("ENV", "development").strip().lower()
-
-COOKIE_NAME = os.getenv("USTOCK_COOKIE_NAME", "access_token").strip()
-COOKIE_SECURE = ENV == "production"
-COOKIE_SAMESITE = "none" if ENV == "production" else "lax"
-COOKIE_MAX_AGE = int(os.getenv("USTOCK_COOKIE_MAX_AGE", "604800"))  # 7 days seconds
-
 API_PREFIX = "/api"
 
-RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
-FEEDBACK_TO_EMAIL = os.getenv("FEEDBACK_TO_EMAIL", "")
+COOKIE_NAME = os.getenv("USTOCK_COOKIE_NAME", "access_token").strip()
+REFRESH_COOKIE_NAME = os.getenv("USTOCK_REFRESH_COOKIE_NAME", "refresh_token").strip()
+
+COOKIE_SECURE = ENV == "production"
+COOKIE_SAMESITE = "none" if ENV == "production" else "lax"
+COOKIE_MAX_AGE = int(os.getenv("USTOCK_COOKIE_MAX_AGE", "604800"))  # 7 days
+
+RESEND_API_KEY = os.getenv("RESEND_API_KEY", "").strip()
+FEEDBACK_TO_EMAIL = os.getenv("FEEDBACK_TO_EMAIL", "").strip()
+
+TURNSTILE_SECRET_KEY = os.getenv("TURNSTILE_SECRET_KEY", "").strip()
+TURNSTILE_ENABLED = os.getenv("TURNSTILE_ENABLED", "true").strip().lower() in ("1", "true", "yes")
+
+# --- simple in-memory feedback rate limit (dev ok; for prod use Redis/Upstash) ---
+FEEDBACK_RL_WINDOW_SEC = int(os.getenv("FEEDBACK_RL_WINDOW_SEC", "60"))
+FEEDBACK_RL_MAX = int(os.getenv("FEEDBACK_RL_MAX", "5"))
+_feedback_rl: dict[str, list[float]] = {}
 
 app = FastAPI(title="u-stock-auth-backend")
 
@@ -61,145 +81,49 @@ api = APIRouter(prefix=API_PREFIX)
 if RESEND_API_KEY:
     resend.api_key = RESEND_API_KEY
 
-# ---------- Models ----------
-class AlpacaKeys(BaseModel):
-    api_key: str
-    api_secret: str
-    mode: str = "paper"  # "paper" or "live"
 
-class PolygonKeys(BaseModel):
-    api_key: str
-
+# -------------------------
+# Models
+# -------------------------
 class SignupBody(BaseModel):
     email: EmailStr
     password: str
     username: Optional[str] = None
     avatar: Optional[str] = None
 
+
 class LoginBody(BaseModel):
     email: EmailStr
     password: str
+
 
 class UserOut(BaseModel):
     id: str
     email: EmailStr
     avatar: Optional[str] = None
 
+
 class AuthResponse(BaseModel):
     user: UserOut
     ok: bool = True
+
 
 class FeedbackIn(BaseModel):
     name: Optional[str] = None
     email: Optional[EmailStr] = None
     feedback_type: str
     message: str
-    user_id: Optional[str] = None  # optional if logged in
-    user_agent: Optional[str] = None
-    page_url: Optional[str] = None
 
-# ---------- Supabase clients ----------
-def get_supabase_anon() -> Client:
-    """Anon client used for auth endpoints."""
-    if not SUPABASE_URL:
-        raise HTTPException(status_code=500, detail="SUPABASE_URL is missing")
-    if not SUPABASE_ANON_KEY:
-        raise HTTPException(status_code=500, detail="SUPABASE_ANON_KEY is missing")
-    return create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
+    # anti-abuse
+    turnstile_token: str
+    honeypot: Optional[str] = ""
 
-def get_supabase_user(jwt_token: str) -> Client:
-    """
-    User-scoped client for RLS-protected DB operations.
-    This makes PostgREST enforce policies using auth.uid().
-    """
-    sb = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
-    sb.postgrest.auth(jwt_token)
-    return sb
 
-# ---------- Cookie helpers ----------
-def set_auth_cookie(response: Response, access_token: str) -> None:
-    response.set_cookie(
-        key=COOKIE_NAME,
-        value=access_token,
-        httponly=True,
-        secure=True,        # MUST be true when SameSite=None
-        samesite="none",    # REQUIRED for cross-site
-        max_age=COOKIE_MAX_AGE,
-        path="/",
-    )
-
-def clear_auth_cookie(response: Response) -> None:
-    response.delete_cookie(key=COOKIE_NAME, path="/")
-
-def get_cookie_token(request: Request) -> str:
-    token = request.cookies.get(COOKIE_NAME)
-    if not token:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    return token
-
-def require_user_id(request: Request) -> str:
-    token = get_cookie_token(request)
-    sb = get_supabase_anon()
-    try:
-        res = sb.auth.get_user(token)
-    except Exception as e:
-        raise HTTPException(status_code=401, detail=f"Invalid session: {repr(e)}")
-
-    user = getattr(res, "user", None) if res is not None else None
-    if user is None and isinstance(res, dict):
-        user = res.get("user")
-
-    user_id = getattr(user, "id", None) if user is not None else None
-    if not user_id and isinstance(user, dict):
-        user_id = user.get("id")
-
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Invalid session")
-
-    return user_id
-
-def _normalize_provider(p: str) -> str:
-    return (p or "").strip().lower()
-
-# ---------- Health / debug ----------
-@app.get("/")
-def root():
-    return {"name": "u-stock-auth-backend", "status": "running", "env": ENV}
-
-@app.get("/health")
-def health():
-    return {"status": "ok", "supabase_url_set": bool(SUPABASE_URL), "env": ENV}
-
-@api.get("/_debug/routes")
-def debug_routes():
-    out = []
-    for r in app.routes:
-        p = getattr(r, "path", None)
-        if p:
-            out.append(p)
-    return sorted(out)
-
-@app.exception_handler(Exception)
-async def unhandled_exception_handler(request: Request, exc: Exception):
-    return JSONResponse(
-        status_code=500,
-        content={"detail": "Server error", "error": repr(exc)},
-    )
-
-@api.get("/debug/env")
-def debug_env():
-    return {
-        "SUPABASE_URL_set": bool(SUPABASE_URL),
-        "SUPABASE_ANON_KEY_set": bool(SUPABASE_ANON_KEY),
-        "CORS_ORIGINS": CORS_ORIGINS,
-        "ENV": ENV,
-        "COOKIE_SECURE": COOKIE_SECURE,
-        "COOKIE_SAMESITE": COOKIE_SAMESITE,
-        "COOKIE_NAME": COOKIE_NAME,
-    }
-
-# ---------- Password rules ----------
+# -------------------------
+# Helpers
+# -------------------------
 PASSWORD_MIN_LEN = 12
+
 
 def validate_password(password: str, email: str, username: str | None = None) -> None:
     if len(password) < PASSWORD_MIN_LEN:
@@ -219,299 +143,304 @@ def validate_password(password: str, email: str, username: str | None = None) ->
     if username and username.lower() in password.lower():
         raise HTTPException(status_code=400, detail="Password must not contain your username.")
 
-# ---------- Auth endpoints ----------
+
+def get_supabase_anon() -> Client:
+    if not SUPABASE_URL:
+        raise HTTPException(status_code=500, detail="SUPABASE_URL is missing")
+    if not SUPABASE_ANON_KEY:
+        raise HTTPException(status_code=500, detail="SUPABASE_ANON_KEY is missing")
+    return create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
+
+
+def set_auth_cookies(response: Response, access_token: str, refresh_token: str | None = None) -> None:
+    if access_token:
+        response.set_cookie(
+            key=COOKIE_NAME,
+            value=access_token,
+            httponly=True,
+            secure=COOKIE_SECURE,
+            samesite=COOKIE_SAMESITE,
+            max_age=COOKIE_MAX_AGE,
+            path="/",
+        )
+    if refresh_token:
+        response.set_cookie(
+            key=REFRESH_COOKIE_NAME,
+            value=refresh_token,
+            httponly=True,
+            secure=COOKIE_SECURE,
+            samesite=COOKIE_SAMESITE,
+            max_age=COOKIE_MAX_AGE,
+            path="/",
+        )
+
+
+def clear_auth_cookies(response: Response) -> None:
+    response.delete_cookie(key=COOKIE_NAME, path="/", samesite=COOKIE_SAMESITE, secure=COOKIE_SECURE)
+    response.delete_cookie(key=REFRESH_COOKIE_NAME, path="/", samesite=COOKIE_SAMESITE, secure=COOKIE_SECURE)
+
+
+def _extract_user_id_and_email(res: Any) -> Tuple[str | None, str | None]:
+    user = getattr(res, "user", None) if res is not None else None
+    if user is None and isinstance(res, dict):
+        user = res.get("user")
+
+    uid = getattr(user, "id", None) if user is not None else None
+    email = getattr(user, "email", None) if user is not None else None
+
+    if isinstance(user, dict):
+        uid = uid or user.get("id")
+        email = email or user.get("email")
+
+    return uid, email
+
+
+def require_user(request: Request, response: Response) -> Dict[str, str]:
+    """
+    Returns {"id": ..., "email": ...} or raises 401.
+    Also refreshes cookies if refresh_token exists & access expired.
+    """
+    sb = get_supabase_anon()
+    access = request.cookies.get(COOKIE_NAME)
+    refresh = request.cookies.get(REFRESH_COOKIE_NAME)
+
+    # 1) Try access token
+    if access:
+        try:
+            res = sb.auth.get_user(access)
+            uid, email = _extract_user_id_and_email(res)
+            if uid:
+                return {"id": uid, "email": email or ""}
+        except Exception:
+            pass
+
+    # 2) Refresh token -> mint new session
+    if refresh:
+        try:
+            try:
+                refreshed = sb.auth.refresh_session(refresh)
+            except Exception:
+                refreshed = sb.auth.refresh_session({"refresh_token": refresh})
+
+            uid, email = _extract_user_id_and_email(refreshed)
+
+            session = getattr(refreshed, "session", None)
+            if session:
+                new_access = getattr(session, "access_token", None)
+                new_refresh = getattr(session, "refresh_token", None)
+                if new_access:
+                    set_auth_cookies(response, new_access, new_refresh)
+
+            if uid:
+                return {"id": uid, "email": email or ""}
+        except Exception as e:
+            raise HTTPException(status_code=401, detail=f"Invalid session: {repr(e)}")
+
+    raise HTTPException(status_code=401, detail="Not authenticated")
+
+
+def _get_client_ip(request: Request) -> str:
+    xfwd = request.headers.get("x-forwarded-for")
+    if xfwd:
+        return xfwd.split(",")[0].strip()
+    xreal = request.headers.get("x-real-ip")
+    if xreal:
+        return xreal.strip()
+    if request.client and request.client.host:
+        return request.client.host
+    return "unknown"
+
+
+def _rate_limit_feedback(ip: str) -> None:
+    now = time.time()
+    window_start = now - FEEDBACK_RL_WINDOW_SEC
+    hits = _feedback_rl.get(ip, [])
+    hits = [t for t in hits if t >= window_start]
+    if len(hits) >= FEEDBACK_RL_MAX:
+        raise HTTPException(status_code=429, detail="Too many feedback requests. Try again soon.")
+    hits.append(now)
+    _feedback_rl[ip] = hits
+
+
+def _verify_turnstile(token: str, request: Request) -> None:
+    if not TURNSTILE_ENABLED:
+        return
+
+    if not TURNSTILE_SECRET_KEY:
+        raise HTTPException(status_code=500, detail="TURNSTILE_SECRET_KEY is missing")
+
+    ip = _get_client_ip(request)
+
+    try:
+        r = requests.post(
+            "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+            data={"secret": TURNSTILE_SECRET_KEY, "response": token, "remoteip": ip},
+            timeout=4,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Captcha verify request failed: {repr(e)}")
+
+    try:
+        data = r.json()
+    except Exception:
+        data = {}
+
+    if not data.get("success"):
+        codes = data.get("error-codes") or data.get("error_codes") or []
+        raise HTTPException(status_code=400, detail=f"Captcha verification failed: {codes}")
+
+
+# -------------------------
+# Error handler (so you see useful errors)
+# -------------------------
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    return JSONResponse(status_code=500, content={"detail": "Server error", "error": repr(exc)})
+
+
+# -------------------------
+# Health / debug
+# -------------------------
+@app.get("/")
+def root():
+    return {"name": "u-stock-auth-backend", "status": "running", "env": ENV}
+
+
+@app.get("/health")
+def health():
+    return {"status": "ok", "supabase_url_set": bool(SUPABASE_URL), "env": ENV}
+
+
+@api.get("/debug/env")
+def debug_env():
+    return {
+        "ENV": ENV,
+        "CORS_ORIGINS": CORS_ORIGINS,
+        "COOKIE_SECURE": COOKIE_SECURE,
+        "COOKIE_SAMESITE": COOKIE_SAMESITE,
+        "COOKIE_NAME": COOKIE_NAME,
+        "SUPABASE_URL_set": bool(SUPABASE_URL),
+        "SUPABASE_ANON_KEY_set": bool(SUPABASE_ANON_KEY),
+        "TURNSTILE_ENABLED": TURNSTILE_ENABLED,
+        "TURNSTILE_SECRET_KEY_set": bool(TURNSTILE_SECRET_KEY),
+    }
+
+
+# -------------------------
+# Auth endpoints
+# -------------------------
 @api.post("/auth/signup", response_model=AuthResponse)
 def signup(body: SignupBody, response: Response):
     validate_password(body.password, body.email, body.username)
     sb = get_supabase_anon()
+
     try:
         res = sb.auth.sign_up({"email": body.email, "password": body.password})
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Supabase signup error: {repr(e)}")
 
-    if not res or not res.user:
-        raise HTTPException(status_code=400, detail=f"Signup failed. Raw response: {res}")
+    if not res or not getattr(res, "user", None):
+        raise HTTPException(status_code=400, detail="Signup failed")
 
-    if getattr(res, "session", None) and res.session and getattr(res.session, "access_token", None):
-        set_auth_cookie(response, res.session.access_token)
+    session = getattr(res, "session", None)
+    if session:
+        set_auth_cookies(response, getattr(session, "access_token", None), getattr(session, "refresh_token", None))
 
     return AuthResponse(
         user=UserOut(id=res.user.id, email=res.user.email, avatar=body.avatar or "📈"),
         ok=True,
     )
 
+
 @api.post("/auth/login", response_model=AuthResponse)
 def login(body: LoginBody, response: Response):
     sb = get_supabase_anon()
+
     try:
         res = sb.auth.sign_in_with_password({"email": body.email, "password": body.password})
     except Exception as e:
         raise HTTPException(status_code=401, detail=f"Supabase login error: {repr(e)}")
 
-    if not res.user or not res.session:
+    if not getattr(res, "user", None) or not getattr(res, "session", None):
         raise HTTPException(status_code=401, detail="Invalid email/password or email not confirmed")
 
-    set_auth_cookie(response, res.session.access_token)
+    set_auth_cookies(response, getattr(res.session, "access_token", None), getattr(res.session, "refresh_token", None))
 
     return AuthResponse(
-        user=UserOut(
-            id=res.user.id,
-            email=res.user.email,
-            avatar=(res.user.user_metadata or {}).get("avatar"),
-        ),
+        user=UserOut(id=res.user.id, email=res.user.email, avatar=(res.user.user_metadata or {}).get("avatar")),
         ok=True,
     )
 
+
 @api.post("/auth/logout")
 def logout(response: Response):
-    clear_auth_cookie(response)
+    clear_auth_cookies(response)
     return {"ok": True}
+
 
 @api.get("/auth/me")
-def me(user_id: str = Depends(require_user_id)):
-    return {"user_id": user_id}
+def me(request: Request, response: Response):
+    u = require_user(request, response)
+    return {"user_id": u["id"], "email": u["email"]}
 
-# ---------- Integrations (RLS-friendly) ----------
-@api.get("/integrations")
-def list_integrations(request: Request, user_id: str = Depends(require_user_id)):
-    token = get_cookie_token(request)
-    sb = get_supabase_user(token)
 
-    res = sb.table("integrations").select("provider,status").execute()
-    rows = getattr(res, "data", None) or (res.get("data", []) if isinstance(res, dict) else [])
-    existing = {r["provider"]: r.get("status", "connected") for r in rows}
-
-    apps = []
-    for p in ["alpaca", "polygon", "tradingview"]:
-        apps.append({"provider": p, "status": existing.get(p, "not_connected")})
-
-    return {"user_id": user_id, "apps": apps}
-
-@api.post("/integrations/alpaca/keys")
-def save_alpaca_keys(payload: AlpacaKeys, request: Request, user_id: str = Depends(require_user_id)):
-    token = get_cookie_token(request)
-    sb = get_supabase_user(token)
-
-    mode = (payload.mode or "paper").strip().lower()
-    if mode not in ("paper", "live"):
-        raise HTTPException(status_code=400, detail="mode must be 'paper' or 'live'")
-
-    sb.table("integrations").upsert(
-        {
-            "user_id": user_id,
-            "provider": "alpaca",
-            "status": "connected",
-            "config": {
-                "mode": mode,
-                "api_key": payload.api_key.strip(),
-                "api_secret": payload.api_secret.strip(),
-            },
-        },
-        on_conflict="user_id,provider",
-    ).execute()
-
-    return {"ok": True}
-
-@api.post("/integrations/polygon/keys")
-def save_polygon_keys(payload: PolygonKeys, request: Request, user_id: str = Depends(require_user_id)):
-    token = get_cookie_token(request)
-    sb = get_supabase_user(token)
-
-    sb.table("integrations").upsert(
-        {
-            "user_id": user_id,
-            "provider": "polygon",
-            "status": "connected",
-            "config": {"api_key": payload.api_key.strip()},
-        },
-        on_conflict="user_id,provider",
-    ).execute()
-
-    return {"ok": True}
-
-@api.delete("/integrations/{provider}")
-def disconnect_provider(provider: str, request: Request, user_id: str = Depends(require_user_id)):
-    token = get_cookie_token(request)
-    sb = get_supabase_user(token)
-
-    provider = _normalize_provider(provider)
-    if provider not in ("alpaca", "polygon", "tradingview"):
-        raise HTTPException(status_code=400, detail="Unknown provider")
-
-    sb.table("integrations").delete().eq("provider", provider).execute()
-    return {"ok": True, "provider": provider}
-
-# ---------- Market latest ----------
-ALPACA_DATA_BASE = "https://data.alpaca.markets"
-
-def _get_alpaca_keys_from_db(request: Request) -> Dict[str, str]:
-    token = get_cookie_token(request)
-    sb = get_supabase_user(token)
-
-    res = (
-        sb.table("integrations")
-        .select("config,status")
-        .eq("provider", "alpaca")
-        .limit(1)
-        .execute()
-    )
-    rows = getattr(res, "data", None) or (res.get("data", []) if isinstance(res, dict) else [])
-    if not rows:
-        raise HTTPException(status_code=400, detail="Alpaca not connected. Add keys in Connected Apps.")
-
-    cfg = rows[0].get("config") or {}
-    api_key = (cfg.get("api_key") or "").strip()
-    api_secret = (cfg.get("api_secret") or "").strip()
-    if not api_key or not api_secret:
-        raise HTTPException(status_code=400, detail="Alpaca keys missing. Reconnect Alpaca integration.")
-
-    return {"api_key": api_key, "api_secret": api_secret}
-
-def _iso_to_ms(ts: str | None) -> int:
-    if not ts:
-        return int(datetime.now(timezone.utc).timestamp() * 1000)
-    try:
-        dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
-        return int(dt.timestamp() * 1000)
-    except Exception:
-        return int(datetime.now(timezone.utc).timestamp() * 1000)
-
-def _normalize_stock_trade(symbol: str, raw: Dict[str, Any]) -> Dict[str, Any] | None:
-    trade = raw.get("trade") if isinstance(raw, dict) else None
-    if not trade:
-        return None
-    price = trade.get("p")
-    if price is None:
-        return None
-    return {
-        "source": "alpaca",
-        "symbol": symbol,
-        "ts": _iso_to_ms(trade.get("t")),
-        "price": float(price),
-        "size": float(trade.get("s") or 0),
-        "kind": "trade",
-    }
-
-def _normalize_crypto_trade(symbol: str, raw: Dict[str, Any]) -> Dict[str, Any] | None:
-    trade = raw.get("trade") if isinstance(raw, dict) else None
-    if not trade:
-        return None
-    price = trade.get("p")
-    if price is None:
-        return None
-    return {
-        "source": "alpaca",
-        "symbol": symbol,
-        "ts": _iso_to_ms(trade.get("t")),
-        "price": float(price),
-        "size": float(trade.get("s") or 0),
-        "kind": "trade",
-    }
-
-@api.get("/market/latest/stocks")
-def latest_stocks(symbols: str, request: Request, user_id: str = Depends(require_user_id)):
-    keys = _get_alpaca_keys_from_db(request)
-    sym_list = [s.strip().upper() for s in symbols.split(",") if s.strip()]
-    if not sym_list:
-        raise HTTPException(status_code=400, detail="symbols is required")
-
-    url = f"{ALPACA_DATA_BASE}/v2/stocks/trades/latest"
-    headers = {
-        "APCA-API-KEY-ID": keys["api_key"],
-        "APCA-API-SECRET-KEY": keys["api_secret"],
-    }
-    params = {"symbols": ",".join(sym_list)}
-
-    r = requests.get(url, headers=headers, params=params, timeout=10)
-    if r.status_code >= 400:
-        raise HTTPException(status_code=r.status_code, detail=r.text)
-
-    data = r.json()
-    trades = (data or {}).get("trades") or {}
-
-    ticks: List[Dict[str, Any]] = []
-    for s in sym_list:
-        t = _normalize_stock_trade(s, trades.get(s) or {})
-        if t:
-            ticks.append(t)
-
-    return {"ticks": ticks, "symbols": sym_list}
-
-@api.get("/market/latest/crypto")
-def latest_crypto(symbols: str, request: Request, loc: str = "us", user_id: str = Depends(require_user_id)):
-    keys = _get_alpaca_keys_from_db(request)
-    sym_list = [s.strip().upper() for s in symbols.split(",") if s.strip()]
-    if not sym_list:
-        raise HTTPException(status_code=400, detail="symbols is required")
-
-    loc = (loc or "us").strip().lower()
-    url = f"{ALPACA_DATA_BASE}/v1beta3/crypto/{loc}/latest/trades"
-    headers = {
-        "APCA-API-KEY-ID": keys["api_key"],
-        "APCA-API-SECRET-KEY": keys["api_secret"],
-    }
-    params = {"symbols": ",".join(sym_list)}
-
-    r = requests.get(url, headers=headers, params=params, timeout=10)
-    if r.status_code >= 400:
-        raise HTTPException(status_code=r.status_code, detail=r.text)
-
-    data = r.json()
-    trades = (data or {}).get("trades") or {}
-
-    ticks: List[Dict[str, Any]] = []
-    for s in sym_list:
-        t = _normalize_crypto_trade(s, trades.get(s) or {})
-        if t:
-            ticks.append(t)
-
-    return {"ticks": ticks, "symbols": sym_list, "loc": loc}
-
-# ---------- Feedback ----------
+# -------------------------
+# Feedback
+# -------------------------
 @api.post("/feedback")
 def submit_feedback(payload: FeedbackIn, request: Request):
-    sb = get_supabase_anon()
+    # bots fill hidden fields
+    if payload.honeypot and payload.honeypot.strip():
+        return {"ok": True}
+
+    ip = _get_client_ip(request)
+    _rate_limit_feedback(ip)
+
+    if TURNSTILE_ENABLED:
+        if not payload.turnstile_token:
+            raise HTTPException(status_code=400, detail="Missing captcha token.")
+        _verify_turnstile(payload.turnstile_token, request)
 
     row = {
         "name": payload.name,
         "email": payload.email,
         "feedback_type": payload.feedback_type,
         "message": payload.message,
-        "user_id": payload.user_id,
-        "user_agent": payload.user_agent,
-        "page_url": payload.page_url,
     }
 
-    sb.table("feedback").insert(row).execute()
+    try:
+        sb = get_supabase_anon()
+        sb.table("feedback").insert(row, returning="minimal").execute()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Feedback insert failed: {repr(e)}")
 
-    # ---- SEND EMAIL ----
+    # Email notify (optional)
+    email_sent = False
+    email_error = None
     if RESEND_API_KEY and FEEDBACK_TO_EMAIL:
-        resend.Emails.send(
-            {
-                "from": "U-Stock Feedback <onboarding@resend.dev>",
-                "to": FEEDBACK_TO_EMAIL,
-                "subject": f"📬 New Feedback ({payload.feedback_type})",
-                "html": f"""
-                    <h2>New Feedback</h2>
-                    <p><b>Type:</b> {payload.feedback_type}</p>
-                    <p><b>Name:</b> {payload.name or "Anonymous"}</p>
-                    <p><b>Email:</b> {payload.email or "Not provided"}</p>
-                    <p><b>User ID:</b> {payload.user_id or "Anonymous"}</p>
-                    <hr />
-                    <pre style="white-space:pre-wrap;font-family:system-ui;">
-{payload.message}
-                    </pre>
-                    <hr />
-                    <small>
-                    {payload.page_url or ""}<br/>
-                    {payload.user_agent or ""}
-                    </small>
-                """,
-            }
-        )
+        try:
+            resend.Emails.send(
+                {
+                    "from": "U-Stock Feedback <onboarding@resend.dev>",
+                    "to": FEEDBACK_TO_EMAIL,
+                    "subject": f"📬 New Feedback ({payload.feedback_type})",
+                    "html": f"""
+                      <h2>New Feedback</h2>
+                      <p><b>Type:</b> {payload.feedback_type}</p>
+                      <p><b>Name:</b> {payload.name or "Anonymous"}</p>
+                      <p><b>Email:</b> {payload.email or "Not provided"}</p>
+                      <p><b>IP:</b> {ip}</p>
+                      <hr />
+                      <pre style="white-space:pre-wrap;font-family:system-ui;">{payload.message}</pre>
+                    """,
+                }
+            )
+            email_sent = True
+        except Exception as e:
+            email_error = repr(e)
 
-    return {"ok": True}
+    return {"ok": True, "email_sent": email_sent, "email_error": email_error}
 
 
-# IMPORTANT: mount the /api router
+# IMPORTANT: mount router
 app.include_router(api)

@@ -55,12 +55,35 @@ export function AuthProvider({ children }) {
       }
 
       if (!data) {
+        // New shape: { user: { id, email, username } }
+        if (data?.user?.id) {
+          setUser(data.user);
+          setIsAuthed(true);
+          return true;
+        }
+
+        // Backwards compat (old shape): { user_id: "..." }
+        if (data?.user_id) {
+          setUser((prev) => ({
+            ...(prev || {}),
+            id: data.user_id,
+            email: data.email || prev?.email || "",
+          }));
+
+          setIsAuthed(true);
+          return true;
+        }
+
         setIsAuthed(false);
         setUser(null);
         return false;
       }
 
-      setUser((prev) => ({ ...(prev || {}), id: data.user_id }));
+      setUser((prev) => ({
+        ...(prev || {}),
+        id: data.user_id,
+        email: data.email || prev?.email || "",
+      }));
       setIsAuthed(true);
       return true;
     } catch {

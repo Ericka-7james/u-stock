@@ -1,12 +1,16 @@
 // src/components/pages/FeedbackPage.jsx
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import Turnstile from "react-turnstile";
 import AppShell from "../layout/AppShell";
 import "../../css/pages/FeedbackPage.css";
 import { API_BASE, API_PREFIX } from "../../config/config";
 import { useAuth } from "../../context/AuthContext";
 
-const MAX_MESSAGE_CHARS = 1200;
+const SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY;
+
+// word count UI + validation
+const WORD_LIMIT = 250;
+const MIN_WORDS = 3;
 
 async function safeJson(res) {
   try {
@@ -16,84 +20,120 @@ async function safeJson(res) {
   }
 }
 
-async function throwReadable(res) {
-  const data = await safeJson(res);
-  const msg = data?.detail || `Request failed (${res.status})`;
-  throw new Error(msg);
+function countWords(s) {
+  return (s || "").trim().split(/\s+/).filter(Boolean).length;
 }
 
 export default function FeedbackPage() {
-  const navigate = useNavigate();
-  const { user, isAuthed } = useAuth();
+  const { user, isAuthed, refreshSession } = useAuth();
+
+  const [honeypot, setHoneypot] = useState("");
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [feedbackType, setFeedbackType] = useState("feature");
   const [message, setMessage] = useState("");
 
+  const [token, setToken] = useState(null);
+  const [status, setStatus] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [status, setStatus] = useState("idle"); // idle | success | error
-  const [error, setError] = useState("");
 
-  const remaining = useMemo(
-    () => MAX_MESSAGE_CHARS - message.length,
-    [message]
-  );
-
-  // ✅ Autofill if logged in (best-effort)
+  // ensure we have latest /auth/me info (email) after login
   useEffect(() => {
-    if (!isAuthed || !user) return;
+    if (isAuthed) refreshSession?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthed]);
 
-    // Only fill if user hasn't typed yet
-    if (!email && user.email) setEmail(user.email);
-    if (!name && (user.username || user.name)) setName(user.username || user.name);
-  }, [isAuthed, user, email, name]);
+  // Autofill if signed in + fields empty
+useEffect(() => {
+  if (!isAuthed || !user) return;
 
-  const handleSubmit = async (e) => {
+  const userEmail = user.email || "";
+  const fallbackName = userEmail ? userEmail.split("@")[0] : "";
+
+  setEmail((prev) => prev || userEmail);
+  setName((prev) => prev || fallbackName);
+}, [isAuthed, user?.email]);
+
+  const wordCount = useMemo(() => countWords(message), [message]);
+  const overLimit = wordCount > WORD_LIMIT;
+  const underMin = wordCount > 0 && wordCount < MIN_WORDS;
+
+  const captchaRequired = !import.meta.env.DEV; // in dev, allow running even if key missing
+  const captchaOk = SITE_KEY ? !!token : !captchaRequired;
+
+  const canSubmit = useMemo(() => {
+    const messageOk = wordCount >= MIN_WORDS && !overLimit;
+    return messageOk && captchaOk && !submitting;
+  }, [wordCount, overLimit, captchaOk, submitting]);
+
+  const resetForm = () => {
+    setFeedbackType("feature");
+    setMessage("");
+    setToken(null);
+    setStatus("");
+  };
+
+  const onSubmit = async (e) => {
     e.preventDefault();
-    setError("");
-    setStatus("idle");
+    setStatus("");
 
-    const trimmedMsg = message.trim();
-    if (!trimmedMsg) {
-      setStatus("error");
-      setError("Please enter a message.");
+    if (honeypot.trim()) {
+      setStatus("Sent! Thank you.");
       return;
     }
-
-    if (message.length > MAX_MESSAGE_CHARS) {
-      setStatus("error");
-      setError(`Message is too long (max ${MAX_MESSAGE_CHARS} characters).`);
+    if (wordCount < MIN_WORDS) {
+      setStatus(`Please enter at least ${MIN_WORDS} words.`);
+      return;
+    }
+    if (overLimit) {
+      setStatus(`Please keep your message under ${WORD_LIMIT} words.`);
+      return;
+    }
+    if (SITE_KEY && !token) {
+      setStatus("Please complete the captcha.");
+      return;
+    }
+    if (!SITE_KEY && captchaRequired) {
+      setStatus("Captcha is required in production but VITE_TURNSTILE_SITE_KEY is missing.");
       return;
     }
 
     setSubmitting(true);
+
     try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 12000);
+
       const res = await fetch(`${API_BASE}${API_PREFIX}/feedback`, {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
-        credentials: "include", // ok even for anon; harmless
+        signal: controller.signal,
         body: JSON.stringify({
           name: name.trim() || null,
           email: email.trim() || null,
           feedback_type: feedbackType,
-          message: trimmedMsg,
-          user_id: user?.id || null,
-          user_agent: navigator.userAgent,
-          page_url: window.location.href,
+          message: message.trim(),
+          turnstile_token: SITE_KEY ? token : "",
+          honeypot,
         }),
       });
 
-      if (!res.ok) await throwReadable(res);
+      clearTimeout(timeout);
 
-      setStatus("success");
-      setName("");
-      setEmail("");
-      setFeedbackType("feature");
+      const data = await safeJson(res);
+      if (!res.ok) {
+        setStatus(data?.detail || "Failed to send feedback.");
+        return;
+      }
+
+      setStatus("Sent! Thank you.");
       setMessage("");
+      setToken(null);
     } catch (err) {
-      setStatus("error");
-      setError(err?.message || "Failed to send feedback.");
+      if (err?.name === "AbortError") setStatus("Request timed out. Backend didn’t respond.");
+      else setStatus(err?.message || "Failed to send feedback.");
     } finally {
       setSubmitting(false);
     }
@@ -110,11 +150,22 @@ export default function FeedbackPage() {
           </p>
         </header>
 
-        <form className="feedback-form" onSubmit={handleSubmit}>
-          <div className="feedback-field">
-            <label className="feedback-label" htmlFor="name">
-              Name
+        <form className="feedback-form" onSubmit={onSubmit}>
+          {/* Honeypot */}
+          <div className="feedback-honeypot" aria-hidden="true">
+            <label>
+              Do not fill this out:
+              <input
+                value={honeypot}
+                onChange={(e) => setHoneypot(e.target.value)}
+                autoComplete="off"
+                tabIndex={-1}
+              />
             </label>
+          </div>
+
+          <div className="feedback-field">
+            <label className="feedback-label" htmlFor="name">Name</label>
             <input
               id="name"
               type="text"
@@ -122,13 +173,12 @@ export default function FeedbackPage() {
               placeholder="Your name"
               value={name}
               onChange={(e) => setName(e.target.value)}
+              autoComplete="name"
             />
           </div>
 
           <div className="feedback-field">
-            <label className="feedback-label" htmlFor="email">
-              Contact email
-            </label>
+            <label className="feedback-label" htmlFor="email">Contact email</label>
             <input
               id="email"
               type="email"
@@ -136,6 +186,7 @@ export default function FeedbackPage() {
               placeholder="you@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
             />
             <p className="feedback-hint">
               I&apos;ll use this if I need to follow up about your feedback.
@@ -143,9 +194,7 @@ export default function FeedbackPage() {
           </div>
 
           <div className="feedback-field">
-            <label className="feedback-label" htmlFor="feedbackType">
-              Feedback type
-            </label>
+            <label className="feedback-label" htmlFor="feedbackType">Feedback type</label>
             <select
               id="feedbackType"
               className="feedback-select"
@@ -160,19 +209,11 @@ export default function FeedbackPage() {
           </div>
 
           <div className="feedback-field">
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-              <label className="feedback-label" htmlFor="message">
-                Message
-              </label>
-              <span
-                style={{
-                  fontSize: 12,
-                  opacity: 0.7,
-                  fontFamily: "monospace",
-                }}
-              >
-                {message.length}/{MAX_MESSAGE_CHARS}
-              </span>
+            <div className="feedback-message-row">
+              <label className="feedback-label" htmlFor="message">Message</label>
+              <div className={`feedback-counter ${overLimit ? "is-over" : ""}`}>
+                {wordCount}/{WORD_LIMIT} words
+              </div>
             </div>
 
             <textarea
@@ -181,11 +222,17 @@ export default function FeedbackPage() {
               placeholder="Tell me what you’d like to learn, improve, or fix in U-Stock."
               rows={6}
               value={message}
-              onChange={(e) => setMessage(e.target.value.slice(0, MAX_MESSAGE_CHARS))}
+              onChange={(e) => setMessage(e.target.value)}
             />
-            {remaining <= 100 ? (
-              <p className="feedback-hint" style={{ marginTop: 8 }}>
-                {remaining} characters left
+
+            {underMin ? (
+              <p className="feedback-hint feedback-hint--warn">
+                Add a bit more detail (min {MIN_WORDS} words).
+              </p>
+            ) : null}
+            {overLimit ? (
+              <p className="feedback-hint feedback-hint--warn">
+                Please shorten your message (max {WORD_LIMIT} words).
               </p>
             ) : null}
           </div>
@@ -194,15 +241,29 @@ export default function FeedbackPage() {
             Think of this as your suggestion box. I use these notes to decide what to build next.
           </p>
 
-          {status === "success" ? (
-            <div className="feedback-success">
-              ✅ Thanks! Your feedback was sent.
-            </div>
-          ) : null}
+          {/* Centered captcha */}
+          <div className="feedback-captcha" style={{ display: "flex", justifyContent: "center" }}>
+            {SITE_KEY ? (
+              <Turnstile
+                sitekey={SITE_KEY}
+                onVerify={(t) => setToken(t)}
+                onExpire={() => setToken(null)}
+                onError={() => setToken(null)}
+              />
+            ) : (
+              <p className="feedback-hint feedback-hint--warn">
+                Captcha isn’t configured. Add <code>VITE_TURNSTILE_SITE_KEY</code> to your frontend env.
+              </p>
+            )}
+          </div>
 
-          {status === "error" && error ? (
-            <div className="feedback-error">
-              ⚠️ {error}
+          {status ? (
+            <div
+              className={`feedback-status ${
+                status.toLowerCase().includes("sent") ? "feedback-status--ok" : "feedback-status--err"
+              }`}
+            >
+              {status}
             </div>
           ) : null}
 
@@ -210,18 +271,18 @@ export default function FeedbackPage() {
             <button
               type="submit"
               className="feedback-btn feedback-btn--primary"
-              disabled={submitting}
+              disabled={!canSubmit}
             >
-              {submitting ? "Sending…" : "Send feedback"}
+              {submitting ? "Sending..." : "Send feedback"}
             </button>
 
             <button
               type="button"
               className="feedback-btn feedback-btn--ghost"
-              onClick={() => navigate(-1)}
+              onClick={resetForm}
               disabled={submitting}
             >
-              Cancel
+              Clear
             </button>
           </div>
         </form>

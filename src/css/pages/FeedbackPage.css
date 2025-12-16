@@ -142,3 +142,75 @@
     margin-bottom: 20px;
   }
 }
+
+/* ---- Anti-bot honeypot ---- */
+.feedback-honeypot {
+  position: absolute;
+  left: -9999px;
+  height: 0;
+  overflow: hidden;
+}
+
+/* ---- Turnstile wrapper so it aligns nicely ---- */
+.feedback-captcha {
+  margin-top: 12px;
+  display: flex;
+  justify-content: flex-start;
+}
+
+/* ---- Status message ---- */
+.feedback-status {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-size: 0.95rem;
+  line-height: 1.3;
+}
+
+.feedback-status--ok {
+  border: 1px solid rgba(46, 204, 113, 0.35);
+  background: rgba(46, 204, 113, 0.12);
+}
+
+.feedback-status--err {
+  border: 1px solid rgba(231, 76, 60, 0.35);
+  background: rgba(231, 76, 60, 0.12);
+}
+
+/* Make disabled button feel intentional */
+.feedback-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.feedback-message-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.feedback-counter {
+  font-size: 0.85rem;
+  opacity: 0.8;
+}
+
+.feedback-counter.is-over {
+  opacity: 1;
+  font-weight: 600;
+}
+
+.feedback-hint--warn {
+  margin-top: 6px;
+  font-size: 0.9rem;
+  opacity: 0.9;
+}
+
+.feedback-captcha {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: 12px;
+}
+
+

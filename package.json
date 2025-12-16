@@ -36,6 +36,7 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.9.6",
+    "react-turnstile": "^1.1.4",
     "recharts": "^3.4.1"
   },
   "devDependencies": {
