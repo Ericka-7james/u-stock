@@ -500,7 +500,7 @@ app.include_router(api)
                     <p><b>User ID:</b> {payload.user_id or "Anonymous"}</p>
                     <hr />
                     <pre style="white-space:pre-wrap;font-family:system-ui;">
-    {payload.message}
+        {payload.message}
                     </pre>
                     <hr />
                     <small>
@@ -509,5 +509,3 @@ app.include_router(api)
                     </small>
                 """
             })
-
-        return {"ok": True}
