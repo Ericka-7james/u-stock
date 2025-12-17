@@ -209,4 +209,14 @@
     flex-direction: column;
     align-items: stretch;
   }
+
+  .connected-header > div {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .connected-header button {
+    width: 100%;
+    text-align: center;
+  }
 }
