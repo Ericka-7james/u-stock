@@ -292,6 +292,7 @@ def _verify_turnstile(token: str, request: Request) -> None:
         codes = data.get("error-codes") or data.get("error_codes") or []
         raise HTTPException(status_code=400, detail=f"Captcha verification failed: {codes}")
 
+
 def _escape_html(s: str) -> str:
     return (
         (s or "")
@@ -558,3 +559,7 @@ def submit_feedback(payload: FeedbackIn, request: Request):
         "thanks_sent": thanks_sent,
         "thanks_error": thanks_error,
     }
+
+
+# 👈 IMPORTANT: without this, /api/auth/me (and all /api routes) will 404
+app.include_router(api)
