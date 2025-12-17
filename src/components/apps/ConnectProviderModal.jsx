@@ -109,7 +109,7 @@ export default function ConnectProviderModal({
   };
 
   return (
-    <div className="cp-modal-overlay" onMouseDown={onClose} role="presentation">
+    <div className="cp-modal-overlay" onClick={onClose} role="presentation">
       <div
         className="cp-modal"
         role="dialog"

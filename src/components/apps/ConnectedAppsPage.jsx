@@ -36,10 +36,12 @@ export default function ConnectedAppsPage() {
   const [loading, setLoading] = useState(false);
   const [apps, setApps] = useState([]);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
 
   const [dismissed, setDismissed] = useState({
     notSignedIn: false,
     genericError: false,
+    notConnected: false,
   });
 
   const [modalOpen, setModalOpen] = useState(false);
@@ -56,6 +58,7 @@ export default function ConnectedAppsPage() {
 
     if (!isAuthed) {
       setApps([]);
+      setNotice("");
       return;
     }
 
@@ -74,6 +77,8 @@ export default function ConnectedAppsPage() {
       }
 
       const data = await res.json();
+      setNotice(data?.message || "");
+      setDismissed((d) => ({ ...d, notConnected: false })); // show latest notice again if it changed
 
       // Debug: uncomment if you want to see exactly what backend returns
       // console.log("integrations response:", data);
@@ -81,6 +86,7 @@ export default function ConnectedAppsPage() {
       setApps(Array.isArray(data?.apps) ? data.apps : []);
     } catch (e) {
       setApps([]);
+      setNotice("");
       setError(e?.message || "Could not load connected apps.");
     } finally {
       setLoading(false);
@@ -140,6 +146,7 @@ export default function ConnectedAppsPage() {
     await logout?.();
     // after logout, statuses should clear
     setApps([]);
+    setNotice("");
   };
 
   return (
@@ -178,6 +185,12 @@ export default function ConnectedAppsPage() {
         {!!error && !dismissed.genericError && (
           <CloseableBanner onClose={() => dismissBanner("genericError")}>
             {error}
+          </CloseableBanner>
+        )}
+
+        {isAuthed && !!notice && !dismissed.notConnected && (
+          <CloseableBanner onClose={() => dismissBanner("notConnected")}>
+            {notice}
           </CloseableBanner>
         )}
 

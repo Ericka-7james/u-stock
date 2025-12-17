@@ -15,6 +15,7 @@ from pydantic import BaseModel, EmailStr
 from supabase import Client, create_client
 
 import resend
+from cryptography.fernet import Fernet
 
 # -------------------------
 # Load env (support both root .env and api/.env)
@@ -34,6 +35,8 @@ for env_path in [
 # ---- Settings ----
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip()
 SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY", "").strip()
+SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+INTEGRATIONS_ENC_KEY = os.getenv("INTEGRATIONS_ENC_KEY", "").strip()
 
 CORS_ORIGINS = [
     o.strip()
@@ -302,6 +305,29 @@ def _escape_html(s: str) -> str:
         .replace('"', "&quot;")
         .replace("'", "&#39;")
     )
+def get_supabase_service() -> Client:
+    if not SUPABASE_URL:
+        raise HTTPException(status_code=500, detail="SUPABASE_URL is missing")
+    if not SUPABASE_SERVICE_ROLE_KEY:
+        raise HTTPException(status_code=500, detail="SUPABASE_SERVICE_ROLE_KEY is missing")
+    return create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+
+def _fernet() -> Fernet:
+    if not INTEGRATIONS_ENC_KEY:
+        raise HTTPException(status_code=500, detail="INTEGRATIONS_ENC_KEY is missing")
+    return Fernet(INTEGRATIONS_ENC_KEY.encode() if isinstance(INTEGRATIONS_ENC_KEY, str) else INTEGRATIONS_ENC_KEY)
+
+def encrypt_secret(value: str | None) -> str | None:
+    if not value:
+        return None
+    f = _fernet()
+    return f.encrypt(value.encode("utf-8")).decode("utf-8")
+
+def decrypt_secret(token: str | None) -> str | None:
+    if not token:
+        return None
+    f = _fernet()
+    return f.decrypt(token.encode("utf-8")).decode("utf-8")
 
 # -------------------------
 # Error handler (so you see useful errors)
@@ -559,6 +585,145 @@ def submit_feedback(payload: FeedbackIn, request: Request):
         "thanks_sent": thanks_sent,
         "thanks_error": thanks_error,
     }
+
+# -------------------------
+# Integrations (Supabase table)
+# -------------------------
+
+KNOWN_PROVIDERS = [
+    {"key": "alpaca", "name": "Alpaca"},
+    {"key": "polygon", "name": "Polygon.io"},
+    {"key": "tradingview", "name": "TradingView"},
+]
+
+class IntegrationOut(BaseModel):
+    provider: str
+    status: str  # "connected" | "not_connected"
+    updated_at: Optional[str] = None
+
+class IntegrationsResponse(BaseModel):
+    apps: List[IntegrationOut]
+    missing: List[str]
+    message: str
+    ok: bool = True
+
+class AlpacaKeysIn(BaseModel):
+    api_key: str
+    api_secret: str
+    mode: str = "paper"  # "paper" | "live"
+
+class PolygonKeysIn(BaseModel):
+    api_key: str
+
+def _provider_name(key: str) -> str:
+    for p in KNOWN_PROVIDERS:
+        if p["key"] == key:
+            return p["name"]
+    return key
+
+def _missing_message(missing: List[str]) -> str:
+    if len(missing) == 0:
+        return ""
+    if len(missing) == 1:
+        return f"{_provider_name(missing[0])} is not connected. Connect it to enable this app."
+    return "Some apps aren’t connected yet. Connect one or more providers to continue."
+
+@api.get("/integrations", response_model=IntegrationsResponse)
+def list_integrations(request: Request, response: Response):
+    u = require_user(request, response)
+    user_id = u["id"]
+
+    sb = get_supabase_service()
+    try:
+        rows = (
+            sb.table("integrations")
+            .select("provider,status,updated_at")
+            .eq("user_id", user_id)
+            .execute()
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to load integrations: {repr(e)}")
+
+    data = rows.data or []
+    db_status = {str(r["provider"]).lower(): r for r in data if r.get("provider")}
+
+    apps: List[IntegrationOut] = []
+    missing: List[str] = []
+
+    for p in KNOWN_PROVIDERS:
+        key = p["key"]
+        rec = db_status.get(key)
+
+        if rec and str(rec.get("status", "")).lower() == "connected":
+            apps.append(
+                IntegrationOut(
+                    provider=key,
+                    status="connected",
+                    updated_at=str(rec.get("updated_at")) if rec.get("updated_at") else None,
+                )
+            )
+        else:
+            apps.append(IntegrationOut(provider=key, status="not_connected", updated_at=None))
+            missing.append(key)
+
+    msg = _missing_message(missing)
+    return IntegrationsResponse(apps=apps, missing=missing, message=msg, ok=True)
+
+@api.post("/integrations/alpaca/keys")
+def save_alpaca_keys(payload: AlpacaKeysIn, request: Request, response: Response):
+    u = require_user(request, response)
+    user_id = u["id"]
+
+    if not payload.api_key.strip():
+        raise HTTPException(status_code=400, detail="API key is required.")
+    if not payload.api_secret.strip():
+        raise HTTPException(status_code=400, detail="API secret is required for Alpaca.")
+    if payload.mode not in ("paper", "live"):
+        raise HTTPException(status_code=400, detail="Mode must be 'paper' or 'live'.")
+
+    sb = get_supabase_service()
+    row = {
+        "user_id": user_id,
+        "provider": "alpaca",
+        "status": "connected",
+        "api_key_enc": encrypt_secret(payload.api_key.strip()),
+        "api_secret_enc": encrypt_secret(payload.api_secret.strip()),
+        "mode": payload.mode,
+        "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    }
+
+    try:
+        sb.table("integrations").upsert(row, on_conflict="user_id,provider").execute()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save Alpaca keys: {repr(e)}")
+
+    return {"ok": True, "provider": "alpaca", "status": "connected"}
+
+@api.post("/integrations/polygon/keys")
+def save_polygon_keys(payload: PolygonKeysIn, request: Request, response: Response):
+    u = require_user(request, response)
+    user_id = u["id"]
+
+    if not payload.api_key.strip():
+        raise HTTPException(status_code=400, detail="API key is required.")
+
+    sb = get_supabase_service()
+    row = {
+        "user_id": user_id,
+        "provider": "polygon",
+        "status": "connected",
+        "api_key_enc": encrypt_secret(payload.api_key.strip()),
+        "api_secret_enc": None,
+        "mode": None,
+        "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    }
+
+    try:
+        sb.table("integrations").upsert(row, on_conflict="user_id,provider").execute()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save Polygon key: {repr(e)}")
+
+    return {"ok": True, "provider": "polygon", "status": "connected"}
 
 
 # 👈 IMPORTANT: without this, /api/auth/me (and all /api routes) will 404
