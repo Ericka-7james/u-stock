@@ -65,6 +65,9 @@ FEEDBACK_RL_WINDOW_SEC = int(os.getenv("FEEDBACK_RL_WINDOW_SEC", "60"))
 FEEDBACK_RL_MAX = int(os.getenv("FEEDBACK_RL_MAX", "5"))
 _feedback_rl: dict[str, list[float]] = {}
 
+FEEDBACK_FROM = os.getenv("FEEDBACK_FROM", "Lucent Financial <onboarding@resend.dev>").strip()
+PUBLIC_LOGO_URL = os.getenv("PUBLIC_LOGO_URL", "").strip()
+
 app = FastAPI(title="u-stock-auth-backend")
 
 app.add_middleware(
@@ -289,6 +292,15 @@ def _verify_turnstile(token: str, request: Request) -> None:
         codes = data.get("error-codes") or data.get("error_codes") or []
         raise HTTPException(status_code=400, detail=f"Captcha verification failed: {codes}")
 
+def _escape_html(s: str) -> str:
+    return (
+        (s or "")
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+        .replace("'", "&#39;")
+    )
 
 # -------------------------
 # Error handler (so you see useful errors)
@@ -391,7 +403,7 @@ def me(request: Request, response: Response):
 def submit_feedback(payload: FeedbackIn, request: Request):
     # bots fill hidden fields
     if payload.honeypot and payload.honeypot.strip():
-        return {"ok": True}
+        return {"ok": True, "email_sent": False, "thanks_sent": False}
 
     ip = _get_client_ip(request)
     _rate_limit_feedback(ip)
@@ -408,39 +420,141 @@ def submit_feedback(payload: FeedbackIn, request: Request):
         "message": payload.message,
     }
 
+    # 1) Insert into Supabase
     try:
         sb = get_supabase_anon()
         sb.table("feedback").insert(row, returning="minimal").execute()
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Feedback insert failed: {repr(e)}")
 
-    # Email notify (optional)
+    # 2) Email notify (admin)
     email_sent = False
     email_error = None
+
+    # 3) Thank-you email (user)
+    thanks_sent = False
+    thanks_error = None
+
     if RESEND_API_KEY and FEEDBACK_TO_EMAIL:
         try:
+            safe_type = _escape_html(payload.feedback_type)
+            safe_name = _escape_html(payload.name or "Anonymous")
+            safe_email = _escape_html(payload.email or "Not provided")
+            safe_msg = _escape_html(payload.message or "")
+
+            logo_html = ""
+            if PUBLIC_LOGO_URL:
+                logo_html = f"""
+                  <div style="text-align:center;padding-bottom:18px;">
+                    <img src="{PUBLIC_LOGO_URL}" alt="Lucent Financial" width="140" style="display:block;margin:0 auto;" />
+                  </div>
+                """
+
+            admin_html = f"""
+<!DOCTYPE html>
+<html>
+  <body style="margin:0;padding:0;background:#f7f7f7;font-family:Inter,Arial,sans-serif;">
+    <table width="100%" cellpadding="0" cellspacing="0">
+      <tr>
+        <td align="center" style="padding:32px 16px;">
+          <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;padding:32px;">
+            <tr><td>{logo_html}</td></tr>
+            <tr>
+              <td>
+                <h2 style="margin:0 0 16px 0;color:#111827;">New Feedback Received</h2>
+                <p style="margin:8px 0;"><strong>Type:</strong> {safe_type}</p>
+                <p style="margin:8px 0;"><strong>Name:</strong> {safe_name}</p>
+                <p style="margin:8px 0;"><strong>Email:</strong> {safe_email}</p>
+                <p style="margin:8px 0;"><strong>IP:</strong> {_escape_html(ip)}</p>
+
+                <hr style="margin:22px 0;border:none;border-top:1px solid #e5e7eb;" />
+
+                <div style="background:#f9fafb;border:1px solid #e5e7eb;padding:14px;border-radius:10px;white-space:pre-wrap;color:#111827;">
+                  {safe_msg}
+                </div>
+
+                <div style="padding-top:22px;color:#6b7280;font-size:12px;">
+                  Lucent Financial · Feedback System
+                </div>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>
+            """
+
             resend.Emails.send(
                 {
-                    "from": "U-Stock Feedback <onboarding@resend.dev>",
-                    "to": FEEDBACK_TO_EMAIL,
+                    "from": FEEDBACK_FROM,
+                    "to": [FEEDBACK_TO_EMAIL],
                     "subject": f"📬 New Feedback ({payload.feedback_type})",
-                    "html": f"""
-                      <h2>New Feedback</h2>
-                      <p><b>Type:</b> {payload.feedback_type}</p>
-                      <p><b>Name:</b> {payload.name or "Anonymous"}</p>
-                      <p><b>Email:</b> {payload.email or "Not provided"}</p>
-                      <p><b>IP:</b> {ip}</p>
-                      <hr />
-                      <pre style="white-space:pre-wrap;font-family:system-ui;">{payload.message}</pre>
-                    """,
+                    "html": admin_html,
+                    # lets you click Reply in Gmail and respond to the user
+                    "reply_to": payload.email or None,
                 }
             )
             email_sent = True
         except Exception as e:
             email_error = repr(e)
 
-    return {"ok": True, "email_sent": email_sent, "email_error": email_error}
+        # Send thank-you email to user (only if user provided email)
+        if payload.email:
+            try:
+                thanks_html = f"""
+<!DOCTYPE html>
+<html>
+  <body style="margin:0;padding:0;background:#f7f7f7;font-family:Inter,Arial,sans-serif;">
+    <table width="100%" cellpadding="0" cellspacing="0">
+      <tr>
+        <td align="center" style="padding:32px 16px;">
+          <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;padding:32px;">
+            <tr><td>{logo_html}</td></tr>
+            <tr>
+              <td>
+                <h2 style="margin:0 0 12px 0;color:#111827;">Thanks for your feedback!</h2>
+                <p style="margin:0 0 12px 0;color:#374151;line-height:1.5;">
+                  We received your message and appreciate you helping improve Lucent Financial.
+                </p>
+                <p style="margin:0 0 18px 0;color:#6b7280;font-size:13px;">
+                  If you included a contact email, we may follow up for details.
+                </p>
 
+                <div style="background:#f9fafb;border:1px solid #e5e7eb;padding:14px;border-radius:10px;white-space:pre-wrap;color:#111827;">
+                  <strong>Your message:</strong><br/><br/>{safe_msg}
+                </div>
 
-# IMPORTANT: mount router
-app.include_router(api)
+                <div style="padding-top:22px;color:#6b7280;font-size:12px;">
+                  — Lucent Financial Team
+                </div>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>
+                """
+
+                resend.Emails.send(
+                    {
+                        "from": FEEDBACK_FROM,
+                        "to": [payload.email],
+                        "subject": "✅ Thanks — we got your message",
+                        "html": thanks_html,
+                    }
+                )
+                thanks_sent = True
+            except Exception as e:
+                thanks_error = repr(e)
+
+    return {
+        "ok": True,
+        "email_sent": email_sent,
+        "email_error": email_error,
+        "thanks_sent": thanks_sent,
+        "thanks_error": thanks_error,
+    }

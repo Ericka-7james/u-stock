@@ -1,15 +1,15 @@
-fastapi==0.115.6
-uvicorn==0.30.6
+fastapi
+uvicorn
 
 pydantic==2.10.6
 email-validator==2.2.0
-python-dotenv==1.0.1
+python-dotenv
 
-supabase==2.11.0
+supabase
 httpx==0.28.1
-requests==2.32.3
+requests
 
-resend==0.8.0
+resend
 
 httpx>=0.27.0
 upstash-redis>=1.0.0
