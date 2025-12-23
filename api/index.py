@@ -17,6 +17,8 @@ from supabase import Client, create_client
 import resend
 from cryptography.fernet import Fernet
 
+from api.cron import router as cron_router
+
 # -------------------------
 # Load env (support both root .env and api/.env)
 # -------------------------
@@ -725,6 +727,18 @@ def save_polygon_keys(payload: PolygonKeysIn, request: Request, response: Respon
 
     return {"ok": True, "provider": "polygon", "status": "connected"}
 
+##DEBUGGER
+@api.get("/debug/pipeline")
+def debug_pipeline():
+    v = os.getenv("PIPELINE_SECRET", "")
+    return {
+        "PIPELINE_SECRET_set": bool(v.strip()),
+        "PIPELINE_SECRET_len": len(v.strip()),
+        "PIPELINE_SECRET_prefix": v.strip()[:6],
+        "PIPELINE_SECRET_suffix": v.strip()[-6:] if len(v.strip()) >= 6 else v.strip(),
+    }
+
+app.include_router(cron_router, prefix="/api")
 
 # 👈 IMPORTANT: without this, /api/auth/me (and all /api routes) will 404
 app.include_router(api)

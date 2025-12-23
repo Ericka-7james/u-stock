@@ -2,6 +2,10 @@ name: Market Data Snapshots
 
 on:
   schedule:
+    # 7:00 AM ET (handles EST + EDT)
+    - cron: "0 12 * * 1-5"
+    - cron: "0 11 * * 1-5"
+
     # 9:30 AM ET market open (handles EST + EDT)
     - cron: "30 13 * * 1-5"
     - cron: "30 14 * * 1-5"
