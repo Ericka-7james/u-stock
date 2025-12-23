@@ -30,3 +30,7 @@ dist-ssr
 __pycache__/
 api/__pycache__/
 *.pyc
+
+
+# Temp file
+_my_commits_tmp.txt
