@@ -13,6 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr
 from supabase import Client, create_client
+from api.alpaca_data import router as alpaca_router
 
 import resend
 from cryptography.fernet import Fernet
@@ -739,6 +740,7 @@ def debug_pipeline():
     }
 
 app.include_router(cron_router, prefix="/api")
+app.include_router(alpaca_router, prefix="/api")
 
 # 👈 IMPORTANT: without this, /api/auth/me (and all /api routes) will 404
 app.include_router(api)

@@ -14,6 +14,7 @@ import DataSnapshotsCard from "./cards/DataSnapshotsCard.jsx";
 import { useSignalsSnapshot } from "../../hooks/raw/useSignalsSnapshot.js";
 import { useDailyPricesHistory } from "../../hooks/raw/useDailyPricesHistory.js";
 import { useSentimentSnapshot } from "../../hooks/raw/useSentimentSnapshot.js";
+import { useAlpacaDailyBars } from "../../hooks/useAlpacaDailyBars.js";
 
 // Styles
 import "../../css/dashboard/DashboardPage.css";
@@ -89,6 +90,17 @@ export default function DashboardPage() {
     return sentimentData.find((row) => row.ticker === currentTicker) || null;
   }, [currentTicker, sentimentData]);
 
+  const {
+    bars: alpacaBars,
+    loading: alpacaLoading,
+    error: alpacaError,
+    meta: alpacaMeta,
+  } = useAlpacaDailyBars(currentTicker, 220);
+  const alpacaHistoryBySymbol = useMemo(() => {
+    if (!currentTicker) return {};
+    return { [currentTicker]: alpacaBars || [] };
+  }, [currentTicker, alpacaBars]);
+
   return (
     <AppShell>
       {/* Top stats row */}
@@ -112,12 +124,27 @@ export default function DashboardPage() {
 
         {/* SENTIMENT panel – directly under chart */}
         <section className="panel panel-sentiment">
+          {alpacaError ? (
+            <div className="errorBanner">
+              Alpaca daily bars failed: {alpacaError}
+              <div style={{ fontSize: 12, opacity: 0.8, marginTop: 6 }}>
+                Tip: Make sure you’re signed in and Alpaca keys are saved in Connected Apps.
+              </div>
+            </div>
+          ) : null}
+
           <SentimentCard
             symbol={currentTicker}
-            historyBySymbol={historyBySymbol}
-            loading={combinedLoading || sentimentLoading}
-            backendSnapshot={currentSentimentRow}
+            historyBySymbol={alpacaHistoryBySymbol}
+            loading={alpacaLoading}
+            backendSnapshot={null}
           />
+
+          {alpacaMeta?.fetchedAt ? (
+            <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>
+              Alpaca fetched: {new Date(alpacaMeta.fetchedAt).toLocaleString()}
+            </div>
+          ) : null}
         </section>
 
         {/* Filters + snapshots panel */}

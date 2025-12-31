@@ -1,0 +1,8 @@
+.candlesPage {
+  width: 100%;
+}
+
+.candlesPageGrid {
+  display: grid;
+  gap: 16px;
+}

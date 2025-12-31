@@ -7,13 +7,12 @@ import CandleChart from "../charts/CandleChart";
 import SearchableTickerDropdown from "../common/SearchableTickerDropdown";
 import { useAuth } from "../../context/AuthContext";
 import "../../css/charts/CandlesPage.css";
+import TradingViewEmbed from "../charts/TradingViewEmbed";
 
 function LoadingBars({ label = "Loading" }) {
   return (
     <div style={{ padding: 12 }}>
-      <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 8 }}>
-        {label}
-      </div>
+      <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 8 }}>{label}</div>
       <div className="loadingBars">
         <div className="loadingBar" />
         <div className="loadingBar" />
@@ -42,6 +41,18 @@ function WowSticker() {
   return <span className="wowSticker">WOW</span>;
 }
 
+function toTradingViewSymbolStocks(sym) {
+  // Conservative default: most of your list is NASDAQ.
+  // You can improve later by mapping per ticker.
+  return `NASDAQ:${sym}`;
+}
+
+function toTradingViewSymbolCrypto(sym) {
+  // Convert "BTC/USD" -> "COINBASE:BTCUSD" (good default feed)
+  const cleaned = String(sym || "").replace("/", "").toUpperCase(); // BTCUSD
+  return `COINBASE:${cleaned}`;
+}
+
 function CandleCard({
   title,
   subtitle,
@@ -55,6 +66,8 @@ function CandleCard({
   isLoading,
   error,
   childrenTopRight,
+  // NEW: allow swapping chart body
+  chartBody,
 }) {
   return (
     <div className="card">
@@ -69,9 +82,7 @@ function CandleCard({
           <div style={{ marginTop: 4, fontSize: 12, opacity: 0.7 }}>
             {subtitle}
             {lastUpdatedLabel ? (
-              <span style={{ marginLeft: 10, opacity: 0.8 }}>
-                • {lastUpdatedLabel}
-              </span>
+              <span style={{ marginLeft: 10, opacity: 0.8 }}>• {lastUpdatedLabel}</span>
             ) : null}
           </div>
         </div>
@@ -98,7 +109,7 @@ function CandleCard({
           <LoadingBars label="Loading" />
         ) : (
           <div style={{ marginBottom: 12 }}>
-            <CandleChart candles={candlesForActive} />
+            {chartBody ? chartBody : <CandleChart candles={candlesForActive} />}
           </div>
         )}
       </div>
@@ -112,7 +123,8 @@ export default function CandlesPage() {
   // -------------------------
   // ✅ GLOBAL "PAUSE FETCHING"
   // -------------------------
-  // Turn this to true later when you want polling back.
+  // Since you’re starting simple with TradingView embeds:
+  // Keep this true for now so nothing polls your APIs.
   const PAUSE_CANDLE_FETCHING = true;
 
   // (Keep these — we won’t delete your existing behavior)
@@ -121,23 +133,9 @@ export default function CandlesPage() {
   const [activeStock, setActiveStock] = useState("AAPL");
   const [activeCrypto, setActiveCrypto] = useState("BTC/USD");
 
-  // “Any stock/crypto” via dropdown:
   // You can expand these lists later (from a JSON universe).
   const STOCK_UNIVERSE = useMemo(() => {
-    // minimal starter list (add more anytime)
-    return [
-      "AAPL",
-      "TSLA",
-      "NVDA",
-      "MSFT",
-      "AMZN",
-      "GOOGL",
-      "META",
-      "AMD",
-      "NFLX",
-      "SPY",
-      "QQQ",
-    ];
+    return ["AAPL", "TSLA", "NVDA", "MSFT", "AMZN", "GOOGL", "META", "AMD", "NFLX", "SPY", "QQQ"];
   }, []);
 
   const CRYPTO_UNIVERSE = useMemo(() => {
@@ -146,32 +144,33 @@ export default function CandlesPage() {
 
   // If dropdown selects a new active symbol, ensure it exists in the list.
   useEffect(() => {
-    if (!stockSymbols.includes(activeStock)) {
-      setStockSymbols((prev) => [...prev, activeStock]);
-    }
+    if (!stockSymbols.includes(activeStock)) setStockSymbols((prev) => [...prev, activeStock]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeStock]);
 
   useEffect(() => {
-    if (!cryptoSymbols.includes(activeCrypto)) {
-      setCryptoSymbols((prev) => [...prev, activeCrypto]);
-    }
+    if (!cryptoSymbols.includes(activeCrypto)) setCryptoSymbols((prev) => [...prev, activeCrypto]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeCrypto]);
 
   // Fetchers (kept, but won’t run while paused)
-  const stocksFetcher = useMemo(() => async (symbols) => {
-    const res = await fetchLatestStocks(symbols);
-    return { ticks: res.ticks };
-  }, []);
+  const stocksFetcher = useMemo(
+    () => async (symbols) => {
+      const res = await fetchLatestStocks(symbols);
+      return { ticks: res.ticks };
+    },
+    []
+  );
 
-  const cryptoFetcher = useMemo(() => async (symbols) => {
-    const res = await fetchLatestCrypto(symbols, "us");
-    return { ticks: res.ticks };
-  }, []);
+  const cryptoFetcher = useMemo(
+    () => async (symbols) => {
+      const res = await fetchLatestCrypto(symbols, "us");
+      return { ticks: res.ticks };
+    },
+    []
+  );
 
   // ✅ If paused, pass empty symbols so hooks don’t hit network
-  // (also avoid console spam from fetcher errors)
   const stocks = usePollingCandles({
     symbols: PAUSE_CANDLE_FETCHING ? [] : stockSymbols,
     fetcher: stocksFetcher,
@@ -188,18 +187,18 @@ export default function CandlesPage() {
     pollIntervalMs: 1500,
   });
 
-  // Auth-aware gating
+  // Auth-aware gating (you can remove later if you want embeds available to everyone)
   const mustSignIn = !authLoading && !isAuthed;
 
-  // While paused, we always show skeleton (no chart data)
-  const showStocksLoading = PAUSE_CANDLE_FETCHING || stocks.loading;
-  const showCryptoLoading = PAUSE_CANDLE_FETCHING || crypto.loading;
+  // While paused, we show TradingView embeds instead of CandleChart data
+  const showStocksLoading = false;
+  const showCryptoLoading = false;
 
   // Status pills
   const stocksStatus = mustSignIn ? (
     <StatusPill kind="needs" text="Sign in required" />
   ) : PAUSE_CANDLE_FETCHING ? (
-    <StatusPill kind="paused" text="Paused" />
+    <StatusPill kind="paused" text="Embed mode" />
   ) : stocks.error ? (
     <StatusPill kind="error" text="Error" />
   ) : (
@@ -209,30 +208,33 @@ export default function CandlesPage() {
   const cryptoStatus = mustSignIn ? (
     <StatusPill kind="needs" text="Sign in required" />
   ) : PAUSE_CANDLE_FETCHING ? (
-    <StatusPill kind="paused" text="Paused" />
+    <StatusPill kind="paused" text="Embed mode" />
   ) : crypto.error ? (
     <StatusPill kind="error" text="Error" />
   ) : (
     <StatusPill kind="live" text="Live" />
   );
 
-  // Last updated (when polling is enabled, you can wire actual timestamps from hook)
-  const stocksUpdatedLabel = PAUSE_CANDLE_FETCHING ? "Not fetching" : "";
-  const cryptoUpdatedLabel = PAUSE_CANDLE_FETCHING ? "Not fetching" : "";
+  const stocksUpdatedLabel = PAUSE_CANDLE_FETCHING ? "TradingView chart" : "";
+  const cryptoUpdatedLabel = PAUSE_CANDLE_FETCHING ? "TradingView chart" : "";
+
+  // TradingView embed config
+  const tvTheme = "light"; // change to "dark" if your site is dark
+  const tvInterval = "1";  // 1 minute
+
+  const stockTvSymbol = toTradingViewSymbolStocks(activeStock);
+  const cryptoTvSymbol = toTradingViewSymbolCrypto(activeCrypto);
 
   return (
     <AppShell>
       <div style={{ display: "grid", gap: 16 }}>
-        {/* Simple top guard: don’t hammer APIs if not signed in */}
         {mustSignIn ? (
-          <div className="errorBanner">
-            You’re not signed in. Sign in to load candles.
-          </div>
+          <div className="errorBanner">You’re not signed in. Sign in to continue.</div>
         ) : null}
 
         <CandleCard
           title="Stocks (1m candles)"
-          subtitle="Stocks: requires Alpaca keys connected"
+          subtitle="Stocks: TradingView embed (no polling yet)"
           status={stocksStatus}
           lastUpdatedLabel={stocksUpdatedLabel}
           showWow={false}
@@ -241,43 +243,54 @@ export default function CandlesPage() {
           onSelectSymbol={setActiveStock}
           candlesForActive={stocks.candles1m?.[activeStock] || []}
           isLoading={showStocksLoading}
-          error={PAUSE_CANDLE_FETCHING ? null : stocks.error}
+          error={null}
           childrenTopRight={
             <button
               type="button"
               className="miniActionBtn"
-              onClick={() => {
-                // later: route to Connected Apps
-                alert("Connect Alpaca in Connected Apps to enable stocks candles.");
-              }}
+              onClick={() => alert("Alpaca connection will be used later for live candles & trading.")}
             >
               Connect Alpaca
             </button>
           }
+          chartBody={
+            <TradingViewEmbed
+              symbol={stockTvSymbol}
+              interval={tvInterval}
+              theme={tvTheme}
+              height={420}
+            />
+          }
         />
 
         <CandleCard
-          title="Crypto (1m candles)"   // ✅ renamed
-          subtitle="Crypto: demo-friendly once enabled"
+          title="Crypto (1m candles)"
+          subtitle="Crypto: TradingView embed (demo-friendly)"
           status={cryptoStatus}
           lastUpdatedLabel={cryptoUpdatedLabel}
-          showWow={true}               // ✅ WOW sticker
+          showWow={true}
           allTickers={CRYPTO_UNIVERSE}
           activeSymbol={activeCrypto}
           onSelectSymbol={setActiveCrypto}
           candlesForActive={crypto.candles1m?.[activeCrypto] || []}
           isLoading={showCryptoLoading}
-          error={PAUSE_CANDLE_FETCHING ? null : crypto.error}
+          error={null}
           childrenTopRight={
             <button
               type="button"
               className="miniActionBtn miniActionBtn--wow"
-              onClick={() => {
-                alert("Crypto candles will be enabled next (polling currently paused).");
-              }}
+              onClick={() => alert("Crypto candles are shown via TradingView embed for now.")}
             >
               Enable crypto candles
             </button>
+          }
+          chartBody={
+            <TradingViewEmbed
+              symbol={cryptoTvSymbol}
+              interval={tvInterval}
+              theme={tvTheme}
+              height={420}
+            />
           }
         />
       </div>
