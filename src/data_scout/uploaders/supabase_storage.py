@@ -18,32 +18,37 @@ def upload_file_to_supabase_storage(
     """
     Upload a local file to Supabase Storage.
 
-    Requires:
-      pip install supabase
-
-    IMPORTANT:
-      Use SUPABASE_SERVICE_ROLE_KEY for CI uploads (GitHub Actions).
-      Do NOT put service role key in the browser / client.
+    ✅ Server-only: use SUPABASE_SECRET_KEY (preferred) or legacy SUPABASE_SERVICE_ROLE_KEY.
+    🚫 Never use these keys in the browser.
     """
     from supabase import create_client  # lazy import
 
     url = supabase_url or os.environ.get("SUPABASE_URL")
-    key = supabase_key or os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+
+    # Prefer new key, fallback to legacy for compatibility
+    key = (
+        supabase_key
+        or os.environ.get("SUPABASE_SECRET_KEY")
+        or os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+    )
 
     if not url or not key:
         raise RuntimeError(
-            "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in environment."
+            "Missing SUPABASE_URL and a server key. "
+            "Set SUPABASE_SECRET_KEY (preferred) or SUPABASE_SERVICE_ROLE_KEY (legacy)."
         )
 
-    client = create_client(url, key)
+    if not local_path.exists():
+        raise RuntimeError(f"Local file does not exist: {local_path}")
 
+    client = create_client(url, key)
     data = local_path.read_bytes()
+
     res = client.storage.from_(bucket).upload(
         path=object_path,
         file=data,
         file_options={"content-type": content_type, "upsert": upsert},
     )
 
-    # supabase-py returns different shapes across versions; do a minimal guard:
     if res is None:
         raise RuntimeError("Supabase upload returned None (unexpected).")

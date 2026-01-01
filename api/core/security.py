@@ -26,7 +26,7 @@ for env_path in [
 
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip()
 SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY", "").strip()
-SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+SUPABASE_SECRET_KEY = os.getenv("SUPABASE_SECRET_KEY", "").strip()
 INTEGRATIONS_ENC_KEY = os.getenv("INTEGRATIONS_ENC_KEY", "").strip()
 
 COOKIE_NAME = os.getenv("USTOCK_COOKIE_NAME", "access_token").strip()
@@ -49,9 +49,9 @@ def get_supabase_anon() -> Client:
 def get_supabase_service() -> Client:
     if not SUPABASE_URL:
         raise HTTPException(status_code=500, detail="SUPABASE_URL is missing")
-    if not SUPABASE_SERVICE_ROLE_KEY:
-        raise HTTPException(status_code=500, detail="SUPABASE_SERVICE_ROLE_KEY is missing")
-    return create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+    if not SUPABASE_SECRET_KEY:
+        raise HTTPException(status_code=500, detail="SUPABASE_SECRET_KEY is missing")
+    return create_client(SUPABASE_URL, SUPABASE_SECRET_KEY)
 
 
 def set_auth_cookies(response: Response, access_token: str, refresh_token: str | None = None) -> None:
