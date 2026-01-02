@@ -1,61 +1,126 @@
 // src/components/dashboard/cards/PriceChartPanel.jsx
-import { useMemo } from "react";
-import SearchableTickerDropdown from "../../common/SearchableTickerDropdown.jsx";
+import { useEffect, useId, useRef } from "react";
 import HelpTooltip from "../../common/HelpTooltip.jsx";
-import TradingViewEmbed from "../../charts/TradingViewEmbed.jsx";
+import "../../../css/dashboard/cards/PriceChartPanel.css";
 
-function toTradingViewSymbol(ticker) {
-  const t = String(ticker || "").toUpperCase().trim();
-  if (!t) return "NASDAQ:AAPL";
+function loadTradingViewScript() {
+  return new Promise((resolve, reject) => {
+    if (window.TradingView && window.TradingView.widget) {
+      resolve();
+      return;
+    }
 
-  // If already prefixed, keep it (ex: "NYSE:IBM")
-  if (t.includes(":")) return t;
+    const existing = document.querySelector('script[data-tv="true"]');
+    if (existing) {
+      existing.onload = resolve;
+      return;
+    }
 
-  // Common ETFs + exchange nuances
-  const known = {
-    SPY: "AMEX:SPY",
-    IWM: "AMEX:IWM",
-    DIA: "AMEX:DIA",
-    VTI: "AMEX:VTI",
-    QQQ: "NASDAQ:QQQ",
-  };
-  if (known[t]) return known[t];
-
-  // Default guess: NASDAQ (works for most tech tickers)
-  return `NASDAQ:${t}`;
+    const script = document.createElement("script");
+    script.src = "https://s3.tradingview.com/tv.js";
+    script.async = true;
+    script.dataset.tv = "true";
+    script.onload = resolve;
+    script.onerror = reject;
+    document.head.appendChild(script);
+  });
 }
 
 export default function PriceChartPanel({
-  allTickers,
   currentTicker,
   onSelectTicker,
-  currentSeries, // kept for compatibility (unused now)
-  loading,
-  pricesMeta, // kept for compatibility (unused now)
+  isDarkMode = false, // pass from AppShell / context
 }) {
-  const tvSymbol = useMemo(() => toTradingViewSymbol(currentTicker), [currentTicker]);
+  const containerId = useId().replace(/:/g, "-");
+  const widgetRef = useRef(null);
+  const lastSymbolRef = useRef(null);
 
-  // Dashboard is usually daily; change to "1" if you want 1-minute.
-  const interval = "D";
-  const theme = "light";
+  useEffect(() => {
+    let alive = true;
+
+    async function init() {
+      try {
+        await loadTradingViewScript();
+        if (!alive) return;
+
+        const widget = new window.TradingView.widget({
+          container_id: containerId,
+          symbol: currentTicker || "AAPL",
+          interval: "D",
+          autosize: true,
+          theme: isDarkMode ? "dark" : "light",
+          locale: "en",
+          allow_symbol_change: true,
+          hide_top_toolbar: false,
+          hide_side_toolbar: false,
+          withdateranges: true,
+          save_image: false,
+        });
+
+        widgetRef.current = widget;
+
+        widget.onChartReady(() => {
+          const chart = widget.activeChart?.();
+          if (!chart) return;
+
+          // Read initial symbol
+          try {
+            const s = chart.symbol?.();
+            if (s?.name) {
+              lastSymbolRef.current = s.name;
+              onSelectTicker?.(s.name.split(":").pop());
+            }
+          } catch {}
+
+          // Subscribe to symbol changes (if available)
+          try {
+            chart.onSymbolChanged().subscribe(null, (s) => {
+              const next = s?.name;
+              if (!next || next === lastSymbolRef.current) return;
+              lastSymbolRef.current = next;
+              onSelectTicker?.(next.split(":").pop());
+            });
+          } catch {
+            // Some builds don’t support subscriptions — safe to ignore
+          }
+        });
+      } catch (e) {
+        console.error("TradingView failed to load:", e);
+      }
+    }
+
+    init();
+
+    return () => {
+      alive = false;
+      try {
+        widgetRef.current?.remove?.();
+      } catch {}
+      widgetRef.current = null;
+    };
+  }, [containerId, currentTicker, onSelectTicker, isDarkMode]);
 
   return (
     <section className="panel panel-chart">
       <div className="card-main-chart">
+        {/* ✅ ORIGINAL HEADER PRESERVED */}
         <div className="card-header">
           <div className="card-header-left">
             <div className="card-title-row">
               <h2 className="card-title-text">Price action viewer</h2>
               <HelpTooltip title="What is the Price action viewer?">
                 <p>
-                  This panel now uses a <strong>TradingView embedded chart</strong> for the selected ticker.
+                  This chart shows live market price data powered by TradingView.
                 </p>
                 <ul>
                   <li>
-                    Use the ticker dropdown to switch symbols.
+                    <strong>X-axis:</strong> time (based on selected interval)
                   </li>
                   <li>
-                    This is a chart embed only (no alerts / no trading).
+                    <strong>Y-axis:</strong> market price
+                  </li>
+                  <li>
+                    Search and switch tickers directly inside the chart.
                   </li>
                 </ul>
                 <p className="help-popover__note">
@@ -63,32 +128,19 @@ export default function PriceChartPanel({
                 </p>
               </HelpTooltip>
             </div>
-            <p className="card-subtitle">Select a ticker or type to filter the universe.</p>
+
+            <p className="card-subtitle">
+              Search any symbol directly in the chart.
+            </p>
           </div>
 
-          <div className="chart-controls">
-            <label className="chart-controls-label">
-              Ticker
-              <SearchableTickerDropdown
-                allTickers={allTickers}
-                currentTicker={currentTicker}
-                onChange={onSelectTicker}
-              />
-            </label>
-          </div>
+          {/* ❌ DROPDOWN REMOVED — INTENTIONALLY EMPTY */}
+          <div className="chart-controls" />
         </div>
 
-        <div style={{ height: 420 }}>
-          {loading ? (
-            <div style={{ padding: 12, fontSize: 12, opacity: 0.8 }}>Loading…</div>
-          ) : (
-            <TradingViewEmbed
-              symbol={tvSymbol}
-              interval={interval}
-              theme={theme}
-              height={420}
-            />
-          )}
+        {/* ✅ TRADINGVIEW CHART */}
+        <div className="tv-chart-wrapper">
+          <div id={containerId} className="tv-chart-inner" />
         </div>
       </div>
     </section>

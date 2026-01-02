@@ -1,19 +1,10 @@
 // src/components/dashboard/DashboardPage.jsx
-import { useMemo, useState } from "react";
-
+import { useEffect, useMemo, useState } from "react";
 import AppShell from "../layout/AppShell.jsx";
 
-// Dashboard cards
-import StatSummary from "./cards/StatSummary.jsx";
 import PriceChartPanel from "./cards/PriceChartPanel.jsx";
 import SentimentCard from "./cards/SentimentCard.jsx";
-import TopSignalsCard from "./cards/TopSignalsCard.jsx";
-import DataSnapshotsCard from "./cards/DataSnapshotsCard.jsx";
 
-// Data hooks
-import { useSignalsSnapshot } from "../../hooks/raw/useSignalsSnapshot.js";
-import { useDailyPricesHistory } from "../../hooks/raw/useDailyPricesHistory.js";
-import { useSentimentSnapshot } from "../../hooks/raw/useSentimentSnapshot.js";
 import { useAlpacaDailyBars } from "../../hooks/useAlpacaDailyBars.js";
 
 // Styles
@@ -21,108 +12,85 @@ import "../../css/dashboard/DashboardPage.css";
 import "../../css/dashboard/cards/ChartControls.css";
 import "../../css/dashboard/cards/CardShared.css";
 
+function readIsDarkMode() {
+  if (typeof document === "undefined") return false;
+
+  // Support the most common theme patterns:
+  // 1) <html class="dark">
+  // 2) <body class="dark">
+  // 3) <html data-theme="dark"> or <body data-theme="dark">
+  const root = document.documentElement;
+  const body = document.body;
+
+  const classDark =
+    root?.classList?.contains("dark") || body?.classList?.contains("dark");
+
+  const dataThemeDark =
+    root?.getAttribute?.("data-theme") === "dark" ||
+    body?.getAttribute?.("data-theme") === "dark";
+
+  return Boolean(classDark || dataThemeDark);
+}
+
 export default function DashboardPage() {
-  // Ranked signals from your Python signal_engine
-  const {
-    data: signals = [],
-    meta: signalsMeta,
-    loading: signalsLoading,
-  } = useSignalsSnapshot();
+  const [currentTicker, setCurrentTicker] = useState("AAPL");
 
-  // Daily OHLCV history (from prices-raw.json)
-  const {
-    historyBySymbol = {},
-    symbols: priceSymbols = [],
-    meta: pricesMeta,
-    loading: pricesLoading,
-  } = useDailyPricesHistory();
+  // ✅ Reactive dark mode state
+  const [isDarkMode, setIsDarkMode] = useState(() => readIsDarkMode());
 
-  // Slim per-ticker sentiment snapshot
-  const {
-    data: sentimentData = [],
-    meta: sentimentMeta,
-    loading: sentimentLoading,
-  } = useSentimentSnapshot();
+  useEffect(() => {
+    if (typeof document === "undefined") return;
 
-  const [selectedTicker, setSelectedTicker] = useState("");
+    const root = document.documentElement;
+    const body = document.body;
 
-  // All tickers available for charting
-  const allTickers = useMemo(() => {
-    const fromSignals = signals.map((row) => row.ticker).filter(Boolean);
-    const merged = new Set([...fromSignals, ...priceSymbols]);
-    return Array.from(merged).sort();
-  }, [signals, priceSymbols]);
+    const update = () => setIsDarkMode(readIsDarkMode());
 
-  // Default ticker: first ranked signal, else first price symbol
-  const defaultTicker = useMemo(() => {
-    if (signals.length > 0) return signals[0].ticker;
-    if (priceSymbols.length > 0) return priceSymbols[0];
-    return "";
-  }, [signals, priceSymbols]);
+    // Run once on mount (in case theme is set after initial render)
+    update();
 
-  // The actual ticker to use in UI
-  const currentTicker = selectedTicker || defaultTicker;
+    // Observe class/data-theme changes (most theme toggles do this)
+    const obs = new MutationObserver(() => update());
 
-  // Current OHLCV series for price chart
-  const currentSeries = useMemo(() => {
-    if (!currentTicker) return [];
-    return historyBySymbol[currentTicker] || [];
-  }, [historyBySymbol, currentTicker]);
-
-  const combinedLoading = signalsLoading || pricesLoading;
-
-  // Latest data refresh across signals + prices (for footer)
-  const lastUpdated = useMemo(() => {
-    const times = [];
-    if (signalsMeta?.generatedAt) {
-      times.push(new Date(signalsMeta.generatedAt));
+    if (root) {
+      obs.observe(root, {
+        attributes: true,
+        attributeFilter: ["class", "data-theme"],
+      });
     }
-    if (pricesMeta?.generatedAt) {
-      times.push(new Date(pricesMeta.generatedAt));
+    if (body) {
+      obs.observe(body, {
+        attributes: true,
+        attributeFilter: ["class", "data-theme"],
+      });
     }
-    if (times.length === 0) return null;
-    return new Date(Math.max(...times.map((t) => t.getTime())));
-  }, [signalsMeta, pricesMeta]);
 
-  // Current sentiment row for selected ticker
-  const currentSentimentRow = useMemo(() => {
-    if (!currentTicker || !Array.isArray(sentimentData)) return null;
-    return sentimentData.find((row) => row.ticker === currentTicker) || null;
-  }, [currentTicker, sentimentData]);
+    return () => obs.disconnect();
+  }, []);
 
+  // ✅ Alpaca-backed daily history for SentimentCard fallback computation
   const {
     bars: alpacaBars,
     loading: alpacaLoading,
     error: alpacaError,
     meta: alpacaMeta,
   } = useAlpacaDailyBars(currentTicker, 220);
+
   const alpacaHistoryBySymbol = useMemo(() => {
-    if (!currentTicker) return {};
     return { [currentTicker]: alpacaBars || [] };
   }, [currentTicker, alpacaBars]);
 
   return (
     <AppShell>
-      {/* Top stats row */}
-      <StatSummary
-        signalsMeta={signalsMeta}
-        signalsData={signals}
-        pricesMeta={pricesMeta}
-        priceSymbols={priceSymbols}
-      />
-
       <main className="dashboard-main">
-        {/* PRICE CHART panel */}
+        {/* 1) CHART (TradingView owns symbol search) */}
         <PriceChartPanel
-          allTickers={allTickers}
           currentTicker={currentTicker}
-          onSelectTicker={setSelectedTicker}
-          currentSeries={currentSeries}
-          loading={combinedLoading}
-          pricesMeta={pricesMeta}
+          onSelectTicker={setCurrentTicker}
+          isDarkMode={isDarkMode}
         />
 
-        {/* SENTIMENT panel – directly under chart */}
+        {/* 2) SENTIMENT (Alpaca history) */}
         <section className="panel panel-sentiment">
           {alpacaError ? (
             <div className="errorBanner">
@@ -147,29 +115,80 @@ export default function DashboardPage() {
           ) : null}
         </section>
 
-        {/* Filters + snapshots panel */}
-        <section className="panel panel-filters">
-          <TopSignalsCard
-            signals={signals}
-            signalsMeta={signalsMeta}
-            currentTicker={currentTicker}
-            onSelectTicker={setSelectedTicker}
-            loading={combinedLoading}
-          />
+        {/* 3) BOT-FIRST PANELS (placeholders) */}
+        <section className="panel panel-filters" style={{ display: "grid", gap: 12 }}>
+          <div className="card">
+            <div className="cardHeader">
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  width: "100%",
+                }}
+              >
+                <h2 style={{ margin: 0 }}>Bot status</h2>
+                <span style={{ fontSize: 12, opacity: 0.7 }}>Coming next</span>
+              </div>
+            </div>
+            <div className="cardBody" style={{ fontSize: 13, opacity: 0.85 }}>
+              <ul style={{ margin: 0, paddingLeft: 18, lineHeight: 1.7 }}>
+                <li>Running / Paused</li>
+                <li>Paper vs Live</li>
+                <li>Current strategy + risk mode</li>
+                <li>Last decision + confidence</li>
+              </ul>
+            </div>
+          </div>
 
-          <DataSnapshotsCard
-            signalsMeta={signalsMeta}
-            pricesMeta={pricesMeta}
-            priceSymbols={priceSymbols}
-          />
+          <div className="card">
+            <div className="cardHeader">
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  width: "100%",
+                }}
+              >
+                <h2 style={{ margin: 0 }}>Positions & Orders</h2>
+                <span style={{ fontSize: 12, opacity: 0.7 }}>Coming next</span>
+              </div>
+            </div>
+            <div className="cardBody" style={{ fontSize: 13, opacity: 0.85 }}>
+              <ul style={{ margin: 0, paddingLeft: 18, lineHeight: 1.7 }}>
+                <li>Open positions + unrealized P/L</li>
+                <li>Open orders (limit/stop) + statuses</li>
+                <li>Exposure summary</li>
+              </ul>
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="cardHeader">
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  width: "100%",
+                }}
+              >
+                <h2 style={{ margin: 0 }}>Predictions & Reasoning log</h2>
+                <span style={{ fontSize: 12, opacity: 0.7 }}>Coming next</span>
+              </div>
+            </div>
+            <div className="cardBody" style={{ fontSize: 13, opacity: 0.85 }}>
+              <ul style={{ margin: 0, paddingLeft: 18, lineHeight: 1.7 }}>
+                <li>Timestamp + ticker</li>
+                <li>Action (buy/sell/hold) + confidence</li>
+                <li>Reasoning summary</li>
+                <li>Outcome tracking</li>
+              </ul>
+            </div>
+          </div>
         </section>
       </main>
-
-      {lastUpdated && (
-        <div className="dashboard-last-updated">
-          Last updated: {lastUpdated.toLocaleString()}
-        </div>
-      )}
     </AppShell>
   );
 }

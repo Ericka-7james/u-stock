@@ -67,7 +67,6 @@ export default function ConnectedAppsPage() {
       const res = await authFetch("/integrations", { method: "GET" });
 
       if (res.status === 401) {
-        // session cookie missing/expired
         setApps([]);
         throw new Error("Session expired — please sign in again.");
       }
@@ -78,10 +77,7 @@ export default function ConnectedAppsPage() {
 
       const data = await res.json();
       setNotice(data?.message || "");
-      setDismissed((d) => ({ ...d, notConnected: false })); // show latest notice again if it changed
-
-      // Debug: uncomment if you want to see exactly what backend returns
-      // console.log("integrations response:", data);
+      setDismissed((d) => ({ ...d, notConnected: false }));
 
       setApps(Array.isArray(data?.apps) ? data.apps : []);
     } catch (e) {
@@ -98,17 +94,25 @@ export default function ConnectedAppsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthed]);
 
-  // ✅ Stronger than a Set: always use status field
+  // Normalize statuses from backend
   const statusByProvider = useMemo(() => {
     const map = new Map();
     for (const a of apps) {
-      // Normalize just in case backend changes later
       const provider = String(a?.provider || "").toLowerCase();
       const status = String(a?.status || "not_connected").toLowerCase();
       if (provider) map.set(provider, status);
     }
     return map;
   }, [apps]);
+
+  // ✅ Define ONCE (NOT inside map) — used for gating the notice banner
+  const hasAnyConnected = useMemo(() => {
+    for (const p of PROVIDERS) {
+      const status = statusByProvider.get(p.key) || "not_connected";
+      if (status === "connected") return true;
+    }
+    return false;
+  }, [statusByProvider]);
 
   const providerCount = PROVIDERS.length;
   const notSignedInCopy =
@@ -142,9 +146,7 @@ export default function ConnectedAppsPage() {
   };
 
   const handleLogout = async () => {
-    // Clears cookie session (your cookie-auth backend supports this)
     await logout?.();
-    // after logout, statuses should clear
     setApps([]);
     setNotice("");
   };
@@ -162,7 +164,6 @@ export default function ConnectedAppsPage() {
               </p>
             </div>
 
-            {/* Handy while you’re testing cookie sessions */}
             {isAuthed && (
               <button
                 className="connected-btn connected-btn--secondary"
@@ -188,7 +189,8 @@ export default function ConnectedAppsPage() {
           </CloseableBanner>
         )}
 
-        {isAuthed && !!notice && !dismissed.notConnected && (
+        {/* ✅ Only show "not connected" notice if NONE are connected */}
+        {isAuthed && !!notice && !dismissed.notConnected && !hasAnyConnected && (
           <CloseableBanner onClose={() => dismissBanner("notConnected")}>
             {notice}
           </CloseableBanner>
@@ -210,9 +212,7 @@ export default function ConnectedAppsPage() {
                   <span
                     className={
                       "connected-status " +
-                      (isConnected
-                        ? "connected-status--on"
-                        : "connected-status--off")
+                      (isConnected ? "connected-status--on" : "connected-status--off")
                     }
                     title={`backend status: ${status}`}
                   >
@@ -287,7 +287,7 @@ export default function ConnectedAppsPage() {
           provider={activeProvider}
           onClose={closeModal}
           onGoSignIn={goSignIn}
-          onConnected={loadConnections} 
+          onConnected={loadConnections}
         />
       </div>
     </AppShell>

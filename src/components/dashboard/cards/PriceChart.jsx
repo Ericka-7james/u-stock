@@ -1,55 +1,44 @@
-// src/components/dashboard/PriceChart.jsx
-import {
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
-  CartesianGrid,
-} from "recharts";
+// src/charts/PriceChart.jsx
+import TradingViewEmbed from "../components/charts/TradingViewEmbed.jsx";
 
-export default function PriceChart({ ticker, data, loading, pricesMeta }) {
+function toTradingViewSymbol(ticker) {
+  const t = (ticker || "").trim();
+  if (!t) return "NASDAQ:AAPL";
+
+  // Already a full TradingView symbol
+  if (t.includes(":")) return t;
+
+  // If user passes crypto like "BTC/USD" -> "BITSTAMP:BTCUSD" (simple default)
+  if (t.includes("/")) {
+    const [base, quote] = t.split("/").map((s) => (s || "").toUpperCase().trim());
+    if (base && quote) return `BITSTAMP:${base}${quote}`;
+  }
+
+  // Default stocks to NASDAQ (you can improve mapping later)
+  return `NASDAQ:${t.toUpperCase()}`;
+}
+
+export default function PriceChart({
+  ticker,
+  loading = false,
+  interval = "1", // "1" = 1m
+  theme = "light",
+  height = 360,
+}) {
   if (loading) {
-    return <p className="muted">Loading price history…</p>;
+    return <p className="muted">Loading chart…</p>;
   }
 
-  if (!ticker || !data || data.length === 0) {
-    return <p className="muted">No price history available.</p>;
-  }
-
-  const snapshotTime = pricesMeta?.generatedAt
-    ? new Date(pricesMeta.generatedAt)
-    : null;
+  const symbol = toTradingViewSymbol(ticker);
 
   return (
-    <div className="chart-wrapper">
-      <ResponsiveContainer width="100%" height={320}>
-        <LineChart data={data}>
-          <CartesianGrid strokeDasharray="3 3" />
-          <XAxis
-            dataKey="dateLabel"
-            minTickGap={16}
-            tickFormatter={(v) => v?.slice(5) ?? v} // show MM-DD
-          />
-          <YAxis
-            domain={["auto", "auto"]}
-            tickFormatter={(v) => v.toFixed(0)}
-          />
-          <Tooltip
-            formatter={(value) =>
-              typeof value === "number" ? value.toFixed(2) : value
-            }
-            labelFormatter={(label) => `Date: ${label}`}
-          />
-          <Line
-            type="monotone"
-            dataKey="close"
-            dot={false}
-            strokeWidth={2}
-          />
-        </LineChart>
-      </ResponsiveContainer>
+    <div className="chart-wrapper" style={{ width: "100%" }}>
+      <TradingViewEmbed
+        symbol={symbol}
+        interval={interval}
+        theme={theme}
+        height={height}
+      />
     </div>
   );
 }
