@@ -3,9 +3,8 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Request, Response, Query
 from typing import List
 
-from ..core.security import require_user, get_supabase_service, decrypt_secret
-from ..clients.alpaca_client import latest_quotes, recent_trades
-
+from api.core.security import require_user, get_supabase_service, decrypt_secret
+from api.clients.alpaca_client import latest_quotes, recent_trades
 
 router = APIRouter(prefix="/api/market/us", tags=["market-us"])
 
