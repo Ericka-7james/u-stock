@@ -20,6 +20,12 @@ from cryptography.fernet import Fernet
 
 from api.cron import router as cron_router
 
+from api.routes.market_us import router as market_us_router
+from api.routes.macro import router as macro_router
+from api.routes.fundamentals import router as fundamentals_router
+from api.routes.calendar import router as calendar_router
+from api.routes.fx import router as fx_router
+
 # -------------------------
 # Load env (support both root .env and api/.env)
 # -------------------------
@@ -742,5 +748,11 @@ def debug_pipeline():
 app.include_router(cron_router, prefix="/api")
 app.include_router(alpaca_router, prefix="/api")
 
-# 👈 IMPORTANT: without this, /api/auth/me (and all /api routes) will 404
+# NEW phase-1 routers
+app.include_router(market_us_router)      # already has /api prefix inside
+app.include_router(macro_router)
+app.include_router(fundamentals_router)
+app.include_router(calendar_router)
+app.include_router(fx_router)
+
 app.include_router(api)

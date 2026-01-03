@@ -1,0 +1,7 @@
+{
+  "timezone": "America/New_York",
+  "events": [
+    { "name": "CPI", "date": "2026-01-14", "time": "08:30", "buffer_min": 30 },
+    { "name": "FOMC", "date": "2026-01-29", "time": "14:00", "buffer_min": 60 }
+  ]
+}
