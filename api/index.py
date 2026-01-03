@@ -14,18 +14,18 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr
 from supabase import Client, create_client
-from api.alpaca_data import router as alpaca_router
+from .alpaca_data import router as alpaca_router
 
 import resend
 from cryptography.fernet import Fernet
 
-from api.cron import router as cron_router
+from .cron import router as cron_router
 
-from api.routes.market_us import router as market_us_router
-from api.routes.macro import router as macro_router
-from api.routes.fundamentals import router as fundamentals_router
-from api.routes.calendar import router as calendar_router
-from api.routes.fx import router as fx_router
+from .routes.market_us import router as market_us_router
+from .routes.macro import router as macro_router
+from .routes.fundamentals import router as fundamentals_router
+from .routes.calendar import router as calendar_router
+from .routes.fx import router as fx_router
 
 # -------------------------
 # Load env (support both root .env and api/.env)

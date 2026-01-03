@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from supabase import Client, create_client
 
 
-from api.core.security import (
+from .core.security import (
     require_user,
     decrypt_secret,
     get_supabase_service,   # ✅ single source of truth

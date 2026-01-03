@@ -1,6 +1,6 @@
 # api/routes/fundamentals.py
 from fastapi import APIRouter, HTTPException
-from api.clients.fundamentals_client import alpha_company_overview
+from .clients.fundamentals_client import alpha_company_overview
 
 router = APIRouter(prefix="/api/fundamentals", tags=["fundamentals"])
 
