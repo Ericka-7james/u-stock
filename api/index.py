@@ -13,9 +13,18 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr
 from supabase import Client, create_client
+from api.alpaca_data import router as alpaca_router
 
 import resend
 from cryptography.fernet import Fernet
+
+from api.cron import router as cron_router
+
+from api.routes.market_us import router as market_us_router
+from api.routes.macro import router as macro_router
+from api.routes.fundamentals import router as fundamentals_router
+from api.routes.calendar import router as calendar_router
+from api.routes.fx import router as fx_router
 
 # -------------------------
 # Load env (support both root .env and api/.env)
@@ -35,7 +44,7 @@ for env_path in [
 # ---- Settings ----
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip()
 SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY", "").strip()
-SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+SUPABASE_SECRET_KEY = os.getenv("SUPABASE_SECRET_KEY", "").strip()
 INTEGRATIONS_ENC_KEY = os.getenv("INTEGRATIONS_ENC_KEY", "").strip()
 
 CORS_ORIGINS = [
@@ -308,9 +317,9 @@ def _escape_html(s: str) -> str:
 def get_supabase_service() -> Client:
     if not SUPABASE_URL:
         raise HTTPException(status_code=500, detail="SUPABASE_URL is missing")
-    if not SUPABASE_SERVICE_ROLE_KEY:
-        raise HTTPException(status_code=500, detail="SUPABASE_SERVICE_ROLE_KEY is missing")
-    return create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+    if not SUPABASE_SECRET_KEY:
+        raise HTTPException(status_code=500, detail="SUPABASE_SECRET_KEY is missing")
+    return create_client(SUPABASE_URL, SUPABASE_SECRET_KEY)
 
 def _fernet() -> Fernet:
     if not INTEGRATIONS_ENC_KEY:
@@ -725,6 +734,25 @@ def save_polygon_keys(payload: PolygonKeysIn, request: Request, response: Respon
 
     return {"ok": True, "provider": "polygon", "status": "connected"}
 
+##DEBUGGER
+@api.get("/debug/pipeline")
+def debug_pipeline():
+    v = os.getenv("PIPELINE_SECRET", "")
+    return {
+        "PIPELINE_SECRET_set": bool(v.strip()),
+        "PIPELINE_SECRET_len": len(v.strip()),
+        "PIPELINE_SECRET_prefix": v.strip()[:6],
+        "PIPELINE_SECRET_suffix": v.strip()[-6:] if len(v.strip()) >= 6 else v.strip(),
+    }
 
-# 👈 IMPORTANT: without this, /api/auth/me (and all /api routes) will 404
+app.include_router(cron_router, prefix="/api")
+app.include_router(alpaca_router, prefix="/api")
+
+# NEW phase-1 routers
+app.include_router(market_us_router)      # already has /api prefix inside
+app.include_router(macro_router)
+app.include_router(fundamentals_router)
+app.include_router(calendar_router)
+app.include_router(fx_router)
+
 app.include_router(api)

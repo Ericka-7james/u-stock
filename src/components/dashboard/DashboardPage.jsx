@@ -1,148 +1,192 @@
 // src/components/dashboard/DashboardPage.jsx
-import { useMemo, useState } from "react";
-
+import { useEffect, useMemo, useState } from "react";
 import AppShell from "../layout/AppShell.jsx";
 
-// Dashboard cards
-import StatSummary from "./cards/StatSummary.jsx";
 import PriceChartPanel from "./cards/PriceChartPanel.jsx";
 import SentimentCard from "./cards/SentimentCard.jsx";
-import TopSignalsCard from "./cards/TopSignalsCard.jsx";
-import DataSnapshotsCard from "./cards/DataSnapshotsCard.jsx";
 
-// Data hooks
-import { useSignalsSnapshot } from "../../hooks/raw/useSignalsSnapshot.js";
-import { useDailyPricesHistory } from "../../hooks/raw/useDailyPricesHistory.js";
-import { useSentimentSnapshot } from "../../hooks/raw/useSentimentSnapshot.js";
+import { useAlpacaDailyBars } from "../../hooks/useAlpacaDailyBars.js";
 
 // Styles
 import "../../css/dashboard/DashboardPage.css";
 import "../../css/dashboard/cards/ChartControls.css";
 import "../../css/dashboard/cards/CardShared.css";
 
+const LAST_TICKER_KEY = "ustock:last_ticker";
+
+function readIsDarkMode() {
+  if (typeof document === "undefined") return false;
+  const root = document.documentElement;
+  const body = document.body;
+
+  const classDark =
+    root?.classList?.contains("dark") || body?.classList?.contains("dark");
+
+  const dataThemeDark =
+    root?.getAttribute?.("data-theme") === "dark" ||
+    body?.getAttribute?.("data-theme") === "dark";
+
+  return Boolean(classDark || dataThemeDark);
+}
+
+function loadLastTicker() {
+  try {
+    const v = localStorage.getItem(LAST_TICKER_KEY);
+    const s = String(v || "").trim().toUpperCase();
+    return s || "AAPL";
+  } catch {
+    return "AAPL";
+  }
+}
+
+function normalizeSymbol(sym) {
+  const s = String(sym || "").trim();
+  if (!s) return "";
+  const last = s.includes(":") ? s.split(":").pop() : s;
+  return last.toUpperCase();
+}
+
 export default function DashboardPage() {
-  // Ranked signals from your Python signal_engine
+  console.log("✅ DashboardPage LOADED", new Date().toISOString());
+
+  const [currentTicker, setCurrentTicker] = useState(() => loadLastTicker());
+
+  // persist ticker
+  useEffect(() => {
+    try {
+      if (currentTicker) localStorage.setItem(LAST_TICKER_KEY, currentTicker);
+    } catch {}
+  }, [currentTicker]);
+
+  // debug when ticker changes
+  useEffect(() => {
+    console.log("📌 Dashboard currentTicker changed =>", currentTicker);
+  }, [currentTicker]);
+
+  // Reactive dark mode state
+  const [isDarkMode, setIsDarkMode] = useState(() => readIsDarkMode());
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+
+    const update = () => setIsDarkMode(readIsDarkMode());
+
+    update();
+
+    const obs = new MutationObserver(() => update());
+    const root = document.documentElement;
+    const body = document.body;
+
+    if (root) obs.observe(root, { attributes: true, attributeFilter: ["class", "data-theme"] });
+    if (body) obs.observe(body, { attributes: true, attributeFilter: ["class", "data-theme"] });
+
+    return () => obs.disconnect();
+  }, []);
+
+  /**
+   * ✅ TradingView FREE embed symbol detection (postMessage)
+   * This is the only reliable method for the free widget.
+   */
+  useEffect(() => {
+    console.log("✅ TradingView message listener ATTACHED");
+
+    const handler = (e) => {
+      const origin = String(e.origin || "");
+      // be flexible: TradingView can come from s.tradingview.com, www.tradingview.com, etc.
+      if (!origin.includes("tradingview.com")) return;
+
+      let msg = e.data;
+
+      // sometimes messages arrive as JSON strings
+      if (typeof msg === "string") {
+        try {
+          msg = JSON.parse(msg);
+        } catch {
+          // ignore non-JSON strings
+          return;
+        }
+      }
+
+      if (!msg || typeof msg !== "object") return;
+
+      // Debug: log ANY TradingView messages (comment out later)
+      // console.log("TV raw message:", origin, msg);
+
+      if (msg.name !== "quoteUpdate") return;
+
+      const raw =
+        msg?.data?.short_name ||
+        msg?.data?.original_name ||
+        msg?.data?.ticker ||
+        msg?.data?.symbol ||
+        "";
+
+      const next = normalizeSymbol(raw);
+      if (!next) return;
+
+      setCurrentTicker((prev) => {
+        if (prev === next) return prev;
+        console.log("✅ TradingView detected ticker =>", next);
+        return next;
+      });
+    };
+
+    window.addEventListener("message", handler);
+    return () => window.removeEventListener("message", handler);
+  }, []);
+
+  // Alpaca-backed daily history
   const {
-    data: signals = [],
-    meta: signalsMeta,
-    loading: signalsLoading,
-  } = useSignalsSnapshot();
+    bars: alpacaBars,
+    loading: alpacaLoading,
+    error: alpacaError,
+    meta: alpacaMeta,
+  } = useAlpacaDailyBars(currentTicker, 220);
 
-  // Daily OHLCV history (from prices-raw.json)
-  const {
-    historyBySymbol = {},
-    symbols: priceSymbols = [],
-    meta: pricesMeta,
-    loading: pricesLoading,
-  } = useDailyPricesHistory();
-
-  // Slim per-ticker sentiment snapshot
-  const {
-    data: sentimentData = [],
-    meta: sentimentMeta,
-    loading: sentimentLoading,
-  } = useSentimentSnapshot();
-
-  const [selectedTicker, setSelectedTicker] = useState("");
-
-  // All tickers available for charting
-  const allTickers = useMemo(() => {
-    const fromSignals = signals.map((row) => row.ticker).filter(Boolean);
-    const merged = new Set([...fromSignals, ...priceSymbols]);
-    return Array.from(merged).sort();
-  }, [signals, priceSymbols]);
-
-  // Default ticker: first ranked signal, else first price symbol
-  const defaultTicker = useMemo(() => {
-    if (signals.length > 0) return signals[0].ticker;
-    if (priceSymbols.length > 0) return priceSymbols[0];
-    return "";
-  }, [signals, priceSymbols]);
-
-  // The actual ticker to use in UI
-  const currentTicker = selectedTicker || defaultTicker;
-
-  // Current OHLCV series for price chart
-  const currentSeries = useMemo(() => {
-    if (!currentTicker) return [];
-    return historyBySymbol[currentTicker] || [];
-  }, [historyBySymbol, currentTicker]);
-
-  const combinedLoading = signalsLoading || pricesLoading;
-
-  // Latest data refresh across signals + prices (for footer)
-  const lastUpdated = useMemo(() => {
-    const times = [];
-    if (signalsMeta?.generatedAt) {
-      times.push(new Date(signalsMeta.generatedAt));
-    }
-    if (pricesMeta?.generatedAt) {
-      times.push(new Date(pricesMeta.generatedAt));
-    }
-    if (times.length === 0) return null;
-    return new Date(Math.max(...times.map((t) => t.getTime())));
-  }, [signalsMeta, pricesMeta]);
-
-  // Current sentiment row for selected ticker
-  const currentSentimentRow = useMemo(() => {
-    if (!currentTicker || !Array.isArray(sentimentData)) return null;
-    return sentimentData.find((row) => row.ticker === currentTicker) || null;
-  }, [currentTicker, sentimentData]);
+  const alpacaHistoryBySymbol = useMemo(() => {
+    return { [currentTicker]: alpacaBars || [] };
+  }, [currentTicker, alpacaBars]);
 
   return (
     <AppShell>
-      {/* Top stats row */}
-      <StatSummary
-        signalsMeta={signalsMeta}
-        signalsData={signals}
-        pricesMeta={pricesMeta}
-        priceSymbols={priceSymbols}
-      />
-
       <main className="dashboard-main">
-        {/* PRICE CHART panel */}
         <PriceChartPanel
-          allTickers={allTickers}
           currentTicker={currentTicker}
-          onSelectTicker={setSelectedTicker}
-          currentSeries={currentSeries}
-          loading={combinedLoading}
-          pricesMeta={pricesMeta}
+          onSelectTicker={(next) => {
+            const clean = normalizeSymbol(next);
+            if (!clean) return;
+            console.log("📥 Chart requested ticker =>", clean);
+            setCurrentTicker(clean);
+          }}
+          isDarkMode={isDarkMode}
         />
 
-        {/* SENTIMENT panel – directly under chart */}
         <section className="panel panel-sentiment">
+          {alpacaError ? (
+            <div className="errorBanner">
+              Alpaca daily bars failed: {alpacaError}
+              <div style={{ fontSize: 12, opacity: 0.8, marginTop: 6 }}>
+                Tip: Make sure you’re signed in and Alpaca keys are saved in Connected Apps.
+              </div>
+            </div>
+          ) : null}
+
           <SentimentCard
             symbol={currentTicker}
-            historyBySymbol={historyBySymbol}
-            loading={combinedLoading || sentimentLoading}
-            backendSnapshot={currentSentimentRow}
-          />
-        </section>
-
-        {/* Filters + snapshots panel */}
-        <section className="panel panel-filters">
-          <TopSignalsCard
-            signals={signals}
-            signalsMeta={signalsMeta}
-            currentTicker={currentTicker}
-            onSelectTicker={setSelectedTicker}
-            loading={combinedLoading}
+            historyBySymbol={alpacaHistoryBySymbol}
+            loading={alpacaLoading}
+            backendSnapshot={null}
           />
 
-          <DataSnapshotsCard
-            signalsMeta={signalsMeta}
-            pricesMeta={pricesMeta}
-            priceSymbols={priceSymbols}
-          />
+          {alpacaMeta?.fetchedAt ? (
+            <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>
+              Alpaca fetched: {new Date(alpacaMeta.fetchedAt).toLocaleString()}
+            </div>
+          ) : null}
         </section>
+
+        {/* your other panels unchanged */}
       </main>
-
-      {lastUpdated && (
-        <div className="dashboard-last-updated">
-          Last updated: {lastUpdated.toLocaleString()}
-        </div>
-      )}
     </AppShell>
   );
 }

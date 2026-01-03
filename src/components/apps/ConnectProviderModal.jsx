@@ -109,7 +109,14 @@ export default function ConnectProviderModal({
   };
 
   return (
-    <div className="cp-modal-overlay" onClick={onClose} role="presentation">
+    <div
+      className="cp-modal-overlay"
+      role="presentation"
+      onMouseDown={(e) => {
+        // Only close if the actual overlay was clicked (not children)
+        if (e.target === e.currentTarget) onClose?.();
+      }}
+    >
       <div
         className="cp-modal"
         role="dialog"

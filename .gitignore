@@ -1,3 +1,7 @@
+__pycache__/
+api/__pycache__/
+*.pyc
+
 # Logs
 logs
 *.log
@@ -27,6 +31,6 @@ dist-ssr
 .env
 .env.local
 
-__pycache__/
-api/__pycache__/
-*.pyc
+
+# Temp file
+_my_commits_tmp.txt

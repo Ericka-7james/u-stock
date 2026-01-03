@@ -1,0 +1,11 @@
+{
+  "job": "market-snapshot",
+  "mode": "intraday",
+  "status": "failure",
+  "started_at_utc": "2025-12-24T12:22:48.603516+00:00",
+  "finished_at_utc": "2025-12-24T12:34:27.046924+00:00",
+  "duration_ms": 698443,
+  "last_attempt_at_utc": "2025-12-24T12:34:27.046924+00:00",
+  "last_success_at_utc": null,
+  "error": "Traceback (most recent call last):\n  File \"<frozen runpy>\", line 198, in _run_module_as_main\n  File \"<frozen runpy>\", line 88, in _run_code\n  File \"C:\\dev\\u-stock\\src\\data_scout\\fetchers\\fetch_prices.py\", line 146, in <module>\n    main()\n    ~~~~^^\n  File \"C:\\dev\\u-stock\\src\\data_scout\\fetchers\\fetch_prices.py\", line 141, in main\n    save_prices_parquet(df)\n    ~~~~~~~~~~~~~~~~~~~^^^^\n  File \"C:\\dev\\u-stock\\src\\data_scout\\fetchers\\fetch_prices.py\", line 40, in save_prices_parquet\n    print(f\"[prices] Saved Parquet \\u2192 {out_path}\")\n    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\james\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\encodings\\cp1252.py\", line 19, in encode\n    return codecs.charmap_encode(input,self.errors,encoding_table)[0]\n           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nUnicodeEncodeError: 'charmap' codec can't encode character '\\u2192' in position 23: character maps to <undefined>\n"
+}

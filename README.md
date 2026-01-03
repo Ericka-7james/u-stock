@@ -1,105 +1,140 @@
-# 📈 U-Stock – Financial Intelligence Platform
+# 📈 U-Stock v2 — Financial Intelligence Platform
 
-🔗 **Website Link**  
+🔗 **Live Website**  
 https://u-stock-git-main-erickas-projects-e87cef06.vercel.app/
 
-U-Stock is a financial intelligence platform designed to automate market data ingestion, clean and preprocess stock information, compute multi-signal indicators, and provide structured analytics for future modeling. Built with a modular Python backend and a React frontend, U-Stock makes it easy to explore stock behavior across multiple timeframes.
+**U-Stock v2** is a modular, cloud-ready financial intelligence platform built to **ingest, validate, snapshot, and analyze market data across multiple timeframes**.  
+It serves as a clean foundation for **signal research, analytics dashboards, and future ML-driven trading systems**.
+
+Version 2 marks a **significant architectural upgrade** over v1, introducing snapshot standardization, pipeline health checks, and frontend-aligned data contracts.
 
 ---
 
-## 🚀 Features
+## 🚀 What’s New in v2
 
-### 📊 Automated Market Data Pipelines
-- Symbol universe ingestion and validation  
-- Real-time and intraday price fetching  
-- Multi-interval data (5m, 15m, daily)  
-- Duplicate and anomaly cleaning  
-- JSON-based structured outputs  
+- Snapshot-based data architecture  
+- Health-validated ingestion pipelines  
+- Multi-interval intraday support (2m / 5m / 15m)  
+- Deterministic, versioned JSON outputs  
+- Frontend-synchronized data contracts  
+- Cloud- and serverless-safe execution  
 
-### ⚙️ Indicator & Analytics Engine
-- Multiple technical indicators  
-- Intraday + multi-day analysis  
-- Extensible architecture for custom indicators  
+---
 
-### 🖥️ React Frontend (TypeScript)
-- Clean, modern UI for exploring stock analytics  
-- Responsive design  
-- Future support for charts + interactive dashboards  
+## 🧠 Core Capabilities
 
-### ☁️ Cloud-Ready Architecture
-- Serverless-friendly deployment (Vercel)  
-- Modular pipeline organization  
-- CI/CD-ready (GitHub Actions planned)  
+### 📊 Market Data Pipelines
+- US equity symbol universe generation  
+- Delisted / invalid ticker filtering  
+- Intraday price ingestion (2m, 5m, 15m)  
+- Daily historical prices  
+- Fundamentals and quote snapshots  
+- Clean, analytics-ready JSON outputs  
+
+### 🧪 Snapshot & Health System (v2)
+- Timestamped snapshot files  
+- Pipeline health reports  
+- Partial-failure tolerance  
+- Size-safe uploads (cloud storage ready)  
+- Designed for Supabase / object storage  
+
+### ⚙️ Analytics & Signal Foundation
+- Multi-timeframe indicator support  
+- Clear fetch → clean → analyze separation  
+- Extensible indicator registry  
+- Built to support ML signal scoring  
+
+### 🖥️ Frontend Dashboard
+- React + TypeScript  
+- Responsive, modern UI  
+- Data-driven components powered by snapshots  
+- Designed for charts, signals, and portfolio views  
+
+
+::contentReference[oaicite:0]{index=0}
+
 
 ---
 
 ## 🛠 Tech Stack
 
-**Backend**
+### Backend
 - Python  
 - Pandas  
-- YFinance (or similar APIs)  
-- JSON-based pipelines  
+- Structured JSON pipelines  
+- Modular snapshot utilities  
+- Market data APIs (YFinance / extensible)
 
-**Frontend**
+### Frontend
 - React  
 - TypeScript  
 - Vite  
+- Responsive + dark-mode UI  
 
-**Infrastructure**
-- Vercel (hosting)  
-- GitHub (source control)  
-
----
-
-## 🧪 Current Capabilities
-
-- Intraday data ingestion (5m, 15m)  
-- Daily historical price collection  
-- Cleans delisted + invalid tickers  
-- Builds unified, refined symbol universe  
-- Outputs analytics-ready JSON files  
+### Infrastructure
+- Vercel (frontend hosting)  
+- GitHub (version control)  
+- Serverless-first architecture  
+- CI/CD-ready design  
 
 ---
 
-## 🧱 Planned Improvements
+## 🧪 Current v2 Capabilities
 
-- Docker support  
-- CI/CD via GitHub Actions  
-- ML-driven signal scoring  
-- Portfolio simulation mode  
-- Analytics dashboard with charts  
-- Performance optimizations  
+- Multi-interval intraday ingestion (2m / 5m / 15m)  
+- Daily historical price snapshots  
+- Fundamentals + quotes aggregation  
+- Refined symbol universe generation  
+- Snapshot health reporting  
+- Frontend-consumable analytics outputs  
 
 ---
 
-## 🖼 Screenshots
+## 🧱 Roadmap (v2 → v3)
 
-**Dashboard Preview**  
---- coming ---
+- Dockerized local & cloud execution  
+- GitHub Actions CI/CD pipelines  
+- ML-driven signal scoring engine  
+- Portfolio simulation & backtesting  
+- Interactive analytics dashboards  
+- Performance tuning & optimization  
+
+---
 
 ## 🖼 Pipeline Execution Examples
 
-### 📦 Running Full Fetch Pipeline
-This shows U-Stock pulling prices, intraday data, and fundamentals in a single automated batch.
+### 📦 Full Market Snapshot Run
+Automated batch execution fetching prices, intraday data, fundamentals, and health checks.
 
-![U-Stock Batch Fetch Pipeline]
-<img width="940" height="801" alt="npmrunfetchall" src="https://github.com/user-attachments/assets/631cb2c8-dd04-4764-9d34-28d5b52433ca" />
+
+::contentReference[oaicite:1]{index=1}
 
 
 ---
 
-### 📈 Building the Symbol Universe
-This screenshot shows the system generating the refined US equities universe using NASDAQ Trader and Wikipedia fallbacks.
+### 📈 Symbol Universe Construction
+Refined US equities universe built using NASDAQ Trader data with Wikipedia fallbacks.
 
-![U-Stock Ticker Universe Build]
-<img width="1162" height="255" alt="npmruntickers" src="https://github.com/user-attachments/assets/b79564df-1863-4222-a394-79285c0833ca" />
+
+::contentReference[oaicite:2]{index=2}
+
 
 ---
 
 ## 👩‍💻 About the Developer
 
-Built by **Ericka James** — Software Engineer focusing on full-stack development, data pipelines, and cloud-native systems.
+Built by **Ericka James** — Software Engineer focused on:
+
+- Full-stack development  
+- Data pipelines & analytics  
+- Cloud-native systems  
+- Financial intelligence platforms  
 
 - GitHub: https://github.com/ericka-7james  
-- LinkedIn: https://www.linkedin.com/in/ericka-james
+- LinkedIn: https://www.linkedin.com/in/ericka-james  
+
+---
+
+### 💡 Why U-Stock v2 Matters
+U-Stock v2 demonstrates **real-world data engineering and system design**: reliable ingestion, health-checked pipelines, frontend integration, and scalable architecture.  
+It is both a **portfolio-grade platform** and a **foundation for future fintech products**.

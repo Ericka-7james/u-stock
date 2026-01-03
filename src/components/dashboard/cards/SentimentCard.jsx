@@ -160,33 +160,34 @@ export default function SentimentCard({
             >
               ×
             </button>
-            <h3 className="help-popover__title">
-              How is sentiment calculated?
-            </h3>
-            <p className="help-popover__text">
-              This card summarizes different views of the selected ticker, based
-              on its daily price history and your backend snapshot.
-            </p>
-            <ul className="help-popover__list">
-              <li>
-                <strong>Price-based Sentiment</strong> looks at recent returns
-                (1-day, 5-day, and ~1-month) to classify the move as bullish,
-                bearish, or neutral.
-              </li>
-              <li>
-                <strong>Volatility Sentiment</strong> uses realized volatility
-                to indicate whether trading is calm, normal, or stressed.
-              </li>
-              <li>
-                <strong>Technical Pattern Sentiment</strong> compares the latest
-                close to moving averages and pattern indicators to identify
-                uptrends, downtrends, or mixed ranges.
-              </li>
-            </ul>
-            <p className="help-popover__note">
-              These scores are for exploration only and are not trading signals
-              or investment advice.
-            </p>
+            <h3 className="help-popover__title">What does this “Sentiment” mean?</h3>
+
+              <p className="help-popover__text">
+                Right now, this card is <strong>price-derived sentiment</strong> — it summarizes what the
+                price has been doing recently. It does <strong>not</strong> include news, social media,
+                fundamentals, or macro data yet.
+              </p>
+
+              <ul className="help-popover__list">
+                <li>
+                  <strong>Price-based</strong> looks at recent returns (1D, 5D, ~20D) and labels the move
+                  as bullish/bearish/neutral.
+                </li>
+                <li>
+                  <strong>Volatility</strong> uses realized volatility from daily returns to describe
+                  whether price action is calm, normal, or stressed.
+                </li>
+                <li>
+                  <strong>Technical</strong> compares the latest close to moving averages (20/50-day) to
+                  detect trend vs mixed/range behavior.
+                </li>
+              </ul>
+
+              <p className="help-popover__note">
+                <strong>Exploration only.</strong> This is not a trading signal or investment advice.
+                Next upgrades: combine price signals with news + social sentiment + fundamentals, and
+                store decision logs with confidence + outcome tracking.
+              </p>
           </div>
         </div>
       )}
