@@ -1,5 +1,8 @@
 {
-  "version": 2,
-  "builds": [{ "src": "index.py", "use": "@vercel/python" }],
-  "routes": [{ "src": "/(.*)", "dest": "index.py" }]
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "https://u-stock-backend.vercel.app/api/$1"
+    }
+  ]
 }
