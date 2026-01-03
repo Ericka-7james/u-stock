@@ -31,15 +31,12 @@ function normalizeSymbol(sym) {
   return last.toUpperCase();
 }
 
-export default function PriceChartPanel({
-  currentTicker = "AAPL",
-  isDarkMode = false,
-}) {
-  console.log("✅ PriceChartPanel LOADED (embed-only)", new Date().toISOString());
-
+export default function PriceChartPanel({ currentTicker = "AAPL", isDarkMode = false }) {
   const containerIdRef = useRef(`tv-${Math.random().toString(16).slice(2)}`);
-  const createdRef = useRef(false);
+  const widgetRef = useRef(null);
 
+  // Create / recreate on theme changes.
+  // (We DO NOT recreate on ticker changes; the embed owns symbol search anyway.)
   useEffect(() => {
     let alive = true;
 
@@ -48,11 +45,13 @@ export default function PriceChartPanel({
         await loadTradingViewScript();
         if (!alive) return;
 
-        // only create once (free widget is an iframe embed)
-        if (createdRef.current) return;
-        createdRef.current = true;
+        // 🔥 Hard cleanup: wipe container + remove old widget reference
+        const containerEl = document.getElementById(containerIdRef.current);
+        if (containerEl) containerEl.innerHTML = "";
+        widgetRef.current = null;
 
-        new window.TradingView.widget({
+        // Recreate with new theme
+        widgetRef.current = new window.TradingView.widget({
           container_id: containerIdRef.current,
           symbol: normalizeSymbol(currentTicker) || "AAPL",
           interval: "D",
@@ -73,7 +72,8 @@ export default function PriceChartPanel({
     return () => {
       alive = false;
     };
-  }, [isDarkMode, currentTicker]);
+    // ✅ only theme changes trigger rebuild
+  }, [isDarkMode]);
 
   return (
     <section className="panel panel-chart">
@@ -84,6 +84,9 @@ export default function PriceChartPanel({
               <h2 className="card-title-text">Price action viewer</h2>
               <HelpTooltip title="What is the Price action viewer?">
                 <p>This chart is powered by TradingView.</p>
+                <p className="help-popover__note">
+                  Theme updates require recreating the free embed.
+                </p>
               </HelpTooltip>
             </div>
             <p className="card-subtitle">Search any symbol directly in the chart.</p>
