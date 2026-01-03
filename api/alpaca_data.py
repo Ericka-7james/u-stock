@@ -1,7 +1,7 @@
 # api/alpaca_data.py
 import os
 import requests
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, HTTPException, Request, Response
 from supabase import Client, create_client
 
@@ -66,11 +66,20 @@ def get_daily_bars(symbol: str, request: Request, response: Response, limit: int
 
         limit = max(10, min(int(limit), 1000))
 
+        # ✅ ADD THIS: give Alpaca a real time window
+        start = (datetime.now(timezone.utc) - timedelta(days=limit * 3)).isoformat()
+
         sb = get_supabase_service()
         api_key, api_secret, mode = _load_alpaca_keys(sb, user_id)
 
         url = f"{ALPACA_DATA_BASE_URL}/v2/stocks/{symbol}/bars"
-        params = {"timeframe": "1Day", "limit": limit, "adjustment": "all", "feed": "sip"}
+        params = {
+            "timeframe": "1Day",
+            "limit": limit,
+            "start": start,
+            "adjustment": "raw",   # ✅ changed from "all"
+            "feed": "sip",
+        }
         headers = _alpaca_headers(api_key, api_secret)
 
         r = requests.get(url, params=params, headers=headers, timeout=8)

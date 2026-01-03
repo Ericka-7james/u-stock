@@ -22,18 +22,17 @@ export function useAlpacaDailyBars(symbol, limit = 200) {
       setError("");
 
       try {
-        const res = await fetch(`/api/alpaca/bars/daily?symbol=${encodeURIComponent(s)}&limit=${limit}`, {
-          credentials: "include",
-        });
+        const res = await fetch(
+          `/api/alpaca/bars/daily?symbol=${encodeURIComponent(s)}&limit=${limit}`,
+          { credentials: "include" }
+        );
 
         const data = await res.json().catch(() => ({}));
 
         if (!res.ok) {
-          const msg =
-            data?.error ||                // <- from your exception handler
-            data?.detail ||               // <- normal fastapi http errors
-            `Request failed (${res.status})`;
-          throw new Error(msg);
+          throw new Error(
+            data?.error || data?.detail || `Request failed (${res.status})`
+          );
         }
 
         if (!alive) return;
@@ -55,8 +54,6 @@ export function useAlpacaDailyBars(symbol, limit = 200) {
       alive = false;
     };
   }, [symbol, limit]);
-
-  console.log("alpaca bars", symbol, bars?.length, bars?.[0]);
 
   return { bars, meta, loading, error };
 }

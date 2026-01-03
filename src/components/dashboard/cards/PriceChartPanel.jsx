@@ -1,18 +1,16 @@
 // src/components/dashboard/cards/PriceChartPanel.jsx
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useRef } from "react";
 import HelpTooltip from "../../common/HelpTooltip.jsx";
 import "../../../css/dashboard/cards/PriceChartPanel.css";
 
 function loadTradingViewScript() {
   return new Promise((resolve, reject) => {
-    if (window.TradingView && window.TradingView.widget) {
-      resolve();
-      return;
-    }
+    if (window.TradingView?.widget) return resolve();
 
     const existing = document.querySelector('script[data-tv="true"]');
     if (existing) {
-      existing.onload = resolve;
+      existing.addEventListener("load", resolve);
+      existing.addEventListener("error", reject);
       return;
     }
 
@@ -26,26 +24,37 @@ function loadTradingViewScript() {
   });
 }
 
+function normalizeSymbol(sym) {
+  const s = String(sym || "").trim();
+  if (!s) return "";
+  const last = s.includes(":") ? s.split(":").pop() : s;
+  return last.toUpperCase();
+}
+
 export default function PriceChartPanel({
-  currentTicker,
-  onSelectTicker,
-  isDarkMode = false, // pass from AppShell / context
+  currentTicker = "AAPL",
+  isDarkMode = false,
 }) {
-  const containerId = useId().replace(/:/g, "-");
-  const widgetRef = useRef(null);
-  const lastSymbolRef = useRef(null);
+  console.log("✅ PriceChartPanel LOADED (embed-only)", new Date().toISOString());
+
+  const containerIdRef = useRef(`tv-${Math.random().toString(16).slice(2)}`);
+  const createdRef = useRef(false);
 
   useEffect(() => {
     let alive = true;
 
-    async function init() {
+    (async () => {
       try {
         await loadTradingViewScript();
         if (!alive) return;
 
-        const widget = new window.TradingView.widget({
-          container_id: containerId,
-          symbol: currentTicker || "AAPL",
+        // only create once (free widget is an iframe embed)
+        if (createdRef.current) return;
+        createdRef.current = true;
+
+        new window.TradingView.widget({
+          container_id: containerIdRef.current,
+          symbol: normalizeSymbol(currentTicker) || "AAPL",
           interval: "D",
           autosize: true,
           theme: isDarkMode ? "dark" : "light",
@@ -56,91 +65,33 @@ export default function PriceChartPanel({
           withdateranges: true,
           save_image: false,
         });
-
-        widgetRef.current = widget;
-
-        widget.onChartReady(() => {
-          const chart = widget.activeChart?.();
-          if (!chart) return;
-
-          // Read initial symbol
-          try {
-            const s = chart.symbol?.();
-            if (s?.name) {
-              lastSymbolRef.current = s.name;
-              onSelectTicker?.(s.name.split(":").pop());
-            }
-          } catch {}
-
-          // Subscribe to symbol changes (if available)
-          try {
-            chart.onSymbolChanged().subscribe(null, (s) => {
-              const next = s?.name;
-              if (!next || next === lastSymbolRef.current) return;
-              lastSymbolRef.current = next;
-              onSelectTicker?.(next.split(":").pop());
-            });
-          } catch {
-            // Some builds don’t support subscriptions — safe to ignore
-          }
-        });
       } catch (e) {
-        console.error("TradingView failed to load:", e);
+        console.error("TradingView init failed:", e);
       }
-    }
-
-    init();
+    })();
 
     return () => {
       alive = false;
-      try {
-        widgetRef.current?.remove?.();
-      } catch {}
-      widgetRef.current = null;
     };
-  }, [containerId, currentTicker, onSelectTicker, isDarkMode]);
+  }, [isDarkMode, currentTicker]);
 
   return (
     <section className="panel panel-chart">
       <div className="card-main-chart">
-        {/* ✅ ORIGINAL HEADER PRESERVED */}
         <div className="card-header">
           <div className="card-header-left">
             <div className="card-title-row">
               <h2 className="card-title-text">Price action viewer</h2>
               <HelpTooltip title="What is the Price action viewer?">
-                <p>
-                  This chart shows live market price data powered by TradingView.
-                </p>
-                <ul>
-                  <li>
-                    <strong>X-axis:</strong> time (based on selected interval)
-                  </li>
-                  <li>
-                    <strong>Y-axis:</strong> market price
-                  </li>
-                  <li>
-                    Search and switch tickers directly inside the chart.
-                  </li>
-                </ul>
-                <p className="help-popover__note">
-                  This is a visualization tool only and is not investment advice.
-                </p>
+                <p>This chart is powered by TradingView.</p>
               </HelpTooltip>
             </div>
-
-            <p className="card-subtitle">
-              Search any symbol directly in the chart.
-            </p>
+            <p className="card-subtitle">Search any symbol directly in the chart.</p>
           </div>
-
-          {/* ❌ DROPDOWN REMOVED — INTENTIONALLY EMPTY */}
-          <div className="chart-controls" />
         </div>
 
-        {/* ✅ TRADINGVIEW CHART */}
         <div className="tv-chart-wrapper">
-          <div id={containerId} className="tv-chart-inner" />
+          <div id={containerIdRef.current} className="tv-chart-inner" />
         </div>
       </div>
     </section>

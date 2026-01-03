@@ -95,12 +95,12 @@ def _extract_user_id_and_email(res: Any) -> Tuple[str | None, str | None]:
 def require_user(request: Request, response: Response) -> Dict[str, str]:
     """
     Returns {"id": ..., "email": ...} or raises 401.
-    Same logic as your index.py, but moved to avoid circular imports.
     """
     sb = get_supabase_anon()
     access = request.cookies.get(COOKIE_NAME)
     refresh = request.cookies.get(REFRESH_COOKIE_NAME)
 
+    # 1️⃣ Try access token first
     if access:
         try:
             res = sb.auth.get_user(access)
@@ -108,29 +108,60 @@ def require_user(request: Request, response: Response) -> Dict[str, str]:
             if uid:
                 return {"id": uid, "email": email or ""}
         except Exception:
-            pass
+            pass  # access token expired/invalid → try refresh
 
+    # 2️⃣ Try refresh token
     if refresh:
         try:
+            refreshed = None
+
+            # Attempt A: refresh with string token
             try:
                 refreshed = sb.auth.refresh_session(refresh)
-            except Exception:
-                refreshed = sb.auth.refresh_session({"refresh_token": refresh})
+            except Exception as e1:
+                # Attempt B: refresh with dict payload
+                try:
+                    refreshed = sb.auth.refresh_session({"refresh_token": refresh})
+                except Exception as e2:
+                    raise HTTPException(
+                        status_code=401,
+                        detail=(
+                            "Invalid session: refresh failed "
+                            f"(string={repr(e1)}, dict={repr(e2)})"
+                        ),
+                    )
 
             uid, email = _extract_user_id_and_email(refreshed)
 
-            session = getattr(refreshed, "session", None)
+            # Handle different return shapes from supabase-py
+            session = None
+            if isinstance(refreshed, dict):
+                session = refreshed.get("session") or refreshed.get("data", {}).get("session")
+            else:
+                session = getattr(refreshed, "session", None) or getattr(
+                    getattr(refreshed, "data", None), "session", None
+                )
+
             if session:
-                new_access = getattr(session, "access_token", None)
-                new_refresh = getattr(session, "refresh_token", None)
+                if isinstance(session, dict):
+                    new_access = session.get("access_token")
+                    new_refresh = session.get("refresh_token")
+                else:
+                    new_access = getattr(session, "access_token", None)
+                    new_refresh = getattr(session, "refresh_token", None)
+
                 if new_access:
                     set_auth_cookies(response, new_access, new_refresh)
 
             if uid:
                 return {"id": uid, "email": email or ""}
+
+        except HTTPException:
+            raise
         except Exception as e:
             raise HTTPException(status_code=401, detail=f"Invalid session: {repr(e)}")
 
+    # 3️⃣ No valid session
     raise HTTPException(status_code=401, detail="Not authenticated")
 
 
