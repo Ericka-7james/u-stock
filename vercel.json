@@ -1,8 +1,0 @@
-{
-  "rewrites": [
-    {
-      "source": "/api/(.*)",
-      "destination": "https://u-stock-backend.vercel.app/api/$1"
-    }
-  ]
-}
