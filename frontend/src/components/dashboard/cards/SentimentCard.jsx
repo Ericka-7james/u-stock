@@ -1,4 +1,4 @@
-// src/components/dashboard/SentimentCard.jsx
+// src/components/dashboard/cards/SentimentCard.jsx
 import { useMemo, useState } from "react";
 import "../../../css/dashboard/cards/SentimentCard.css";
 

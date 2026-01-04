@@ -12,28 +12,32 @@
 /* Desktop: filters left, chart + sentiment right */
 @media (min-width: 1024px) {
   .dashboard-main {
-    grid-template-columns: minmax(260px, 380px) minmax(0, 1fr);
-    grid-template-rows: auto auto;
-    grid-template-areas:
-      "filters chart"
-      "filters sentiment";
+    grid-template-columns: minmax(320px, 440px) minmax(0, 1fr);
     gap: 1.5rem;
+    align-items: start;
   }
 
-  .panel-filters {
-    grid-area: filters;
-    transform: none !important;
+  .dashboard-left {
+    display: grid;
+    gap: 14px; /* ✅ spacing between Trade cards + Sentiment */
+    align-content: start;
   }
 
-  .panel-chart {
-    grid-area: chart;
-  }
-
-  .panel-sentiment {
-    grid-area: sentiment;
+  .dashboard-right {
+    align-content: start;
   }
 }
 
+.dashboard-left {
+  display: grid;
+  gap: 14px;
+}
+
+.dashboard-right {
+  display: grid;
+  gap: 14px;      /* spacing between price + sentiment */
+  align-content: start;
+}
 /* Chart / sentiment panels extend the base .panel style from AppShell */
 
 .panel.panel-chart {
