@@ -4,12 +4,27 @@
 
 .dashboard-main {
   display: grid;
-  grid-template-columns: 1fr;   /* mobile & tablet: single column */
+  grid-template-columns: 1fr; /* mobile: single column */
   gap: 20px;
   align-items: flex-start;
 }
 
-/* Desktop: filters left, chart + sentiment right */
+/* ✅ MOBILE/TABLET: Right stack first (chart + sentiment), then left (trade cards) */
+.dashboard-right {
+  order: 1;
+  display: grid;
+  gap: 14px; /* spacing between price + sentiment */
+  align-content: start;
+}
+
+.dashboard-left {
+  order: 2;
+  display: grid;
+  gap: 14px; /* spacing between trade cards */
+  align-content: start;
+}
+
+/* Desktop: trade left, chart + sentiment right */
 @media (min-width: 1024px) {
   .dashboard-main {
     grid-template-columns: minmax(320px, 440px) minmax(0, 1fr);
@@ -18,26 +33,14 @@
   }
 
   .dashboard-left {
-    display: grid;
-    gap: 14px; /* ✅ spacing between Trade cards + Sentiment */
-    align-content: start;
+    order: 1;
   }
 
   .dashboard-right {
-    align-content: start;
+    order: 2;
   }
 }
 
-.dashboard-left {
-  display: grid;
-  gap: 14px;
-}
-
-.dashboard-right {
-  display: grid;
-  gap: 14px;      /* spacing between price + sentiment */
-  align-content: start;
-}
 /* Chart / sentiment panels extend the base .panel style from AppShell */
 
 .panel.panel-chart {
@@ -170,7 +173,7 @@ body.ustock-dark .card-header .card-subtitle {
 
 /* ⬇️ NEW: brighten the subtitle specifically in dark mode */
 body.ustock-dark .card-header .card-subtitle {
-  color: var(--ustock-text-strong);  /* bright white-ish */
+  color: var(--ustock-text-strong); /* bright white-ish */
   opacity: 1;
   text-shadow: 0 0 8px rgba(0, 0, 0, 0.65);
 }
