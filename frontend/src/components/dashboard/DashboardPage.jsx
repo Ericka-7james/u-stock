@@ -1,4 +1,4 @@
-// src/components/dashboard/DashboardPage.jsx
+// frontend/src/components/dashboard/DashboardPage.jsx
 import { useEffect, useMemo, useState } from "react";
 import AppShell from "../layout/AppShell.jsx";
 
@@ -7,6 +7,7 @@ import SentimentCard from "./cards/SentimentCard.jsx";
 import TradePerformancePanel from "./cards/TradePerformancePanel.jsx";
 
 import { useAlpacaDailyBars } from "../../hooks/useAlpacaDailyBars.js";
+import { useAlpacaTradeSummary } from "../../hooks/useAlpacaTradeSummary.js";
 
 // Styles
 import "../../css/dashboard/DashboardPage.css";
@@ -45,27 +46,6 @@ function normalizeSymbol(sym) {
   if (!s) return "";
   const last = s.includes(":") ? s.split(":").pop() : s;
   return last.toUpperCase();
-}
-
-/**
- * ✅ TEMP: stub summary (so the panel renders now)
- * Later we will replace this with Alpaca paper fills / DB summary.
- */
-function makeStubTradeSummary() {
-  return {
-    start: "Jan 3, 2022",
-    end: "Jan 7, 2022",
-    trades: [
-      { symbol: "AAPL", pnl: 4.5, strategy: "breakout", openedAt: "2022-01-03T10:00:00Z", closedAt: "2022-01-03T15:30:00Z" },
-      { symbol: "TSLA", pnl: -2.88, strategy: "mean_reversion", openedAt: "2022-01-04T10:00:00Z", closedAt: "2022-01-04T13:00:00Z" },
-      { symbol: "AMD", pnl: 3.79, strategy: "breakout", openedAt: "2022-01-05T11:10:00Z", closedAt: "2022-01-05T15:55:00Z" },
-      { symbol: "SPY", pnl: 3.12, strategy: "trend", openedAt: "2022-01-06T10:05:00Z", closedAt: "2022-01-06T12:45:00Z" },
-      { symbol: "UAA", pnl: 3.12, strategy: "trend", openedAt: "2022-01-07T09:40:00Z", closedAt: "2022-01-07T11:10:00Z" },
-      { symbol: "EBAY", pnl: -2.88, strategy: "mean_reversion", openedAt: "2022-01-05T13:20:00Z", closedAt: "2022-01-05T14:10:00Z" },
-      { symbol: "TWTR", pnl: -2.53, strategy: "news", openedAt: "2022-01-06T13:00:00Z", closedAt: "2022-01-06T15:10:00Z" },
-      { symbol: "M", pnl: -2.53, strategy: "news", openedAt: "2022-01-07T12:05:00Z", closedAt: "2022-01-07T14:25:00Z" },
-    ],
-  };
 }
 
 export default function DashboardPage() {
@@ -150,7 +130,7 @@ export default function DashboardPage() {
     return () => window.removeEventListener("message", handler);
   }, []);
 
-  // Alpaca-backed daily history
+  // Alpaca-backed daily history (for SentimentCard)
   const {
     bars: alpacaBars,
     loading: alpacaLoading,
@@ -162,28 +142,54 @@ export default function DashboardPage() {
     return { [currentTicker]: alpacaBars || [] };
   }, [currentTicker, alpacaBars]);
 
+  // ✅ Real trade summary from backend (fills -> FIFO realized trades)
   const [tradePreset, setTradePreset] = useState("Week");
 
-  const tradePerfData = useMemo(() => {
-    const d = makeStubTradeSummary();
-    return { ...d, preset: tradePreset };
-  }, [tradePreset]);
+  const {
+    data: tradePerfData,
+    loading: tradePerfLoading,
+    error: tradePerfError,
+  } = useAlpacaTradeSummary(tradePreset, {
+    slippageBps: 0, // you can set later from Settings
+    feeBps: 0,
+  });
 
   return (
     <AppShell>
       <main className="dashboard-main">
         {/* LEFT COLUMN: trade cards only */}
         <div className="dashboard-left">
+          {tradePerfError ? (
+            <div className="errorBanner">
+              Trade summary failed: {tradePerfError}
+              <div style={{ fontSize: 12, opacity: 0.8, marginTop: 6 }}>
+                Tip: Make sure Alpaca is connected and you have paper/live trading activity.
+              </div>
+            </div>
+          ) : null}
+
           <TradePerformancePanel
-            data={tradePerfData}
+            data={
+              tradePerfData || {
+                start: "—",
+                end: "—",
+                trades: [],
+              }
+            }
             onChangeRange={(preset) => {
               console.log("📊 TradePerformance range =>", preset);
               setTradePreset(preset);
             }}
           />
+
+          {tradePerfLoading ? (
+            <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>
+              Loading trade performance…
+            </div>
+          ) : null}
         </div>
 
-        {/* RIGHT COLUMN: PriceChart THEN Sentiment (always this order) */}
+        {/* RIGHT COLUMN: PriceChart THEN Sentiment */}
         <div className="dashboard-right">
           <PriceChartPanel
             currentTicker={currentTicker}

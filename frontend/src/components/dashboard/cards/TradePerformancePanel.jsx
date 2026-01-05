@@ -1,4 +1,4 @@
-// src/components/dashboard/cards/TradePerformancePanel.jsx
+// frontend/src/components/dashboard/cards/TradePerformancePanel.jsx
 import { useMemo } from "react";
 import "../../../css/dashboard/cards/TradePerformancePanel.css";
 
@@ -66,7 +66,47 @@ function TableCard({ title, rows, tone }) {
   );
 }
 
-export default function TradePerformancePanel({ data, onChangeRange }) {
+function OpportunityTable({ title, rows }) {
+  return (
+    <div className="tpOppMiniTable">
+      <div className="tpOppMiniTitle">{title}</div>
+
+      <div className="tpOppHead">
+        <div>Symbol</div>
+        <div className="right">Score</div>
+      </div>
+
+      <div className="tpOppBody">
+        {rows?.length ? (
+          rows.slice(0, 6).map((r, i) => (
+            <div key={i} className="tpOppRow">
+              <div className="mono">{String(r.symbol || "").toUpperCase()}</div>
+              <div className="right mono">{Number(r.score || 0).toFixed(2)}</div>
+            </div>
+          ))
+        ) : (
+          <div className="tpEmpty">
+            Not wired yet. Phase 1 will rank symbols using expected move − costs.
+          </div>
+        )}
+      </div>
+
+      {/* tiny note for transparency */}
+      <div className="tpOppFootnote">
+        Score = expectedMove% × (1 + momentum) − cost%
+      </div>
+    </div>
+  );
+}
+
+/**
+ * TradePerformancePanel
+ * - data: { start, end, trades: [{symbol,pnl,...}] }
+ * - onChangeRange: (preset) => void
+ *
+ * Optional (future): opportunities = { crypto:[], stocks:[], funds:[] }
+ */
+export default function TradePerformancePanel({ data, onChangeRange, opportunities = null }) {
   const safe = data || { start: "", end: "", trades: [] };
   const trades = Array.isArray(safe.trades) ? safe.trades : [];
 
@@ -118,9 +158,13 @@ export default function TradePerformancePanel({ data, onChangeRange }) {
 
   const totalTone = summary.total >= 0 ? "pos" : "neg";
 
+  const oppCrypto = opportunities?.crypto || [];
+  const oppStocks = opportunities?.stocks || [];
+  const oppFunds = opportunities?.funds || [];
+
   return (
     <section className="tpPanel">
-      {/* ✅ Header now matches PriceChartPanel header style */}
+      {/* Header styled like PriceChartPanel header */}
       <div className="tpHeaderBar">
         <div className="tpHeaderLeft">
           <div className="tpTitleRow">
@@ -145,7 +189,7 @@ export default function TradePerformancePanel({ data, onChangeRange }) {
         </div>
       </div>
 
-      {/* All the small cards (independent card surfaces) */}
+      {/* Card grid (independent surfaces) */}
       <div className="tpLeft">
         <div className="tpLeftGrid">
           <BigStat
@@ -172,12 +216,14 @@ export default function TradePerformancePanel({ data, onChangeRange }) {
 
           <CardShell title="Exit Reason" className="tpSpan2">
             <div className="tpEmpty">
-              Replace with pie/donut chart (this card is independent).
+              Phase 1: classify from trade logs (stop, target, time, manual, reversal).
             </div>
           </CardShell>
 
           <CardShell title="Avg Win / Loss" className="tpSpan2">
-            <div className="tpEmpty">Replace with bar chart (independent card).</div>
+            <div className="tpEmpty">
+              Phase 1: show distribution + variance (histogram / box stats), not just averages.
+            </div>
             <div className="tpTinyStats">
               <div className="tpTinyRow">
                 <div className="muted">Avg Win</div>
@@ -198,6 +244,15 @@ export default function TradePerformancePanel({ data, onChangeRange }) {
             <TableCard title="Top Wins" rows={summary.topWins} tone="pos" />
             <TableCard title="Top Losses" rows={summary.topLosses} tone="neg" />
           </div>
+
+          {/* ✅ NEW: bottom card for day-trading opportunities */}
+          <CardShell title="Top Day Trades (Opportunity)" className="tpSpan2">
+            <div className="tpOppGrid">
+              <OpportunityTable title="Crypto" rows={oppCrypto} />
+              <OpportunityTable title="Stocks" rows={oppStocks} />
+              <OpportunityTable title="ETFs / Funds" rows={oppFunds} />
+            </div>
+          </CardShell>
         </div>
       </div>
     </section>

@@ -1,7 +1,7 @@
 // src/components/landing/LandingPage.jsx
 import { useNavigate } from "react-router-dom";
 import "../../css/landing/LandingPage.css";
-import landingIllustration from "../../assets/images/LandingPageIcon.png";
+import landingIllustration from "../../assets/images/LandingPageIcon_v2.png";
 import AppShell from "../layout/AppShell";
 
 export default function LandingPage() {

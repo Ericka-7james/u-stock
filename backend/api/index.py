@@ -15,6 +15,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr
 from supabase import Client, create_client
 from api.alpaca_data import router as alpaca_router
+from api.alpaca_trading import router as alpaca_trading_router
 
 import resend
 from cryptography.fernet import Fernet
@@ -748,9 +749,10 @@ def debug_pipeline():
 
 app.include_router(cron_router, prefix="/api")
 app.include_router(alpaca_router, prefix="/api")
+app.include_router(alpaca_trading_router, prefix="/api")
 
 # NEW phase-1 routers
-app.include_router(market_us_router)      # already has /api prefix inside
+app.include_router(market_us_router) 
 app.include_router(macro_router)
 app.include_router(fundamentals_router)
 app.include_router(calendar_router)

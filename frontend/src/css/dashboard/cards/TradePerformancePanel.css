@@ -1,13 +1,11 @@
-/* src/css/dashboard/cards/TradePerformancePanel.css */
+/* frontend/src/css/dashboard/cards/TradePerformancePanel.css */
 
-/* Panel wrapper */
+/* Panel wrapper (not a card) */
 .tpPanel {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+  display: block;
 }
 
-/* ✅ Match PriceChartPanel header style */
+/* Header bar matches PriceChartPanel header vibe */
 .tpHeaderBar {
   background: radial-gradient(
     circle at top left,
@@ -17,26 +15,25 @@
   );
   padding: 10px 14px;
   border-radius: 12px;
-  border: 1px solid var(--ustock-border-card);
-  box-shadow: 0 8px 20px rgba(15, 118, 110, 0.06);
-
+  margin-bottom: 12px;
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 12px;
+  border: 1px solid var(--ustock-border-card);
 }
 
 .tpHeaderLeft {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  min-width: 0;
 }
 
 .tpTitleRow {
   display: flex;
   align-items: center;
   gap: 8px;
+  white-space: nowrap;
 }
 
 .tpTitleText {
@@ -52,112 +49,101 @@
   opacity: 1;
 }
 
-/* Tabs */
 .tpTabs {
   display: flex;
   gap: 8px;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
 }
 
 .tpTab {
   border: 1px solid var(--ustock-border-card);
   background: var(--ustock-bg-card);
   color: var(--ustock-text-main);
-  padding: 6px 10px;
   border-radius: 999px;
+  padding: 6px 10px;
   font-size: 12px;
   cursor: pointer;
-  transition: box-shadow 0.15s ease, transform 0.15s ease;
 }
 
 .tpTab:hover {
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
-  transform: translateY(-1px);
+  filter: brightness(1.02);
 }
 
-/* Layout for your card grid */
+/* Main grid for cards */
 .tpLeft {
   display: block;
 }
 
-.tpLeftGrid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  align-items: start;
-}
-
-.tpSpan2 {
-  grid-column: 1 / -1;
-}
-
-.tpTables {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-
-/* Card surfaces */
+/* Each card is its own surface */
 .tpCard {
   background: var(--ustock-bg-card);
   border-radius: 12px;
-  border: 1px solid var(--ustock-border-card);
-  padding: 12px 14px;
+  padding: 14px;
   box-shadow: 0 8px 20px rgba(15, 118, 110, 0.06);
+  border: 1px solid var(--ustock-border-card);
+  color: var(--ustock-text-main);
 }
 
 .tpCardTitle {
-  font-size: 12px;
-  color: var(--ustock-text-muted);
-  margin-bottom: 8px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-}
-
-.tpBigCard .tpBigValue {
-  font-size: 34px;
   font-weight: 700;
+  font-size: 13px;
+  margin-bottom: 10px;
   color: var(--ustock-text-strong);
-  margin: 6px 0 2px;
 }
 
-.tpBigCard .tpBigSub {
+.tpLeftGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+/* span helpers */
+.tpSpan2 {
+  grid-column: span 2;
+}
+
+/* Big stat cards */
+.tpBigCard {
+  padding: 14px;
+}
+
+.tpBigValue {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--ustock-text-strong);
+}
+
+.tpBigSub {
+  margin-top: 6px;
   font-size: 12px;
   color: var(--ustock-text-muted);
 }
 
-/* Positive/negative accents (subtle border tint) */
-.tpBigCard.pos {
-  border-color: rgba(22, 163, 74, 0.25);
+/* tones */
+.tpBigCard.pos .tpBigValue,
+.tpMiniCard.pos .tpMiniValue {
+  color: #15803d;
 }
-.tpBigCard.neg {
-  border-color: rgba(220, 38, 38, 0.25);
+
+.tpBigCard.neg .tpBigValue,
+.tpMiniCard.neg .tpMiniValue {
+  color: #b91c1c;
 }
 
 /* Mini stat grid */
 .tpMiniGrid {
-  grid-column: 1 / -1;
+  grid-column: span 2;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
 }
 
 .tpMiniCard {
-  background: var(--ustock-bg-card);
+  background: var(--ustock-bg-card-soft);
   border: 1px solid var(--ustock-border-card);
   border-radius: 12px;
-  padding: 10px 12px;
-  box-shadow: 0 8px 20px rgba(15, 118, 110, 0.06);
-}
-
-.tpMiniCard.pos {
-  border-color: rgba(22, 163, 74, 0.25);
-  background: rgba(22, 163, 74, 0.06);
-}
-
-.tpMiniCard.neg {
-  border-color: rgba(220, 38, 38, 0.25);
-  background: rgba(220, 38, 38, 0.06);
+  padding: 12px;
 }
 
 .tpMiniLabel {
@@ -167,18 +153,12 @@
 }
 
 .tpMiniValue {
-  font-size: 20px;
-  font-weight: 700;
+  font-weight: 800;
+  font-size: 14px;
   color: var(--ustock-text-strong);
 }
 
-/* Empty placeholder */
-.tpEmpty {
-  font-size: 13px;
-  color: var(--ustock-text-muted);
-}
-
-/* Tiny rows inside Avg Win/Loss */
+/* tiny stats block inside Avg Win/Loss card */
 .tpTinyStats {
   margin-top: 10px;
   display: grid;
@@ -189,28 +169,34 @@
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  font-size: 13px;
 }
 
 .muted {
   color: var(--ustock-text-muted);
 }
+
 .mono {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
-    "Courier New", monospace;
-}
-.right {
-  text-align: right;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
 }
 
 /* Tables */
+.tpTables {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.tpTableCard {
+  padding: 14px;
+}
+
 .tpTableHead {
-  display: flex;
-  justify-content: space-between;
-  color: var(--ustock-text-muted);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
   font-size: 12px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--ustock-border-card);
+  color: var(--ustock-text-muted);
   margin-bottom: 8px;
 }
 
@@ -220,45 +206,106 @@
 }
 
 .tpRow {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: 1fr auto;
   gap: 10px;
-  padding: 10px 10px;
+  padding: 8px 10px;
   border-radius: 10px;
-  border: 1px solid var(--ustock-border-card);
   background: var(--ustock-bg-card-soft);
+  border: 1px solid rgba(15, 118, 110, 0.12);
 }
 
-.tpRow.pos {
-  border-color: rgba(22, 163, 74, 0.25);
-  background: rgba(22, 163, 74, 0.06);
+.tpRow.pos .right {
+  color: #15803d;
+  font-weight: 700;
 }
 
-.tpRow.neg {
-  border-color: rgba(220, 38, 38, 0.25);
-  background: rgba(220, 38, 38, 0.06);
+.tpRow.neg .right {
+  color: #b91c1c;
+  font-weight: 700;
+}
+
+.tpEmpty {
+  font-size: 12px;
+  color: var(--ustock-text-muted);
+  padding: 8px 2px;
+}
+
+.right {
+  text-align: right;
+}
+
+/* NEW: Opportunity grid inside the bottom card */
+.tpOppGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.tpOppMiniTable {
+  background: var(--ustock-bg-card-soft);
+  border: 1px solid var(--ustock-border-card);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.tpOppMiniTitle {
+  font-weight: 800;
+  font-size: 13px;
+  margin-bottom: 8px;
+  color: var(--ustock-text-strong);
+}
+
+.tpOppHead {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--ustock-text-muted);
+  margin-bottom: 8px;
+}
+
+.tpOppBody {
+  display: grid;
+  gap: 8px;
+}
+
+.tpOppRow {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--ustock-bg-card);
+  border: 1px solid rgba(15, 118, 110, 0.12);
+}
+
+.tpOppFootnote {
+  margin-top: 10px;
+  font-size: 11px;
+  color: var(--ustock-text-muted);
 }
 
 /* Responsive */
-@media (max-width: 768px) {
+@media (max-width: 900px) {
   .tpLeftGrid {
     grid-template-columns: 1fr;
+  }
+
+  .tpSpan2 {
+    grid-column: span 1;
+  }
+
+  .tpMiniGrid {
+    grid-column: span 1;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .tpTables {
     grid-template-columns: 1fr;
   }
 
-  .tpMiniGrid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .tpHeaderBar {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .tpTabs {
-    justify-content: flex-start;
+  .tpOppGrid {
+    grid-template-columns: 1fr;
   }
 }
