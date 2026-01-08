@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import AppShell from "../layout/AppShell.jsx";
 
+import BotRunnerCard from "../bots/BotRunnerCard.jsx";
 import PriceChartPanel from "./cards/PriceChartPanel.jsx";
 import SentimentCard from "./cards/SentimentCard.jsx";
 import TradePerformancePanel from "./cards/TradePerformancePanel.jsx";
@@ -189,8 +190,10 @@ export default function DashboardPage() {
           ) : null}
         </div>
 
-        {/* RIGHT COLUMN: PriceChart THEN Sentiment */}
+        {/* RIGHT COLUMN: BotRunner THEN PriceChart THEN Sentiment */}
         <div className="dashboard-right">
+          <BotRunnerCard />
+
           <PriceChartPanel
             currentTicker={currentTicker}
             onSelectTicker={(next) => {
