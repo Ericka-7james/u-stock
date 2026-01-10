@@ -1,19 +1,28 @@
-# api/health.py
+# backend/api/routes/health.py
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 
-router = APIRouter(prefix="/health", tags=["health"])
+router = APIRouter(prefix="/api", tags=["health"])
 
-def _project_root() -> Path:
-    return Path(__file__).resolve().parents[1]
 
-@router.get("/market-snapshot")
+def _backend_root() -> Path:
+    # .../backend
+    return Path(__file__).resolve().parents[2]
+
+
+@router.get("/health")
+def health():
+    return {"status": "ok", "env": os.getenv("ENV", "development").strip().lower()}
+
+
+@router.get("/health/market-snapshot")
 def market_snapshot_health():
-    path = _project_root() / "public" / "data" / "fetched" / "market-snapshot-health.json"
+    path = _backend_root() / "public" / "data" / "fetched" / "market-snapshot-health.json"
     if not path.exists():
         # Not an error: just means it hasn't run yet.
         return JSONResponse(

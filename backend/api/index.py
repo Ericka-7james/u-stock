@@ -1,6 +1,4 @@
 # backend/api/index.py
-from api.settings import Settings
-
 from __future__ import annotations
 
 import os
@@ -8,17 +6,39 @@ import sys
 import re
 import time
 from pathlib import Path
-from typing import Any, List, Optional, Dict
+from typing import Optional
 
 import requests
 from dotenv import load_dotenv
-from fastapi import APIRouter, FastAPI, HTTPException, Response, Request, Query
+from fastapi import APIRouter, FastAPI, HTTPException, Response, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr
 
-from api.db import get_supabase_anon, get_supabase_service
-from api.crypto_utils import encrypt_secret
+# -------------------------
+# Path + env bootstrapping (do this FIRST)
+# -------------------------
+THIS_FILE = Path(__file__).resolve()
+API_DIR = THIS_FILE.parent           # backend/api
+BACKEND_DIR = API_DIR.parent         # backend
+
+if str(BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(BACKEND_DIR))
+
+load_dotenv(BACKEND_DIR / ".env.local", override=True)
+load_dotenv(BACKEND_DIR / ".env", override=False)
+
+ENV = os.getenv("ENV", "local").strip().lower()
+
+# Only strict in staging/prod; local can be non-strict to avoid reload misery
+STRICT_SETTINGS = ENV in ("staging", "prod", "production")
+
+from api.settings import Settings
+settings = Settings(strict=STRICT_SETTINGS)
+
+import resend
+from api.db import get_supabase_anon
+from api.deps import require_user
 
 from api.alpaca_data import router as alpaca_router
 from api.alpaca_trading import router as alpaca_trading_router
@@ -32,33 +52,14 @@ from api.routes.fx import router as fx_router
 from api.routes.opportunities import router as opportunities_router
 from api.routes.auth_bot_runner import router as auth_bot_runner_router
 from api.routes.integrations_alpaca import router as integrations_alpaca_router
-from api.routes.health import router as health_router
+
+# Health router: standardize it to export `router` in backend/api/routes/health.py
+try:
+    from api.routes.health import router as health_router
+except Exception:
+    health_router = None
 
 
-from api.deps import require_user
-
-import resend
-
-settings = Settings()
-
-# -------------------------
-# Path + env bootstrapping
-# -------------------------
-THIS_FILE = Path(__file__).resolve()
-API_DIR = THIS_FILE.parent           # backend/api
-BACKEND_DIR = API_DIR.parent         # backend
-
-# Ensure "backend" is on sys.path (so "api.*" imports work consistently)
-if str(BACKEND_DIR) not in sys.path:
-    sys.path.insert(0, str(BACKEND_DIR))
-
-# Deterministic env loading:
-# 1) backend/.env.local overrides everything
-# 2) backend/.env fills anything missing
-load_dotenv(BACKEND_DIR / ".env.local", override=True)
-load_dotenv(BACKEND_DIR / ".env", override=False)
-
-ENV = os.getenv("ENV", "development").strip().lower()
 API_PREFIX = "/api"
 
 CORS_ORIGINS = [
@@ -72,10 +73,9 @@ CORS_ORIGINS = [
 
 COOKIE_NAME = os.getenv("USTOCK_COOKIE_NAME", "access_token").strip()
 REFRESH_COOKIE_NAME = os.getenv("USTOCK_REFRESH_COOKIE_NAME", "refresh_token").strip()
-
 COOKIE_SECURE = os.getenv("USTOCK_COOKIE_SECURE", "false").strip().lower() in ("1", "true", "yes")
-COOKIE_SAMESITE = os.getenv("USTOCK_COOKIE_SAMESITE", "lax").strip().lower()  # lax | none | strict
-COOKIE_MAX_AGE = int(os.getenv("USTOCK_COOKIE_MAX_AGE", "604800"))  # 7 days
+COOKIE_SAMESITE = os.getenv("USTOCK_COOKIE_SAMESITE", "lax").strip().lower()
+COOKIE_MAX_AGE = int(os.getenv("USTOCK_COOKIE_MAX_AGE", "604800"))
 
 RESEND_API_KEY = os.getenv("RESEND_API_KEY", "").strip()
 FEEDBACK_TO_EMAIL = os.getenv("FEEDBACK_TO_EMAIL", "").strip()
@@ -88,7 +88,6 @@ FEEDBACK_RL_MAX = int(os.getenv("FEEDBACK_RL_MAX", "5"))
 _feedback_rl: dict[str, list[float]] = {}
 
 FEEDBACK_FROM = os.getenv("FEEDBACK_FROM", "Lucent Financial <onboarding@resend.dev>").strip()
-PUBLIC_LOGO_URL = os.getenv("PUBLIC_LOGO_URL", "").strip()
 
 app = FastAPI(title="u-stock-auth-backend")
 
@@ -146,7 +145,7 @@ PASSWORD_MIN_LEN = 12
 
 
 # -------------------------
-# Auth helpers
+# Helpers
 # -------------------------
 def validate_password(password: str, email: str, username: str | None = None) -> None:
     if len(password) < PASSWORD_MIN_LEN:
@@ -195,13 +194,6 @@ def clear_auth_cookies(response: Response) -> None:
     response.delete_cookie(key=REFRESH_COOKIE_NAME, path="/", samesite=COOKIE_SAMESITE, secure=COOKIE_SECURE)
 
 
-def _now_iso() -> str:
-    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-
-
-# -------------------------
-# Turnstile + feedback helpers
-# -------------------------
 def _get_client_ip(request: Request) -> str:
     xfwd = request.headers.get("x-forwarded-for")
     if xfwd:
@@ -232,15 +224,11 @@ def _verify_turnstile(token: str, request: Request) -> None:
         raise HTTPException(status_code=500, detail="TURNSTILE_SECRET_KEY is missing")
 
     ip = _get_client_ip(request)
-    try:
-        r = requests.post(
-            "https://challenges.cloudflare.com/turnstile/v0/siteverify",
-            data={"secret": TURNSTILE_SECRET_KEY, "response": token, "remoteip": ip},
-            timeout=4,
-        )
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Captcha verify request failed: {repr(e)}")
-
+    r = requests.post(
+        "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+        data={"secret": TURNSTILE_SECRET_KEY, "response": token, "remoteip": ip},
+        timeout=4,
+    )
     try:
         data = r.json()
     except Exception:
@@ -272,11 +260,11 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 # -------------------------
 @app.get("/")
 def root():
-    return {"name": "u-stock-auth-backend", "status": "running", "env": ENV}
+    return {"name": "u-stock-auth-backend", "status": "running", "env": ENV, "strict_settings": STRICT_SETTINGS}
 
 
 @app.get("/health")
-def health():
+def health_root():
     return {"status": "ok", "env": ENV}
 
 
@@ -287,10 +275,7 @@ def health():
 def signup(body: SignupBody, response: Response):
     validate_password(body.password, body.email, body.username)
     sb = get_supabase_anon()
-    try:
-        res = sb.auth.sign_up({"email": body.email, "password": body.password})
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Supabase signup error: {repr(e)}")
+    res = sb.auth.sign_up({"email": body.email, "password": body.password})
 
     if not res or not getattr(res, "user", None):
         raise HTTPException(status_code=400, detail="Signup failed")
@@ -333,83 +318,6 @@ def me(request: Request, response: Response):
 
 
 # -------------------------
-# Feedback
-# -------------------------
-@api.post("/feedback")
-def submit_feedback(payload: FeedbackIn, request: Request):
-    if payload.honeypot and payload.honeypot.strip():
-        return {"ok": True, "email_sent": False, "thanks_sent": False}
-
-    ip = _get_client_ip(request)
-    _rate_limit_feedback(ip)
-
-    if TURNSTILE_ENABLED:
-        if not payload.turnstile_token:
-            raise HTTPException(status_code=400, detail="Missing captcha token.")
-        _verify_turnstile(payload.turnstile_token, request)
-
-    row = {
-        "name": payload.name,
-        "email": payload.email,
-        "feedback_type": payload.feedback_type,
-        "message": payload.message,
-    }
-
-    try:
-        sb = get_supabase_anon()
-        sb.table("feedback").insert(row, returning="minimal").execute()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Feedback insert failed: {repr(e)}")
-
-    email_sent = False
-    email_error = None
-    thanks_sent = False
-    thanks_error = None
-
-    if RESEND_API_KEY and FEEDBACK_TO_EMAIL:
-        try:
-            safe_type = _escape_html(payload.feedback_type)
-            safe_name = _escape_html(payload.name or "Anonymous")
-            safe_email = _escape_html(payload.email or "Not provided")
-            safe_msg = _escape_html(payload.message or "")
-
-            admin_html = f"""<!DOCTYPE html><html><body>
-            <h2>New Feedback</h2>
-            <p><b>Type:</b> {safe_type}</p>
-            <p><b>Name:</b> {safe_name}</p>
-            <p><b>Email:</b> {safe_email}</p>
-            <pre>{safe_msg}</pre>
-            </body></html>"""
-
-            resend.Emails.send(
-                {
-                    "from": FEEDBACK_FROM,
-                    "to": [FEEDBACK_TO_EMAIL],
-                    "subject": f"📬 New Feedback ({payload.feedback_type})",
-                    "html": admin_html,
-                    "reply_to": payload.email or None,
-                }
-            )
-            email_sent = True
-        except Exception as e:
-            email_error = repr(e)
-
-        if payload.email:
-            try:
-                thanks_html = """<!DOCTYPE html><html><body>
-                <h2>Thanks!</h2><p>We got your message.</p>
-                </body></html>"""
-                resend.Emails.send(
-                    {"from": FEEDBACK_FROM, "to": [payload.email], "subject": "✅ Thanks — we got your message", "html": thanks_html}
-                )
-                thanks_sent = True
-            except Exception as e:
-                thanks_error = repr(e)
-
-    return {"ok": True, "email_sent": email_sent, "email_error": email_error, "thanks_sent": thanks_sent, "thanks_error": thanks_error}
-
-
-# -------------------------
 # Routers
 # -------------------------
 app.include_router(cron_router, prefix="/api")
@@ -422,8 +330,9 @@ app.include_router(fundamentals_router)
 app.include_router(calendar_router)
 app.include_router(fx_router)
 app.include_router(opportunities_router)
-app.include_router(health_router)
 
+if health_router is not None:
+    app.include_router(health_router)
 
 app.include_router(auth_bot_runner_router, prefix="/api")
 app.include_router(integrations_alpaca_router, prefix="/api")
