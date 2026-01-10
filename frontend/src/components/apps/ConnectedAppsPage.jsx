@@ -4,6 +4,7 @@ import "../../css/apps/ConnectedAppsPage.css";
 import { useAuth } from "../../context/AuthContext";
 import ConnectProviderModal from "./ConnectProviderModal";
 import { useNavigate } from "react-router-dom";
+import { explainResponseError } from "../common/errorMessages";
 
 const PROVIDERS = [
   {
@@ -71,8 +72,10 @@ export default function ConnectedAppsPage() {
         throw new Error("Session expired — please sign in again.");
       }
       if (!res.ok) {
-        const msg = await safeErrorMessage(res);
-        throw new Error(msg);
+        const ui = await explainResponseError(res, { feature: "integrations_list" });
+        const err = new Error(ui.body);
+        err._ui = ui; // attach friendly payload
+        throw err;
       }
 
       const data = await res.json();
@@ -83,7 +86,8 @@ export default function ConnectedAppsPage() {
     } catch (e) {
       setApps([]);
       setNotice("");
-      setError(e?.message || "Could not load connected apps.");
+      const ui = e?._ui;
+      setError(ui ? `${ui.title}\n\n${ui.body}` : (e?.message || "Could not load connected apps."));
     } finally {
       setLoading(false);
     }
@@ -187,6 +191,18 @@ export default function ConnectedAppsPage() {
           <CloseableBanner onClose={() => dismissBanner("genericError")}>
             {error}
           </CloseableBanner>
+        )}
+
+        {import.meta.env.DEV && !!error && !dismissed.genericError && (
+          <details style={{ marginTop: 10, fontSize: 12, opacity: 0.75 }}>
+            <summary>Debug tips</summary>
+            <div style={{ whiteSpace: "pre-wrap" }}>
+              If this is local dev:
+              {"\n"}- confirm backend is running on :8000
+              {"\n"}- confirm cookies are being set (Network tab → auth/login)
+              {"\n"}- confirm proxy is active (vite.config.js)
+            </div>
+          </details>
         )}
 
         {/* ✅ Only show "not connected" notice if NONE are connected */}

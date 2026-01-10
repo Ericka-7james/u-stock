@@ -28,7 +28,7 @@ from api.routes.macro import router as macro_router
 from api.routes.fundamentals import router as fundamentals_router
 from api.routes.calendar import router as calendar_router
 from api.routes.fx import router as fx_router
-
+from api.routes.opportunities import router as opportunities_router
 from api.routes.auth_bot_runner import router as auth_bot_runner_router
 from api.routes.integrations_alpaca import router as integrations_alpaca_router
 
@@ -265,19 +265,6 @@ def health():
     return {"status": "ok", "env": ENV}
 
 
-@api.get("/debug/env")
-def debug_env():
-    return {
-        "ENV": ENV,
-        "CORS_ORIGINS": CORS_ORIGINS,
-        "COOKIE_SECURE": COOKIE_SECURE,
-        "COOKIE_SAMESITE": COOKIE_SAMESITE,
-        "COOKIE_NAME": COOKIE_NAME,
-        "TURNSTILE_ENABLED": TURNSTILE_ENABLED,
-        "TURNSTILE_SECRET_KEY_set": bool(TURNSTILE_SECRET_KEY),
-    }
-
-
 @api.post("/auth/signup", response_model=AuthResponse)
 def signup(body: SignupBody, response: Response):
     validate_password(body.password, body.email, body.username)
@@ -470,7 +457,16 @@ def list_integrations(request: Request, response: Response):
     try:
         rows = sb.table("integrations").select("provider,status,updated_at").eq("user_id", user_id).execute()
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to load integrations: {repr(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "code": "INTEGRATIONS_LOAD_FAILED",
+                "message": "Could not load your connected apps.",
+                "user_action": "Refresh the page. If it keeps happening, sign out and sign back in.",
+                "source": "integrations",
+                "debug": repr(e),  # optional (nice during dev)
+            },
+        )
 
     data = rows.data or []
     db_status = {str(r["provider"]).lower(): r for r in data if r.get("provider")}
@@ -858,6 +854,22 @@ def debug_pipeline():
         "PIPELINE_SECRET_suffix": v.strip()[-6:] if len(v.strip()) >= 6 else v.strip(),
     }
 
+@api.get("/debug/env")
+def debug_env():
+    return {
+        "ENV": ENV,
+        "CORS_ORIGINS": CORS_ORIGINS,
+        "COOKIE_SECURE": COOKIE_SECURE,
+        "COOKIE_SAMESITE": COOKIE_SAMESITE,
+        "COOKIE_NAME": COOKIE_NAME,
+        "TURNSTILE_ENABLED": TURNSTILE_ENABLED,
+        "TURNSTILE_SECRET_KEY_set": bool(TURNSTILE_SECRET_KEY),
+
+        # ✅ add these
+        "INTEGRATIONS_ENC_KEY_set": bool(os.getenv("INTEGRATIONS_ENC_KEY", "").strip()),
+        "INTEGRATIONS_ENC_KEY_len": len(os.getenv("INTEGRATIONS_ENC_KEY", "").strip()),
+        "INTEGRATIONS_ENC_KEY_prefix": os.getenv("INTEGRATIONS_ENC_KEY", "").strip()[:6],
+    }
 
 # Routers
 app.include_router(cron_router, prefix="/api")
@@ -869,6 +881,7 @@ app.include_router(macro_router)
 app.include_router(fundamentals_router)
 app.include_router(calendar_router)
 app.include_router(fx_router)
+app.include_router(opportunities_router)
 
 app.include_router(auth_bot_runner_router, prefix="/api")
 app.include_router(integrations_alpaca_router, prefix="/api")

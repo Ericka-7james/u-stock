@@ -2,13 +2,15 @@
 import { useEffect, useMemo, useState } from "react";
 import AppShell from "../layout/AppShell.jsx";
 
-import BotRunnerCard from "../bots/BotRunnerCard.jsx";
 import PriceChartPanel from "./cards/PriceChartPanel.jsx";
 import SentimentCard from "./cards/SentimentCard.jsx";
 import TradePerformancePanel from "./cards/TradePerformancePanel.jsx";
 
 import { useAlpacaDailyBars } from "../../hooks/useAlpacaDailyBars.js";
 import { useAlpacaTradeSummary } from "../../hooks/useAlpacaTradeSummary.js";
+
+// ✅ NEW
+import { explainAnyError } from "../common/errorMessages.js";
 
 // Styles
 import "../../css/dashboard/DashboardPage.css";
@@ -22,13 +24,8 @@ function readIsDarkMode() {
   const root = document.documentElement;
   const body = document.body;
 
-  const classDark =
-    root?.classList?.contains("dark") || body?.classList?.contains("dark");
-
-  const dataThemeDark =
-    root?.getAttribute?.("data-theme") === "dark" ||
-    body?.getAttribute?.("data-theme") === "dark";
-
+  const classDark = root?.classList?.contains("dark") || body?.classList?.contains("dark");
+  const dataThemeDark = root?.getAttribute?.("data-theme") === "dark" || body?.getAttribute?.("data-theme") === "dark";
   return Boolean(classDark || dataThemeDark);
 }
 
@@ -49,9 +46,24 @@ function normalizeSymbol(sym) {
   return last.toUpperCase();
 }
 
-export default function DashboardPage() {
-  console.log("✅ DashboardPage LOADED", new Date().toISOString());
+function ErrorBanner({ title, body, debug }) {
+  return (
+    <div className="errorBanner" style={{ whiteSpace: "pre-wrap" }}>
+      <strong>{title}</strong>
+      <div style={{ marginTop: 6 }}>{body}</div>
 
+      {/* ✅ Dev-only debug details */}
+      {import.meta.env.DEV && debug ? (
+        <details style={{ marginTop: 10, fontSize: 12, opacity: 0.8 }}>
+          <summary>Debug info</summary>
+          <pre style={{ overflowX: "auto" }}>{JSON.stringify(debug, null, 2)}</pre>
+        </details>
+      ) : null}
+    </div>
+  );
+}
+
+export default function DashboardPage() {
   const [currentTicker, setCurrentTicker] = useState(() => loadLastTicker());
 
   useEffect(() => {
@@ -60,40 +72,25 @@ export default function DashboardPage() {
     } catch {}
   }, [currentTicker]);
 
-  useEffect(() => {
-    console.log("📌 Dashboard currentTicker changed =>", currentTicker);
-  }, [currentTicker]);
-
   const [isDarkMode, setIsDarkMode] = useState(() => readIsDarkMode());
 
   useEffect(() => {
     if (typeof document === "undefined") return;
 
     const update = () => setIsDarkMode(readIsDarkMode());
-
     update();
 
     const obs = new MutationObserver(() => update());
     const root = document.documentElement;
     const body = document.body;
 
-    if (root)
-      obs.observe(root, {
-        attributes: true,
-        attributeFilter: ["class", "data-theme"],
-      });
-    if (body)
-      obs.observe(body, {
-        attributes: true,
-        attributeFilter: ["class", "data-theme"],
-      });
+    if (root) obs.observe(root, { attributes: true, attributeFilter: ["class", "data-theme"] });
+    if (body) obs.observe(body, { attributes: true, attributeFilter: ["class", "data-theme"] });
 
     return () => obs.disconnect();
   }, []);
 
   useEffect(() => {
-    console.log("✅ TradingView message listener ATTACHED");
-
     const handler = (e) => {
       const origin = String(e.origin || "");
       if (!origin.includes("tradingview.com")) return;
@@ -106,7 +103,6 @@ export default function DashboardPage() {
           return;
         }
       }
-
       if (!msg || typeof msg !== "object") return;
       if (msg.name !== "quoteUpdate") return;
 
@@ -120,101 +116,54 @@ export default function DashboardPage() {
       const next = normalizeSymbol(raw);
       if (!next) return;
 
-      setCurrentTicker((prev) => {
-        if (prev === next) return prev;
-        console.log("✅ TradingView detected ticker =>", next);
-        return next;
-      });
+      setCurrentTicker((prev) => (prev === next ? prev : next));
     };
 
     window.addEventListener("message", handler);
     return () => window.removeEventListener("message", handler);
   }, []);
 
-  // Alpaca-backed daily history (for SentimentCard)
-  const {
-    bars: alpacaBars,
-    loading: alpacaLoading,
-    error: alpacaError,
-    meta: alpacaMeta,
-  } = useAlpacaDailyBars(currentTicker, 220);
+  const { bars: alpacaBars, loading: alpacaLoading, error: alpacaError, meta: alpacaMeta } =
+    useAlpacaDailyBars(currentTicker, 220);
 
-  const alpacaHistoryBySymbol = useMemo(() => {
-    return { [currentTicker]: alpacaBars || [] };
-  }, [currentTicker, alpacaBars]);
+  const alpacaHistoryBySymbol = useMemo(() => ({ [currentTicker]: alpacaBars || [] }), [currentTicker, alpacaBars]);
 
-  // ✅ Real trade summary from backend (fills -> FIFO realized trades)
   const [tradePreset, setTradePreset] = useState("Week");
 
-  const {
-    data: tradePerfData,
-    loading: tradePerfLoading,
-    error: tradePerfError,
-  } = useAlpacaTradeSummary(tradePreset, {
-    slippageBps: 0, // you can set later from Settings
-    feeBps: 0,
-  });
+  const { data: tradePerfData, loading: tradePerfLoading, error: tradePerfError } =
+    useAlpacaTradeSummary(tradePreset, { slippageBps: 0, feeBps: 0 });
+
+  const tradeErrUI = tradePerfError ? explainAnyError(tradePerfError, { feature: "trade_summary" }) : null;
+  const barsErrUI = alpacaError ? explainAnyError(alpacaError, { feature: "daily_bars" }) : null;
 
   return (
     <AppShell>
       <main className="dashboard-main">
-        {/* LEFT COLUMN: trade cards only */}
         <div className="dashboard-left">
-          {tradePerfError ? (
-            <div className="errorBanner">
-              Trade summary failed: {tradePerfError}
-              <div style={{ fontSize: 12, opacity: 0.8, marginTop: 6 }}>
-                Tip: Make sure Alpaca is connected and you have paper/live trading activity.
-              </div>
-            </div>
-          ) : null}
+          {tradeErrUI ? <ErrorBanner title={tradeErrUI.title} body={tradeErrUI.body} debug={tradeErrUI.debug} /> : null}
 
           <TradePerformancePanel
-            data={
-              tradePerfData || {
-                start: "—",
-                end: "—",
-                trades: [],
-              }
-            }
-            onChangeRange={(preset) => {
-              console.log("📊 TradePerformance range =>", preset);
-              setTradePreset(preset);
-            }}
+            data={tradePerfData || { start: "—", end: "—", trades: [] }}
+            onChangeRange={(preset) => setTradePreset(preset)}
           />
 
           {tradePerfLoading ? (
-            <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>
-              Loading trade performance…
-            </div>
+            <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>Loading trade performance…</div>
           ) : null}
         </div>
 
-        {/* RIGHT COLUMN: BotRunner THEN PriceChart THEN Sentiment */}
         <div className="dashboard-right">
-          <BotRunnerCard />
-
           <PriceChartPanel
             currentTicker={currentTicker}
             onSelectTicker={(next) => {
               const clean = normalizeSymbol(next);
-              if (!clean) return;
-              console.log("📥 Chart requested ticker =>", clean);
-              setCurrentTicker(clean);
+              if (clean) setCurrentTicker(clean);
             }}
             isDarkMode={isDarkMode}
           />
 
           <section className="panel panel-sentiment">
-            {alpacaError ? (
-              <div className="errorBanner">
-                Alpaca daily bars failed: {alpacaError}
-                <div style={{ fontSize: 12, opacity: 0.8, marginTop: 6 }}>
-                  Tip: Make sure you’re signed in and Alpaca keys are saved in
-                  Connected Apps.
-                </div>
-              </div>
-            ) : null}
+            {barsErrUI ? <ErrorBanner title={barsErrUI.title} body={barsErrUI.body} debug={barsErrUI.debug} /> : null}
 
             <SentimentCard
               symbol={currentTicker}

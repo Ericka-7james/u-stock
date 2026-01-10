@@ -29,7 +29,11 @@ export function AuthProvider({ children }) {
 
       const p = path.startsWith("/") ? path : `/${path}`;
 
-      return fetch(`${API_BASE}${API_PREFIX}${p}`, {
+      // ✅ With Vite proxy, API_BASE should be "" in dev
+      // so this becomes "/api/auth/me"
+      const url = `${API_BASE}${API_PREFIX}${p}`;
+
+      return fetch(url, {
         ...options,
         method,
         credentials: "include",
@@ -41,51 +45,47 @@ export function AuthProvider({ children }) {
   const refreshSession = async () => {
     const attempt = async () => {
       const res = await authFetch("auth/me", { method: "GET" });
-      if (!res.ok) return null;
-      return await safeJson(res);
+      const data = await safeJson(res);
+      return { ok: res.ok, data };
     };
 
     try {
-      let data = await attempt();
+      let { ok, data } = await attempt();
 
-      // Safari fallback: short retry once before giving up
-      if (!data) {
-        await new Promise((r) => setTimeout(r, 300));
-        data = await attempt();
+      // Safari-ish fallback: retry once quickly
+      if (!ok) {
+        await new Promise((r) => setTimeout(r, 250));
+        ({ ok, data } = await attempt());
       }
 
-      if (!data) {
-        // New shape: { user: { id, email, username } }
-        if (data?.user?.id) {
-          setUser(data.user);
-          setIsAuthed(true);
-          return true;
-        }
-
-        // Backwards compat (old shape): { user_id: "..." }
-        if (data?.user_id) {
-          setUser((prev) => ({
-            ...(prev || {}),
-            id: data.user_id,
-            email: data.email || prev?.email || "",
-          }));
-
-          setIsAuthed(true);
-          return true;
-        }
-
+      if (!ok) {
         setIsAuthed(false);
         setUser(null);
         return false;
       }
 
-      setUser((prev) => ({
-        ...(prev || {}),
-        id: data.user_id,
-        email: data.email || prev?.email || "",
-      }));
-      setIsAuthed(true);
-      return true;
+      // New shape: { user: { id, email, ... } }
+      if (data?.user?.id) {
+        setUser(data.user);
+        setIsAuthed(true);
+        return true;
+      }
+
+      // Old shape: { user_id: "...", email: "..." }
+      if (data?.user_id) {
+        setUser((prev) => ({
+          ...(prev || {}),
+          id: data.user_id,
+          email: data.email || prev?.email || "",
+        }));
+        setIsAuthed(true);
+        return true;
+      }
+
+      // Unexpected shape
+      setIsAuthed(false);
+      setUser(null);
+      return false;
     } catch {
       setIsAuthed(false);
       setUser(null);
@@ -114,7 +114,7 @@ export function AuthProvider({ children }) {
     setUser(data.user || null);
     setIsAuthed(true);
 
-    // confirm cookie is actually valid
+    // confirm cookie works
     await refreshSession();
   };
 
