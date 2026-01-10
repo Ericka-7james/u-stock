@@ -1,230 +1,152 @@
 # u-stock-bots/runner/main.py
 from __future__ import annotations
 
+import argparse
 import os
-import sys
 import time
-from dataclasses import asdict
-from pathlib import Path
 from typing import Any, Dict, Optional
 
-# ------------------------------------------------------------
-# Make imports work no matter where you run from
-# - Allows: `python -m runner.main` from u-stock-bots/
-# - Fixes: ModuleNotFoundError: No module named 'bots'
-# ------------------------------------------------------------
-THIS_FILE = Path(__file__).resolve()
-RUNNER_DIR = THIS_FILE.parent           # .../u-stock-bots/runner
-BOTS_ROOT = RUNNER_DIR.parent           # .../u-stock-bots
-
-if str(BOTS_ROOT) not in sys.path:
-    sys.path.insert(0, str(BOTS_ROOT))
-
-# If you ever colocate backend as ../backend and want to import its "api" package,
-# you can optionally add it too (safe even if it doesn't exist).
-BACKEND_ROOT = BOTS_ROOT.parent / "backend"
-if BACKEND_ROOT.exists() and str(BACKEND_ROOT) not in sys.path:
-    sys.path.insert(0, str(BACKEND_ROOT))
-
-
-# ------------------------------------------------------------
-# Imports from your bots package
-# ------------------------------------------------------------
-from bots._shared.config import RunnerConfig
 from bots._shared.http import UStockAPI
+
+# Your bot entrypoints
 from bots.ema_trend.bot import run as ema_trend_run
-from bots.logging.journal import Journal
+# from bots.orb.bot import run as orb_run  # if you have it
 
-# Phase 2 executor placeholder (won't actually hit TradeStation yet)
-from bots.execution.tradestation import TradeStationExecutor
-
-
-# ------------------------------------------------------------
-# Small helpers
-# ------------------------------------------------------------
-def _ensure_dir(p: str) -> None:
-    Path(p).parent.mkdir(parents=True, exist_ok=True)
+DEFAULT_LOOP_SECONDS = int(os.getenv("RUNNER_LOOP_SECONDS", "15"))
 
 
 def _sleep(seconds: float) -> None:
-    # Central place to change sleep behavior if needed later
     time.sleep(max(0.0, float(seconds)))
 
 
-def _now_iso() -> str:
-    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+def _fmt_hhmmss(seconds: Optional[int]) -> str:
+    if seconds is None:
+        return "?"
+    s = int(seconds)
+    h = s // 3600
+    m = (s % 3600) // 60
+    sec = s % 60
+    if h > 0:
+        return f"{h}h {m}m {sec}s"
+    if m > 0:
+        return f"{m}m {sec}s"
+    return f"{sec}s"
 
 
-def _mk_runner_headers(cfg: RunnerConfig) -> Dict[str, str]:
+def _get_market_session(api: UStockAPI) -> Dict[str, Any]:
+    # backend session endpoint
+    return api.get("/api/market/us/session")
+
+
+def _gate_us_market(api: UStockAPI, *, debug: bool = False) -> bool:
     """
-    Runner auth: backend should accept these via require_user_or_runner().
-    These env var names are guesses based on your earlier pattern—adjust if needed
-    to match your RunnerConfig fields.
-    """
-    h: Dict[str, str] = {"accept": "application/json"}
-
-    secret = getattr(cfg, "runner_secret", None) or os.getenv("BOT_RUNNER_SECRET") or os.getenv("X_BOT_RUNNER_SECRET")
-    user_id = getattr(cfg, "runner_user_id", None) or os.getenv("RUNNER_USER_ID") or os.getenv("X_RUNNER_USER_ID")
-
-    if secret:
-        h["X-Bot-Runner-Secret"] = str(secret)
-    if user_id:
-        h["X-Runner-User-Id"] = str(user_id)
-
-    return h
-
-
-def _safe_post(api: UStockAPI, path: str, payload: Dict[str, Any], headers: Optional[Dict[str, str]] = None) -> None:
-    """
-    Best-effort POST that never crashes the loop if the endpoint isn't ready.
+    Returns True if market is open.
+    If closed, sleeps until next open (or a safe fallback).
     """
     try:
-        # UStockAPI might support post(); if not, fall back to request()
-        if hasattr(api, "post"):
-            api.post(path, json=payload, headers=headers)  # type: ignore[arg-type]
-        elif hasattr(api, "request"):
-            api.request("POST", path, json=payload, headers=headers)  # type: ignore[arg-type]
-    except Exception:
-        pass
+        sess = _get_market_session(api)
+    except Exception as e:
+        # If session endpoint fails, we fail "open" to avoid freezing forever.
+        # But we should back off a bit.
+        print(f"[runner] market session check failed: {e}")
+        _sleep(60)
+        return True
+
+    if not (sess or {}).get("ok"):
+        print("[runner] market session returned not ok; will retry soon")
+        _sleep(60)
+        return True
+
+    is_open = bool(sess.get("is_open"))
+    if is_open:
+        if debug:
+            print(f"[runner] market: OPEN (next_close={sess.get('next_close')})")
+        return True
+
+    # CLOSED
+    wait = sess.get("seconds_until_open")
+    msg = f"[runner] market: CLOSED (next_open={sess.get('next_open')})"
+
+    if isinstance(wait, (int, float)) and wait is not None:
+        # Add a small buffer so we don't wake up before open.
+        wait_s = int(wait) + 20
+        print(f"{msg} → sleeping {_fmt_hhmmss(wait_s)}")
+        _sleep(wait_s)
+        return False
+
+    # Fallback if next_open missing
+    print(f"{msg} → sleeping 30m (fallback)")
+    _sleep(30 * 60)
+    return False
 
 
-def _safe_get(api: UStockAPI, path: str, headers: Optional[Dict[str, str]] = None) -> Optional[Dict[str, Any]]:
-    try:
-        if hasattr(api, "get"):
-            return api.get(path, headers=headers)  # type: ignore[arg-type]
-        if hasattr(api, "request"):
-            return api.request("GET", path, headers=headers)  # type: ignore[arg-type]
-    except Exception:
-        return None
-    return None
+def _run_selected_bot(api: UStockAPI, bot_name: str):
+    if bot_name == "ema_trend":
+        return ema_trend_run(api)
+    # elif bot_name == "orb":
+    #     return orb_run(api)
+    else:
+        raise ValueError(f"Unknown bot '{bot_name}'")
 
 
-def main() -> None:
-    cfg = RunnerConfig()
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--once", action="store_true", help="Run one iteration then exit.")
+    parser.add_argument("--debug", action="store_true", help="Verbose logs.")
+    parser.add_argument("--loop", type=int, default=DEFAULT_LOOP_SECONDS, help="Loop interval in seconds when market open.")
+    parser.add_argument("--bot", type=str, default=os.getenv("RUNNER_BOT", "ema_trend"), help="Bot to run.")
+    parser.add_argument(
+        "--respect-market-hours",
+        action="store_true",
+        default=True,
+        help="If set, do not run bots while US market is closed.",
+    )
+    args = parser.parse_args()
 
-    # Create API client (your UStockAPI likely reads cfg.api_base internally;
-    # if it accepts a base_url param, you can update this line accordingly.)
     api = UStockAPI()
 
-    # Logs
-    _ensure_dir("logs/journal.ndjson")
-    journal = Journal(path="logs/journal.ndjson")
+    print(f"[runner] API={api.base_url.rstrip('/')} loop={args.loop}s bot={args.bot}")
 
-    # Executor placeholder
-    executor = TradeStationExecutor()
-
-    # Runner headers for require_user_or_runner protected endpoints
-    runner_headers = _mk_runner_headers(cfg)
-
-    bot_id = "ema_trend"
-
-    print(f"[runner] API={getattr(cfg, 'api_base', 'unknown')} loop={cfg.loop_sleep_seconds}s bot={bot_id}")
-
-    # Basic exponential backoff if repeated failures happen
-    backoff = 1.0
-    backoff_max = 30.0
-
-    def gate_ok() -> bool:
-        """
-        Optional "gate" check.
-        If endpoint doesn't exist, we don't block local testing.
-        """
-        g = _safe_get(api, "/api/bot-runner/gate", headers=runner_headers)
-        if not g:
-            return True
-        return bool(g.get("ok", True))
+    backoff = 2.0
+    max_backoff = 120.0
 
     while True:
         try:
-            # Heartbeat: runner alive
-            _safe_post(
-                api,
-                "/api/bot-runner/heartbeat",
-                {"ok": True, "bot_id": bot_id, "runtime_state": "running", "ts": _now_iso()},
-                headers=runner_headers,
-            )
+            # Gate on market hours
+            if args.respect_market_hours:
+                opened = _gate_us_market(api, debug=args.debug)
+                # If it was closed, _gate_us_market already slept.
+                # Loop again (don’t run bots until open).
+                if not opened:
+                    if args.once:
+                        # If user asked --once, we end after respecting the gate.
+                        return
+                    continue
 
-            if not gate_ok():
-                print("[runner] gate blocked - sleeping")
-                _safe_post(
-                    api,
-                    "/api/bot-runner/runtime",
-                    {"bot_id": bot_id, "runtime_state": "paused", "note": "gate_blocked", "ts": _now_iso()},
-                    headers=runner_headers,
-                )
-                _sleep(cfg.loop_sleep_seconds)
-                continue
+            # Run bot iteration
+            intents = _run_selected_bot(api, args.bot)
 
-            # Run strategy
-            intents = ema_trend_run(api)  # your bot calls backend endpoints using `api`
-
-            if intents:
-                print(f"[{bot_id}] intents={len(intents)}")
-            else:
-                print(f"[{bot_id}] intents=0")
-
-            for intent in intents:
-                # 1) log intent locally
-                journal.log_intent(intent)
-
-                # 2) Phase 2 placeholder: submit bracket order (SIM)
-                result = executor.place_bracket(intent)
-                journal.log_order(intent, asdict(result))
-
-                print(
-                    f"[order] {intent.symbol} {intent.side} "
-                    f"entry={intent.entry} stop={intent.stop} tp={intent.take_profit} "
-                    f"conf={intent.confidence} status={result.status}"
-                )
-
-                # 3) best-effort: push intent/order logs to backend (if you have endpoints)
-                _safe_post(
-                    api,
-                    "/api/bot-runner/log",
-                    {
-                        "bot_id": bot_id,
-                        "level": "info",
-                        "message": f"order {intent.symbol} {intent.side} entry={intent.entry} stop={intent.stop} tp={intent.take_profit} status={result.status}",
-                        "ts": _now_iso(),
-                    },
-                    headers=runner_headers,
-                )
+            if args.debug:
+                n = 0 if intents is None else (len(intents) if hasattr(intents, "__len__") else 1)
+                print(f"[runner] intents: {n}")
 
             # Reset backoff on success
-            backoff = 1.0
-            _sleep(cfg.loop_sleep_seconds)
+            backoff = 2.0
+
+            if args.once:
+                return
+
+            _sleep(args.loop)
 
         except KeyboardInterrupt:
-            print("\n[runner] stopped by user")
-            _safe_post(
-                api,
-                "/api/bot-runner/runtime",
-                {"bot_id": bot_id, "runtime_state": "stopped", "note": "keyboard_interrupt", "ts": _now_iso()},
-                headers=runner_headers,
-            )
-            return
-
+            raise
         except Exception as e:
-            # Log locally
             print(f"[runner] error: {type(e).__name__}: {e}")
+            if args.once:
+                raise
 
-            # Best-effort: mark runtime error in backend
-            _safe_post(
-                api,
-                "/api/bot-runner/runtime",
-                {
-                    "bot_id": bot_id,
-                    "runtime_state": "error",
-                    "last_error_type": type(e).__name__,
-                    "last_error_message": str(e),
-                    "ts": _now_iso(),
-                },
-                headers=runner_headers,
-            )
-
-            # Backoff sleep (prevents tight crash loop)
             _sleep(backoff)
-            backoff = min(backoff * 2.0, backoff_max)
+            backoff = min(max_backoff, backoff * 1.6)
 
 
 if __name__ == "__main__":
