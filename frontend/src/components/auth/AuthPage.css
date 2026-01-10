@@ -14,8 +14,22 @@
   display: flex;
   width: 100%;
   max-width: 1200px;
-  margin: 0 auto;
+  margin: 18px auto 24px;
   min-height: calc(100vh - 64px);
+
+  /* ✅ THIS makes it round like signup-card */
+  border-radius: 26px;
+
+  /* ✅ THIS makes the children respect the rounding */
+  overflow: hidden;
+
+  /* wrapper border + shadow */
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow:
+    0 12px 28px rgba(15, 23, 42, 0.10),
+    0 40px 90px rgba(15, 23, 42, 0.14);
+
+  background: transparent;
 }
 
 /* LEFT: login ------------------------------------------------------ */
@@ -146,6 +160,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
+
+  /* subtle divider where panels meet */
+  border-left: 1px solid rgba(255, 255, 255, 0.18);
 }
 
 .auth-right-inner {
@@ -166,46 +183,6 @@
   font-size: 14px;
   color: #e5e7eb;
   margin-bottom: 24px;
-}
-
-/* Signup form (used on /auth/signup) */
-.auth-signup-form {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.auth-signup-field input {
-  width: 100%;
-  border-radius: 999px;
-  border: 1px solid rgba(15, 23, 42, 0.1);
-  padding: 8px 14px;
-  font-size: 14px;
-  background: #f9fafb;
-  color: #111827;
-}
-
-/* Avatar chips */
-.auth-avatar-grid {
-  margin-top: 6px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.auth-avatar-chip {
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.6);
-  background: transparent;
-  color: white;
-  padding: 6px 10px;
-  font-size: 16px;
-  cursor: pointer;
-}
-
-.auth-avatar-chip--active {
-  background: white;
-  color: var(--ustock-green-main);
 }
 
 /* White signup button */
@@ -234,7 +211,7 @@
 
   .auth-left-inner,
   .auth-right-inner {
-    padding-top: 56px; /* keeps content clear of fixed nav and nicely centered */
+    padding-top: 56px;
   }
 }
 
@@ -243,18 +220,20 @@
 @media (max-width: 768px) {
   .auth-page {
     min-height: calc(100vh - 64px);
+    padding: 16px; /* gives shadow + rounding room */
+    box-sizing: border-box;
   }
 
   .auth-page-inner {
     flex-direction: column;
-    min-height: calc(100vh - 64px);
+    min-height: calc(100vh - 64px - 32px);
+    border-radius: 22px; /* slightly smaller on mobile like signup */
   }
 
-  /* LOGIN SECTION — slightly shorter so green panel peeks into view */
   .auth-left {
-    min-height: 55vh;          /* was 60vh */
-    padding-top: 35px;         /* was 72px – keeps it below fixed nav but tighter */
-    padding-bottom: 8px;       /* a bit less spacing at the bottom */
+    min-height: 55vh;
+    padding-top: 35px;
+    padding-bottom: 8px;
     align-items: flex-start;
     justify-content: center;
   }
@@ -276,12 +255,13 @@
     margin-top: 4px;
   }
 
-  /* SIGNUP SECTION — no rounded top, comes into view sooner */
   .auth-right {
-    border-radius: 0;          /* FIX: remove rounded top */
-    padding-top: 24px;         /* slightly tighter so text is higher */
+    border-left: none;
+    border-top: 1px solid rgba(255, 255, 255, 0.18);
+
+    padding-top: 24px;
     padding-bottom: 32px;
-    min-height: 45vh;          /* was 40vh */
+    min-height: 45vh;
     justify-content: flex-start;
   }
 
@@ -328,7 +308,13 @@
 
 /* ========== DARK MODE OVERRIDES FOR AUTH ==================== */
 
-/* left panel background & headings */
+body.ustock-dark .auth-page-inner {
+  border-color: rgba(148, 163, 184, 0.18);
+  box-shadow:
+    0 10px 26px rgba(0, 0, 0, 0.55),
+    0 32px 80px rgba(0, 0, 0, 0.65);
+}
+
 body.ustock-dark .auth-left {
   background: var(--ustock-bg-page);
 }
@@ -337,7 +323,6 @@ body.ustock-dark .auth-title {
   color: var(--ustock-text-strong);
 }
 
-/* login field pill + text */
 body.ustock-dark .auth-field {
   background: var(--ustock-bg-card);
   border-color: var(--ustock-border-card);
@@ -357,7 +342,6 @@ body.ustock-dark .auth-field input::placeholder {
   color: var(--ustock-text-muted);
 }
 
-/* autofill should match dark pill */
 body.ustock-dark .auth-field input:-webkit-autofill,
 body.ustock-dark .auth-field input:-webkit-autofill:hover,
 body.ustock-dark .auth-field input:-webkit-autofill:focus {
@@ -366,14 +350,12 @@ body.ustock-dark .auth-field input:-webkit-autofill:focus {
   -webkit-text-fill-color: var(--ustock-text-main);
 }
 
-/* primary login button – same treatment in dark */
 body.ustock-dark .auth-primary-btn {
   background: var(--ustock-green-main);
   color: #f9fafb;
   box-shadow: 0 14px 34px rgba(15, 118, 110, 0.55);
 }
 
-/* right green hero panel keeps green bg, but button/text adapt */
 body.ustock-dark .auth-right {
   background: var(--ustock-green-main);
 }
@@ -383,7 +365,6 @@ body.ustock-dark .auth-right-text {
   color: #f9fafb;
 }
 
-/* signup pill on the green card in dark mode */
 body.ustock-dark .auth-secondary-btn {
   background: #020617;
   color: #f9fafb;

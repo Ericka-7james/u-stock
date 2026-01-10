@@ -1,20 +1,24 @@
-# api/routes/market_us.py
+# backend/api/routes/market_us.py
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from fastapi import APIRouter, HTTPException, Request, Response, Query
-from typing import List, Dict, Any, Tuple
 import os
+import time
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional, Tuple
+
 import requests
+from fastapi import APIRouter, HTTPException, Query, Request, Response
 
 from api.deps import require_user_or_runner
-from api.core.security import get_supabase_service
+from api.db import get_supabase_service
 from api.crypto_utils import decrypt_secret
 from api.clients.alpaca_client import latest_quotes, recent_trades
 
 router = APIRouter(prefix="/api/market/us", tags=["market-us"])
 
 ALPACA_DATA_BASE = os.getenv("ALPACA_DATA_BASE", "https://data.alpaca.markets").rstrip("/")
+ALPACA_PAPER_TRADE_BASE = os.getenv("ALPACA_TRADE_BASE", "https://paper-api.alpaca.markets").rstrip("/")
+ALPACA_LIVE_TRADE_BASE = os.getenv("ALPACA_LIVE_TRADE_BASE", "https://api.alpaca.markets").rstrip("/")
 
 
 # -----------------------------
@@ -25,9 +29,6 @@ def _utc_iso() -> str:
 
 
 def _set_notice(response: Response, message: str, level: str = "info") -> None:
-    """
-    Light-weight UI banner hint; NOT relied on for program logic.
-    """
     if message:
         response.headers["X-UStock-Notice"] = message
         response.headers["X-UStock-Notice-Level"] = level
@@ -42,14 +43,7 @@ def _http_exc(
     source: str = "market_us",
     debug: str | None = None,
 ):
-    """
-    Standard structured error payload for frontend.
-    """
-    detail: Dict[str, Any] = {
-        "code": code,
-        "message": message,
-        "source": source,
-    }
+    detail: Dict[str, Any] = {"code": code, "message": message, "source": source}
     if user_action:
         detail["user_action"] = user_action
     if debug:
@@ -57,18 +51,27 @@ def _http_exc(
     raise HTTPException(status_code=status_code, detail=detail)
 
 
-def _load_alpaca_keys(user_id: str) -> Tuple[str, str]:
+def _iso_to_epoch_seconds(iso_str: Optional[str]) -> Optional[int]:
+    if not iso_str:
+        return None
+    try:
+        s = iso_str.replace("Z", "+00:00")
+        dt = datetime.fromisoformat(s)
+        return int(dt.timestamp())
+    except Exception:
+        return None
+
+
+def _load_alpaca_keys(user_id: str) -> Tuple[str, str, str]:
     """
-    Always use per-user Alpaca keys stored in Supabase (integrations table).
-    Works for both:
-      - browser requests (cookie auth)
-      - runner requests (runner header + X-Runner-User-Id)
+    Returns (api_key, api_secret, mode) where mode is "paper" or "live".
+    Reads from Supabase integrations table.
     """
     sb = get_supabase_service()
     try:
         res = (
             sb.table("integrations")
-            .select("api_key_enc,api_secret_enc,status")
+            .select("api_key_enc,api_secret_enc,status,mode")
             .eq("user_id", user_id)
             .eq("provider", "alpaca")
             .limit(1)
@@ -107,7 +110,6 @@ def _load_alpaca_keys(user_id: str) -> Tuple[str, str]:
         api_key = decrypt_secret(row.get("api_key_enc"))
         api_secret = decrypt_secret(row.get("api_secret_enc"))
     except Exception as e:
-        # Most common cause: encryption env vars changed or missing
         _http_exc(
             500,
             "ALPACA_KEYS_DECRYPT_FAILED",
@@ -126,7 +128,15 @@ def _load_alpaca_keys(user_id: str) -> Tuple[str, str]:
             source="market_us._load_alpaca_keys",
         )
 
-    return api_key, api_secret
+    mode = str(row.get("mode") or ("paper" if os.getenv("ALPACA_PAPER", "true").lower() == "true" else "live")).lower()
+    if mode not in ("paper", "live"):
+        mode = "paper"
+
+    return api_key, api_secret, mode
+
+
+def _alpaca_trade_base(mode: str) -> str:
+    return ALPACA_PAPER_TRADE_BASE if mode == "paper" else ALPACA_LIVE_TRADE_BASE
 
 
 def _alpaca_intraday_bars(
@@ -137,10 +147,6 @@ def _alpaca_intraday_bars(
     api_secret: str,
     feed: str = "sip",
 ) -> Dict[str, List[float]]:
-    """
-    Alpaca v2 stocks bars endpoint.
-    Returns {o,h,l,c} arrays.
-    """
     url = f"{ALPACA_DATA_BASE}/v2/stocks/{symbol}/bars"
     headers = {
         "APCA-API-KEY-ID": api_key,
@@ -149,9 +155,9 @@ def _alpaca_intraday_bars(
     }
     params = {"timeframe": timeframe, "limit": limit, "adjustment": "raw", "feed": feed}
 
-    r = requests.get(url, headers=headers, params=params, timeout=12)
+    # Keep this tight so the runner never hangs for long
+    r = requests.get(url, headers=headers, params=params, timeout=8)
 
-    # Structured error for common rejection cases
     if r.status_code in (401, 403):
         _http_exc(
             401,
@@ -162,7 +168,6 @@ def _alpaca_intraday_bars(
             debug=f"status={r.status_code} body={r.text[:200]}",
         )
 
-    # Alpaca sometimes 429 rate limits
     if r.status_code == 429:
         _http_exc(
             429,
@@ -192,13 +197,97 @@ def _alpaca_intraday_bars(
     h = [float(b["h"]) for b in bars if isinstance(b, dict) and "h" in b]
     l = [float(b["l"]) for b in bars if isinstance(b, dict) and "l" in b]
     c = [float(b["c"]) for b in bars if isinstance(b, dict) and "c" in b]
+    v = [float(b["v"]) for b in bars if isinstance(b, dict) and "v" in b]
 
-    return {"o": o, "h": h, "l": l, "c": c}
+    return {"o": o, "h": h, "l": l, "c": c, "v": v}
 
 
 # -----------------------------
 # Endpoints
 # -----------------------------
+@router.get("/session")
+def market_session(request: Request, response: Response) -> Dict[str, Any]:
+    """
+    Single source of truth for whether US equities market is open.
+
+    Uses Alpaca /v2/clock so the runner can sleep until next open.
+    """
+    user = require_user_or_runner(request, response)
+
+    api_key, api_secret, mode = _load_alpaca_keys(user["id"])
+    base = _alpaca_trade_base(mode)
+
+    try:
+        r = requests.get(
+            f"{base}/v2/clock",
+            headers={
+                "APCA-API-KEY-ID": api_key,
+                "APCA-API-SECRET-KEY": api_secret,
+                "accept": "application/json",
+            },
+            timeout=6,
+        )
+    except Exception as e:
+        _http_exc(
+            502,
+            "ALPACA_CLOCK_TIMEOUT",
+            "Could not reach Alpaca clock endpoint.",
+            "Try again in a moment.",
+            source="market_us.market_session",
+            debug=repr(e),
+        )
+
+    if r.status_code in (401, 403):
+        _http_exc(
+            401,
+            "ALPACA_KEYS_REJECTED",
+            "Alpaca keys rejected.",
+            "Reconnect Alpaca in Connected Apps and paste keys again.",
+            source="market_us.market_session",
+            debug=f"status={r.status_code} body={r.text[:200]}",
+        )
+
+    if r.status_code != 200:
+        _http_exc(
+            502,
+            "ALPACA_CLOCK_FAILED",
+            "Failed to fetch market clock from Alpaca.",
+            "Try again in a moment.",
+            source="market_us.market_session",
+            debug=f"status={r.status_code} body={r.text[:300]}",
+        )
+
+    data = r.json() or {}
+    is_open = bool(data.get("is_open"))
+    next_open = data.get("next_open")
+    next_close = data.get("next_close")
+    ts = data.get("timestamp")
+
+    now_epoch = int(time.time())
+    next_open_epoch = _iso_to_epoch_seconds(next_open)
+    next_close_epoch = _iso_to_epoch_seconds(next_close)
+
+    seconds_until_open = None
+    if (not is_open) and next_open_epoch:
+        seconds_until_open = max(0, next_open_epoch - now_epoch)
+
+    seconds_until_close = None
+    if is_open and next_close_epoch:
+        seconds_until_close = max(0, next_close_epoch - now_epoch)
+
+    return {
+        "ok": True,
+        "is_open": is_open,
+        "timestamp": ts,
+        "next_open": next_open,
+        "next_close": next_close,
+        "seconds_until_open": seconds_until_open,
+        "seconds_until_close": seconds_until_close,
+        "mode": mode,
+        "fetchedAt": _utc_iso(),
+    }
+
+
 @router.get("/quotes/latest")
 def get_latest_quotes(
     request: Request,
@@ -210,9 +299,15 @@ def get_latest_quotes(
 
     syms = [s.upper().strip() for s in symbols if s and s.strip()]
     if not syms:
-        _http_exc(400, "SYMBOLS_REQUIRED", "symbols is required.", "Provide one or more symbols.", source="market_us.get_latest_quotes")
+        _http_exc(
+            400,
+            "SYMBOLS_REQUIRED",
+            "symbols is required.",
+            "Provide one or more symbols.",
+            source="market_us.get_latest_quotes",
+        )
 
-    api_key, api_secret = _load_alpaca_keys(user["id"])
+    api_key, api_secret, _mode = _load_alpaca_keys(user["id"])
 
     try:
         data = latest_quotes(syms, api_key, api_secret, feed=feed)
@@ -238,9 +333,9 @@ def get_latest_quotes(
 
 @router.get("/trades")
 def get_trades(
-    symbol: str,
     request: Request,
     response: Response,
+    symbol: str,
     limit: int = 50,
     feed: str = "sip",
 ):
@@ -248,21 +343,20 @@ def get_trades(
 
     sym = (symbol or "").upper().strip()
     if not sym:
-        _http_exc(400, "SYMBOL_REQUIRED", "symbol is required.", "Provide a symbol like SPY.", source="market_us.get_trades")
+        _http_exc(
+            400,
+            "SYMBOL_REQUIRED",
+            "symbol is required.",
+            "Provide a symbol like SPY.",
+            source="market_us.get_trades",
+        )
 
     limit = max(1, min(int(limit), 2000))
-
-    api_key, api_secret = _load_alpaca_keys(user["id"])
+    api_key, api_secret, _mode = _load_alpaca_keys(user["id"])
 
     try:
         data = recent_trades(sym, api_key, api_secret, limit=limit, feed=feed)
-        return {
-            "ok": True,
-            "symbol": sym,
-            "feed_used": data.get("feed") or feed,
-            "data": data,
-            "fetchedAt": _utc_iso(),
-        }
+        return {"ok": True, "symbol": sym, "feed_used": data.get("feed") or feed, "data": data, "fetchedAt": _utc_iso()}
     except HTTPException:
         raise
     except Exception as e:
@@ -298,24 +392,19 @@ def bars(
     tf = timeframe.strip()
 
     try:
-        api_key, api_secret = _load_alpaca_keys(user["id"])
+        api_key, api_secret, _mode = _load_alpaca_keys(user["id"])
     except HTTPException as e:
-        # Helpful UI hint
-        _set_notice(
-            response,
-            "Alpaca not connected (or keys can’t be decrypted). Fix in Connected Apps.",
-            level="error",
-        )
+        _set_notice(response, "Alpaca not connected (or keys can’t be decrypted). Fix in Connected Apps.", level="error")
         raise e
 
-    # Fetch bars
-    bars_obj = _alpaca_intraday_bars(sym, tf, limit, api_key, api_secret, feed=feed)
+    bars_obj = _alpaca_intraday_bars(sym, tf, int(limit), api_key, api_secret, feed=feed)
 
     return {
         "ok": True,
         "symbol": sym,
         "timeframe": tf,
         "provider_used": "alpaca",
+        "feed_used": feed,
         "bars": bars_obj,
         "notice": None,
         "fetchedAt": _utc_iso(),

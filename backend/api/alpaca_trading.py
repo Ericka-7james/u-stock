@@ -268,8 +268,11 @@ def trade_summary(
         }
 
         r = requests.get(url, params=params, headers=_alpaca_headers(api_key, api_secret), timeout=12)
+        if r.status_code in (401, 403):
+            raise HTTPException(status_code=401, detail=f"alpaca_summary_fills_error {r.status_code}: {r.text}")
         if r.status_code >= 400:
             raise HTTPException(status_code=502, detail=f"alpaca_summary_fills_error {r.status_code}: {r.text}")
+
 
         fills = r.json() or []
         trades = _fifo_realized_trades_from_fills(

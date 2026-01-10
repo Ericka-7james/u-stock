@@ -18,10 +18,10 @@ def get_supabase_anon() -> Client:
 
 def get_supabase_service() -> Client:
     url = os.getenv("SUPABASE_URL", "").strip()
-    service = os.getenv("SUPABASE_SECRET_KEY", "").strip()
+    service = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
     if not url:
         raise HTTPException(status_code=500, detail="SUPABASE_URL is missing")
     if not service:
-        raise HTTPException(status_code=500, detail="SUPABASE_SECRET_KEY is missing")
+        raise HTTPException(status_code=500, detail="SUPABASE_SERVICE_ROLE_KEY is missing")
     return create_client(url, service)
 

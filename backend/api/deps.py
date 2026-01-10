@@ -1,124 +1,80 @@
-# api/deps.py
+# backend/api/deps.py
 from __future__ import annotations
 
-from typing import Any, Dict, Tuple, Optional
 import os
+from typing import Any, Dict, Optional
+
 from fastapi import HTTPException, Request, Response
-from supabase import Client, create_client
 
-SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip()
-SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY", "").strip()
-
-COOKIE_NAME = os.getenv("USTOCK_COOKIE_NAME", "access_token").strip()
-REFRESH_COOKIE_NAME = os.getenv("USTOCK_REFRESH_COOKIE_NAME", "refresh_token").strip()
-
-ENV = os.getenv("ENV", "development").strip().lower()
-COOKIE_SECURE = ENV == "production"
-COOKIE_SAMESITE = "none" if ENV == "production" else "lax"
-COOKIE_MAX_AGE = int(os.getenv("USTOCK_COOKIE_MAX_AGE", "604800"))
-
-# Runner auth
-BOT_RUNNER_SECRET_ENV = os.getenv("BOT_RUNNER_SECRET", "").strip()
-BOT_RUNNER_HEADER = "X-Bot-Runner-Secret"
-RUNNER_USER_HEADER = "X-Runner-User-Id"
+from api.db import get_supabase_anon
 
 
-def get_supabase_anon() -> Client:
-    if not SUPABASE_URL:
-        raise HTTPException(status_code=500, detail="SUPABASE_URL is missing")
-    if not SUPABASE_ANON_KEY:
-        raise HTTPException(status_code=500, detail="SUPABASE_ANON_KEY is missing")
-    return create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
+RUNNER_SECRET_ENV = "BOT_RUNNER_SECRET"
+
+# Header names (accept both, but we will SEND the first one)
+RUNNER_SECRET_HEADER = "X-Bot-Runner-Secret"
+RUNNER_USER_ID_HEADER = "X-Runner-User-Id"
+RUNNER_USER_ID_HEADER_ALT = "X-Bot-Runner-User-Id"  # tolerate older name
 
 
-def set_auth_cookies(response: Response, access_token: str, refresh_token: str | None = None) -> None:
-    if access_token:
-        response.set_cookie(
-            key=COOKIE_NAME,
-            value=access_token,
-            httponly=True,
-            secure=COOKIE_SECURE,
-            samesite=COOKIE_SAMESITE,
-            max_age=COOKIE_MAX_AGE,
-            path="/",
-        )
-    if refresh_token:
-        response.set_cookie(
-            key=REFRESH_COOKIE_NAME,
-            value=refresh_token,
-            httponly=True,
-            secure=COOKIE_SECURE,
-            samesite=COOKIE_SAMESITE,
-            max_age=COOKIE_MAX_AGE,
-            path="/",
-        )
+def _get_bearer_token_from_cookie(request: Request) -> Optional[str]:
+    for name in ("access_token", "sb-access-token", "USTOCK_ACCESS_TOKEN"):
+        v = request.cookies.get(name)
+        if v:
+            return v
+    return None
 
 
-def _extract_user_id_and_email(res: Any) -> Tuple[str | None, str | None]:
-    user = getattr(res, "user", None) if res is not None else None
-    if user is None and isinstance(res, dict):
-        user = res.get("user")
-
-    uid = getattr(user, "id", None) if user is not None else None
-    email = getattr(user, "email", None) if user is not None else None
-
-    if isinstance(user, dict):
-        uid = uid or user.get("id")
-        email = email or user.get("email")
-
-    return uid, email
+def _get_bearer_token_from_auth_header(request: Request) -> Optional[str]:
+    auth = request.headers.get("authorization") or request.headers.get("Authorization")
+    if not auth:
+        return None
+    parts = auth.split(" ", 1)
+    if len(parts) == 2 and parts[0].lower() == "bearer":
+        return parts[1].strip()
+    return None
 
 
-def require_user(request: Request, response: Response) -> Dict[str, str]:
+def require_user(request: Request, response: Response) -> Dict[str, Any]:
+    token = _get_bearer_token_from_auth_header(request) or _get_bearer_token_from_cookie(request)
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
     sb = get_supabase_anon()
-    access = request.cookies.get(COOKIE_NAME)
-    refresh = request.cookies.get(REFRESH_COOKIE_NAME)
+    try:
+        ures = sb.auth.get_user(token)
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Invalid session token: {repr(e)}")
 
-    if access:
-        try:
-            res = sb.auth.get_user(access)
-            uid, email = _extract_user_id_and_email(res)
-            if uid:
-                return {"id": uid, "email": email or ""}
-        except Exception:
-            pass
+    user = getattr(ures, "user", None) or (ures.get("user") if isinstance(ures, dict) else None)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
 
-    if refresh:
-        try:
-            try:
-                refreshed = sb.auth.refresh_session(refresh)
-            except Exception:
-                refreshed = sb.auth.refresh_session({"refresh_token": refresh})
+    user_id = getattr(user, "id", None) or user.get("id")
+    email = getattr(user, "email", None) or user.get("email")
 
-            uid, email = _extract_user_id_and_email(refreshed)
-
-            session = getattr(refreshed, "session", None)
-            if session:
-                new_access = getattr(session, "access_token", None)
-                new_refresh = getattr(session, "refresh_token", None)
-                if new_access:
-                    set_auth_cookies(response, new_access, new_refresh)
-
-            if uid:
-                return {"id": uid, "email": email or ""}
-        except Exception as e:
-            raise HTTPException(status_code=401, detail=f"Invalid session: {repr(e)}")
-
-    raise HTTPException(status_code=401, detail="Not authenticated")
+    return {"id": user_id, "email": email}
 
 
-def require_user_or_runner(request: Request, response: Response) -> Dict[str, str]:
-    """
-    - Normal browser calls: uses cookies (require_user)
-    - Runner calls: uses X-Bot-Runner-Secret + X-Runner-User-Id
-    """
-    secret = (request.headers.get(BOT_RUNNER_HEADER) or "").strip()
-    runner_uid = (request.headers.get(RUNNER_USER_HEADER) or "").strip()
+def require_runner(request: Request, response: Response) -> Dict[str, Any]:
+    expected = (os.getenv(RUNNER_SECRET_ENV) or "").strip()
+    if not expected:
+        raise HTTPException(status_code=500, detail="BOT_RUNNER_SECRET not configured on server")
 
-    if BOT_RUNNER_SECRET_ENV and secret and secret == BOT_RUNNER_SECRET_ENV:
-        if not runner_uid:
-            raise HTTPException(status_code=400, detail="Runner missing X-Runner-User-Id header")
-        # email unknown for runner requests; not needed
-        return {"id": runner_uid, "email": ""}
+    got = (request.headers.get(RUNNER_SECRET_HEADER) or "").strip()
+    if not got or got != expected:
+        raise HTTPException(status_code=401, detail="Runner not authenticated")
 
+    # Accept either header name for user id
+    user_id = (request.headers.get(RUNNER_USER_ID_HEADER) or request.headers.get(RUNNER_USER_ID_HEADER_ALT) or "").strip()
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Runner missing X-Runner-User-Id")
+
+    return {"id": user_id, "email": None, "auth": "runner"}
+
+
+def require_user_or_runner(request: Request, response: Response) -> Dict[str, Any]:
+    # If runner secret header exists, treat it as runner auth
+    if request.headers.get(RUNNER_SECRET_HEADER):
+        return require_runner(request, response)
     return require_user(request, response)

@@ -5,11 +5,10 @@ import AppShell from "../layout/AppShell.jsx";
 import PriceChartPanel from "./cards/PriceChartPanel.jsx";
 import SentimentCard from "./cards/SentimentCard.jsx";
 import TradePerformancePanel from "./cards/TradePerformancePanel.jsx";
+import TopSignalsCard from "./cards/TopSignalsCard.jsx";
 
 import { useAlpacaDailyBars } from "../../hooks/useAlpacaDailyBars.js";
 import { useAlpacaTradeSummary } from "../../hooks/useAlpacaTradeSummary.js";
-
-// ✅ NEW
 import { explainAnyError } from "../common/errorMessages.js";
 
 // Styles
@@ -19,13 +18,44 @@ import "../../css/dashboard/cards/CardShared.css";
 
 const LAST_TICKER_KEY = "ustock:last_ticker";
 
+/**
+ * Minimal fetch helper:
+ * - Works locally with Vite proxy (/api -> backend)
+ * - Works in production when frontend and backend are same origin
+ * - Includes cookies for auth routes
+ */
+async function apiGet(path, { signal } = {}) {
+  const res = await fetch(path, {
+    method: "GET",
+    credentials: "include",
+    headers: { Accept: "application/json" },
+    signal,
+  });
+
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg =
+      json?.detail ||
+      json?.error ||
+      `Request failed (${res.status})`;
+    const err = new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
+    err.status = res.status;
+    err.payload = json;
+    throw err;
+  }
+  return json;
+}
+
 function readIsDarkMode() {
   if (typeof document === "undefined") return false;
   const root = document.documentElement;
   const body = document.body;
 
-  const classDark = root?.classList?.contains("dark") || body?.classList?.contains("dark");
-  const dataThemeDark = root?.getAttribute?.("data-theme") === "dark" || body?.getAttribute?.("data-theme") === "dark";
+  const classDark =
+    root?.classList?.contains("dark") || body?.classList?.contains("dark");
+  const dataThemeDark =
+    root?.getAttribute?.("data-theme") === "dark" ||
+    body?.getAttribute?.("data-theme") === "dark";
   return Boolean(classDark || dataThemeDark);
 }
 
@@ -52,7 +82,6 @@ function ErrorBanner({ title, body, debug }) {
       <strong>{title}</strong>
       <div style={{ marginTop: 6 }}>{body}</div>
 
-      {/* ✅ Dev-only debug details */}
       {import.meta.env.DEV && debug ? (
         <details style={{ marginTop: 10, fontSize: 12, opacity: 0.8 }}>
           <summary>Debug info</summary>
@@ -61,6 +90,80 @@ function ErrorBanner({ title, body, debug }) {
       ) : null}
     </div>
   );
+}
+
+/**
+ * Top signals loader
+ * Scalable: backend can change the source without breaking UI.
+ *
+ * Expected response shapes supported:
+ * 1) { ok:true, signals:[...], meta:{...} }
+ * 2) { ok:true, top_signals:[...], signals_meta:{...} }
+ * 3) Fallback /api/opportunities: { symbols:[...], ... }  -> we show empty (since that's not ranked signals)
+ */
+function useTopSignals() {
+  const [signals, setSignals] = useState([]);
+  const [signalsMeta, setSignalsMeta] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const ac = new AbortController();
+    let alive = true;
+
+    async function run() {
+      setLoading(true);
+      setError("");
+
+      try {
+        // Recommended endpoint (add later in backend if you want clean separation)
+        // If it 404s, fall back.
+        let json;
+        try {
+          json = await apiGet("/api/opportunities/signals/top", { signal: ac.signal });
+        } catch (e) {
+          if (e?.status === 404) {
+            json = await apiGet("/api/opportunities", { signal: ac.signal });
+          } else {
+            throw e;
+          }
+        }
+
+        if (!alive) return;
+
+        const nextSignals =
+          json?.signals ||
+          json?.top_signals ||
+          [];
+
+        const nextMeta =
+          json?.meta ||
+          json?.signals_meta ||
+          null;
+
+        // If fallback is /api/opportunities and returns only symbols,
+        // signals will be [] and TopSignalsCard will show its empty message.
+        setSignals(Array.isArray(nextSignals) ? nextSignals : []);
+        setSignalsMeta(nextMeta);
+      } catch (e) {
+        if (!alive) return;
+        setError(String(e?.message || e));
+        setSignals([]);
+        setSignalsMeta(null);
+      } finally {
+        if (!alive) return;
+        setLoading(false);
+      }
+    }
+
+    run();
+    return () => {
+      alive = false;
+      ac.abort();
+    };
+  }, []);
+
+  return { signals, signalsMeta, loading, error };
 }
 
 export default function DashboardPage() {
@@ -90,6 +193,7 @@ export default function DashboardPage() {
     return () => obs.disconnect();
   }, []);
 
+  // TradingView -> update ticker
   useEffect(() => {
     const handler = (e) => {
       const origin = String(e.origin || "");
@@ -126,15 +230,20 @@ export default function DashboardPage() {
   const { bars: alpacaBars, loading: alpacaLoading, error: alpacaError, meta: alpacaMeta } =
     useAlpacaDailyBars(currentTicker, 220);
 
-  const alpacaHistoryBySymbol = useMemo(() => ({ [currentTicker]: alpacaBars || [] }), [currentTicker, alpacaBars]);
+  const alpacaHistoryBySymbol = useMemo(
+    () => ({ [currentTicker]: alpacaBars || [] }),
+    [currentTicker, alpacaBars]
+  );
 
   const [tradePreset, setTradePreset] = useState("Week");
-
   const { data: tradePerfData, loading: tradePerfLoading, error: tradePerfError } =
     useAlpacaTradeSummary(tradePreset, { slippageBps: 0, feeBps: 0 });
 
   const tradeErrUI = tradePerfError ? explainAnyError(tradePerfError, { feature: "trade_summary" }) : null;
   const barsErrUI = alpacaError ? explainAnyError(alpacaError, { feature: "daily_bars" }) : null;
+
+  const { signals, signalsMeta, loading: signalsLoading, error: signalsError } = useTopSignals();
+  const signalsErrUI = signalsError ? explainAnyError(signalsError, { feature: "top_signals" }) : null;
 
   return (
     <AppShell>
@@ -150,6 +259,21 @@ export default function DashboardPage() {
           {tradePerfLoading ? (
             <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>Loading trade performance…</div>
           ) : null}
+
+          {signalsErrUI ? (
+            <ErrorBanner title={signalsErrUI.title} body={signalsErrUI.body} debug={signalsErrUI.debug} />
+          ) : null}
+
+          <TopSignalsCard
+            signals={signals}
+            signalsMeta={signalsMeta}
+            currentTicker={currentTicker}
+            onSelectTicker={(t) => {
+              const clean = normalizeSymbol(t);
+              if (clean) setCurrentTicker(clean);
+            }}
+            loading={signalsLoading}
+          />
         </div>
 
         <div className="dashboard-right">

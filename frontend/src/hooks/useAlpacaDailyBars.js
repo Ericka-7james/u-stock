@@ -1,4 +1,6 @@
-import { useEffect, useState } from "react";
+// frontend/src/hooks/useAlpacaDailyBars.js
+import { useEffect, useMemo, useState } from "react";
+import { apiFetch } from "../lib/apiFetch";
 
 export function useAlpacaDailyBars(symbol, limit = 200) {
   const [bars, setBars] = useState([]);
@@ -6,15 +8,25 @@ export function useAlpacaDailyBars(symbol, limit = 200) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  const url = useMemo(() => {
+    const s = (symbol || "").trim();
+    if (!s) return "";
+    const qs = new URLSearchParams({
+      symbol: s,
+      limit: String(limit ?? 200),
+    });
+    return `/api/alpaca/bars/daily?${qs.toString()}`;
+  }, [symbol, limit]);
+
   useEffect(() => {
-    let alive = true;
+    const controller = new AbortController();
 
     async function run() {
-      const s = (symbol || "").trim();
-      if (!s) {
+      if (!url) {
         setBars([]);
         setMeta(null);
         setError("");
+        setLoading(false);
         return;
       }
 
@@ -22,38 +34,26 @@ export function useAlpacaDailyBars(symbol, limit = 200) {
       setError("");
 
       try {
-        const res = await fetch(
-          `/api/alpaca/bars/daily?symbol=${encodeURIComponent(s)}&limit=${limit}`,
-          { credentials: "include" }
-        );
+        const data = await apiFetch(url, {
+          method: "GET",
+          signal: controller.signal,
+        });
 
-        const data = await res.json().catch(() => ({}));
-
-        if (!res.ok) {
-          throw new Error(
-            data?.error || data?.detail || `Request failed (${res.status})`
-          );
-        }
-
-        if (!alive) return;
-
-        setBars(data.bars || []);
-        setMeta(data.meta || null);
+        setBars(Array.isArray(data?.bars) ? data.bars : []);
+        setMeta(data?.meta ?? null);
       } catch (e) {
-        if (!alive) return;
+        if (controller.signal.aborted) return;
         setError(e?.message || String(e));
         setBars([]);
         setMeta(null);
       } finally {
-        if (alive) setLoading(false);
+        if (!controller.signal.aborted) setLoading(false);
       }
     }
 
     run();
-    return () => {
-      alive = false;
-    };
-  }, [symbol, limit]);
+    return () => controller.abort();
+  }, [url]);
 
   return { bars, meta, loading, error };
 }
