@@ -1,8 +1,7 @@
 # api/core/security.py
 import os
-import re
-import time
 from typing import Any, Dict, Tuple
+
 from fastapi import HTTPException, Request, Response
 from supabase import Client, create_client
 from cryptography.fernet import Fernet
@@ -15,6 +14,7 @@ from dotenv import load_dotenv
 THIS_DIR = Path(__file__).resolve().parents[1]      # .../api
 PROJECT_ROOT = THIS_DIR.parent                      # .../u-stock
 
+# NOTE: override=False means "first one wins"
 for env_path in [
     PROJECT_ROOT / ".env",
     PROJECT_ROOT / ".env.local",
@@ -26,7 +26,14 @@ for env_path in [
 
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip()
 SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY", "").strip()
+
+# ✅ Support both names (your repo uses both)
+SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
 SUPABASE_SECRET_KEY = os.getenv("SUPABASE_SECRET_KEY", "").strip()
+
+# ✅ Canonical "service key" (prefer SERVICE_ROLE_KEY)
+SERVICE_KEY = SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SECRET_KEY
+
 INTEGRATIONS_ENC_KEY = os.getenv("INTEGRATIONS_ENC_KEY", "").strip()
 
 COOKIE_NAME = os.getenv("USTOCK_COOKIE_NAME", "access_token").strip()
@@ -38,20 +45,71 @@ COOKIE_SAMESITE = "none" if ENV == "production" else "lax"
 COOKIE_MAX_AGE = int(os.getenv("USTOCK_COOKIE_MAX_AGE", "604800"))
 
 
+def _raise_supabase_env_missing(which: str) -> None:
+    raise HTTPException(
+        status_code=500,
+        detail={
+            "code": "SUPABASE_MISCONFIGURED",
+            "message": f"{which} is missing in environment variables.",
+            "hint": "Check your backend/.env (or root .env) and restart the backend.",
+        },
+    )
+
+
+def _wrap_supabase_exception(e: Exception, which: str) -> HTTPException:
+    msg = str(e) or repr(e)
+    lower = msg.lower()
+
+    if "invalid api key" in lower:
+        return HTTPException(
+            status_code=500,
+            detail={
+                "code": "SUPABASE_INVALID_KEY",
+                "message": f"Supabase rejected {which}.",
+                "hint": f"Verify SUPABASE_URL matches the project for your {which}, and paste the correct key into .env. Then restart the backend.",
+                "provider": "supabase",
+                "which": which,
+            },
+        )
+
+    return HTTPException(
+        status_code=500,
+        detail={
+            "code": "SUPABASE_ERROR",
+            "message": f"Supabase client error ({which}).",
+            "hint": "Check backend logs for more detail.",
+            "provider": "supabase",
+            "which": which,
+            "raw": msg[:300],
+        },
+    )
+
+
 def get_supabase_anon() -> Client:
     if not SUPABASE_URL:
-        raise HTTPException(status_code=500, detail="SUPABASE_URL is missing")
+        _raise_supabase_env_missing("SUPABASE_URL")
     if not SUPABASE_ANON_KEY:
-        raise HTTPException(status_code=500, detail="SUPABASE_ANON_KEY is missing")
-    return create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
+        _raise_supabase_env_missing("SUPABASE_ANON_KEY")
+    try:
+        return create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
+    except Exception as e:
+        raise _wrap_supabase_exception(e, "SUPABASE_ANON_KEY")
 
 
 def get_supabase_service() -> Client:
     if not SUPABASE_URL:
-        raise HTTPException(status_code=500, detail="SUPABASE_URL is missing")
-    if not SUPABASE_SECRET_KEY:
-        raise HTTPException(status_code=500, detail="SUPABASE_SECRET_KEY is missing")
-    return create_client(SUPABASE_URL, SUPABASE_SECRET_KEY)
+        _raise_supabase_env_missing("SUPABASE_URL")
+
+    # ✅ Accept either env var
+    if not SERVICE_KEY:
+        _raise_supabase_env_missing("SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_SECRET_KEY)")
+
+    try:
+        return create_client(SUPABASE_URL, SERVICE_KEY)
+    except Exception as e:
+        # Tell you the canonical name we tried to use
+        which = "SUPABASE_SERVICE_ROLE_KEY" if SUPABASE_SERVICE_ROLE_KEY else "SUPABASE_SECRET_KEY"
+        raise _wrap_supabase_exception(e, which)
 
 
 def set_auth_cookies(response: Response, access_token: str, refresh_token: str | None = None) -> None:
@@ -93,14 +151,10 @@ def _extract_user_id_and_email(res: Any) -> Tuple[str | None, str | None]:
 
 
 def require_user(request: Request, response: Response) -> Dict[str, str]:
-    """
-    Returns {"id": ..., "email": ...} or raises 401.
-    """
     sb = get_supabase_anon()
     access = request.cookies.get(COOKIE_NAME)
     refresh = request.cookies.get(REFRESH_COOKIE_NAME)
 
-    # 1️⃣ Try access token first
     if access:
         try:
             res = sb.auth.get_user(access)
@@ -108,39 +162,34 @@ def require_user(request: Request, response: Response) -> Dict[str, str]:
             if uid:
                 return {"id": uid, "email": email or ""}
         except Exception:
-            pass  # access token expired/invalid → try refresh
+            pass
 
-    # 2️⃣ Try refresh token
     if refresh:
         try:
             refreshed = None
-
-            # Attempt A: refresh with string token
             try:
                 refreshed = sb.auth.refresh_session(refresh)
             except Exception as e1:
-                # Attempt B: refresh with dict payload
                 try:
                     refreshed = sb.auth.refresh_session({"refresh_token": refresh})
                 except Exception as e2:
                     raise HTTPException(
                         status_code=401,
-                        detail=(
-                            "Invalid session: refresh failed "
-                            f"(string={repr(e1)}, dict={repr(e2)})"
-                        ),
+                        detail={
+                            "code": "INVALID_SESSION",
+                            "message": "Invalid session: refresh failed",
+                            "hint": "Sign in again.",
+                            "debug": {"string": repr(e1), "dict": repr(e2)},
+                        },
                     )
 
             uid, email = _extract_user_id_and_email(refreshed)
 
-            # Handle different return shapes from supabase-py
             session = None
             if isinstance(refreshed, dict):
                 session = refreshed.get("session") or refreshed.get("data", {}).get("session")
             else:
-                session = getattr(refreshed, "session", None) or getattr(
-                    getattr(refreshed, "data", None), "session", None
-                )
+                session = getattr(refreshed, "session", None) or getattr(getattr(refreshed, "data", None), "session", None)
 
             if session:
                 if isinstance(session, dict):
@@ -159,15 +208,24 @@ def require_user(request: Request, response: Response) -> Dict[str, str]:
         except HTTPException:
             raise
         except Exception as e:
-            raise HTTPException(status_code=401, detail=f"Invalid session: {repr(e)}")
+            raise HTTPException(
+                status_code=401,
+                detail={"code": "INVALID_SESSION", "message": f"Invalid session: {repr(e)}", "hint": "Sign in again."},
+            )
 
-    # 3️⃣ No valid session
-    raise HTTPException(status_code=401, detail="Not authenticated")
+    raise HTTPException(status_code=401, detail={"code": "NOT_AUTHENTICATED", "message": "Not authenticated"})
 
 
 def _fernet() -> Fernet:
     if not INTEGRATIONS_ENC_KEY:
-        raise HTTPException(status_code=500, detail="INTEGRATIONS_ENC_KEY is missing")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "code": "INTEGRATIONS_ENC_KEY_MISSING",
+                "message": "INTEGRATIONS_ENC_KEY is missing",
+                "hint": "Set INTEGRATIONS_ENC_KEY in backend env and restart.",
+            },
+        )
     return Fernet(INTEGRATIONS_ENC_KEY.encode("utf-8"))
 
 

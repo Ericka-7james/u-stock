@@ -52,6 +52,9 @@ from api.routes.fx import router as fx_router
 from api.routes.opportunities import router as opportunities_router
 from api.routes.auth_bot_runner import router as auth_bot_runner_router
 from api.routes.integrations_alpaca import router as integrations_alpaca_router
+from api.routes.integrations import router as integrations_router
+from api.routes.market_leaders import router as market_leaders_router
+
 
 # Health router: standardize it to export `router` in backend/api/routes/health.py
 try:
@@ -336,5 +339,8 @@ if health_router is not None:
 
 app.include_router(auth_bot_runner_router, prefix="/api")
 app.include_router(integrations_alpaca_router, prefix="/api")
+app.include_router(integrations_router, prefix="/api")
+app.include_router(market_leaders_router)
+
 
 app.include_router(api)
