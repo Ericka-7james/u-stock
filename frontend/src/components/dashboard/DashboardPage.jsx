@@ -1,29 +1,23 @@
 // frontend/src/components/dashboard/DashboardPage.jsx
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import AppShell from "../layout/AppShell.jsx";
 
 import PriceChartPanel from "./cards/PriceChartPanel.jsx";
 import SentimentCard from "./cards/SentimentCard.jsx";
 import TradePerformancePanel from "./cards/TradePerformancePanel.jsx";
-import TopSignalsCard from "./cards/TopSignalsCard.jsx";
+import MarketLeadersCard from "./cards/MarketLeadersCard.jsx";
 
 import { useAlpacaDailyBars } from "../../hooks/useAlpacaDailyBars.js";
 import { useAlpacaTradeSummary } from "../../hooks/useAlpacaTradeSummary.js";
 import { explainAnyError } from "../common/errorMessages.js";
 
-// Styles
 import "../../css/dashboard/DashboardPage.css";
 import "../../css/dashboard/cards/ChartControls.css";
 import "../../css/dashboard/cards/CardShared.css";
 
 const LAST_TICKER_KEY = "ustock:last_ticker";
 
-/**
- * Minimal fetch helper:
- * - Works locally with Vite proxy (/api -> backend)
- * - Works in production when frontend and backend are same origin
- * - Includes cookies for auth routes
- */
 async function apiGet(path, { signal } = {}) {
   const res = await fetch(path, {
     method: "GET",
@@ -32,18 +26,31 @@ async function apiGet(path, { signal } = {}) {
     signal,
   });
 
-  const json = await res.json().catch(() => ({}));
+  const ct = res.headers.get("content-type") || "";
+  const json = ct.includes("application/json")
+    ? await res.json().catch(() => ({}))
+    : await res.text().catch(() => "");
+
   if (!res.ok) {
+    const detail =
+      typeof json === "object" && json?.detail ? json.detail : typeof json === "string" ? json : null;
+    const code = typeof json === "object" && json?.code ? json.code : null;
+
     const msg =
-      json?.detail ||
-      json?.error ||
+      (typeof detail === "string" && detail) ||
+      (typeof json === "object" && (json?.error || json?.message)) ||
       `Request failed (${res.status})`;
+
     const err = new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
     err.status = res.status;
-    err.payload = json;
+    err.code = code || null;
+    err.detail = detail || null;
+    err.payload = typeof json === "object" ? json : { raw: json };
+
     throw err;
   }
-  return json;
+
+  return typeof json === "object" ? json : { ok: true, raw: json };
 }
 
 function readIsDarkMode() {
@@ -51,11 +58,9 @@ function readIsDarkMode() {
   const root = document.documentElement;
   const body = document.body;
 
-  const classDark =
-    root?.classList?.contains("dark") || body?.classList?.contains("dark");
+  const classDark = root?.classList?.contains("dark") || body?.classList?.contains("dark");
   const dataThemeDark =
-    root?.getAttribute?.("data-theme") === "dark" ||
-    body?.getAttribute?.("data-theme") === "dark";
+    root?.getAttribute?.("data-theme") === "dark" || body?.getAttribute?.("data-theme") === "dark";
   return Boolean(classDark || dataThemeDark);
 }
 
@@ -76,11 +81,68 @@ function normalizeSymbol(sym) {
   return last.toUpperCase();
 }
 
-function ErrorBanner({ title, body, debug }) {
+function BodyWithInlineAction({ body, action, onAction }) {
+  const text = String(body || "");
+  const label = action?.label ? String(action.label) : "";
+  const canInline = Boolean(label && text.includes(label) && typeof onAction === "function");
+  const lines = text.split("\n");
+
+  const renderLine = (line, lineIdx) => {
+    if (!canInline) return <span key={`l-${lineIdx}`}>{line}</span>;
+
+    const parts = line.split(label);
+    if (parts.length === 1) return <span key={`l-${lineIdx}`}>{line}</span>;
+
+    return (
+      <span key={`l-${lineIdx}`}>
+        {parts.map((p, i) => (
+          <span key={`p-${lineIdx}-${i}`}>
+            {p}
+            {i < parts.length - 1 ? (
+              <button
+                type="button"
+                onClick={onAction}
+                style={{
+                  padding: 0,
+                  border: "none",
+                  background: "transparent",
+                  fontWeight: 800,
+                  textDecoration: "underline",
+                  cursor: "pointer",
+                  color: "#2563eb",
+                }}
+                aria-label={label}
+                title={label}
+              >
+                {label}
+              </button>
+            ) : null}
+          </span>
+        ))}
+      </span>
+    );
+  };
+
   return (
-    <div className="errorBanner" style={{ whiteSpace: "pre-wrap" }}>
+    <span>
+      {lines.map((line, idx) => (
+        <span key={`line-${idx}`}>
+          {renderLine(line, idx)}
+          {idx < lines.length - 1 ? <br /> : null}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+function ErrorBanner({ title, body, debug, action, onAction }) {
+  return (
+    <div className="errorBanner">
       <strong>{title}</strong>
-      <div style={{ marginTop: 6 }}>{body}</div>
+
+      <div style={{ marginTop: 6 }}>
+        <BodyWithInlineAction body={body} action={action} onAction={onAction} />
+      </div>
 
       {import.meta.env.DEV && debug ? (
         <details style={{ marginTop: 10, fontSize: 12, opacity: 0.8 }}>
@@ -92,18 +154,10 @@ function ErrorBanner({ title, body, debug }) {
   );
 }
 
-/**
- * Top signals loader
- * Scalable: backend can change the source without breaking UI.
- *
- * Expected response shapes supported:
- * 1) { ok:true, signals:[...], meta:{...} }
- * 2) { ok:true, top_signals:[...], signals_meta:{...} }
- * 3) Fallback /api/opportunities: { symbols:[...], ... }  -> we show empty (since that's not ranked signals)
- */
-function useTopSignals() {
-  const [signals, setSignals] = useState([]);
-  const [signalsMeta, setSignalsMeta] = useState(null);
+/** Market Leaders */
+function useMarketLeaders() {
+  const [items, setItems] = useState([]);
+  const [meta, setMeta] = useState({ source: "alpaca_movers" });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -116,40 +170,19 @@ function useTopSignals() {
       setError("");
 
       try {
-        // Recommended endpoint (add later in backend if you want clean separation)
-        // If it 404s, fall back.
-        let json;
-        try {
-          json = await apiGet("/api/opportunities/signals/top", { signal: ac.signal });
-        } catch (e) {
-          if (e?.status === 404) {
-            json = await apiGet("/api/opportunities", { signal: ac.signal });
-          } else {
-            throw e;
-          }
-        }
-
+        const json = await apiGet("/api/market/leaders?market=stocks&direction=up&limit=8", { signal: ac.signal });
         if (!alive) return;
 
-        const nextSignals =
-          json?.signals ||
-          json?.top_signals ||
-          [];
-
-        const nextMeta =
-          json?.meta ||
-          json?.signals_meta ||
-          null;
-
-        // If fallback is /api/opportunities and returns only symbols,
-        // signals will be [] and TopSignalsCard will show its empty message.
-        setSignals(Array.isArray(nextSignals) ? nextSignals : []);
-        setSignalsMeta(nextMeta);
+        setItems(Array.isArray(json?.items) ? json.items : []);
+        setMeta({
+          source: json?.source || { code: "alpaca_movers", label: "Alpaca market movers (today)" },
+          asOf: json?.asOf || null,
+        });
       } catch (e) {
         if (!alive) return;
         setError(String(e?.message || e));
-        setSignals([]);
-        setSignalsMeta(null);
+        setItems([]);
+        setMeta({ source: "alpaca_movers" });
       } finally {
         if (!alive) return;
         setLoading(false);
@@ -163,10 +196,50 @@ function useTopSignals() {
     };
   }, []);
 
-  return { signals, signalsMeta, loading, error };
+  return { items, meta, loading, error };
+}
+
+/** Bot Opportunities (internal) */
+function useBotOpportunities() {
+  const [data, setData] = useState({ crypto: [], stocks: [], funds: [] });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const ac = new AbortController();
+    let alive = true;
+
+    async function run() {
+      setLoading(true);
+      setError("");
+
+      try {
+        const json = await apiGet("/api/opportunities/bot/top?limit=8", { signal: ac.signal });
+        if (!alive) return;
+        setData(json || { crypto: [], stocks: [], funds: [] });
+      } catch (e) {
+        if (!alive) return;
+        setError(String(e?.message || e));
+        setData({ crypto: [], stocks: [], funds: [] });
+      } finally {
+        if (!alive) return;
+        setLoading(false);
+      }
+    }
+
+    run();
+    return () => {
+      alive = false;
+      ac.abort();
+    };
+  }, []);
+
+  return { data, loading, error };
 }
 
 export default function DashboardPage() {
+  const navigate = useNavigate();
+
   const [currentTicker, setCurrentTicker] = useState(() => loadLastTicker());
 
   useEffect(() => {
@@ -230,10 +303,7 @@ export default function DashboardPage() {
   const { bars: alpacaBars, loading: alpacaLoading, error: alpacaError, meta: alpacaMeta } =
     useAlpacaDailyBars(currentTicker, 220);
 
-  const alpacaHistoryBySymbol = useMemo(
-    () => ({ [currentTicker]: alpacaBars || [] }),
-    [currentTicker, alpacaBars]
-  );
+  const alpacaHistoryBySymbol = useMemo(() => ({ [currentTicker]: alpacaBars || [] }), [currentTicker, alpacaBars]);
 
   const [tradePreset, setTradePreset] = useState("Week");
   const { data: tradePerfData, loading: tradePerfLoading, error: tradePerfError } =
@@ -242,37 +312,85 @@ export default function DashboardPage() {
   const tradeErrUI = tradePerfError ? explainAnyError(tradePerfError, { feature: "trade_summary" }) : null;
   const barsErrUI = alpacaError ? explainAnyError(alpacaError, { feature: "daily_bars" }) : null;
 
-  const { signals, signalsMeta, loading: signalsLoading, error: signalsError } = useTopSignals();
-  const signalsErrUI = signalsError ? explainAnyError(signalsError, { feature: "top_signals" }) : null;
+  const { items: leaders, meta: leadersMeta, loading: leadersLoading, error: leadersError } = useMarketLeaders();
+  const leadersErrUI = leadersError ? explainAnyError(leadersError, { feature: "market_leaders" }) : null;
+
+  const { data: oppData, loading: oppLoading, error: oppError } = useBotOpportunities();
+  const oppErrUI = oppError ? explainAnyError(oppError, { feature: "bot_opportunities" }) : null;
+
+  // ✅ stub for now — later we’ll wire this to runner telemetry
+  const activeBot = { running: false, name: "" };
 
   return (
     <AppShell>
       <main className="dashboard-main">
         <div className="dashboard-left">
-          {tradeErrUI ? <ErrorBanner title={tradeErrUI.title} body={tradeErrUI.body} debug={tradeErrUI.debug} /> : null}
+          {tradeErrUI ? (
+            <ErrorBanner
+              title={tradeErrUI.title}
+              body={tradeErrUI.body}
+              debug={tradeErrUI.debug}
+              action={tradeErrUI.action}
+              onAction={() => {
+                const href = tradeErrUI?.action?.href;
+                if (href) navigate(href);
+              }}
+            />
+          ) : null}
 
+          {/* ✅ This is your Opportunities card now */}
           <TradePerformancePanel
             data={tradePerfData || { start: "—", end: "—", trades: [] }}
             onChangeRange={(preset) => setTradePreset(preset)}
+            opportunities={oppData}
+            leaders={leaders}
+            activeBot={activeBot}
+            onPickSymbol={(sym) => {
+              const clean = normalizeSymbol(sym);
+              if (clean) setCurrentTicker(clean);
+            }}
           />
 
           {tradePerfLoading ? (
-            <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>Loading trade performance…</div>
+            <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>Loading…</div>
           ) : null}
 
-          {signalsErrUI ? (
-            <ErrorBanner title={signalsErrUI.title} body={signalsErrUI.body} debug={signalsErrUI.debug} />
+          {oppErrUI ? (
+            <ErrorBanner
+              title={oppErrUI.title}
+              body={oppErrUI.body}
+              debug={oppErrUI.debug}
+              action={oppErrUI.action}
+              onAction={() => {
+                const href = oppErrUI?.action?.href;
+                if (href) navigate(href);
+              }}
+            />
           ) : null}
 
-          <TopSignalsCard
-            signals={signals}
-            signalsMeta={signalsMeta}
-            currentTicker={currentTicker}
-            onSelectTicker={(t) => {
-              const clean = normalizeSymbol(t);
+          {leadersErrUI ? (
+            <ErrorBanner
+              title={leadersErrUI.title}
+              body={leadersErrUI.body}
+              debug={leadersErrUI.debug}
+              action={leadersErrUI.action}
+              onAction={() => {
+                const href = leadersErrUI?.action?.href;
+                if (href) navigate(href);
+              }}
+            />
+          ) : null}
+
+          <MarketLeadersCard
+            title="Market leaders"
+            subtitle="Top movers from Alpaca (today). Click one to load the chart."
+            items={leaders}
+            meta={leadersMeta}
+            loading={leadersLoading}
+            onSelectSymbol={(sym) => {
+              const clean = normalizeSymbol(sym);
               if (clean) setCurrentTicker(clean);
             }}
-            loading={signalsLoading}
           />
         </div>
 
@@ -287,7 +405,18 @@ export default function DashboardPage() {
           />
 
           <section className="panel panel-sentiment">
-            {barsErrUI ? <ErrorBanner title={barsErrUI.title} body={barsErrUI.body} debug={barsErrUI.debug} /> : null}
+            {barsErrUI ? (
+              <ErrorBanner
+                title={barsErrUI.title}
+                body={barsErrUI.body}
+                debug={barsErrUI.debug}
+                action={barsErrUI.action}
+                onAction={() => {
+                  const href = barsErrUI?.action?.href;
+                  if (href) navigate(href);
+                }}
+              />
+            ) : null}
 
             <SentimentCard
               symbol={currentTicker}

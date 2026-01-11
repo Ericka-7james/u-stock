@@ -1,0 +1,152 @@
+.mlCard {
+  background: #fff;
+  border-radius: 18px;
+  padding: 18px;
+  box-shadow: 0 12px 36px rgba(15, 23, 42, 0.06);
+}
+
+.mlHeader {
+  margin-bottom: 10px;
+}
+
+.mlTitle {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #0f172a;
+  line-height: 1.2;
+}
+
+.mlSubtitle {
+  margin-top: 6px;
+  font-size: 0.9rem;
+  color: #64748b;
+}
+
+.mlTableHead {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.85rem;
+  color: #64748b;
+  padding: 8px 2px 10px;
+}
+
+.mlTableHead .right {
+  text-align: right;
+}
+
+.mlBody {
+  display: grid;
+  gap: 10px;
+}
+
+.mlRow {
+  width: 100%;
+  text-align: left;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  border-radius: 14px;
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
+}
+
+.mlRow:hover {
+  transform: translateY(-1px);
+  border-color: #cbd5e1;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.06);
+}
+
+.mlRowTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0; /* IMPORTANT: enables ellipsis correctly */
+}
+
+.mlSymbol {
+  font-weight: 800;
+  color: #0f172a;
+  font-size: 1.05rem;
+
+  /* allow ellipsis if needed */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1 1 auto;
+}
+
+.mlScore {
+  flex: 0 0 auto; /* IMPORTANT: never shrink offscreen */
+  font-weight: 800;
+  color: #0f172a;
+  font-size: 1.05rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mlScore.pos {
+  color: #0f766e;
+}
+
+.mlScore.neg {
+  color: #b91c1c;
+}
+
+.mlArrow {
+  font-size: 0.95rem;
+  line-height: 1;
+  opacity: 0.9;
+}
+
+.mlRowSub {
+  margin-top: 6px;
+  color: #475569;
+  font-size: 0.88rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  /* keep it from overflowing the card */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mlRowSub .dot {
+  opacity: 0.6;
+}
+
+.mlRowSub.muted {
+  color: #94a3b8;
+}
+
+.mlEmpty {
+  padding: 12px 4px;
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
+.mlFoot {
+  margin-top: 12px;
+  font-size: 0.8rem;
+  color: #94a3b8;
+}
+
+.mlRowSkeleton {
+  height: 72px;
+  border-radius: 14px;
+  border: 1px solid #e2e8f0;
+  background: linear-gradient(90deg, #f8fafc 0%, #eef2f7 45%, #f8fafc 100%);
+  background-size: 220% 100%;
+  animation: mlShimmer 1.2s ease-in-out infinite;
+}
+
+@keyframes mlShimmer {
+  0% { background-position: 0% 0; }
+  100% { background-position: 100% 0; }
+}

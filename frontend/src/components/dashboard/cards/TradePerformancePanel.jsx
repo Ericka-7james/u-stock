@@ -6,13 +6,12 @@ function n(x) {
   const v = Number(x);
   return Number.isFinite(v) ? v : 0;
 }
-function fmtMoney(v) {
-  const x = n(v);
-  const sign = x < 0 ? "-" : "";
-  return `${sign}$${Math.abs(x).toFixed(2)}`;
-}
 function fmtPct(v) {
   return `${Math.round(n(v))}%`;
+}
+function fmtPrice(v) {
+  const x = Number(v);
+  return Number.isFinite(x) ? x.toFixed(2) : "—";
 }
 
 function CardShell({ title, children, className = "" }) {
@@ -42,33 +41,82 @@ function MiniStat({ label, value, tone = "" }) {
   );
 }
 
-function TableCard({ title, rows, tone }) {
+/**
+ * PillRow rules:
+ * - Always show full SYMBOL
+ * - If the "right value" (score) would truncate, hide it entirely.
+ * - Tooltip on hover shows full symbol + full score + sub line.
+ */
+function PillRow({ symbol, score, sub = "", onClick }) {
+  const sym = String(symbol || "").toUpperCase();
+  const scoreStr =
+    Number.isFinite(Number(score)) ? Number(score).toFixed(2) : "—";
+
+  const tooltip = [sym, `Score: ${scoreStr}`, sub].filter(Boolean).join("\n");
+
   return (
-    <CardShell title={title} className="tpTableCard">
-      <div className="tpTableHead">
-        <div>Ticker</div>
-        <div className="right">P/L</div>
+    <button
+      type="button"
+      onClick={onClick}
+      title={tooltip}
+      style={{
+        width: "100%",
+        boxSizing: "border-box",
+        border: "1px solid rgba(148,163,184,0.25)",
+        background: "transparent",
+        borderRadius: 12,
+        padding: "10px 12px",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "flex-start",
+        gap: 6,
+        cursor: onClick ? "pointer" : "default",
+        color: "inherit",
+        overflow: "hidden",
+        textAlign: "left",
+      }}
+    >
+      {/* TOP: SYMBOL ONLY */}
+      <div
+        className="mono"
+        style={{
+          fontWeight: 900,
+          fontSize: 14,
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          width: "100%",
+        }}
+      >
+        {sym}
       </div>
 
-      <div className="tpTableBody">
-        {rows?.length ? (
-          rows.slice(0, 6).map((r, i) => (
-            <div key={i} className={`tpRow ${tone}`}>
-              <div className="mono">{String(r.symbol || "").toUpperCase()}</div>
-              <div className="right mono">{fmtMoney(r.pnl)}</div>
-            </div>
-          ))
-        ) : (
-          <div className="tpEmpty">No trades in this range.</div>
-        )}
+      {/* BOTTOM: SCORE */}
+      <div
+        className="mono"
+        style={{
+          fontSize: 12,
+          opacity: 0.85,
+          whiteSpace: "nowrap",
+        }}
+      >
+        Score {scoreStr}
       </div>
-    </CardShell>
+    </button>
   );
 }
 
-function OpportunityTable({ title, rows }) {
+function OpportunityTable({ title, rows, emptyMessage, onPickSymbol }) {
+  const clean = Array.isArray(rows) ? rows : [];
+
   return (
-    <div className="tpOppMiniTable">
+    <div
+      className="tpOppMiniTable"
+      style={{
+        overflow: "hidden",
+        borderRadius: 14,
+      }}
+    >
       <div className="tpOppMiniTitle">{title}</div>
 
       <div className="tpOppHead">
@@ -76,181 +124,166 @@ function OpportunityTable({ title, rows }) {
         <div className="right">Score</div>
       </div>
 
-      <div className="tpOppBody">
-        {rows?.length ? (
-          rows.slice(0, 6).map((r, i) => (
-            <div key={i} className="tpOppRow">
-              <div className="mono">{String(r.symbol || "").toUpperCase()}</div>
-              <div className="right mono">{Number(r.score || 0).toFixed(2)}</div>
-            </div>
-          ))
+      <div className="tpOppBody" style={{ display: "grid", gap: 10 }}>
+        {clean.length ? (
+          clean.slice(0, 6).map((r, i) => {
+            const sym = String(r.symbol || "").toUpperCase();
+            const sub = r.sub ? String(r.sub) : "";
+            return (
+              <PillRow
+                key={`${sym}-${i}`}
+                symbol={sym}
+                score={r.score}
+                sub={sub}
+                onClick={onPickSymbol ? () => onPickSymbol(sym) : undefined}
+              />
+            );
+          })
         ) : (
-          <div className="tpEmpty">
-            Not wired yet. Phase 1 will rank symbols using expected move − costs.
-          </div>
+          <div className="tpEmpty">{emptyMessage || "No results yet."}</div>
         )}
-      </div>
-
-      {/* tiny note for transparency */}
-      <div className="tpOppFootnote">
-        Score = expectedMove% × (1 + momentum) − cost%
       </div>
     </div>
   );
 }
 
-/**
- * TradePerformancePanel
- * - data: { start, end, trades: [{symbol,pnl,...}] }
- * - onChangeRange: (preset) => void
- *
- * Optional (future): opportunities = { crypto:[], stocks:[], funds:[] }
- */
-export default function TradePerformancePanel({ data, onChangeRange, opportunities = null }) {
+export default function TradePerformancePanel({
+  data,
+  onChangeRange,
+  opportunities = null,
+  leaders = [],
+  activeBot = null,
+  onPickSymbol,
+}) {
+  const oppStocks = Array.isArray(opportunities?.stocks) ? opportunities.stocks : [];
+
+  const leadersClean = useMemo(() => {
+    const raw = Array.isArray(leaders) ? leaders : [];
+    return raw
+      .map((x) => ({
+        symbol: String(x?.symbol || "").toUpperCase().trim(),
+        changePct: n(x?.changePct),
+        last: x?.last,
+        prevClose: x?.prevClose,
+      }))
+      .filter((x) => x.symbol);
+  }, [leaders]);
+
+  const leadersScored = useMemo(() => {
+    return [...leadersClean]
+      .map((l) => ({
+        symbol: l.symbol,
+        score: Math.abs(l.changePct),
+        sub: `Last ${fmtPrice(l.last)} · Prev ${fmtPrice(l.prevClose)}`,
+      }))
+      .sort((a, b) => n(b.score) - n(a.score))
+      .slice(0, 6);
+  }, [leadersClean]);
+
+  const aligned = useMemo(() => {
+    const oppSet = new Map(oppStocks.map((x) => [String(x.symbol || "").toUpperCase(), x]));
+    const out = [];
+
+    for (const l of leadersClean) {
+      const hit = oppSet.get(l.symbol);
+      if (hit) {
+        const botScore = n(hit.score);
+        const moveScore = Math.abs(l.changePct);
+        out.push({
+          symbol: l.symbol,
+          score: botScore + moveScore,
+          sub: `Bot ${botScore.toFixed(2)} + Move ${moveScore.toFixed(2)}%`,
+        });
+      }
+    }
+
+    out.sort((a, b) => n(b.score) - n(a.score));
+    return out.slice(0, 6);
+  }, [leadersClean, oppStocks]);
+
+  const botRunning = Boolean(activeBot?.running);
+  const botName = String(activeBot?.name || "").trim();
+
+  // keep a tiny summary bar so your top section doesn’t look empty
   const safe = data || { start: "", end: "", trades: [] };
   const trades = Array.isArray(safe.trades) ? safe.trades : [];
-
-  const summary = useMemo(() => {
-    const total = trades.reduce((a, t) => a + n(t.pnl), 0);
-    const wins = trades.filter((t) => n(t.pnl) > 0);
-    const losses = trades.filter((t) => n(t.pnl) < 0);
-
-    const winRate = trades.length ? (wins.length / trades.length) * 100 : 0;
-
-    const maxWin = wins.length ? Math.max(...wins.map((t) => n(t.pnl))) : 0;
-    const maxLoss = losses.length ? Math.min(...losses.map((t) => n(t.pnl))) : 0;
-
-    const avgWin = wins.length
-      ? wins.reduce((a, t) => a + n(t.pnl), 0) / wins.length
-      : 0;
-
-    const avgLoss = losses.length
-      ? Math.abs(losses.reduce((a, t) => a + n(t.pnl), 0) / losses.length)
-      : 0;
-
-    const grossProfit = wins.reduce((a, t) => a + n(t.pnl), 0);
-    const grossLossAbs = Math.abs(losses.reduce((a, t) => a + n(t.pnl), 0));
-    const profitFactor =
-      grossLossAbs > 0 ? grossProfit / grossLossAbs : grossProfit > 0 ? 99 : 0;
-
-    const topWins = [...wins].sort((a, b) => n(b.pnl) - n(a.pnl));
-    const topLosses = [...losses].sort((a, b) => n(a.pnl) - n(b.pnl));
-
-    const expectancy = trades.length ? total / trades.length : 0;
-
-    return {
-      total,
-      tradesCount: trades.length,
-      winsCount: wins.length,
-      lossesCount: losses.length,
-      winRate,
-      maxWin,
-      maxLoss,
-      avgWin,
-      avgLoss,
-      profitFactor,
-      expectancy,
-      profitPerTrade: trades.length ? total / trades.length : 0,
-      topWins,
-      topLosses,
-    };
-  }, [trades]);
-
-  const totalTone = summary.total >= 0 ? "pos" : "neg";
-
-  const oppCrypto = opportunities?.crypto || [];
-  const oppStocks = opportunities?.stocks || [];
-  const oppFunds = opportunities?.funds || [];
+  const winRate = trades.length ? (trades.filter((t) => n(t.pnl) > 0).length / trades.length) * 100 : 0;
 
   return (
     <section className="tpPanel">
-      {/* Header styled like PriceChartPanel header */}
       <div className="tpHeaderBar">
         <div className="tpHeaderLeft">
           <div className="tpTitleRow">
-            <h2 className="tpTitleText">Trade Performance</h2>
+            <h2 className="tpTitleText">Opportunities</h2>
           </div>
+
           <p className="tpSubtitle">
-            {safe.start} — {safe.end}
+            {botRunning
+              ? `Bot running: ${botName || "Unknown bot"}`
+              : "No bot running — start a bot to unlock bot-aligned picks."}
           </p>
         </div>
 
         <div className="tpTabs">
           {["Week", "Month", "Year"].map((p) => (
-            <button
-              key={p}
-              className="tpTab"
-              type="button"
-              onClick={() => onChangeRange?.(p)}
-            >
+            <button key={p} className="tpTab" type="button" onClick={() => onChangeRange?.(p)}>
               {p}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Card grid (independent surfaces) */}
       <div className="tpLeft">
         <div className="tpLeftGrid">
           <BigStat
-            label="Win Ratio"
-            value={fmtPct(summary.winRate)}
-            sub={`${summary.tradesCount} trades`}
+            label="Bot Status"
+            value={botRunning ? "LIVE" : "OFF"}
+            sub={botRunning ? "Using bot alignment" : "Leaders-only (Phase 1)"}
+            tone={botRunning ? "pos" : "neg"}
           />
 
           <BigStat
-            label="Total Profit"
-            value={fmtMoney(summary.total)}
-            sub={`Expectancy ${fmtMoney(summary.expectancy)}`}
-            tone={totalTone}
+            label="Trades Context"
+            value={`${trades.length}`}
+            sub={`Win rate ${fmtPct(winRate)}`}
           />
 
           <div className="tpMiniGrid">
-            <MiniStat label="Trades" value={String(summary.tradesCount)} />
-            <MiniStat label="Wins" value={String(summary.winsCount)} tone="pos" />
-            <MiniStat label="Losses" value={String(summary.lossesCount)} tone="neg" />
-            <MiniStat label="Profit/Trade" value={fmtMoney(summary.profitPerTrade)} />
-            <MiniStat label="Max Loss" value={fmtMoney(summary.maxLoss)} tone="neg" />
-            <MiniStat label="Max Win" value={fmtMoney(summary.maxWin)} tone="pos" />
+            <MiniStat label="Leaders" value={String(leadersClean.length)} />
+            <MiniStat label="Aligned" value={String(aligned.length)} tone={aligned.length ? "pos" : ""} />
+            <MiniStat label="Internal Picks" value={String(oppStocks.length)} />
           </div>
 
-          <CardShell title="Exit Reason" className="tpSpan2">
-            <div className="tpEmpty">
-              Phase 1: classify from trade logs (stop, target, time, manual, reversal).
-            </div>
-          </CardShell>
-
-          <CardShell title="Avg Win / Loss" className="tpSpan2">
-            <div className="tpEmpty">
-              Phase 1: show distribution + variance (histogram / box stats), not just averages.
-            </div>
-            <div className="tpTinyStats">
-              <div className="tpTinyRow">
-                <div className="muted">Avg Win</div>
-                <div className="mono">{fmtMoney(summary.avgWin)}</div>
-              </div>
-              <div className="tpTinyRow">
-                <div className="muted">Avg Loss</div>
-                <div className="mono">-{fmtMoney(summary.avgLoss).replace("-", "")}</div>
-              </div>
-              <div className="tpTinyRow">
-                <div className="muted">Profit Factor</div>
-                <div className="mono">{summary.profitFactor.toFixed(2)}</div>
-              </div>
-            </div>
-          </CardShell>
-
-          <div className="tpSpan2 tpTables">
-            <TableCard title="Top Wins" rows={summary.topWins} tone="pos" />
-            <TableCard title="Top Losses" rows={summary.topLosses} tone="neg" />
-          </div>
-
-          {/* ✅ NEW: bottom card for day-trading opportunities */}
           <CardShell title="Top Day Trades (Opportunity)" className="tpSpan2">
             <div className="tpOppGrid">
-              <OpportunityTable title="Crypto" rows={oppCrypto} />
-              <OpportunityTable title="Stocks" rows={oppStocks} />
-              <OpportunityTable title="ETFs / Funds" rows={oppFunds} />
+              <OpportunityTable
+                title="Bot-aligned (leaders ∩ bot)"
+                rows={botRunning ? aligned : []}
+                emptyMessage={botRunning ? "No overlap yet." : "Start a bot to generate aligned picks."}
+                onPickSymbol={onPickSymbol}
+              />
+
+              <OpportunityTable
+                title="Market leaders (today)"
+                rows={leadersScored}
+                emptyMessage="No leaders returned yet."
+                onPickSymbol={onPickSymbol}
+              />
+
+              <OpportunityTable
+                title="Internal (bot picks)"
+                rows={(oppStocks || []).slice(0, 6).map((r) => ({
+                  symbol: r.symbol,
+                  score: r.score,
+                  sub: r.reason ? String(r.reason) : "",
+                }))}
+                emptyMessage="Bot opportunities not wired yet."
+                onPickSymbol={onPickSymbol}
+              />
+            </div>
+
+            <div className="tpOppFootnote">
+              Phase 1 scoring = overlap boost + |today move|. Hover any pill to see full details.
             </div>
           </CardShell>
         </div>

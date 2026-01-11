@@ -71,18 +71,26 @@ export default function ConnectedAppsPage() {
         setApps([]);
         throw new Error("Session expired — please sign in again.");
       }
+
       if (!res.ok) {
         const ui = await explainResponseError(res, { feature: "integrations_list" });
         const err = new Error(ui.body);
-        err._ui = ui; // attach friendly payload
+        err._ui = ui;
         throw err;
       }
 
       const data = await res.json();
+
       setNotice(data?.message || "");
       setDismissed((d) => ({ ...d, notConnected: false }));
 
-      setApps(Array.isArray(data?.apps) ? data.apps : []);
+      // ✅ backend returns { items: [...] }
+      const list =
+        (Array.isArray(data?.items) && data.items) ||
+        (Array.isArray(data?.apps) && data.apps) ||
+        [];
+
+      setApps(list);
     } catch (e) {
       setApps([]);
       setNotice("");
@@ -98,7 +106,6 @@ export default function ConnectedAppsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthed]);
 
-  // Normalize statuses from backend
   const statusByProvider = useMemo(() => {
     const map = new Map();
     for (const a of apps) {
@@ -109,7 +116,6 @@ export default function ConnectedAppsPage() {
     return map;
   }, [apps]);
 
-  // ✅ Define ONCE (NOT inside map) — used for gating the notice banner
   const hasAnyConnected = useMemo(() => {
     for (const p of PROVIDERS) {
       const status = statusByProvider.get(p.key) || "not_connected";
@@ -205,7 +211,6 @@ export default function ConnectedAppsPage() {
           </details>
         )}
 
-        {/* ✅ Only show "not connected" notice if NONE are connected */}
         {isAuthed && !!notice && !dismissed.notConnected && !hasAnyConnected && (
           <CloseableBanner onClose={() => dismissBanner("notConnected")}>
             {notice}
@@ -333,19 +338,4 @@ function CloseableBanner({ children, onClose }) {
       </div>
     </div>
   );
-}
-
-async function safeErrorMessage(res) {
-  const ct = res.headers.get("content-type") || "";
-  if (ct.includes("application/json")) {
-    try {
-      const data = await res.json();
-      return data?.detail || `${res.status} ${res.statusText}`;
-    } catch {
-      return `${res.status} ${res.statusText}`;
-    }
-  }
-
-  const text = await res.text();
-  return `Backend returned non-JSON (${res.status}). First 60 chars: ${text.slice(0, 60)}`;
 }

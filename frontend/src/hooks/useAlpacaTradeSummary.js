@@ -1,43 +1,89 @@
 // frontend/src/hooks/useAlpacaTradeSummary.js
 import { useEffect, useState } from "react";
 
+async function safeJson(res) {
+  try {
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+async function throwApiError(res, feature = "alpaca_trade_summary") {
+  const status = res?.status || 0;
+  const ct = res?.headers?.get?.("content-type") || "";
+  const isJson = ct.includes("application/json");
+
+  const data = isJson ? await safeJson(res) : null;
+  const text = !isJson ? await res.text().catch(() => "") : "";
+
+  const detail = data?.detail ?? (text || null);
+
+  let code = null;
+  let message = null;
+
+  if (detail && typeof detail === "object") {
+    code = detail.code || data?.code || null;
+    message = detail.message || detail.detail || data?.message || null;
+  } else {
+    code = data?.code || null;
+    message = typeof detail === "string" ? detail : null;
+  }
+
+  const err = new Error(message || `Request failed (${status})`);
+  err.status = status;
+  err.code = code;
+  err.detail = detail;
+  err.payload = data || { raw: text };
+  err.feature = feature;
+
+  throw err;
+}
+
 export function useAlpacaTradeSummary(preset = "Week", { slippageBps = 0, feeBps = 0 } = {}) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+
+  // IMPORTANT: store error object
+  const [error, setError] = useState(null);
 
   useEffect(() => {
+    const ac = new AbortController();
     let alive = true;
 
     async function run() {
       setLoading(true);
-      setError("");
+      setError(null);
 
       try {
-        const qs = new URLSearchParams({
-          preset: preset || "Week",
-          slippage_bps: String(slippageBps ?? 0),
-          fee_bps: String(feeBps ?? 0),
-        });
+        const qs = new URLSearchParams();
+        qs.set("preset", String(preset || "Week"));
+        qs.set("slippage_bps", String(slippageBps ?? 0));
+        qs.set("fee_bps", String(feeBps ?? 0));
 
-        const res = await fetch(`/api/alpaca/trading/summary?${qs.toString()}`, {
+        const url = `/api/alpaca/trading/summary?${qs.toString()}`;
+
+        const res = await fetch(url, {
           method: "GET",
           credentials: "include",
-          headers: { "Content-Type": "application/json" },
+          headers: { Accept: "application/json" },
+          signal: ac.signal,
         });
 
-        const json = await res.json().catch(() => ({}));
-
         if (!res.ok) {
-          throw new Error(json?.detail || `Trade summary failed (${res.status})`);
+          await throwApiError(res, "trade_summary");
         }
+
+        const json = (await safeJson(res)) || {};
 
         if (!alive) return;
         setData(json);
       } catch (e) {
         if (!alive) return;
-        setError(String(e?.message || e));
+        if (e?.name === "AbortError") return;
+
         setData(null);
+        setError(e); // keep structured error
       } finally {
         if (!alive) return;
         setLoading(false);
@@ -47,6 +93,7 @@ export function useAlpacaTradeSummary(preset = "Week", { slippageBps = 0, feeBps
     run();
     return () => {
       alive = false;
+      ac.abort();
     };
   }, [preset, slippageBps, feeBps]);
 

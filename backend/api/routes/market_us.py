@@ -218,7 +218,7 @@ def market_leaders(
 
         return {
             "ok": True,
-            "source": "alpaca_movers",
+            "source": "ALPACA",
             "market": market,
             "direction": direction,
             "mode": mode,
