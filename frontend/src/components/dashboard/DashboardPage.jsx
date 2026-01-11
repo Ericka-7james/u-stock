@@ -5,6 +5,7 @@ import AppShell from "../layout/AppShell.jsx";
 
 import PriceChartPanel from "./cards/PriceChartPanel.jsx";
 import SentimentCard from "./cards/SentimentCard.jsx";
+import MacroCard from "./cards/MacroCard.jsx";
 import TradePerformancePanel from "./cards/TradePerformancePanel.jsx";
 import MarketLeadersCard from "./cards/MarketLeadersCard.jsx";
 
@@ -338,7 +339,6 @@ export default function DashboardPage() {
             />
           ) : null}
 
-          {/* ✅ This is your Opportunities card now */}
           <TradePerformancePanel
             data={tradePerfData || { start: "—", end: "—", trades: [] }}
             onChangeRange={(preset) => setTradePreset(preset)}
@@ -351,9 +351,7 @@ export default function DashboardPage() {
             }}
           />
 
-          {tradePerfLoading ? (
-            <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>Loading…</div>
-          ) : null}
+          {tradePerfLoading ? <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>Loading…</div> : null}
 
           {oppErrUI ? (
             <ErrorBanner
@@ -424,6 +422,11 @@ export default function DashboardPage() {
               loading={alpacaLoading}
               backendSnapshot={null}
             />
+
+            {/* ✅ NEW: Macro card directly under Sentiment */}
+            <div style={{ marginTop: 12 }}>
+              <MacroCard />
+            </div>
 
             {alpacaMeta?.fetchedAt ? (
               <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>

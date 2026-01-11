@@ -4,6 +4,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Request, Response, HTTPException
 
 from api.deps import require_user
+from api.core.errors import http_error
 from api.security.bot_runner_token import load_bot_runner_config, mint_bot_runner_token
 
 router = APIRouter()
@@ -21,5 +22,13 @@ def create_bot_runner_token(request: Request, response: Response):
     try:
         cfg = load_bot_runner_config()
         return mint_bot_runner_token(user_id, cfg)
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Could not mint bot runner token: {repr(e)}")
+        raise http_error(
+            500,
+            "BOT_RUNNER_TOKEN_MINT_FAILED",
+            "Could not mint bot runner token.",
+            detail={"error": repr(e)},
+            hint="Check server logs and BOT_RUNNER_* env vars.",
+        )

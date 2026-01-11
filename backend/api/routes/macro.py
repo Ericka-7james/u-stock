@@ -1,12 +1,16 @@
-# api/routes/macro.py
+# backend/api/routes/macro.py
+from __future__ import annotations
+
 from fastapi import APIRouter, HTTPException
-from api.clients.fred_client import fred_series_observations
+
+from api.clients.fred_client import get_macro_summary
 
 router = APIRouter(prefix="/api/macro", tags=["macro"])
 
-@router.get("/fred/series")
-def fred_series(series_id: str):
+
+@router.get("/summary")
+def macro_summary():
     try:
-        return {"ok": True, "series_id": series_id, **fred_series_observations(series_id)}
+        return get_macro_summary(ttl_seconds=600)
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"fred_failed: {repr(e)}")
+        raise HTTPException(status_code=502, detail=f"macro_failed: {repr(e)}")

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from typing import Any, Dict, List
+
 import pytest
 
 from api.clients import fred_client
@@ -18,6 +19,7 @@ class DummyResp:
     def raise_for_status(self):
         if self.status_code >= 400:
             import requests
+
             raise requests.HTTPError(f"{self.status_code} error")
 
 
@@ -37,131 +39,180 @@ def _make_get_stub(responses: List[DummyResp], calls_out: list):
 
 @pytest.fixture(autouse=True)
 def _clear_cache():
-    fred_client._CACHE.clear()
+    # New client uses Optional tuple cache, not a dict
+    fred_client._CACHE = None
     yield
-    fred_client._CACHE.clear()
+    fred_client._CACHE = None
 
 
 def test_requires_api_key(monkeypatch):
     monkeypatch.delenv("FRED_API_KEY", raising=False)
     with pytest.raises(RuntimeError) as e:
-        fred_client.fred_series_observations("CPIAUCSL", ttl_sec=0)
-    assert "FRED_API_KEY missing" in str(e.value)
+        fred_client.get_macro_summary(ttl_seconds=0)
+    assert "FRED_API_KEY is missing" in str(e.value)
 
 
-def test_requires_series_id(monkeypatch):
-    monkeypatch.setenv("FRED_API_KEY", "TESTKEY")
-    with pytest.raises(ValueError):
-        fred_client.fred_series_observations("", ttl_sec=0)
-
-
-def test_happy_path_and_params(monkeypatch):
+def test_latest_point_skips_dot_values(monkeypatch):
     monkeypatch.setenv("FRED_API_KEY", "TESTKEY")
 
     calls = []
-    payload = {"observations": [{"date": "2026-01-01", "value": "1.0"}]}
+    payload = {
+        "observations": [
+            {"date": "2026-01-02", "value": "."},
+            {"date": "2026-01-01", "value": "4.25"},
+        ]
+    }
+
     monkeypatch.setattr(
         fred_client.requests,
         "get",
         _make_get_stub([DummyResp(200, payload=payload)], calls),
     )
 
-    out = fred_client.fred_series_observations("CPIAUCSL", ttl_sec=0)
+    v = fred_client._latest_point("DFF")
+    assert v == 4.25
 
-    assert out["cached"] is False
-    assert out["data"]["observations"][0]["value"] == "1.0"
-    assert out["meta"]["attempts"] == 1
     assert calls[0]["url"] == f"{fred_client.FRED_BASE}/series/observations"
-    assert calls[0]["params"]["series_id"] == "CPIAUCSL"
+    assert calls[0]["params"]["series_id"] == "DFF"
     assert calls[0]["params"]["api_key"] == "TESTKEY"
     assert calls[0]["params"]["file_type"] == "json"
-    assert calls[0]["timeout"] == 8
+    assert calls[0]["params"]["sort_order"] == "desc"
+    assert calls[0]["params"]["limit"] == 10
+    assert calls[0]["timeout"] == 15
 
 
-def test_validation_requires_observations_list(monkeypatch):
+def test_latest_two_points_requires_enough_observations(monkeypatch):
     monkeypatch.setenv("FRED_API_KEY", "TESTKEY")
 
     calls = []
+    payload = {"observations": [{"date": "2026-01-01", "value": "100.0"}]}  # only one valid point
+
     monkeypatch.setattr(
         fred_client.requests,
         "get",
-        _make_get_stub([DummyResp(200, payload={"not_obs": True})], calls),
+        _make_get_stub([DummyResp(200, payload=payload)], calls),
     )
 
     with pytest.raises(RuntimeError) as e:
-        fred_client.fred_series_observations("CPIAUCSL", ttl_sec=0, max_retries=0)
+        fred_client._latest_two_points("CPIAUCSL")
 
-    assert "fred_missing_observations" in str(e.value)
-    assert len(calls) == 1
+    assert "Not enough observations" in str(e.value)
 
 
-def test_retries_on_429_then_succeeds(monkeypatch):
+def test_get_macro_summary_happy_path_and_math(monkeypatch):
     monkeypatch.setenv("FRED_API_KEY", "TESTKEY")
 
     calls = []
-    good = {"observations": []}
+
+    # get_macro_summary calls in this order:
+    # 1) _latest_point("DFF")
+    # 2) _latest_point("DGS10")
+    # 3) _latest_two_points("CPIAUCSL")  (limit 13, desc)
+    # 4) _latest_point("UNRATE")
+    #
+    # CPI YoY uses: ((latest / approx_12m_ago) - 1) * 100
+    # We'll provide CPI latest=310.0, 12m=300.0 -> 3.333...%
+
+    resp_dff = DummyResp(
+        200,
+        payload={"observations": [{"date": "2026-01-01", "value": "5.25"}]},
+    )
+    resp_dgs10 = DummyResp(
+        200,
+        payload={"observations": [{"date": "2026-01-01", "value": "4.60"}]},
+    )
+
+    # For _latest_two_points: expects up to 13 observations, desc order.
+    # We give at least 2 numeric values; function takes vals[0] and vals[-1].
+    resp_cpi = DummyResp(
+        200,
+        payload={
+            "observations": [
+                {"date": "2026-01-01", "value": "310.0"},
+                {"date": "2025-12-01", "value": "309.0"},
+                {"date": "2025-11-01", "value": "308.0"},
+                # ... pretend more ...
+                {"date": "2025-01-01", "value": "300.0"},
+            ]
+        },
+    )
+
+    resp_unrate = DummyResp(
+        200,
+        payload={"observations": [{"date": "2026-01-01", "value": "4.20"}]},
+    )
+
     monkeypatch.setattr(
         fred_client.requests,
         "get",
-        _make_get_stub([DummyResp(429, payload={"message": "rate"}), DummyResp(200, payload=good)], calls),
-    )
-    monkeypatch.setattr(fred_client.time, "sleep", lambda _: None)
-
-    out = fred_client.fred_series_observations("CPIAUCSL", ttl_sec=0, max_retries=2)
-
-    assert out["cached"] is False
-    assert out["data"]["observations"] == []
-    assert out["meta"]["attempts"] == 2
-    assert len(calls) == 2
-
-
-def test_does_not_retry_on_4xx_http_error(monkeypatch):
-    monkeypatch.setenv("FRED_API_KEY", "TESTKEY")
-
-    calls = []
-    monkeypatch.setattr(
-        fred_client.requests,
-        "get",
-        _make_get_stub([DummyResp(401, payload={"message": "bad"})], calls),
+        _make_get_stub([resp_dff, resp_dgs10, resp_cpi, resp_unrate], calls),
     )
 
-    import requests
-    with pytest.raises(requests.HTTPError):
-        fred_client.fred_series_observations("CPIAUCSL", ttl_sec=0, max_retries=2)
+    out = fred_client.get_macro_summary(ttl_seconds=0)
 
-    assert len(calls) == 1
+    assert out["ok"] is True
+    assert out["source"] == "fred"
+    assert out["rates"]["fed_funds"] == 5.25
+    assert out["rates"]["ten_year"] == 4.60
+    assert out["labor"]["unemployment"] == 4.20
+
+    # CPI YoY ~ 3.3333%
+    assert abs(out["inflation"]["cpi_yoy"] - 3.3333333) < 1e-3
+
+    # risk rules:
+    # fed_funds >= 4.5 -> +1
+    # ten_year >= 4.5 -> +1
+    # cpi_yoy >= 3.5 -> 0 (3.33 is below 3.5)
+    # unrate >= 4.5 -> 0
+    # score=2 -> Medium
+    assert out["risk"] == "Medium"
+
+    # Basic param checks
+    assert calls[0]["params"]["series_id"] == "DFF"
+    assert calls[1]["params"]["series_id"] == "DGS10"
+    assert calls[2]["params"]["series_id"] == "CPIAUCSL"
+    assert calls[3]["params"]["series_id"] == "UNRATE"
+
+    # CPI request uses limit 13 in client
+    assert calls[2]["params"]["limit"] == 13
+    assert calls[2]["params"]["sort_order"] == "desc"
 
 
 def test_caching_skips_second_network_call(monkeypatch):
     monkeypatch.setenv("FRED_API_KEY", "TESTKEY")
 
     calls = []
-    payload = {"observations": [{"date": "x", "value": "1"}]}
+
+    resp_dff = DummyResp(200, payload={"observations": [{"date": "x", "value": "5.00"}]})
+    resp_dgs10 = DummyResp(200, payload={"observations": [{"date": "x", "value": "4.00"}]})
+    resp_cpi = DummyResp(
+        200,
+        payload={
+            "observations": [
+                {"date": "x", "value": "310.0"},
+                {"date": "y", "value": "300.0"},
+            ]
+        },
+    )
+    resp_unrate = DummyResp(200, payload={"observations": [{"date": "x", "value": "4.00"}]})
+
     monkeypatch.setattr(
         fred_client.requests,
         "get",
-        _make_get_stub([DummyResp(200, payload=payload)], calls),
+        _make_get_stub([resp_dff, resp_dgs10, resp_cpi, resp_unrate], calls),
     )
 
-    out1 = fred_client.fred_series_observations("CPIAUCSL", ttl_sec=999)
-    out2 = fred_client.fred_series_observations("CPIAUCSL", ttl_sec=999)
+    # Control time so cache remains valid
+    t = {"now": 1000.0}
 
-    assert out1["data"] == out2["data"]
-    assert out1["cached"] is False
-    assert out2["cached"] is True
-    assert len(calls) == 1
+    def _time():
+        return t["now"]
 
+    monkeypatch.setattr(fred_client.time, "time", _time)
 
-def test_compat_export_calls_main(monkeypatch):
-    monkeypatch.setenv("FRED_API_KEY", "TESTKEY")
+    out1 = fred_client.get_macro_summary(ttl_seconds=999)
+    t["now"] = 1001.0
+    out2 = fred_client.get_macro_summary(ttl_seconds=999)
 
-    calls = []
-    payload = {"observations": []}
-    monkeypatch.setattr(
-        fred_client.requests,
-        "get",
-        _make_get_stub([DummyResp(200, payload=payload)], calls),
-    )
-
-    out = fred_client.get_series_observations("CPIAUCSL", ttl_sec=0)
-    assert out["data"]["observations"] == []
+    assert out1 == out2
+    assert len(calls) == 4  # only first call hits network (4 requests)

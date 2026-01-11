@@ -1,0 +1,133 @@
+/* ========= Macro Card (styled to match Sentiment Card) =================== */
+
+.macro-card {
+  margin-top: 1rem;
+  background: var(--ustock-bg-card);
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+  box-shadow: 0 8px 20px rgba(15, 118, 110, 0.06);
+  border: 1px solid var(--ustock-border-card);
+  color: var(--ustock-text-main);
+}
+
+/* Header */
+
+.macro-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+  margin-bottom: 0.75rem;
+}
+
+.macro-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+  color: var(--ustock-text-strong);
+}
+
+/* Grid like sentiment-card__body (2 cols) */
+
+.macro-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.75rem; /* space between header + tiles */
+}
+
+/* Tiles styled like sentiment-section */
+
+.macro-metric {
+  padding: 0.75rem 0.75rem;
+  border-radius: 10px;
+  background: var(--ustock-bg-card-soft);
+  border: 1px dashed rgba(15, 118, 110, 0.15);
+}
+
+.macro-label {
+  font-size: 0.72rem;
+  text-transform: none;
+  color: var(--ustock-text-muted);
+  margin-bottom: 0.2rem;
+}
+
+.macro-value {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--ustock-text-main);
+}
+
+/* Risk chip (match sentiment-chip feel) */
+
+.macro-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border: 1px solid var(--ustock-border-card);
+  background: var(--ustock-bg-card-soft);
+  color: var(--ustock-text-strong);
+  white-space: nowrap;
+}
+
+/* Semantic risk coloring (soft, like the sentiment chips) */
+.macro-pill--low {
+  background: #ecfdf3;
+  color: #166534;
+  border-color: rgba(22, 101, 52, 0.18);
+}
+
+.macro-pill--medium {
+  background: #fef3c7;
+  color: #92400e;
+  border-color: rgba(146, 64, 14, 0.18);
+}
+
+.macro-pill--high {
+  background: #fef2f2;
+  color: #b91c1c;
+  border-color: rgba(185, 28, 28, 0.18);
+}
+
+.macro-pill--unknown {
+  background: var(--ustock-bg-card-soft);
+  color: var(--ustock-text-muted);
+}
+
+/* Footer + errors */
+
+.macro-footnote {
+  margin-top: 0.75rem;
+  font-size: 0.8rem;
+  color: var(--ustock-text-muted);
+}
+
+.macro-error {
+  margin: 0.5rem 0 0.25rem;
+  font-size: 0.85rem;
+  color: #b91c1c;
+}
+
+/* Mobile */
+
+@media (max-width: 768px) {
+  .macro-card {
+    padding: 0.85rem 0.9rem;
+  }
+
+  .macro-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .macro-grid {
+    grid-template-columns: 1fr;
+  }
+}

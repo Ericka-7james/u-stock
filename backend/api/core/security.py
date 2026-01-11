@@ -1,48 +1,37 @@
 # api/core/security.py
-import os
-from typing import Any, Dict, Tuple
+from __future__ import annotations
 
+import os
+from functools import lru_cache
+from typing import Any, Dict, Optional, Tuple
+
+from cryptography.fernet import Fernet
 from fastapi import HTTPException, Request, Response
 from supabase import Client, create_client
-from cryptography.fernet import Fernet
-from pathlib import Path
-from dotenv import load_dotenv
 
-# -------------------------
-# Load env (same logic as your index.py)
-# -------------------------
-THIS_DIR = Path(__file__).resolve().parents[1]      # .../api
-PROJECT_ROOT = THIS_DIR.parent                      # .../u-stock
 
-# NOTE: override=False means "first one wins"
-for env_path in [
-    PROJECT_ROOT / ".env",
-    PROJECT_ROOT / ".env.local",
-    THIS_DIR / ".env",
-    THIS_DIR / ".env.local",
-]:
-    if env_path.exists():
-        load_dotenv(env_path, override=False)
+def _env(name: str, default: str = "") -> str:
+    return os.getenv(name, default).strip()
 
-SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip()
-SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY", "").strip()
 
-# ✅ Support both names (your repo uses both)
-SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
-SUPABASE_SECRET_KEY = os.getenv("SUPABASE_SECRET_KEY", "").strip()
+def _cookie_config() -> Dict[str, Any]:
+    env = _env("ENV", "development").lower()
+    cookie_secure = env == "production"
+    cookie_samesite = "none" if env == "production" else "lax"
+    cookie_max_age = int(_env("USTOCK_COOKIE_MAX_AGE", "604800"))  # 7 days
+    return {
+        "ENV": env,
+        "COOKIE_SECURE": cookie_secure,
+        "COOKIE_SAMESITE": cookie_samesite,
+        "COOKIE_MAX_AGE": cookie_max_age,
+        "COOKIE_NAME": _env("USTOCK_COOKIE_NAME", "access_token"),
+        "REFRESH_COOKIE_NAME": _env("USTOCK_REFRESH_COOKIE_NAME", "refresh_token"),
+    }
 
-# ✅ Canonical "service key" (prefer SERVICE_ROLE_KEY)
-SERVICE_KEY = SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SECRET_KEY
 
-INTEGRATIONS_ENC_KEY = os.getenv("INTEGRATIONS_ENC_KEY", "").strip()
-
-COOKIE_NAME = os.getenv("USTOCK_COOKIE_NAME", "access_token").strip()
-REFRESH_COOKIE_NAME = os.getenv("USTOCK_REFRESH_COOKIE_NAME", "refresh_token").strip()
-
-ENV = os.getenv("ENV", "development").strip().lower()
-COOKIE_SECURE = ENV == "production"
-COOKIE_SAMESITE = "none" if ENV == "production" else "lax"
-COOKIE_MAX_AGE = int(os.getenv("USTOCK_COOKIE_MAX_AGE", "604800"))
+def _service_key() -> str:
+    # Support both names; prefer canonical service role key
+    return _env("SUPABASE_SERVICE_ROLE_KEY") or _env("SUPABASE_SECRET_KEY")
 
 
 def _raise_supabase_env_missing(which: str) -> None:
@@ -51,7 +40,7 @@ def _raise_supabase_env_missing(which: str) -> None:
         detail={
             "code": "SUPABASE_MISCONFIGURED",
             "message": f"{which} is missing in environment variables.",
-            "hint": "Check your backend/.env (or root .env) and restart the backend.",
+            "hint": "Check your backend env and restart the backend.",
         },
     )
 
@@ -66,7 +55,10 @@ def _wrap_supabase_exception(e: Exception, which: str) -> HTTPException:
             detail={
                 "code": "SUPABASE_INVALID_KEY",
                 "message": f"Supabase rejected {which}.",
-                "hint": f"Verify SUPABASE_URL matches the project for your {which}, and paste the correct key into .env. Then restart the backend.",
+                "hint": (
+                    f"Verify SUPABASE_URL matches the project for your {which}, "
+                    "and paste the correct key into env. Then restart the backend."
+                ),
                 "provider": "supabase",
                 "which": which,
             },
@@ -85,52 +77,61 @@ def _wrap_supabase_exception(e: Exception, which: str) -> HTTPException:
     )
 
 
+@lru_cache(maxsize=2)
 def get_supabase_anon() -> Client:
-    if not SUPABASE_URL:
+    url = _env("SUPABASE_URL")
+    anon = _env("SUPABASE_ANON_KEY")
+
+    if not url:
         _raise_supabase_env_missing("SUPABASE_URL")
-    if not SUPABASE_ANON_KEY:
+    if not anon:
         _raise_supabase_env_missing("SUPABASE_ANON_KEY")
+
     try:
-        return create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
+        return create_client(url, anon)
     except Exception as e:
         raise _wrap_supabase_exception(e, "SUPABASE_ANON_KEY")
 
 
+@lru_cache(maxsize=2)
 def get_supabase_service() -> Client:
-    if not SUPABASE_URL:
-        _raise_supabase_env_missing("SUPABASE_URL")
+    url = _env("SUPABASE_URL")
+    service = _service_key()
 
-    # ✅ Accept either env var
-    if not SERVICE_KEY:
+    if not url:
+        _raise_supabase_env_missing("SUPABASE_URL")
+    if not service:
         _raise_supabase_env_missing("SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_SECRET_KEY)")
 
     try:
-        return create_client(SUPABASE_URL, SERVICE_KEY)
+        return create_client(url, service)
     except Exception as e:
-        # Tell you the canonical name we tried to use
-        which = "SUPABASE_SERVICE_ROLE_KEY" if SUPABASE_SERVICE_ROLE_KEY else "SUPABASE_SECRET_KEY"
+        which = "SUPABASE_SERVICE_ROLE_KEY" if _env("SUPABASE_SERVICE_ROLE_KEY") else "SUPABASE_SECRET_KEY"
         raise _wrap_supabase_exception(e, which)
 
 
 def set_auth_cookies(response: Response, access_token: str, refresh_token: str | None = None) -> None:
+    cfg = _cookie_config()
+
     if access_token:
         response.set_cookie(
-            key=COOKIE_NAME,
+            key=cfg["COOKIE_NAME"],
             value=access_token,
             httponly=True,
-            secure=COOKIE_SECURE,
-            samesite=COOKIE_SAMESITE,
-            max_age=COOKIE_MAX_AGE,
+            secure=cfg["COOKIE_SECURE"],
+            samesite=cfg["COOKIE_SAMESITE"],
+            max_age=cfg["COOKIE_MAX_AGE"],
             path="/",
         )
+
     if refresh_token:
         response.set_cookie(
-            key=REFRESH_COOKIE_NAME,
+            key=cfg["REFRESH_COOKIE_NAME"],
             value=refresh_token,
             httponly=True,
-            secure=COOKIE_SECURE,
-            samesite=COOKIE_SAMESITE,
-            max_age=COOKIE_MAX_AGE,
+            secure=cfg["COOKIE_SECURE"],
+            samesite=cfg["COOKIE_SAMESITE"],
+            max_age=cfg["COOKIE_MAX_AGE"],
             path="/",
         )
 
@@ -151,10 +152,13 @@ def _extract_user_id_and_email(res: Any) -> Tuple[str | None, str | None]:
 
 
 def require_user(request: Request, response: Response) -> Dict[str, str]:
+    cfg = _cookie_config()
     sb = get_supabase_anon()
-    access = request.cookies.get(COOKIE_NAME)
-    refresh = request.cookies.get(REFRESH_COOKIE_NAME)
 
+    access = request.cookies.get(cfg["COOKIE_NAME"])
+    refresh = request.cookies.get(cfg["REFRESH_COOKIE_NAME"])
+
+    # 1) Access token path
     if access:
         try:
             res = sb.auth.get_user(access)
@@ -162,8 +166,10 @@ def require_user(request: Request, response: Response) -> Dict[str, str]:
             if uid:
                 return {"id": uid, "email": email or ""}
         except Exception:
+            # fall through to refresh path
             pass
 
+    # 2) Refresh token path
     if refresh:
         try:
             refreshed = None
@@ -210,14 +216,22 @@ def require_user(request: Request, response: Response) -> Dict[str, str]:
         except Exception as e:
             raise HTTPException(
                 status_code=401,
-                detail={"code": "INVALID_SESSION", "message": f"Invalid session: {repr(e)}", "hint": "Sign in again."},
+                detail={
+                    "code": "INVALID_SESSION",
+                    "message": f"Invalid session: {repr(e)}",
+                    "hint": "Sign in again.",
+                },
             )
 
-    raise HTTPException(status_code=401, detail={"code": "NOT_AUTHENTICATED", "message": "Not authenticated"})
+    raise HTTPException(
+        status_code=401,
+        detail={"code": "NOT_AUTHENTICATED", "message": "Not authenticated"},
+    )
 
 
 def _fernet() -> Fernet:
-    if not INTEGRATIONS_ENC_KEY:
+    key = _env("INTEGRATIONS_ENC_KEY")
+    if not key:
         raise HTTPException(
             status_code=500,
             detail={
@@ -226,7 +240,8 @@ def _fernet() -> Fernet:
                 "hint": "Set INTEGRATIONS_ENC_KEY in backend env and restart.",
             },
         )
-    return Fernet(INTEGRATIONS_ENC_KEY.encode("utf-8"))
+    # Fernet expects urlsafe-base64 32-byte key; this will raise ValueError if invalid
+    return Fernet(key.encode("utf-8"))
 
 
 def decrypt_secret(token: str | None) -> str | None:

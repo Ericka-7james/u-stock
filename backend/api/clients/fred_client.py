@@ -1,112 +1,165 @@
-# api/clients/fred_client.py
+# backend/api/clients/fred_client.py
 from __future__ import annotations
 
 import os
 import time
+from dataclasses import dataclass
 from typing import Any, Dict, Optional, Tuple
 
 import requests
 
+
 FRED_BASE = "https://api.stlouisfed.org/fred"
 
-# key -> (expires_at_epoch, value)
-_CACHE: Dict[str, Tuple[float, Any]] = {}
+
+def _fred_key() -> str:
+    return os.getenv("FRED_API_KEY", "").strip()
 
 
-def _now() -> float:
-    return time.time()
+def _require_key() -> str:
+    key = _fred_key()
+    if not key:
+        raise RuntimeError("FRED_API_KEY is missing")
+    return key
 
 
-def _cache_get(key: str) -> Optional[Any]:
-    hit = _CACHE.get(key)
-    if not hit:
-        return None
-    expires_at, value = hit
-    if _now() >= expires_at:
-        _CACHE.pop(key, None)
-        return None
-    return value
+def _get_json(url: str, params: Dict[str, Any]) -> Dict[str, Any]:
+    r = requests.get(url, params=params, timeout=15)
+    r.raise_for_status()
+    return r.json()
 
 
-def _cache_set(key: str, value: Any, ttl_sec: int) -> None:
-    if ttl_sec <= 0:
-        return
-    _CACHE[key] = (_now() + float(ttl_sec), value)
-
-
-def _validate_series_observations_payload(data: Any) -> Dict[str, Any]:
-    if not isinstance(data, dict):
-        raise RuntimeError("fred_unexpected_payload")
-    obs = data.get("observations")
-    if obs is None or not isinstance(obs, list):
-        raise RuntimeError("fred_missing_observations")
-    return data
-
-
-def fred_series_observations(
-    series_id: str,
-    *,
-    ttl_sec: int = 3600,
-    timeout_sec: int = 8,
-    max_retries: int = 2,
-    backoff_base_sec: float = 0.5,
-    base_url: str = FRED_BASE,
-) -> Dict[str, Any]:
+def _latest_two_points(series_id: str) -> Tuple[float, float]:
     """
-    Calls FRED /series/observations and caches results.
-
-    Returns:
-      {"cached": bool, "data": <fred json>, "meta": {"attempts": int}}
+    Returns (latest_value, value_12_months_ago-ish) using the latest 13 monthly observations.
+    Works well for monthly series like CPIAUCSL.
     """
-    api_key = os.getenv("FRED_API_KEY", "").strip()
-    if not api_key:
-        raise RuntimeError("FRED_API_KEY missing")
+    key = _require_key()
+    data = _get_json(
+        f"{FRED_BASE}/series/observations",
+        {
+            "series_id": series_id,
+            "api_key": key,
+            "file_type": "json",
+            "sort_order": "desc",
+            "limit": 13,
+        },
+    )
+    obs = data.get("observations", [])
+    vals = []
+    for o in obs:
+        v = o.get("value")
+        if v is None or v == ".":
+            continue
+        vals.append(float(v))
 
-    series_id = (series_id or "").strip()
-    if not series_id:
-        raise ValueError("series_id is required")
+    if len(vals) < 2:
+        raise RuntimeError(f"Not enough observations for {series_id}")
 
-    cache_key = f"fred:series_observations:{series_id}"
-    cached = _cache_get(cache_key)
-    if cached is not None:
-        return {"cached": True, "data": cached, "meta": {"attempts": 0}}
-
-    url = f"{base_url}/series/observations"
-    params = {"series_id": series_id, "api_key": api_key, "file_type": "json"}
-
-    attempts = 0
-    last_err: Optional[Exception] = None
-
-    for attempt in range(1, max_retries + 2):
-        attempts = attempt
-        try:
-            r = requests.get(url, params=params, timeout=timeout_sec)
-
-            # Retry-worthy status codes
-            if r.status_code == 429 or 500 <= r.status_code <= 599:
-                raise RuntimeError(f"fred_http_transient {r.status_code}")
-
-            r.raise_for_status()
-            data = _validate_series_observations_payload(r.json())
-
-            _cache_set(cache_key, data, ttl_sec)
-            return {"cached": False, "data": data, "meta": {"attempts": attempts}}
-
-        except (requests.Timeout, requests.ConnectionError) as e:
-            last_err = e
-        except requests.HTTPError:
-            # non-transient 4xx errors: do not retry
-            raise
-        except Exception as e:
-            # includes transient RuntimeError and validation errors
-            last_err = e
-
-        if attempt < (max_retries + 1):
-            time.sleep(backoff_base_sec * attempt)
-
-    raise RuntimeError(f"fred_error: {last_err}")
+    latest = vals[0]
+    approx_12m_ago = vals[-1]
+    return latest, approx_12m_ago
 
 
-# ✅ Compatibility export: use this name in api/routes/macro.py
-def get_series_observations(series_id: str, ttl_sec: int = 3600) -> Dict[str, Any]:
-    return fred_series_observations(series_id=series_id, ttl_sec=ttl_sec)
+def _latest_point(series_id: str) -> float:
+    key = _require_key()
+    data = _get_json(
+        f"{FRED_BASE}/series/observations",
+        {
+            "series_id": series_id,
+            "api_key": key,
+            "file_type": "json",
+            "sort_order": "desc",
+            "limit": 10,
+        },
+    )
+    obs = data.get("observations", [])
+    for o in obs:
+        v = o.get("value")
+        if v is None or v == ".":
+            continue
+        return float(v)
+    raise RuntimeError(f"No valid observation found for {series_id}")
+
+
+@dataclass(frozen=True)
+class MacroSnapshot:
+    fed_funds: float          # DFF
+    ten_year_yield: float     # DGS10
+    cpi_yoy: float            # CPIAUCSL YoY %
+    unemployment: float       # UNRATE
+    risk: str                 # Low/Medium/High
+
+
+# simple TTL cache so dashboard doesn’t hammer FRED
+_CACHE: Optional[Tuple[float, Dict[str, Any]]] = None
+
+
+def _risk_signal(fed_funds: float, ten_year: float, cpi_yoy: float, unrate: float) -> str:
+    """
+    Simple scoring:
+      +1 if Fed Funds >= 4.5
+      +1 if 10Y >= 4.5
+      +1 if CPI YoY >= 3.5
+      +1 if Unemployment >= 4.5
+    0-1 = Low, 2 = Medium, 3-4 = High
+    """
+    score = 0
+    score += 1 if fed_funds >= 4.5 else 0
+    score += 1 if ten_year >= 4.5 else 0
+    score += 1 if cpi_yoy >= 3.5 else 0
+    score += 1 if unrate >= 4.5 else 0
+
+    if score <= 1:
+        return "Low"
+    if score == 2:
+        return "Medium"
+    return "High"
+
+
+def get_macro_summary(ttl_seconds: int = 600) -> Dict[str, Any]:
+    """
+    Returns a compact macro summary used by the dashboard.
+    Cached for ttl_seconds.
+    """
+    global _CACHE
+
+    now = time.time()
+    if _CACHE is not None:
+        expires_at, payload = _CACHE
+        if now < expires_at:
+            return payload
+
+    # series:
+    # DFF = Effective Federal Funds Rate
+    # DGS10 = 10-Year Treasury Constant Maturity Rate
+    # CPIAUCSL = CPI (index), compute YoY %
+    # UNRATE = Unemployment rate
+    fed_funds = _latest_point("DFF")
+    ten_year = _latest_point("DGS10")
+
+    cpi_latest, cpi_12m = _latest_two_points("CPIAUCSL")
+    cpi_yoy = ((cpi_latest / cpi_12m) - 1.0) * 100.0
+
+    unemployment = _latest_point("UNRATE")
+
+    risk = _risk_signal(fed_funds, ten_year, cpi_yoy, unemployment)
+
+    payload = {
+        "ok": True,
+        "source": "fred",
+        "rates": {
+            "fed_funds": fed_funds,
+            "ten_year": ten_year,
+        },
+        "inflation": {
+            "cpi_yoy": cpi_yoy,
+        },
+        "labor": {
+            "unemployment": unemployment,
+        },
+        "risk": risk,
+    }
+
+    _CACHE = (now + float(ttl_seconds), payload)
+    return payload

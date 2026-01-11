@@ -1,14 +1,20 @@
 # api/lib/alpaca_user_creds.py
+from __future__ import annotations
+
 from typing import Tuple
+
 from fastapi import HTTPException, Request, Response
 from supabase import Client
 
-from api.index import require_user, decrypt_secret  # If this causes circular import, see note below.
+from api.core.security import require_user, decrypt_secret
+
 
 def get_user_alpaca_creds(request: Request, response: Response, sb_service: Client) -> Tuple[str, str, str]:
     """
     Returns (api_key, api_secret, mode) for the signed-in user.
-    Reads from Supabase integrations table: api_key_enc, api_secret_enc, mode, status.
+
+    Reads from Supabase integrations table:
+      status, api_key_enc, api_secret_enc, mode
     """
     u = require_user(request, response)
     user_id = u["id"]
@@ -25,7 +31,7 @@ def get_user_alpaca_creds(request: Request, response: Response, sb_service: Clie
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to load Alpaca integration: {repr(e)}")
 
-    row = rec.data
+    row = getattr(rec, "data", None)
     if not row or str(row.get("status", "")).lower() != "connected":
         raise HTTPException(status_code=400, detail="Alpaca is not connected. Go to Connected Apps and connect Alpaca.")
 
