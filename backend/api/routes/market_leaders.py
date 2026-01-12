@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import re
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -12,8 +13,14 @@ router = APIRouter(prefix="/api/market", tags=["market"])
 
 ALPACA_DATA_BASE = os.getenv("ALPACA_DATA_BASE", "https://data.alpaca.markets").rstrip("/")
 
-# in-memory cache
+# In-memory cache
 _CACHE: Dict[str, Dict[str, Any]] = {}
+
+# bump this whenever you change filtering logic so old cache keys don't collide
+_CACHE_VERSION = "v3-alphaonly"
+
+# ✅ STRICT: no dots, no numbers, no dashes, etc.
+_ALPHA_ONLY = re.compile(r"^[A-Z]+$")
 
 
 def _now_epoch() -> int:
@@ -34,6 +41,14 @@ def _cache_set(key: str, value: Any, ttl: int):
     _CACHE[key] = {"value": value, "expires_at": time.time() + ttl}
 
 
+def _alpaca_headers(api_key: str, api_secret: str) -> Dict[str, str]:
+    return {
+        "APCA-API-KEY-ID": api_key,
+        "APCA-API-SECRET-KEY": api_secret,
+        "Accept": "application/json",
+    }
+
+
 def _num(x: Any) -> Optional[float]:
     try:
         if x is None:
@@ -46,12 +61,11 @@ def _num(x: Any) -> Optional[float]:
         return None
 
 
-def _alpaca_headers(api_key: str, api_secret: str) -> Dict[str, str]:
-    return {
-        "APCA-API-KEY-ID": api_key,
-        "APCA-API-SECRET-KEY": api_secret,
-        "Accept": "application/json",
-    }
+def _is_alpha_only_symbol(sym: str) -> bool:
+    s = (sym or "").strip().upper()
+    if not s:
+        return False
+    return bool(_ALPHA_ONLY.match(s))
 
 
 def _get_user_alpaca_creds(request: Request, response: Response) -> Tuple[str, str, str, str]:
@@ -66,10 +80,11 @@ def _get_user_alpaca_creds(request: Request, response: Response) -> Tuple[str, s
     return _creds(request, response)
 
 
-def _fetch_movers_symbols(api_key: str, api_secret: str, direction: str, limit: int) -> List[str]:
+def _fetch_movers(api_key: str, api_secret: str, direction: str, limit: int) -> List[Dict[str, Any]]:
     """
-    Movers endpoint varies by plan. We'll try it.
-    If it 404s, fallback to a safe universe so UI still renders.
+    Tries Alpaca movers endpoint.
+    If it 404s, fallback to a safe universe.
+    Returns list of dicts with at least {symbol, ...}
     """
     url = f"{ALPACA_DATA_BASE}/v1beta1/screener/stocks/movers"
     params = {"top": limit, "direction": direction}
@@ -80,8 +95,9 @@ def _fetch_movers_symbols(api_key: str, api_secret: str, direction: str, limit: 
         raise HTTPException(status_code=401, detail={"code": "ALPACA_UNAUTHORIZED", "message": "Alpaca rejected keys."})
 
     if r.status_code == 404:
+        # fallback list is already TV-safe
         universe = ["SPY", "QQQ", "IWM", "AAPL", "MSFT", "NVDA", "TSLA", "META", "AMD", "AMZN", "GOOGL"]
-        return universe[:limit]
+        return [{"symbol": s, "changePct": None} for s in universe[:limit]]
 
     if not r.ok:
         raise HTTPException(status_code=502, detail=f"alpaca_movers_error {r.status_code}: {r.text}")
@@ -93,25 +109,18 @@ def _fetch_movers_symbols(api_key: str, api_secret: str, direction: str, limit: 
     if not isinstance(items, list):
         items = []
 
-    out: List[str] = []
+    out: List[Dict[str, Any]] = []
     for it in items:
-        if not isinstance(it, dict):
-            continue
-        sym = it.get("symbol") or it.get("ticker")
-        if sym:
-            out.append(str(sym).upper())
-
-    return out[:limit]
+        if isinstance(it, dict):
+            sym = it.get("symbol") or it.get("ticker")
+            if sym:
+                out.append(it)
+    return out
 
 
 def _fetch_snapshots(api_key: str, api_secret: str, symbols: List[str]) -> Dict[str, Any]:
     """
-    ✅ This is the KEY call that provides previous close.
     GET /v2/stocks/snapshots?symbols=AAPL,MSFT,...
-
-    Returns per-symbol snapshot including:
-      latestTrade.p  (last trade price)
-      prevDailyBar.c (previous close)
     """
     if not symbols:
         return {}
@@ -125,7 +134,8 @@ def _fetch_snapshots(api_key: str, api_secret: str, symbols: List[str]) -> Dict[
         raise HTTPException(status_code=401, detail={"code": "ALPACA_UNAUTHORIZED", "message": "Alpaca rejected keys."})
 
     if not r.ok:
-        raise HTTPException(status_code=502, detail=f"alpaca_snapshots_error {r.status_code}: {r.text}")
+        # If snapshots fail, we still return symbols with changePct if movers provided it
+        return {}
 
     data = r.json()
     return data if isinstance(data, dict) else {}
@@ -146,8 +156,6 @@ def _extract_last_prev(snap: Dict[str, Any]) -> Tuple[Optional[float], Optional[
     last_f = _num(last)
     prev_f = _num(prev)
 
-    # ✅ Do NOT convert missing values into 0.0
-    # Leave them as None so UI shows "—" instead of fake 0.
     if last_f is not None and last_f <= 0:
         last_f = None
     if prev_f is not None and prev_f <= 0:
@@ -162,30 +170,35 @@ def market_leaders(
     response: Response,
     market: str = Query("stocks", pattern="^(stocks)$"),
     direction: str = Query("up", pattern="^(up|down)$"),
-    limit: int = Query(8, ge=1, le=25),
+    limit: int = Query(10, ge=1, le=25),          # ✅ default top 10
     cache_ttl: int = Query(20, ge=5, le=120),
+    fetch_multiplier: int = Query(15, ge=2, le=30),  # ✅ pull extra, then filter down to 10 clean
+    cache_bust: int = Query(0, ge=0, le=1),
 ):
     """
-    Returns:
+    ✅ Returns leaders filtered so frontend NEVER sees:
+       dots (VLN.WS), numbers (BRK.B / GOOG1), dashes, slashes, spaces, etc.
+
+    Rule: symbol must match /^[A-Z]+$/.
+
+    Response:
       {
         ok: true,
-        source: { id, label },
-        market, direction,
-        items: [{ symbol, score, last, prevClose }],
-        asOf: epoch
+        source: "ALPACA",
+        items: [{ symbol, score, last, prevClose, changePct? }],
+        ...
       }
-
-    score = ((last - prevClose) / prevClose) * 100
     """
-    cache_key = f"leaders:{market}:{direction}:{limit}:{cache_ttl}"
-    cached = _cache_get(cache_key)
-    if cached:
-        return cached
+    cache_key = f"{_CACHE_VERSION}:leaders:{market}:{direction}:{limit}:{cache_ttl}:{fetch_multiplier}:{cache_bust}"
+    if not cache_bust:
+        cached = _cache_get(cache_key)
+        if cached:
+            return cached
 
     if market != "stocks":
         out = {
             "ok": True,
-            "source": {"id": "alpaca", "label": "ALPACA"},
+            "source": "ALPACA",
             "market": market,
             "direction": direction,
             "items": [],
@@ -196,39 +209,76 @@ def market_leaders(
 
     _, api_key, api_secret, mode = _get_user_alpaca_creds(request, response)
 
-    # 1) MOVERS -> symbols
-    syms = _fetch_movers_symbols(api_key, api_secret, direction=direction, limit=limit)
+    raw_limit = min(max(limit * fetch_multiplier, limit), 500)
+    raw = _fetch_movers(api_key, api_secret, direction=direction, limit=raw_limit)
 
-    # 2) SNAPSHOTS -> last + prevDailyBar.close
+    # 1) Filter symbols immediately: only A-Z
+    cleaned: List[Dict[str, Any]] = []
+    seen = set()
+
+    for it in raw:
+        sym = (it.get("symbol") or it.get("ticker") or "").strip().upper()
+        if not _is_alpha_only_symbol(sym):
+            continue
+        if sym in seen:
+            continue
+        seen.add(sym)
+        cleaned.append({"symbol": sym, **it})
+
+        if len(cleaned) >= limit:
+            break
+
+    # 2) Optional: pull snapshots for last/prev close if we have symbols
+    syms = [x["symbol"] for x in cleaned]
     snaps = _fetch_snapshots(api_key, api_secret, syms)
 
-    # 3) Compute score from real numbers (no 0 placeholders)
     items: List[Dict[str, Any]] = []
-    for sym in syms:
+    for it in cleaned:
+        sym = it["symbol"]
         snap = snaps.get(sym) or {}
         last, prev = _extract_last_prev(snap)
 
-        score = None
-        if last is not None and prev is not None and prev > 0:
+        # Use movers % if present, else compute from last/prev
+        change_pct = _num(it.get("changePct") or it.get("change_percent") or it.get("percent_change"))
+        score = change_pct
+        if score is None and last is not None and prev is not None and prev > 0:
             score = ((last - prev) / prev) * 100.0
 
-        items.append({"symbol": sym, "score": score, "last": last, "prevClose": prev})
+        items.append(
+            {
+                "symbol": sym,
+                "score": score,
+                "changePct": change_pct,  # optional; UI can use score anyway
+                "last": last,
+                "prevClose": prev,
+                "direction": direction,
+            }
+        )
 
-    # Sort: score desc (missing scores sink)
+    # Sort by score desc (missing sinks)
     def sort_key(r: Dict[str, Any]) -> float:
         v = _num(r.get("score"))
         return v if v is not None else -10_000
 
     items.sort(key=sort_key, reverse=True)
+    items = items[:limit]
 
     out = {
         "ok": True,
-        "source": {"id": "alpaca", "label": "ALPACA"},
+        "source": "ALPACA",
         "market": market,
         "direction": direction,
         "mode": mode,
-        "items": items[:limit],
+        "items": items,
         "asOf": _now_epoch(),
+        "meta": {
+            "requested_limit": limit,
+            "raw_limit": raw_limit,
+            "raw_count": len(raw) if isinstance(raw, list) else 0,
+            "returned": len(items),
+            "filter": "alpha_only /^[A-Z]+$/ (no dots, numbers, dashes, slashes, spaces)",
+        },
     }
+
     _cache_set(cache_key, out, ttl=cache_ttl)
     return out

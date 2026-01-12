@@ -1,9 +1,8 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-// In production on Vercel, you typically call the backend by absolute URL.
-// Locally, we proxy /api -> http://127.0.0.1:8000
-const API_TARGET = process.env.VITE_API_PROXY_TARGET || "http://127.0.0.1:8000";
+// Local dev: proxy /api -> backend
+const API_TARGET = process.env.VITE_API_PROXY_TARGET || "http://localhost:8000";
 
 export default defineConfig(({ mode }) => {
   const isDev = mode === "development";
@@ -11,21 +10,23 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react()],
     server: {
-      host: "127.0.0.1",
+      host: "localhost",          // ✅ was 127.0.0.1
       port: 5173,
       strictPort: true,
       proxy: isDev
         ? {
             "/api": {
-              target: API_TARGET,
+              target: API_TARGET,  // ✅ default localhost:8000
               changeOrigin: true,
               secure: false,
+              // optional but helpful:
+              // ws: false,
             },
           }
         : undefined,
     },
     preview: {
-      host: "127.0.0.1",
+      host: "localhost",          // ✅ was 127.0.0.1
       port: 5173,
       strictPort: true,
     },

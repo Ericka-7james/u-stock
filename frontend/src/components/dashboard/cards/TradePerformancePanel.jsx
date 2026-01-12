@@ -14,6 +14,12 @@ function fmtPrice(v) {
   return Number.isFinite(x) ? x.toFixed(2) : "—";
 }
 
+// ✅ STRICT: no dots, numbers, dashes, slashes, spaces — ONLY A–Z
+function isAlphaOnlySymbol(sym) {
+  const s = String(sym || "").trim().toUpperCase();
+  return /^[A-Z]+$/.test(s);
+}
+
 function CardShell({ title, children, className = "" }) {
   return (
     <div className={`tpCard ${className}`}>
@@ -44,14 +50,11 @@ function MiniStat({ label, value, tone = "" }) {
 /**
  * PillRow rules:
  * - Always show full SYMBOL
- * - If the "right value" (score) would truncate, hide it entirely.
  * - Tooltip on hover shows full symbol + full score + sub line.
  */
 function PillRow({ symbol, score, sub = "", onClick }) {
   const sym = String(symbol || "").toUpperCase();
-  const scoreStr =
-    Number.isFinite(Number(score)) ? Number(score).toFixed(2) : "—";
-
+  const scoreStr = Number.isFinite(Number(score)) ? Number(score).toFixed(2) : "—";
   const tooltip = [sym, `Score: ${scoreStr}`, sub].filter(Boolean).join("\n");
 
   return (
@@ -92,14 +95,7 @@ function PillRow({ symbol, score, sub = "", onClick }) {
       </div>
 
       {/* BOTTOM: SCORE */}
-      <div
-        className="mono"
-        style={{
-          fontSize: 12,
-          opacity: 0.85,
-          whiteSpace: "nowrap",
-        }}
-      >
+      <div className="mono" style={{ fontSize: 12, opacity: 0.85, whiteSpace: "nowrap" }}>
         Score {scoreStr}
       </div>
     </button>
@@ -110,13 +106,7 @@ function OpportunityTable({ title, rows, emptyMessage, onPickSymbol }) {
   const clean = Array.isArray(rows) ? rows : [];
 
   return (
-    <div
-      className="tpOppMiniTable"
-      style={{
-        overflow: "hidden",
-        borderRadius: 14,
-      }}
-    >
+    <div className="tpOppMiniTable" style={{ overflow: "hidden", borderRadius: 14 }}>
       <div className="tpOppMiniTitle">{title}</div>
 
       <div className="tpOppHead">
@@ -129,13 +119,24 @@ function OpportunityTable({ title, rows, emptyMessage, onPickSymbol }) {
           clean.slice(0, 6).map((r, i) => {
             const sym = String(r.symbol || "").toUpperCase();
             const sub = r.sub ? String(r.sub) : "";
+
+            // ✅ Safety check for display + clicks
+            if (!isAlphaOnlySymbol(sym)) return null;
+
             return (
               <PillRow
                 key={`${sym}-${i}`}
                 symbol={sym}
                 score={r.score}
                 sub={sub}
-                onClick={onPickSymbol ? () => onPickSymbol(sym) : undefined}
+                onClick={
+                  onPickSymbol
+                    ? () => {
+                        if (!isAlphaOnlySymbol(sym)) return;
+                        onPickSymbol(sym);
+                      }
+                    : undefined
+                }
               />
             );
           })
@@ -155,18 +156,28 @@ export default function TradePerformancePanel({
   activeBot = null,
   onPickSymbol,
 }) {
-  const oppStocks = Array.isArray(opportunities?.stocks) ? opportunities.stocks : [];
+  // ✅ Filter bot picks too
+  const oppStocks = useMemo(() => {
+    const raw = Array.isArray(opportunities?.stocks) ? opportunities.stocks : [];
+    return raw
+      .map((x) => ({
+        ...x,
+        symbol: String(x?.symbol || "").toUpperCase().trim(),
+      }))
+      .filter((x) => x.symbol && isAlphaOnlySymbol(x.symbol));
+  }, [opportunities]);
 
+  // ✅ Filter leaders too
   const leadersClean = useMemo(() => {
     const raw = Array.isArray(leaders) ? leaders : [];
     return raw
       .map((x) => ({
         symbol: String(x?.symbol || "").toUpperCase().trim(),
-        changePct: n(x?.changePct),
+        changePct: n(x?.changePct ?? x?.score), // allow either
         last: x?.last,
         prevClose: x?.prevClose,
       }))
-      .filter((x) => x.symbol);
+      .filter((x) => x.symbol && isAlphaOnlySymbol(x.symbol));
   }, [leaders]);
 
   const leadersScored = useMemo(() => {
@@ -204,7 +215,6 @@ export default function TradePerformancePanel({
   const botRunning = Boolean(activeBot?.running);
   const botName = String(activeBot?.name || "").trim();
 
-  // keep a tiny summary bar so your top section doesn’t look empty
   const safe = data || { start: "", end: "", trades: [] };
   const trades = Array.isArray(safe.trades) ? safe.trades : [];
   const winRate = trades.length ? (trades.filter((t) => n(t.pnl) > 0).length / trades.length) * 100 : 0;
@@ -218,9 +228,7 @@ export default function TradePerformancePanel({
           </div>
 
           <p className="tpSubtitle">
-            {botRunning
-              ? `Bot running: ${botName || "Unknown bot"}`
-              : "No bot running — start a bot to unlock bot-aligned picks."}
+            {botRunning ? `Bot running: ${botName || "Unknown bot"}` : "No bot running — start a bot to unlock bot-aligned picks."}
           </p>
         </div>
 
@@ -242,11 +250,7 @@ export default function TradePerformancePanel({
             tone={botRunning ? "pos" : "neg"}
           />
 
-          <BigStat
-            label="Trades Context"
-            value={`${trades.length}`}
-            sub={`Win rate ${fmtPct(winRate)}`}
-          />
+          <BigStat label="Trades Context" value={`${trades.length}`} sub={`Win rate ${fmtPct(winRate)}`} />
 
           <div className="tpMiniGrid">
             <MiniStat label="Leaders" value={String(leadersClean.length)} />
@@ -282,9 +286,7 @@ export default function TradePerformancePanel({
               />
             </div>
 
-            <div className="tpOppFootnote">
-              Phase 1 scoring = overlap boost + |today move|. Hover any pill to see full details.
-            </div>
+            <div className="tpOppFootnote">Phase 1 scoring = overlap boost + |today move|. Hover any pill to see full details.</div>
           </CardShell>
         </div>
       </div>

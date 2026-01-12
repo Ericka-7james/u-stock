@@ -8,7 +8,7 @@ function n(x) {
 function nullIfZero(x) {
   const v = n(x);
   if (v === null) return null;
-  if (v === 0) return null; // IMPORTANT: backend used 0 as placeholder before; treat as missing
+  if (v === 0) return null;
   return v;
 }
 
@@ -33,6 +33,12 @@ function toneForScore(score) {
   return "";
 }
 
+// ✅ STRICT: show only A–Z tickers
+function isAlphaOnly(sym) {
+  const s = String(sym || "").trim().toUpperCase();
+  return /^[A-Z]+$/.test(s);
+}
+
 export default function MarketLeadersCard({
   title = "Market leaders (today)",
   subtitle = "Top movers from Alpaca (today). Click one to load the chart.",
@@ -41,7 +47,10 @@ export default function MarketLeadersCard({
   loading = false,
   onSelectSymbol,
 }) {
-  const list = Array.isArray(items) ? items : [];
+  const raw = Array.isArray(items) ? items : [];
+  const list = raw
+    .map((r) => ({ ...r, symbol: String(r?.symbol || "").toUpperCase() }))
+    .filter((r) => isAlphaOnly(r.symbol));
 
   return (
     <section className="mlCard">
@@ -57,12 +66,10 @@ export default function MarketLeadersCard({
 
       <div className="mlBody">
         {loading ? (
-          Array.from({ length: 8 }).map((_, i) => <div key={i} className="mlRow mlRowSkeleton" />)
+          Array.from({ length: 10 }).map((_, i) => <div key={i} className="mlRow mlRowSkeleton" />)
         ) : list.length ? (
           list.map((r, i) => {
             const sym = String(r?.symbol || "").toUpperCase();
-
-            // ✅ score can come from computed "score" or movers "changePct"
             const score = r?.score ?? r?.changePct;
 
             const last = n(r?.last);
@@ -86,9 +93,7 @@ export default function MarketLeadersCard({
 
                   <div className={`mlScore ${scoreTone}`}>
                     {fmtPct(score)}
-                    {n(score) !== null ? (
-                      <span className="mlArrow">{n(score) >= 0 ? "↑" : "↓"}</span>
-                    ) : null}
+                    {n(score) !== null ? <span className="mlArrow">{n(score) >= 0 ? "↑" : "↓"}</span> : null}
                   </div>
                 </div>
 
@@ -110,13 +115,9 @@ export default function MarketLeadersCard({
       </div>
 
       <div className="mlFoot">
-        Source: {meta?.source?.label || "ALPACA"}
-        {meta?.asOf ? (
-          <span className="mlFootSep"> · </span>
-        ) : null}
-        {meta?.asOf ? (
-          <span>As of {new Date(meta.asOf * 1000).toLocaleTimeString()}</span>
-        ) : null}
+        Source: {meta?.source?.label || meta?.source || "ALPACA"}
+        {meta?.asOf ? <span className="mlFootSep"> · </span> : null}
+        {meta?.asOf ? <span>As of {new Date(meta.asOf * 1000).toLocaleTimeString()}</span> : null}
       </div>
     </section>
   );

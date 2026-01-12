@@ -82,6 +82,11 @@ function normalizeSymbol(sym) {
   return last.toUpperCase();
 }
 
+function isTvSafe(sym) {
+  const s = String(sym || "").trim().toUpperCase();
+  return /^[A-Z]+$/.test(s); // rejects VLN.WS, BRK.B, etc.
+}
+
 function BodyWithInlineAction({ body, action, onAction }) {
   const text = String(body || "");
   const label = action?.label ? String(action.label) : "";
@@ -347,7 +352,9 @@ export default function DashboardPage() {
             activeBot={activeBot}
             onPickSymbol={(sym) => {
               const clean = normalizeSymbol(sym);
-              if (clean) setCurrentTicker(clean);
+              if (!clean) return;
+              if (!isTvSafe(clean)) return;
+              setCurrentTicker(clean);
             }}
           />
 
@@ -387,7 +394,9 @@ export default function DashboardPage() {
             loading={leadersLoading}
             onSelectSymbol={(sym) => {
               const clean = normalizeSymbol(sym);
-              if (clean) setCurrentTicker(clean);
+              if (!clean) return;
+              if (!isTvSafe(clean)) return; // blocks VLN.WS, BRK.B, etc.
+              setCurrentTicker(clean);
             }}
           />
         </div>
