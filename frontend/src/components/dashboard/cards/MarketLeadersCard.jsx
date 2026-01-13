@@ -1,3 +1,4 @@
+// frontend/src/components/dashboard/cards/MarketLeadersCard.jsx
 import "../../../css/dashboard/cards/MarketLeadersCard.css";
 
 function n(x) {
@@ -5,17 +6,9 @@ function n(x) {
   return Number.isFinite(v) ? v : null;
 }
 
-function nullIfZero(x) {
-  const v = n(x);
-  if (v === null) return null;
-  if (v === 0) return null;
-  return v;
-}
-
-function fmt2(x) {
-  const v = n(x);
-  if (v === null) return "—";
-  return v.toFixed(2);
+function fmtMoney(v) {
+  const x = Number(v);
+  return Number.isFinite(x) ? `$${x.toFixed(2)}` : "—";
 }
 
 function fmtPct(x) {
@@ -33,14 +26,27 @@ function toneForScore(score) {
   return "";
 }
 
-// ✅ STRICT: show only A–Z tickers
+// STRICT: only A–Z tickers
 function isAlphaOnly(sym) {
   const s = String(sym || "").trim().toUpperCase();
   return /^[A-Z]+$/.test(s);
 }
 
+// If prevClose missing but we have last + pct move,
+// back-calc prev ≈ last / (1 + pct/100)
+function computePrevFallback(last, pct) {
+  const L = n(last);
+  const P = n(pct);
+  if (L === null || P === null) return null;
+  const denom = 1 + P / 100;
+  if (!Number.isFinite(denom) || denom <= 0) return null;
+  const prev = L / denom;
+  if (!Number.isFinite(prev) || prev <= 0) return null;
+  return prev;
+}
+
 export default function MarketLeadersCard({
-  title = "Market leaders (today)",
+  title = "Market leaders",
   subtitle = "Top movers from Alpaca (today). Click one to load the chart.",
   items = [],
   meta = null,
@@ -49,8 +55,49 @@ export default function MarketLeadersCard({
 }) {
   const raw = Array.isArray(items) ? items : [];
   const list = raw
-    .map((r) => ({ ...r, symbol: String(r?.symbol || "").toUpperCase() }))
+    .map((r) => ({
+      ...r,
+      symbol: String(r?.symbol || "").toUpperCase().trim(),
+    }))
     .filter((r) => isAlphaOnly(r.symbol));
+
+  // Determine if any item had computed prevClose (backend or frontend fallback)
+  let anyComputed = false;
+
+  const rows = list.map((r) => {
+    const sym = r.symbol;
+    const pctMove = r?.score ?? r?.changePct;
+
+    const last = n(r?.last);
+
+    let prev = n(r?.prevClose);
+    if (prev !== null && prev <= 0) prev = null;
+
+    const backendComputed = Boolean(r?.prevCloseComputed);
+
+    let computedHere = false;
+    if (prev === null) {
+      const fb = computePrevFallback(last, pctMove);
+      if (fb !== null) {
+        prev = fb;
+        computedHere = true;
+      }
+    }
+
+    if (backendComputed || computedHere) anyComputed = true;
+
+    return {
+      sym,
+      pctMove,
+      last,
+      prev,
+    };
+  });
+
+  const sourceLabel =
+    meta?.source_label ||
+    meta?.sourceLabel ||
+    (anyComputed ? "ALPACA+Computed" : (meta?.source?.label || meta?.source || "ALPACA"));
 
   return (
     <section className="mlCard">
@@ -61,47 +108,45 @@ export default function MarketLeadersCard({
 
       <div className="mlTableHead">
         <div>Symbol</div>
-        <div className="right">Score</div>
+        <div className="right">Move</div>
       </div>
 
       <div className="mlBody">
         {loading ? (
-          Array.from({ length: 10 }).map((_, i) => <div key={i} className="mlRow mlRowSkeleton" />)
-        ) : list.length ? (
-          list.map((r, i) => {
-            const sym = String(r?.symbol || "").toUpperCase();
-            const score = r?.score ?? r?.changePct;
-
-            const last = n(r?.last);
-            const prev = nullIfZero(r?.prevClose);
-
-            const scoreTone = toneForScore(score);
-            const showSecondLine = last !== null || prev !== null;
+          Array.from({ length: 10 }).map((_, i) => (
+            <div key={i} className="mlRow mlRowSkeleton" />
+          ))
+        ) : rows.length ? (
+          rows.map((r, i) => {
+            const scoreTone = toneForScore(r.pctMove);
+            const showSecondLine = r.last !== null || r.prev !== null;
 
             return (
               <button
-                key={`${sym}-${i}`}
+                key={`${r.sym}-${i}`}
                 type="button"
                 className="mlRow"
-                onClick={() => onSelectSymbol?.(sym)}
-                title={sym}
+                onClick={() => onSelectSymbol?.(r.sym)}
+                title={r.sym}
               >
                 <div className="mlRowTop">
-                  <div className="mlSymbol" title={sym}>
-                    {sym}
+                  <div className="mlSymbol" title={r.sym}>
+                    {r.sym}
                   </div>
 
                   <div className={`mlScore ${scoreTone}`}>
-                    {fmtPct(score)}
-                    {n(score) !== null ? <span className="mlArrow">{n(score) >= 0 ? "↑" : "↓"}</span> : null}
+                    {fmtPct(r.pctMove)}
+                    {n(r.pctMove) !== null ? (
+                      <span className="mlArrow">{n(r.pctMove) >= 0 ? "↑" : "↓"}</span>
+                    ) : null}
                   </div>
                 </div>
 
                 {showSecondLine ? (
                   <div className="mlRowSub">
-                    <span>Last: {last === null ? "—" : fmt2(last)}</span>
+                    <span>Last price: {r.last === null ? "—" : `${fmtMoney(r.last)} (USD/share)`}</span>
                     <span className="dot">·</span>
-                    <span>Prev close: {prev === null ? "—" : fmt2(prev)}</span>
+                    <span>Prev close: {r.prev === null ? "—" : `${fmtMoney(r.prev)} (USD/share)`}</span>
                   </div>
                 ) : (
                   <div className="mlRowSub muted">—</div>
@@ -115,7 +160,7 @@ export default function MarketLeadersCard({
       </div>
 
       <div className="mlFoot">
-        Source: {meta?.source?.label || meta?.source || "ALPACA"}
+        Source: {sourceLabel}
         {meta?.asOf ? <span className="mlFootSep"> · </span> : null}
         {meta?.asOf ? <span>As of {new Date(meta.asOf * 1000).toLocaleTimeString()}</span> : null}
       </div>

@@ -13,13 +13,14 @@ router = APIRouter(prefix="/api/market", tags=["market"])
 
 ALPACA_DATA_BASE = os.getenv("ALPACA_DATA_BASE", "https://data.alpaca.markets").rstrip("/")
 
+# Some Alpaca accounts/plans require specifying a feed ("iex" or "sip")
+ALPACA_DATA_FEED = os.getenv("ALPACA_DATA_FEED", "").strip()  # e.g. "iex"
+
 # In-memory cache
 _CACHE: Dict[str, Dict[str, Any]] = {}
 
-# bump this whenever you change filtering logic so old cache keys don't collide
-_CACHE_VERSION = "v3-alphaonly"
+_CACHE_VERSION = "v7-alpha-only-prevclose-computed-flag"
 
-# ✅ STRICT: no dots, no numbers, no dashes, etc.
 _ALPHA_ONLY = re.compile(r"^[A-Z]+$")
 
 
@@ -28,13 +29,13 @@ def _now_epoch() -> int:
 
 
 def _cache_get(key: str):
-    e = _CACHE.get(key)
-    if not e:
+    entry = _CACHE.get(key)
+    if not entry:
         return None
-    if time.time() > e["expires_at"]:
+    if time.time() > entry["expires_at"]:
         _CACHE.pop(key, None)
         return None
-    return e["value"]
+    return entry["value"]
 
 
 def _cache_set(key: str, value: Any, ttl: int):
@@ -63,16 +64,10 @@ def _num(x: Any) -> Optional[float]:
 
 def _is_alpha_only_symbol(sym: str) -> bool:
     s = (sym or "").strip().upper()
-    if not s:
-        return False
-    return bool(_ALPHA_ONLY.match(s))
+    return bool(_ALPHA_ONLY.fullmatch(s))
 
 
 def _get_user_alpaca_creds(request: Request, response: Response) -> Tuple[str, str, str, str]:
-    """
-    Uses your existing helper in api/routes/top_tickers.py
-    Returns: (user_id, api_key, api_secret, mode)
-    """
     try:
         from api.routes.top_tickers import _get_user_alpaca_creds as _creds
     except Exception as e:
@@ -81,75 +76,60 @@ def _get_user_alpaca_creds(request: Request, response: Response) -> Tuple[str, s
 
 
 def _fetch_movers(api_key: str, api_secret: str, direction: str, limit: int) -> List[Dict[str, Any]]:
-    """
-    Tries Alpaca movers endpoint.
-    If it 404s, fallback to a safe universe.
-    Returns list of dicts with at least {symbol, ...}
-    """
     url = f"{ALPACA_DATA_BASE}/v1beta1/screener/stocks/movers"
     params = {"top": limit, "direction": direction}
 
     r = requests.get(url, headers=_alpaca_headers(api_key, api_secret), params=params, timeout=12)
 
     if r.status_code == 401:
-        raise HTTPException(status_code=401, detail={"code": "ALPACA_UNAUTHORIZED", "message": "Alpaca rejected keys."})
+        raise HTTPException(status_code=401, detail={"code": "ALPACA_UNAUTHORIZED"})
 
     if r.status_code == 404:
-        # fallback list is already TV-safe
-        universe = ["SPY", "QQQ", "IWM", "AAPL", "MSFT", "NVDA", "TSLA", "META", "AMD", "AMZN", "GOOGL"]
-        return [{"symbol": s, "changePct": None} for s in universe[:limit]]
+        fallback = ["AAPL", "MSFT", "NVDA", "TSLA", "META", "AMD", "AMZN", "GOOGL", "NFLX", "INTC"]
+        return [{"symbol": s} for s in fallback]
 
     if not r.ok:
-        raise HTTPException(status_code=502, detail=f"alpaca_movers_error {r.status_code}: {r.text}")
+        raise HTTPException(status_code=502, detail=f"alpaca_movers_error {r.status_code}")
 
     data = r.json()
-    items = data.get("movers") or data.get("data") or data.get("items") or data
+    items = data.get("movers") or data.get("data") or data.get("items") or []
     if isinstance(items, dict):
         items = items.get("movers") or items.get("items") or []
-    if not isinstance(items, list):
-        items = []
 
     out: List[Dict[str, Any]] = []
     for it in items:
-        if isinstance(it, dict):
-            sym = it.get("symbol") or it.get("ticker")
-            if sym:
-                out.append(it)
+        if isinstance(it, dict) and (it.get("symbol") or it.get("ticker")):
+            out.append(it)
     return out
 
 
 def _fetch_snapshots(api_key: str, api_secret: str, symbols: List[str]) -> Dict[str, Any]:
-    """
-    GET /v2/stocks/snapshots?symbols=AAPL,MSFT,...
-    """
     if not symbols:
         return {}
 
     url = f"{ALPACA_DATA_BASE}/v2/stocks/snapshots"
-    params = {"symbols": ",".join(symbols)}
+    params: Dict[str, Any] = {"symbols": ",".join(symbols)}
+    if ALPACA_DATA_FEED:
+        params["feed"] = ALPACA_DATA_FEED
 
     r = requests.get(url, headers=_alpaca_headers(api_key, api_secret), params=params, timeout=12)
-
     if r.status_code == 401:
-        raise HTTPException(status_code=401, detail={"code": "ALPACA_UNAUTHORIZED", "message": "Alpaca rejected keys."})
-
+        raise HTTPException(status_code=401, detail={"code": "ALPACA_UNAUTHORIZED"})
     if not r.ok:
-        # If snapshots fail, we still return symbols with changePct if movers provided it
         return {}
 
     data = r.json()
     return data if isinstance(data, dict) else {}
 
 
-def _extract_last_prev(snap: Dict[str, Any]) -> Tuple[Optional[float], Optional[float]]:
+def _extract_last_prev(snapshot: Dict[str, Any]) -> Tuple[Optional[float], Optional[float]]:
     last = None
-    prev = None
-
-    lt = snap.get("latestTrade") or {}
+    lt = snapshot.get("latestTrade") or {}
     if isinstance(lt, dict):
         last = lt.get("p") or lt.get("price")
 
-    prev_bar = snap.get("prevDailyBar") or {}
+    prev = None
+    prev_bar = snapshot.get("prevDailyBar") or {}
     if isinstance(prev_bar, dict):
         prev = prev_bar.get("c") or prev_bar.get("close")
 
@@ -164,121 +144,236 @@ def _extract_last_prev(snap: Dict[str, Any]) -> Tuple[Optional[float], Optional[
     return last_f, prev_f
 
 
+def _close_of(bar: Any) -> Optional[float]:
+    if not isinstance(bar, dict):
+        return None
+    v = bar.get("c") if "c" in bar else bar.get("close")
+    out = _num(v)
+    if out is not None and out <= 0:
+        return None
+    return out
+
+
+def _group_bars_any_shape(symbols: List[str], payload: Any) -> Dict[str, List[Dict[str, Any]]]:
+    out: Dict[str, List[Dict[str, Any]]] = {}
+    if not isinstance(payload, dict):
+        return out
+
+    bars = payload.get("bars")
+
+    # Shape 1: {"bars": {"AAPL":[...], "MSFT":[...]}}
+    if isinstance(bars, dict):
+        for k, v in bars.items():
+            sym = str(k).upper()
+            if sym not in symbols:
+                continue
+            if isinstance(v, list):
+                out[sym] = [b for b in v if isinstance(b, dict)]
+        return out
+
+    # Shape 2: {"bars": [ {S:"AAPL", ...}, {S:"MSFT", ...} ]}
+    if isinstance(bars, list):
+        has_sym_field = any(isinstance(b, dict) and (("S" in b) or ("symbol" in b)) for b in bars)
+        if has_sym_field:
+            for b in bars:
+                if not isinstance(b, dict):
+                    continue
+                sym = str(b.get("S") or b.get("symbol") or "").upper().strip()
+                if not sym or sym not in symbols:
+                    continue
+                out.setdefault(sym, []).append(b)
+            return out
+
+        # Shape 3: single-symbol list if only one symbol requested
+        if len(symbols) == 1:
+            sym = symbols[0]
+            out[sym] = [b for b in bars if isinstance(b, dict)]
+            return out
+
+    return out
+
+
+def _fetch_prevclose_from_bars_batch(api_key: str, api_secret: str, symbols: List[str]) -> Dict[str, Optional[float]]:
+    if not symbols:
+        return {}
+
+    url = f"{ALPACA_DATA_BASE}/v2/stocks/bars"
+    params: Dict[str, Any] = {
+        "symbols": ",".join(symbols),
+        "timeframe": "1Day",
+        "limit": 2,
+        "adjustment": "raw",
+    }
+    if ALPACA_DATA_FEED:
+        params["feed"] = ALPACA_DATA_FEED
+
+    r = requests.get(url, headers=_alpaca_headers(api_key, api_secret), params=params, timeout=12)
+    if r.status_code == 401:
+        raise HTTPException(status_code=401, detail={"code": "ALPACA_UNAUTHORIZED"})
+    if not r.ok:
+        return {}
+
+    data = r.json()
+    grouped = _group_bars_any_shape(symbols, data)
+    if not grouped:
+        return {}
+
+    out: Dict[str, Optional[float]] = {}
+    for sym in symbols:
+        bars = grouped.get(sym) or []
+        if not bars:
+            out[sym] = None
+            continue
+
+        # Sort by timestamp if present
+        if isinstance(bars[0], dict) and "t" in bars[0]:
+            try:
+                bars = sorted(bars, key=lambda b: b.get("t"))
+            except Exception:
+                pass
+
+        if len(bars) >= 2:
+            out[sym] = _close_of(bars[-2])
+        else:
+            out[sym] = _close_of(bars[-1])
+
+    return out
+
+
+def _fetch_prevclose_from_bars_single(api_key: str, api_secret: str, symbol: str) -> Optional[float]:
+    url = f"{ALPACA_DATA_BASE}/v2/stocks/{symbol}/bars"
+    params: Dict[str, Any] = {"timeframe": "1Day", "limit": 2, "adjustment": "raw"}
+    if ALPACA_DATA_FEED:
+        params["feed"] = ALPACA_DATA_FEED
+
+    r = requests.get(url, headers=_alpaca_headers(api_key, api_secret), params=params, timeout=12)
+    if r.status_code == 401:
+        raise HTTPException(status_code=401, detail={"code": "ALPACA_UNAUTHORIZED"})
+    if not r.ok:
+        return None
+
+    data = r.json()
+    bars = data.get("bars") if isinstance(data, dict) else None
+    if not isinstance(bars, list) or not bars:
+        return None
+
+    if isinstance(bars[0], dict) and "t" in bars[0]:
+        try:
+            bars = sorted(bars, key=lambda b: b.get("t"))
+        except Exception:
+            pass
+
+    if len(bars) >= 2:
+        return _close_of(bars[-2])
+    return _close_of(bars[-1])
+
+
 @router.get("/leaders")
 def market_leaders(
     request: Request,
     response: Response,
     market: str = Query("stocks", pattern="^(stocks)$"),
     direction: str = Query("up", pattern="^(up|down)$"),
-    limit: int = Query(10, ge=1, le=25),          # ✅ default top 10
+    limit: int = Query(10, ge=1, le=25),
     cache_ttl: int = Query(20, ge=5, le=120),
-    fetch_multiplier: int = Query(15, ge=2, le=30),  # ✅ pull extra, then filter down to 10 clean
+    fetch_multiplier: int = Query(15, ge=2, le=30),
     cache_bust: int = Query(0, ge=0, le=1),
 ):
-    """
-    ✅ Returns leaders filtered so frontend NEVER sees:
-       dots (VLN.WS), numbers (BRK.B / GOOG1), dashes, slashes, spaces, etc.
-
-    Rule: symbol must match /^[A-Z]+$/.
-
-    Response:
-      {
-        ok: true,
-        source: "ALPACA",
-        items: [{ symbol, score, last, prevClose, changePct? }],
-        ...
-      }
-    """
-    cache_key = f"{_CACHE_VERSION}:leaders:{market}:{direction}:{limit}:{cache_ttl}:{fetch_multiplier}:{cache_bust}"
+    cache_key = f"{_CACHE_VERSION}:{market}:{direction}:{limit}:{fetch_multiplier}:{cache_bust}"
     if not cache_bust:
         cached = _cache_get(cache_key)
         if cached:
             return cached
 
-    if market != "stocks":
-        out = {
-            "ok": True,
-            "source": "ALPACA",
-            "market": market,
-            "direction": direction,
-            "items": [],
-            "asOf": _now_epoch(),
-        }
-        _cache_set(cache_key, out, ttl=cache_ttl)
-        return out
-
     _, api_key, api_secret, mode = _get_user_alpaca_creds(request, response)
 
-    raw_limit = min(max(limit * fetch_multiplier, limit), 500)
-    raw = _fetch_movers(api_key, api_secret, direction=direction, limit=raw_limit)
+    raw_limit = min(limit * fetch_multiplier, 500)
+    raw = _fetch_movers(api_key, api_secret, direction, raw_limit)
 
-    # 1) Filter symbols immediately: only A-Z
-    cleaned: List[Dict[str, Any]] = []
+    # alpha-only + dedupe
     seen = set()
-
+    symbols: List[str] = []
     for it in raw:
-        sym = (it.get("symbol") or it.get("ticker") or "").strip().upper()
+        sym = (it.get("symbol") or it.get("ticker") or "").upper().strip()
         if not _is_alpha_only_symbol(sym):
             continue
         if sym in seen:
             continue
         seen.add(sym)
-        cleaned.append({"symbol": sym, **it})
-
-        if len(cleaned) >= limit:
+        symbols.append(sym)
+        if len(symbols) >= limit:
             break
 
-    # 2) Optional: pull snapshots for last/prev close if we have symbols
-    syms = [x["symbol"] for x in cleaned]
-    snaps = _fetch_snapshots(api_key, api_secret, syms)
+    snapshots = _fetch_snapshots(api_key, api_secret, symbols)
+    prevclose_batch = _fetch_prevclose_from_bars_batch(api_key, api_secret, symbols)
 
     items: List[Dict[str, Any]] = []
-    for it in cleaned:
-        sym = it["symbol"]
-        snap = snaps.get(sym) or {}
+    computed_prevclose_count = 0
+
+    # for transparency/debug
+    batch_hit = 0
+    single_hit = 0
+
+    for sym in symbols:
+        snap = snapshots.get(sym) or {}
         last, prev = _extract_last_prev(snap)
 
-        # Use movers % if present, else compute from last/prev
-        change_pct = _num(it.get("changePct") or it.get("change_percent") or it.get("percent_change"))
-        score = change_pct
-        if score is None and last is not None and prev is not None and prev > 0:
+        prev_computed = False
+
+        if prev is None:
+            prev = prevclose_batch.get(sym)
+            if prev is not None:
+                prev_computed = True
+                batch_hit += 1
+
+        if prev is None:
+            prev = _fetch_prevclose_from_bars_single(api_key, api_secret, sym)
+            if prev is not None:
+                prev_computed = True
+                single_hit += 1
+
+        if prev_computed:
+            computed_prevclose_count += 1
+
+        score = None
+        if last is not None and prev is not None and prev > 0:
             score = ((last - prev) / prev) * 100.0
 
         items.append(
             {
                 "symbol": sym,
                 "score": score,
-                "changePct": change_pct,  # optional; UI can use score anyway
                 "last": last,
                 "prevClose": prev,
+                "prevCloseComputed": bool(prev_computed),
                 "direction": direction,
             }
         )
 
-    # Sort by score desc (missing sinks)
-    def sort_key(r: Dict[str, Any]) -> float:
-        v = _num(r.get("score"))
-        return v if v is not None else -10_000
+    items.sort(key=lambda r: _num(r.get("score")) or -10_000, reverse=True)
 
-    items.sort(key=sort_key, reverse=True)
-    items = items[:limit]
+    base_source = "ALPACA"
+    source_label = "ALPACA+Computed" if computed_prevclose_count > 0 else base_source
 
     out = {
         "ok": True,
-        "source": "ALPACA",
+        "source": base_source,  # keep stable
         "market": market,
         "direction": direction,
         "mode": mode,
         "items": items,
         "asOf": _now_epoch(),
         "meta": {
-            "requested_limit": limit,
-            "raw_limit": raw_limit,
-            "raw_count": len(raw) if isinstance(raw, list) else 0,
+            "source_label": source_label,  # 👈 UI uses this
+            "computed_prevclose_count": computed_prevclose_count,
+            "filter": "alpha_only /^[A-Z]+$/",
             "returned": len(items),
-            "filter": "alpha_only /^[A-Z]+$/ (no dots, numbers, dashes, slashes, spaces)",
+            "prevclose_source": "snapshot.prevDailyBar -> bars(batch) -> bars(single)",
+            "bars_batch_hit": batch_hit,
+            "bars_single_hit": single_hit,
+            "feed": ALPACA_DATA_FEED or None,
         },
     }
 
-    _cache_set(cache_key, out, ttl=cache_ttl)
+    _cache_set(cache_key, out, cache_ttl)
     return out

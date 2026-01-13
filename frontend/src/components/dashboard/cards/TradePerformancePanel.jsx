@@ -6,18 +6,35 @@ function n(x) {
   const v = Number(x);
   return Number.isFinite(v) ? v : 0;
 }
+function nn(x) {
+  const v = Number(x);
+  return Number.isFinite(v) ? v : null;
+}
 function fmtPct(v) {
   return `${Math.round(n(v))}%`;
 }
-function fmtPrice(v) {
+function fmtMoney(v) {
   const x = Number(v);
-  return Number.isFinite(x) ? x.toFixed(2) : "—";
+  return Number.isFinite(x) ? `$${x.toFixed(2)}` : "—";
 }
 
-// ✅ STRICT: no dots, numbers, dashes, slashes, spaces — ONLY A–Z
+// ✅ STRICT: no dots, numbers, dashes — ONLY A–Z
 function isAlphaOnlySymbol(sym) {
   const s = String(sym || "").trim().toUpperCase();
   return /^[A-Z]+$/.test(s);
+}
+
+// If prevClose missing but we have last + pct move,
+// back-calc prev ≈ last / (1 + pct/100)
+function computePrevFallback(last, pct) {
+  const L = nn(last);
+  const P = nn(pct);
+  if (L === null || P === null) return null;
+  const denom = 1 + P / 100;
+  if (!Number.isFinite(denom) || denom <= 0) return null;
+  const prev = L / denom;
+  if (!Number.isFinite(prev) || prev <= 0) return null;
+  return prev;
 }
 
 function CardShell({ title, children, className = "" }) {
@@ -47,11 +64,6 @@ function MiniStat({ label, value, tone = "" }) {
   );
 }
 
-/**
- * PillRow rules:
- * - Always show full SYMBOL
- * - Tooltip on hover shows full symbol + full score + sub line.
- */
 function PillRow({ symbol, score, sub = "", onClick }) {
   const sym = String(symbol || "").toUpperCase();
   const scoreStr = Number.isFinite(Number(score)) ? Number(score).toFixed(2) : "—";
@@ -79,7 +91,6 @@ function PillRow({ symbol, score, sub = "", onClick }) {
         textAlign: "left",
       }}
     >
-      {/* TOP: SYMBOL ONLY */}
       <div
         className="mono"
         style={{
@@ -94,7 +105,6 @@ function PillRow({ symbol, score, sub = "", onClick }) {
         {sym}
       </div>
 
-      {/* BOTTOM: SCORE */}
       <div className="mono" style={{ fontSize: 12, opacity: 0.85, whiteSpace: "nowrap" }}>
         Score {scoreStr}
       </div>
@@ -102,12 +112,19 @@ function PillRow({ symbol, score, sub = "", onClick }) {
   );
 }
 
-function OpportunityTable({ title, rows, emptyMessage, onPickSymbol }) {
+function OpportunityTable({ title, rows, emptyMessage, onPickSymbol, sourceLabel }) {
   const clean = Array.isArray(rows) ? rows : [];
 
   return (
     <div className="tpOppMiniTable" style={{ overflow: "hidden", borderRadius: 14 }}>
-      <div className="tpOppMiniTitle">{title}</div>
+      <div className="tpOppMiniTitle" style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10 }}>
+        <span>{title}</span>
+        {sourceLabel ? (
+          <span style={{ fontSize: 12, opacity: 0.7, whiteSpace: "nowrap" }}>
+            Source: {sourceLabel}
+          </span>
+        ) : null}
+      </div>
 
       <div className="tpOppHead">
         <div>Symbol</div>
@@ -119,8 +136,6 @@ function OpportunityTable({ title, rows, emptyMessage, onPickSymbol }) {
           clean.slice(0, 6).map((r, i) => {
             const sym = String(r.symbol || "").toUpperCase();
             const sub = r.sub ? String(r.sub) : "";
-
-            // ✅ Safety check for display + clicks
             if (!isAlphaOnlySymbol(sym)) return null;
 
             return (
@@ -156,7 +171,6 @@ export default function TradePerformancePanel({
   activeBot = null,
   onPickSymbol,
 }) {
-  // ✅ Filter bot picks too
   const oppStocks = useMemo(() => {
     const raw = Array.isArray(opportunities?.stocks) ? opportunities.stocks : [];
     return raw
@@ -167,28 +181,51 @@ export default function TradePerformancePanel({
       .filter((x) => x.symbol && isAlphaOnlySymbol(x.symbol));
   }, [opportunities]);
 
-  // ✅ Filter leaders too
   const leadersClean = useMemo(() => {
     const raw = Array.isArray(leaders) ? leaders : [];
     return raw
       .map((x) => ({
         symbol: String(x?.symbol || "").toUpperCase().trim(),
-        changePct: n(x?.changePct ?? x?.score), // allow either
+        changePct: n(x?.changePct ?? x?.score),
         last: x?.last,
         prevClose: x?.prevClose,
+        prevCloseComputed: Boolean(x?.prevCloseComputed),
       }))
       .filter((x) => x.symbol && isAlphaOnlySymbol(x.symbol));
   }, [leaders]);
 
   const leadersScored = useMemo(() => {
-    return [...leadersClean]
-      .map((l) => ({
-        symbol: l.symbol,
-        score: Math.abs(l.changePct),
-        sub: `Last ${fmtPrice(l.last)} · Prev ${fmtPrice(l.prevClose)}`,
-      }))
+    let anyComputed = false;
+
+    const rows = [...leadersClean]
+      .map((l) => {
+        const last = nn(l.last);
+        let prev = nn(l.prevClose);
+        if (prev !== null && prev <= 0) prev = null;
+
+        let computedHere = false;
+        if (prev === null) {
+          const fb = computePrevFallback(last, l.changePct);
+          if (fb !== null) {
+            prev = fb;
+            computedHere = true;
+          }
+        }
+
+        if (l.prevCloseComputed || computedHere) anyComputed = true;
+
+        return {
+          symbol: l.symbol,
+          score: Math.abs(l.changePct),
+          sub: `Last price ${last === null ? "—" : `${fmtMoney(last)} (USD/share)`} · Prev close ${
+            prev === null ? "—" : `${fmtMoney(prev)} (USD/share)`
+          }`,
+        };
+      })
       .sort((a, b) => n(b.score) - n(a.score))
       .slice(0, 6);
+
+    return { rows, anyComputed };
   }, [leadersClean]);
 
   const aligned = useMemo(() => {
@@ -269,9 +306,10 @@ export default function TradePerformancePanel({
 
               <OpportunityTable
                 title="Market leaders (today)"
-                rows={leadersScored}
+                rows={leadersScored.rows}
                 emptyMessage="No leaders returned yet."
                 onPickSymbol={onPickSymbol}
+                sourceLabel={leadersScored.anyComputed ? "ALPACA+Computed" : "ALPACA"}
               />
 
               <OpportunityTable
@@ -286,7 +324,7 @@ export default function TradePerformancePanel({
               />
             </div>
 
-            <div className="tpOppFootnote">Phase 1 scoring = overlap boost + |today move|. Hover any pill to see full details.</div>
+            <div className="tpOppFootnote">Hover any pill to see full details. Prices are USD/share.</div>
           </CardShell>
         </div>
       </div>
