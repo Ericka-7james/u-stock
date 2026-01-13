@@ -34,3 +34,8 @@ def require_bot_runner(authorization: str = Header(default="")) -> str:
         raise HTTPException(status_code=401, detail="Bot runner token expired")
     except jwt.InvalidTokenError as e:
         raise HTTPException(status_code=401, detail=f"Invalid bot runner token: {str(e)}")
+    except HTTPException:
+        raise
+    except Exception:
+        # Fail closed for any unexpected verification/config errors
+        raise HTTPException(status_code=401, detail="Invalid bot runner token")

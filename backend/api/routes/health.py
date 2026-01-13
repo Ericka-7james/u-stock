@@ -1,52 +1,41 @@
-# backend/api/routes/health.py
 from __future__ import annotations
 
+import json
 import os
+from pathlib import Path
+
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import JSONResponse
 
-from api.db import get_supabase_anon
-
-router = APIRouter(prefix="/api/health", tags=["health"])
+router = APIRouter(prefix="/api", tags=["health"])
 
 
-@router.get("")
-def healthcheck():
-    """
-    Lightweight health check:
-    - Env vars loaded
-    - Supabase client can initialize
-    - Simple DB call succeeds
-    """
+def _backend_root() -> Path:
+    # .../backend
+    return Path(__file__).resolve().parents[2]
 
-    # --- Env sanity checks (fail fast) ---
-    required_env = [
-        "SUPABASE_URL",
-        "SUPABASE_ANON_KEY",
-        "SUPABASE_SERVICE_ROLE_KEY",
-    ]
 
-    missing = [k for k in required_env if not os.getenv(k)]
-    if missing:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Missing env vars: {', '.join(missing)}",
+@router.get("/health")
+def health():
+    # IMPORTANT: default is development, and we strip/lower
+    return {"status": "ok", "env": os.getenv("ENV", "development").strip().lower()}
+
+
+@router.get("/health/market-snapshot")
+def market_snapshot_health():
+    path = _backend_root() / "public" / "data" / "fetched" / "market-snapshot-health.json"
+    if not path.exists():
+        return JSONResponse(
+            status_code=200,
+            content={
+                "ok": False,
+                "status": "missing",
+                "error": "health file not found yet",
+                "path": str(path),
+            },
         )
 
-    # --- Supabase connectivity check ---
     try:
-        sb = get_supabase_anon()
-
-        # extremely cheap query (does NOT depend on your tables)
-        # auth.get_user() is safe and fast
-        sb.auth.get_user()
-
+        return json.loads(path.read_text(encoding="utf-8"))
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Supabase check failed: {str(e)}",
-        )
-
-    return {
-        "status": "ok",
-        "env": os.getenv("ENV", "local"),
-    }
+        raise HTTPException(status_code=500, detail=f"Failed to read health file: {repr(e)}")

@@ -1,8 +1,9 @@
-# backend/api/routes/market_leaders.py
+# backend/api/routes/market_us.py
 from __future__ import annotations
 
 import os
-from typing import Any, Dict, List, Tuple
+import time
+from typing import Any, Dict, List, Tuple, Optional
 
 import requests
 from fastapi import APIRouter, HTTPException, Query, Request, Response
@@ -11,7 +12,33 @@ from api.core.security import require_user, decrypt_secret, get_supabase_service
 
 router = APIRouter(prefix="/api/market", tags=["market"])
 
-ALPACA_DATA_BASE_URL = os.getenv("ALPACA_DATA_BASE_URL", "https://data.alpaca.markets").strip()
+ALPACA_DATA_BASE_URL = os.getenv("ALPACA_DATA_BASE_URL", "https://data.alpaca.markets").strip().rstrip("/")
+REQUEST_TIMEOUT_SECONDS = int(os.getenv("ALPACA_HTTP_TIMEOUT", "12"))
+
+# Optional lightweight cache (per-process). For multi-instance scaling, use Redis.
+_CACHE: Dict[str, Dict[str, Any]] = {}
+CACHE_TTL_SECONDS = int(os.getenv("MARKET_LEADERS_TTL_SECONDS", "15"))
+_CACHE_VERSION = "v1-market_us-leaders-userkey"
+
+_SESSION = requests.Session()
+
+
+def _now_epoch() -> int:
+    return int(time.time())
+
+
+def _cache_get(key: str):
+    entry = _CACHE.get(key)
+    if not entry:
+        return None
+    if time.time() > entry["expires_at"]:
+        _CACHE.pop(key, None)
+        return None
+    return entry["value"]
+
+
+def _cache_set(key: str, value: Any, ttl: int):
+    _CACHE[key] = {"value": value, "expires_at": time.time() + ttl}
 
 
 def _alpaca_headers(api_key: str, api_secret: str) -> Dict[str, str]:
@@ -20,6 +47,21 @@ def _alpaca_headers(api_key: str, api_secret: str) -> Dict[str, str]:
         "APCA-API-SECRET-KEY": api_secret,
         "Accept": "application/json",
     }
+
+
+def _safe_get(url: str, headers: Dict[str, str]) -> requests.Response:
+    try:
+        return _SESSION.get(url, headers=headers, timeout=REQUEST_TIMEOUT_SECONDS)
+    except requests.RequestException as e:
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "code": "ALPACA_NETWORK_ERROR",
+                "message": "Network error calling Alpaca data API",
+                "provider": "alpaca",
+                "error": repr(e),
+            },
+        )
 
 
 def _load_alpaca_keys(sb, user_id: str) -> Tuple[str, str, str]:
@@ -77,16 +119,10 @@ def _norm_pct(raw: Any) -> float:
     v = _safe_num(raw, 0.0)
     av = abs(v)
 
-    # If it looks like a fraction (<= 1), treat as fraction and multiply by 100
-    if av <= 1.0 and av > 0:
+    if 0 < av <= 1.0:
         return v * 100.0
-
-    # If it looks massively scaled, divide down
-    # (Percent moves almost never exceed 200% for this feed)
     if av > 200.0:
-        # First try bps-ish scaling
         return v / 100.0
-
     return v
 
 
@@ -96,14 +132,13 @@ def _pick_symbol(it: Dict[str, Any]) -> str:
 
 
 def _pick_change_pct(it: Dict[str, Any]) -> float:
-    # Alpaca shapes vary; try the likely fields and normalize
     raw = (
         it.get("change_pct")
         or it.get("changePct")
         or it.get("change_percent")
         or it.get("percent_change")
         or it.get("pct_change")
-        or it.get("pc")  # sometimes used elsewhere
+        or it.get("pc")
         or 0.0
     )
     return _norm_pct(raw)
@@ -138,17 +173,26 @@ def market_leaders(
     market: str = Query("stocks", pattern="^(stocks|crypto)$"),
     direction: str = Query("up", pattern="^(up|down|both)$"),
     limit: int = Query(8, ge=1, le=50),
+    cache_bust: int = Query(0, ge=0, le=1),
 ):
     """
     GET /api/market/leaders?market=stocks&direction=up&limit=8
     """
     try:
         user = require_user(request, response)
+        user_id = user["id"]
+
+        cache_key = f"{_CACHE_VERSION}:{user_id}:{market}:{direction}:{limit}"
+        if not cache_bust:
+            cached = _cache_get(cache_key)
+            if cached is not None:
+                return cached
+
         sb = get_supabase_service()
-        api_key, api_secret, mode = _load_alpaca_keys(sb, user["id"])
+        api_key, api_secret, mode = _load_alpaca_keys(sb, user_id)
 
         url = f"{ALPACA_DATA_BASE_URL}/v1beta1/screener/{market}/movers"
-        r = requests.get(url, headers=_alpaca_headers(api_key, api_secret), timeout=12)
+        r = _safe_get(url, headers=_alpaca_headers(api_key, api_secret))
 
         if r.status_code in (401, 403):
             raise HTTPException(
@@ -216,14 +260,22 @@ def market_leaders(
         else:
             items = (up_items + down_items)[:limit]
 
-        return {
+        out = {
             "ok": True,
             "source": "ALPACA",
             "market": market,
             "direction": direction,
             "mode": mode,
             "items": items,
+            "asOf": _now_epoch(),
+            "meta": {
+                "cache_ttl": CACHE_TTL_SECONDS,
+                "provider": "alpaca",
+            },
         }
+
+        _cache_set(cache_key, out, CACHE_TTL_SECONDS)
+        return out
 
     except HTTPException:
         raise

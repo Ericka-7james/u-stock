@@ -16,12 +16,15 @@ ALPACA_DATA_BASE = os.getenv("ALPACA_DATA_BASE", "https://data.alpaca.markets").
 # Some Alpaca accounts/plans require specifying a feed ("iex" or "sip")
 ALPACA_DATA_FEED = os.getenv("ALPACA_DATA_FEED", "").strip()  # e.g. "iex"
 
-# In-memory cache
+# In-memory cache (per-process; for multi-worker/multi-instance use Redis)
 _CACHE: Dict[str, Dict[str, Any]] = {}
 
-_CACHE_VERSION = "v7-alpha-only-prevclose-computed-flag"
+# Versioned cache key format
+_CACHE_VERSION = "v8-alpha-only-prevclose-computed-flag-userkey-netguard"
 
 _ALPHA_ONLY = re.compile(r"^[A-Z]+$")
+
+_REQUEST_TIMEOUT_SECONDS = 12
 
 
 def _now_epoch() -> int:
@@ -68,6 +71,10 @@ def _is_alpha_only_symbol(sym: str) -> bool:
 
 
 def _get_user_alpaca_creds(request: Request, response: Response) -> Tuple[str, str, str, str]:
+    """
+    Delegates to top_tickers helper. Expected return shape:
+    (user_id, api_key, api_secret, mode)
+    """
     try:
         from api.routes.top_tickers import _get_user_alpaca_creds as _creds
     except Exception as e:
@@ -75,15 +82,24 @@ def _get_user_alpaca_creds(request: Request, response: Response) -> Tuple[str, s
     return _creds(request, response)
 
 
+def _safe_get(url: str, headers: Dict[str, str], params: Dict[str, Any]) -> requests.Response:
+    try:
+        return requests.get(url, headers=headers, params=params, timeout=_REQUEST_TIMEOUT_SECONDS)
+    except requests.RequestException as e:
+        # Normalize network errors into a 502 (bad gateway / upstream issue)
+        raise HTTPException(status_code=502, detail=f"alpaca_network_error: {repr(e)}")
+
+
 def _fetch_movers(api_key: str, api_secret: str, direction: str, limit: int) -> List[Dict[str, Any]]:
     url = f"{ALPACA_DATA_BASE}/v1beta1/screener/stocks/movers"
     params = {"top": limit, "direction": direction}
 
-    r = requests.get(url, headers=_alpaca_headers(api_key, api_secret), params=params, timeout=12)
+    r = _safe_get(url, headers=_alpaca_headers(api_key, api_secret), params=params)
 
     if r.status_code == 401:
         raise HTTPException(status_code=401, detail={"code": "ALPACA_UNAUTHORIZED"})
 
+    # Some plans don’t have screener; keep a stable fallback
     if r.status_code == 404:
         fallback = ["AAPL", "MSFT", "NVDA", "TSLA", "META", "AMD", "AMZN", "GOOGL", "NFLX", "INTC"]
         return [{"symbol": s} for s in fallback]
@@ -112,7 +128,8 @@ def _fetch_snapshots(api_key: str, api_secret: str, symbols: List[str]) -> Dict[
     if ALPACA_DATA_FEED:
         params["feed"] = ALPACA_DATA_FEED
 
-    r = requests.get(url, headers=_alpaca_headers(api_key, api_secret), params=params, timeout=12)
+    r = _safe_get(url, headers=_alpaca_headers(api_key, api_secret), params=params)
+
     if r.status_code == 401:
         raise HTTPException(status_code=401, detail={"code": "ALPACA_UNAUTHORIZED"})
     if not r.ok:
@@ -207,7 +224,8 @@ def _fetch_prevclose_from_bars_batch(api_key: str, api_secret: str, symbols: Lis
     if ALPACA_DATA_FEED:
         params["feed"] = ALPACA_DATA_FEED
 
-    r = requests.get(url, headers=_alpaca_headers(api_key, api_secret), params=params, timeout=12)
+    r = _safe_get(url, headers=_alpaca_headers(api_key, api_secret), params=params)
+
     if r.status_code == 401:
         raise HTTPException(status_code=401, detail={"code": "ALPACA_UNAUTHORIZED"})
     if not r.ok:
@@ -246,7 +264,8 @@ def _fetch_prevclose_from_bars_single(api_key: str, api_secret: str, symbol: str
     if ALPACA_DATA_FEED:
         params["feed"] = ALPACA_DATA_FEED
 
-    r = requests.get(url, headers=_alpaca_headers(api_key, api_secret), params=params, timeout=12)
+    r = _safe_get(url, headers=_alpaca_headers(api_key, api_secret), params=params)
+
     if r.status_code == 401:
         raise HTTPException(status_code=401, detail={"code": "ALPACA_UNAUTHORIZED"})
     if not r.ok:
@@ -279,13 +298,14 @@ def market_leaders(
     fetch_multiplier: int = Query(15, ge=2, le=30),
     cache_bust: int = Query(0, ge=0, le=1),
 ):
-    cache_key = f"{_CACHE_VERSION}:{market}:{direction}:{limit}:{fetch_multiplier}:{cache_bust}"
+    # IMPORTANT: include user in cache key to avoid cross-user data leakage.
+    user_id, api_key, api_secret, mode = _get_user_alpaca_creds(request, response)
+
+    cache_key = f"{_CACHE_VERSION}:{user_id}:{market}:{direction}:{limit}:{fetch_multiplier}:{cache_bust}"
     if not cache_bust:
         cached = _cache_get(cache_key)
         if cached:
             return cached
-
-    _, api_key, api_secret, mode = _get_user_alpaca_creds(request, response)
 
     raw_limit = min(limit * fetch_multiplier, 500)
     raw = _fetch_movers(api_key, api_secret, direction, raw_limit)
@@ -364,7 +384,7 @@ def market_leaders(
         "items": items,
         "asOf": _now_epoch(),
         "meta": {
-            "source_label": source_label,  # 👈 UI uses this
+            "source_label": source_label,  # UI uses this
             "computed_prevclose_count": computed_prevclose_count,
             "filter": "alpha_only /^[A-Z]+$/",
             "returned": len(items),

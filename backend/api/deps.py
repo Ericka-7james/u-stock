@@ -21,7 +21,7 @@ def _get_bearer_token_from_cookie(request: Request) -> Optional[str]:
     for name in ("access_token", "sb-access-token", "USTOCK_ACCESS_TOKEN"):
         v = request.cookies.get(name)
         if v:
-            return v
+            return str(v).strip() or None
     return None
 
 
@@ -31,8 +31,42 @@ def _get_bearer_token_from_auth_header(request: Request) -> Optional[str]:
         return None
     parts = auth.split(" ", 1)
     if len(parts) == 2 and parts[0].lower() == "bearer":
-        return parts[1].strip()
+        token = parts[1].strip()
+        return token or None
     return None
+
+
+def _extract_user_obj(ures: Any) -> Any:
+    """
+    Supabase python clients have returned different shapes across versions.
+    Normalize into a "user" object/dict when possible.
+    """
+    if ures is None:
+        return None
+
+    # common: ures.user
+    user = getattr(ures, "user", None)
+    if user is not None:
+        return user
+
+    # sometimes dict: {"user": {...}}
+    if isinstance(ures, dict):
+        return ures.get("user")
+
+    return None
+
+
+def _extract_user_fields(user: Any) -> tuple[Optional[str], Optional[str]]:
+    if user is None:
+        return (None, None)
+
+    user_id = getattr(user, "id", None) if not isinstance(user, dict) else user.get("id")
+    email = getattr(user, "email", None) if not isinstance(user, dict) else user.get("email")
+
+    uid = str(user_id).strip() if user_id is not None else None
+    em = str(email).strip() if email is not None else None
+
+    return (uid or None, em or None)
 
 
 def require_user(request: Request, response: Response) -> Dict[str, Any]:
@@ -41,17 +75,18 @@ def require_user(request: Request, response: Response) -> Dict[str, Any]:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
     sb = get_supabase_anon()
+
     try:
         ures = sb.auth.get_user(token)
-    except Exception as e:
-        raise HTTPException(status_code=401, detail=f"Invalid session token: {repr(e)}")
+    except Exception:
+        # Don’t leak internal details to clients
+        raise HTTPException(status_code=401, detail="Invalid session token")
 
-    user = getattr(ures, "user", None) or (ures.get("user") if isinstance(ures, dict) else None)
-    if not user:
+    user = _extract_user_obj(ures)
+    user_id, email = _extract_user_fields(user)
+
+    if not user_id:
         raise HTTPException(status_code=401, detail="Not authenticated")
-
-    user_id = getattr(user, "id", None) or user.get("id")
-    email = getattr(user, "email", None) or user.get("email")
 
     return {"id": user_id, "email": email}
 
@@ -66,7 +101,11 @@ def require_runner(request: Request, response: Response) -> Dict[str, Any]:
         raise HTTPException(status_code=401, detail="Runner not authenticated")
 
     # Accept either header name for user id
-    user_id = (request.headers.get(RUNNER_USER_ID_HEADER) or request.headers.get(RUNNER_USER_ID_HEADER_ALT) or "").strip()
+    user_id = (
+        (request.headers.get(RUNNER_USER_ID_HEADER) or "")
+        or (request.headers.get(RUNNER_USER_ID_HEADER_ALT) or "")
+    ).strip()
+
     if not user_id:
         raise HTTPException(status_code=401, detail="Runner missing X-Runner-User-Id")
 
