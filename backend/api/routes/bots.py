@@ -4,176 +4,201 @@ from __future__ import annotations
 import json
 import os
 import time
-from dataclasses import dataclass
-from datetime import datetime, timedelta, time as dtime
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel
+from fastapi import APIRouter, Query
+from fastapi.responses import JSONResponse
 
-try:
-    from zoneinfo import ZoneInfo  # py3.9+
-except Exception:  # pragma: no cover
-    ZoneInfo = None  # type: ignore
+router = APIRouter(prefix="/api/bots", tags=["bots"])
 
-router = APIRouter(tags=["bots"])
+# Runtime folder (already in your repo as ../backend/runtime/)
+RUNTIME_DIR = Path(__file__).resolve().parents[2] / "runtime"
+RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
 
-_BOT_STATE: Dict[str, Dict[str, Any]] = {}  # bot_id -> {running, mode, last_run, last_error, last_intents}
-
-
-def _output_dir() -> Optional[Path]:
-    out_dir = os.getenv("OUTPUT_DIR") or ""
-    if not out_dir:
-        return None
-    return Path(out_dir).expanduser().resolve()
+STATE_DIR = RUNTIME_DIR / "bots"
+STATE_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def _read_market_gate() -> Optional[Dict[str, Any]]:
-    p = _output_dir()
-    if not p:
-        return None
-    f = p / "market_gate.json"
-    if not f.exists():
-        return None
+def _bot_dir(bot_id: str) -> Path:
+    p = STATE_DIR / bot_id
+    p.mkdir(parents=True, exist_ok=True)
+    return p
+
+
+def _read_json(path: Path, default: Any) -> Any:
     try:
-        return json.loads(f.read_text(encoding="utf-8"))
+        if not path.exists():
+            return default
+        return json.loads(path.read_text(encoding="utf-8"))
     except Exception:
-        return None
+        return default
 
 
-@dataclass
-class PauseInfo:
-    paused: bool
-    reason: Optional[str] = None
-    next_open_epoch: Optional[float] = None
+def _write_json(path: Path, payload: Any) -> None:
+    path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
 
 
-def _next_weekday(dt: datetime) -> datetime:
-    # next weekday (Mon-Fri)
-    d = dt
-    while d.weekday() >= 5:
-        d = d + timedelta(days=1)
-    return d
+def _append_log(bot_id: str, level: str, message: str, meta: Optional[Dict[str, Any]] = None) -> None:
+    meta = meta or {}
+    row = {
+        "ts": int(time.time()),
+        "level": str(level).lower(),
+        "message": str(message),
+        "meta": meta,
+    }
+    log_path = _bot_dir(bot_id) / "log.jsonl"
+    with log_path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(row, ensure_ascii=False) + "\n")
 
 
-def _market_hours_pause_info() -> PauseInfo:
-    """
-    Simple market-hours gate: Mon-Fri 9:30–16:00 America/New_York.
-    Not holiday-aware (fine for now; later we can use Alpaca clock endpoint).
-    """
-    if ZoneInfo is None:
-        return PauseInfo(paused=False)
-
-    tz = ZoneInfo("America/New_York")
-    now = datetime.now(tz)
-
-    # Weekend
-    if now.weekday() >= 5:
-        nxt = _next_weekday(now + timedelta(days=1)).replace(hour=9, minute=30, second=0, microsecond=0)
-        return PauseInfo(True, "Market closed (weekend)", nxt.timestamp())
-
-    open_t = now.replace(hour=9, minute=30, second=0, microsecond=0)
-    close_t = now.replace(hour=16, minute=0, second=0, microsecond=0)
-
-    if now < open_t:
-        return PauseInfo(True, "Market closed (pre-open)", open_t.timestamp())
-
-    if now >= close_t:
-        nxt_day = _next_weekday(now + timedelta(days=1)).replace(hour=9, minute=30, second=0, microsecond=0)
-        return PauseInfo(True, "Market closed (after-hours)", nxt_day.timestamp())
-
-    return PauseInfo(False)
-
-
-def _market_pause_info() -> PauseInfo:
-    """
-    Priority:
-      1) If market_gate.json exists and is active -> paused (gate active)
-      2) Else -> pause based on simple market hours (9:30–16:00 ET)
-    """
-    gate = _read_market_gate()
-    now = time.time()
-
-    if isinstance(gate, dict):
-        until = gate.get("closed_until")
-        if isinstance(until, (int, float)) and float(until) > now:
-            return PauseInfo(True, "Market closed (gate active)", float(until))
-
-    return _market_hours_pause_info()
-
-
-class BotStartRequest(BaseModel):
-    bot_id: str
-    mode: str = "paper"
-
-
-@router.get("/api/bots/available")
-def available_bots() -> Dict[str, Any]:
+def _default_config() -> Dict[str, Any]:
     return {
-        "bots": [
-            {"id": "ema_trend", "name": "EMA Trend Bot", "description": "EMA reclaim + ATR gate + chop filter"},
-        ]
+        "mode": "paper",            # paper | live (you can gate live later)
+        "risk_per_trade": 0.005,    # 0.5%
+        "max_trades_per_day": 3,
+        "min_confidence": 0.62,
     }
 
 
-@router.post("/api/bots/start")
-def start_bot(req: BotStartRequest) -> Dict[str, Any]:
-    bot_id = (req.bot_id or "").strip()
-    if not bot_id:
-        raise HTTPException(status_code=400, detail="bot_id is required")
+@router.get("/available")
+def available():
+    # Keep it explicit for now; later you can auto-discover bots from registry.
+    bots = [
+        {"id": "ema_trend", "name": "EMA Trend Bot", "description": "EMA reclaim + ATR gate + chop filter"},
+    ]
+    return {"bots": bots}
 
-    st = _BOT_STATE.get(bot_id) or {}
-    st["running"] = True
-    st["mode"] = req.mode or "paper"
-    st.setdefault("last_run", None)
-    st.setdefault("last_error", None)
-    st.setdefault("last_intents", 0)
-    _BOT_STATE[bot_id] = st
 
-    pause = _market_pause_info()
-    state = "paused" if pause.paused else "running"
+@router.get("/status")
+def status(bot_id: str = Query(...)):
+    bid = str(bot_id).strip()
+    if not bid:
+        return JSONResponse(status_code=400, content={"detail": "bot_id required"})
 
-    return {
-        "ok": True,
-        "bot_id": bot_id,
-        "state": state,
-        "pausedReason": pause.reason,
-        "nextOpenEpoch": pause.next_open_epoch,
+    d = _bot_dir(bid)
+    state = _read_json(d / "state.json", {})
+    cfg = _read_json(d / "config.json", _default_config())
+    intents = _read_json(d / "intents.json", {"items": [], "ts": 0})
+
+    out = {
+        "bot_id": bid,
+        "state": state.get("state", "stopped"),         # running | paused | stopped
+        "mode": state.get("mode", cfg.get("mode", "paper")),
+        "lastRun": state.get("last_run", 0),
+        "lastIntents": len(intents.get("items") or []),
+        "lastError": state.get("last_error"),
+        "pausedReason": state.get("paused_reason"),
+        "nextOpenEpoch": state.get("next_open_epoch"),
+        "config": cfg,
     }
+    return out
 
 
-@router.post("/api/bots/stop")
-def stop_bot(bot_id: str = Query(...)) -> Dict[str, Any]:
-    bot_id = (bot_id or "").strip()
-    st = _BOT_STATE.get(bot_id) or {}
-    st["running"] = False
-    _BOT_STATE[bot_id] = st
-    return {"ok": True, "bot_id": bot_id, "state": "stopped"}
+@router.post("/start")
+def start(payload: Dict[str, Any]):
+    bid = str(payload.get("bot_id") or "").strip()
+    if not bid:
+        return JSONResponse(status_code=400, content={"detail": "bot_id required"})
+
+    mode = str(payload.get("mode") or "paper")
+    d = _bot_dir(bid)
+
+    state = _read_json(d / "state.json", {})
+    state.update(
+        {
+            "bot_id": bid,
+            "state": "running",
+            "mode": mode,
+            "last_error": None,
+            "paused_reason": None,
+        }
+    )
+    _write_json(d / "state.json", state)
+    _append_log(bid, "info", "Bot started", {"mode": mode})
+
+    return {"ok": True, "bot_id": bid, "state": "running", "mode": mode}
 
 
-@router.get("/api/bots/status")
-def bot_status(bot_id: str = Query(...)) -> Dict[str, Any]:
-    bot_id = (bot_id or "").strip()
-    st = _BOT_STATE.get(bot_id) or {"running": False, "mode": "paper", "last_run": None, "last_error": None, "last_intents": 0}
+@router.post("/stop")
+def stop(bot_id: str = Query(...)):
+    bid = str(bot_id).strip()
+    if not bid:
+        return JSONResponse(status_code=400, content={"detail": "bot_id required"})
 
-    pause = _market_pause_info()
+    d = _bot_dir(bid)
+    state = _read_json(d / "state.json", {})
+    state.update({"bot_id": bid, "state": "stopped"})
+    _write_json(d / "state.json", state)
+    _append_log(bid, "info", "Bot stopped", {})
 
-    if st.get("running") and pause.paused:
-        state = "paused"
-    elif st.get("running"):
-        state = "running"
-    else:
-        state = "stopped"
+    return {"ok": True, "bot_id": bid, "state": "stopped"}
 
-    return {
-        "ok": True,
-        "bot_id": bot_id,
-        "state": state,
-        "mode": st.get("mode", "paper"),
-        "lastRun": st.get("last_run"),
-        "lastIntents": st.get("last_intents", 0),
-        "lastError": st.get("last_error"),
-        "pausedReason": pause.reason,
-        "nextOpenEpoch": pause.next_open_epoch,
-    }
+
+@router.get("/intents")
+def intents(bot_id: str = Query(...), limit: int = Query(10, ge=1, le=50)):
+    bid = str(bot_id).strip()
+    if not bid:
+        return JSONResponse(status_code=400, content={"detail": "bot_id required"})
+
+    d = _bot_dir(bid)
+    data = _read_json(d / "intents.json", {"items": [], "ts": 0})
+    items = list(data.get("items") or [])[: int(limit)]
+    return {"bot_id": bid, "ts": int(data.get("ts") or 0), "items": items}
+
+
+@router.get("/log")
+def log(bot_id: str = Query(...), limit: int = Query(50, ge=1, le=300)):
+    bid = str(bot_id).strip()
+    if not bid:
+        return JSONResponse(status_code=400, content={"detail": "bot_id required"})
+
+    log_path = _bot_dir(bid) / "log.jsonl"
+    if not log_path.exists():
+        return {"bot_id": bid, "items": []}
+
+    # Read last N lines efficiently-ish (small scale)
+    try:
+        lines = log_path.read_text(encoding="utf-8").splitlines()
+        tail = lines[-int(limit) :]
+        items: List[Dict[str, Any]] = []
+        for ln in tail:
+            try:
+                items.append(json.loads(ln))
+            except Exception:
+                continue
+        return {"bot_id": bid, "items": items}
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"detail": "Failed to read log", "error": repr(e)})
+
+
+@router.get("/config")
+def get_config(bot_id: str = Query(...)):
+    bid = str(bot_id).strip()
+    if not bid:
+        return JSONResponse(status_code=400, content={"detail": "bot_id required"})
+    d = _bot_dir(bid)
+    cfg = _read_json(d / "config.json", _default_config())
+    return {"bot_id": bid, "config": cfg}
+
+
+@router.post("/config")
+def set_config(payload: Dict[str, Any]):
+    bid = str(payload.get("bot_id") or "").strip()
+    config = payload.get("config")
+    if not bid:
+        return JSONResponse(status_code=400, content={"detail": "bot_id required"})
+    if not isinstance(config, dict):
+        return JSONResponse(status_code=400, content={"detail": "config must be an object"})
+
+    d = _bot_dir(bid)
+    existing = _read_json(d / "config.json", _default_config())
+    existing.update(config)
+
+    # minimal guards
+    if existing.get("mode") not in ("paper", "live"):
+        existing["mode"] = "paper"
+
+    _write_json(d / "config.json", existing)
+    _append_log(bid, "info", "Config updated", {"config": existing})
+    return {"ok": True, "bot_id": bid, "config": existing}
