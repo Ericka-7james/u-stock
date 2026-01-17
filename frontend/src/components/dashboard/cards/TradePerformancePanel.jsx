@@ -1,5 +1,6 @@
 // frontend/src/components/dashboard/cards/TradePerformancePanel.jsx
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import BotControlCard from "./BotControlCard.jsx";
 import "../../../css/dashboard/cards/TradePerformancePanel.css";
 
 function n(x) {
@@ -120,9 +121,7 @@ function OpportunityTable({ title, rows, emptyMessage, onPickSymbol, sourceLabel
       <div className="tpOppMiniTitle" style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10 }}>
         <span>{title}</span>
         {sourceLabel ? (
-          <span style={{ fontSize: 12, opacity: 0.7, whiteSpace: "nowrap" }}>
-            Source: {sourceLabel}
-          </span>
+          <span style={{ fontSize: 12, opacity: 0.7, whiteSpace: "nowrap" }}>Source: {sourceLabel}</span>
         ) : null}
       </div>
 
@@ -163,14 +162,10 @@ function OpportunityTable({ title, rows, emptyMessage, onPickSymbol, sourceLabel
   );
 }
 
-export default function TradePerformancePanel({
-  data,
-  onChangeRange,
-  opportunities = null,
-  leaders = [],
-  activeBot = null,
-  onPickSymbol,
-}) {
+export default function TradePerformancePanel({ data, onChangeRange, opportunities = null, leaders = [], onPickSymbol }) {
+  // NEW: let BotControlCard drive running state + name
+  const [activeBot, setActiveBot] = useState(null);
+
   const oppStocks = useMemo(() => {
     const raw = Array.isArray(opportunities?.stocks) ? opportunities.stocks : [];
     return raw
@@ -249,8 +244,9 @@ export default function TradePerformancePanel({
     return out.slice(0, 6);
   }, [leadersClean, oppStocks]);
 
-  const botRunning = Boolean(activeBot?.running);
-  const botName = String(activeBot?.name || "").trim();
+  // NOTE: BotControlCard should pass {running, bot_id, state, pausedReason,...}
+  const botRunning = Boolean(activeBot?.running || activeBot?.state === "running" || activeBot?.state === "paused");
+  const botName = String(activeBot?.bot_id || "").trim();
 
   const safe = data || { start: "", end: "", trades: [] };
   const trades = Array.isArray(safe.trades) ? safe.trades : [];
@@ -280,10 +276,21 @@ export default function TradePerformancePanel({
 
       <div className="tpLeft">
         <div className="tpLeftGrid">
+          {/* ✅ IMPORTANT: no CardShell wrapper here (prevents card-in-card) */}
+          <div className="tpSpan2">
+            <BotControlCard onStateChange={setActiveBot} />
+          </div>
+
           <BigStat
             label="Bot Status"
-            value={botRunning ? "LIVE" : "OFF"}
-            sub={botRunning ? "Using bot alignment" : "Leaders-only (Phase 1)"}
+            value={activeBot?.state === "paused" ? "PAUSED" : botRunning ? "LIVE" : "OFF"}
+            sub={
+              activeBot?.state === "paused"
+                ? activeBot?.pausedReason || "Market closed"
+                : botRunning
+                ? "Using bot alignment"
+                : "Leaders-only (Phase 1)"
+            }
             tone={botRunning ? "pos" : "neg"}
           />
 

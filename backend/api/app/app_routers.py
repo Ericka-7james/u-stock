@@ -1,3 +1,4 @@
+# backend/api/app/app_routers.py
 from __future__ import annotations
 
 from fastapi import APIRouter, FastAPI
@@ -16,6 +17,9 @@ from api.routes.macro import router as macro_router
 from api.routes.market_leaders import router as market_leaders_router
 from api.routes.market_us import router as market_us_router
 from api.routes.opportunities import router as opportunities_router
+
+# ✅ NEW: bot control routes
+from api.routes.bots import router as bots_router
 
 try:
     from api.routes.health import router as health_router
@@ -42,5 +46,8 @@ def register_routers(app: FastAPI, api: APIRouter) -> None:
     app.include_router(integrations_alpaca_router, prefix="/api")
     app.include_router(integrations_router, prefix="/api")
     app.include_router(market_leaders_router)
+
+    # ✅ NEW: start/stop/status/report endpoints
+    app.include_router(bots_router)
 
     _ = api

@@ -1,0 +1,208 @@
+/* frontend/src/css/dashboard/cards/BotControlCard.css */
+
+.botCard {
+  border-radius: 18px;
+  background: #ffffff;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+
+  /* ✅ Force readable foreground (fixes pill/select text blending) */
+  color: #0f172a;
+}
+
+.botCardHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  background: rgba(241, 245, 249, 0.55);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.botCardTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.botCardTitle {
+  font-weight: 900;
+  font-size: 14px;
+  letter-spacing: 0.2px;
+  color: #0f172a;
+}
+
+.botCardStatePill {
+  font-weight: 900;
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(255, 255, 255, 0.95);
+  color: #0f172a; /* ✅ visible text */
+}
+
+.botCardStatePill.pos {
+  background: rgba(34, 197, 94, 0.12);
+  border-color: rgba(34, 197, 94, 0.55);
+  color: #065f46;
+}
+
+.botCardStatePill.warn {
+  background: rgba(245, 158, 11, 0.14);
+  border-color: rgba(245, 158, 11, 0.6);
+  color: #92400e;
+}
+
+.botCardStatePill.neg {
+  background: rgba(239, 68, 68, 0.14);
+  border-color: rgba(239, 68, 68, 0.55);
+  color: #7f1d1d;
+}
+
+.botCardBody {
+  padding: 16px;
+}
+
+.botCardTopRow {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.botSelectWrap {
+  min-width: 260px;
+  flex: 1;
+}
+
+.botLabel {
+  display: block;
+  font-size: 12px;
+  opacity: 0.75;
+  margin-bottom: 6px;
+  color: #0f172a;
+}
+
+/* ✅ Dropdown readability fix */
+.botSelect {
+  width: 100%;
+  border-radius: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: #ffffff;
+  color: #0f172a;
+  font-weight: 800;
+  outline: none;
+}
+
+.botSelect:focus {
+  border-color: rgba(34, 197, 94, 0.55);
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.12);
+}
+
+.botSelect option {
+  color: #0f172a;
+  background: #ffffff;
+}
+
+.botHint {
+  font-size: 12px;
+  margin-top: 6px;
+  opacity: 0.7;
+  color: #0f172a;
+}
+
+.botActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.botBtn {
+  border-radius: 14px;
+  padding: 10px 14px;
+  font-weight: 900;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: #ffffff;
+  color: #0f172a;
+  cursor: pointer;
+}
+
+.botBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.botBtn.start {
+  border-color: rgba(34, 197, 94, 0.45);
+}
+
+.botBtn.stop {
+  border-color: rgba(239, 68, 68, 0.45);
+}
+
+.botGrid {
+  margin-top: 14px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (max-width: 900px) {
+  .botGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.botTile {
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  padding: 12px 12px;
+  background: rgba(248, 250, 252, 0.65);
+  color: #0f172a;
+}
+
+.botTileLabel {
+  font-size: 12px;
+  opacity: 0.7;
+  margin-bottom: 6px;
+  color: #0f172a;
+}
+
+.botTileValue {
+  font-weight: 900;
+  font-size: 13px;
+  color: #0f172a;
+}
+
+.botPausedLine {
+  font-weight: 900;
+}
+
+.botPausedSub {
+  margin-top: 4px;
+  font-size: 12px;
+  opacity: 0.75;
+  font-weight: 700;
+}
+
+.botError {
+  margin-top: 12px;
+  border-radius: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  background: rgba(254, 226, 226, 0.55);
+  font-weight: 800;
+  font-size: 12px;
+  color: #7f1d1d;
+}
+
+.botError.subtle {
+  border-color: rgba(148, 163, 184, 0.3);
+  background: rgba(241, 245, 249, 0.65);
+  color: #0f172a;
+}
