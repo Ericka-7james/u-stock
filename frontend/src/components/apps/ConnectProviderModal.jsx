@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import "../../css/apps/ConnectProviderModal.css";
 import { useAuth } from "../../context/AuthContext";
 
@@ -7,35 +7,36 @@ export default function ConnectProviderModal({
   provider,
   onClose,
   onGoSignIn,
-  onConnected, // ✅ add this so ConnectedAppsPage can refresh after save
+  onConnected,
 }) {
   const { isAuthed, authFetch } = useAuth();
 
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
 
-  // ✅ form state
   const [mode, setMode] = useState("paper"); // alpaca only
   const [apiKey, setApiKey] = useState("");
   const [apiSecret, setApiSecret] = useState(""); // alpaca only
 
+  const apiKeyRef = useRef(null);
+
   const docsUrl = useMemo(
-    () => provider?.docsUrl || provider?.learnMoreUrl,
+    () => provider?.docsUrl || provider?.learnMoreUrl || "",
     [provider]
   );
 
   const isAlpaca = provider?.key === "alpaca";
   const isPolygon = provider?.key === "polygon";
 
-  // Escape key closes
+  // Escape key closes (unless busy)
   useEffect(() => {
     if (!open) return;
     const onKey = (e) => {
-      if (e.key === "Escape") onClose?.();
+      if (e.key === "Escape" && !busy) onClose?.();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+  }, [open, onClose, busy]);
 
   // reset modal state when opening / switching providers
   useEffect(() => {
@@ -47,6 +48,14 @@ export default function ConnectProviderModal({
     setApiSecret("");
   }, [open, provider?.key]);
 
+  // autofocus first field when authed + open
+  useEffect(() => {
+    if (!open) return;
+    if (!isAuthed) return;
+    const t = setTimeout(() => apiKeyRef.current?.focus?.(), 0);
+    return () => clearTimeout(t);
+  }, [open, isAuthed, provider?.key]);
+
   if (!open || !provider) return null;
 
   const handleLearnMore = () => {
@@ -55,9 +64,9 @@ export default function ConnectProviderModal({
   };
 
   const handleConnect = async () => {
+    if (busy) return; // prevent double submit
     setErr("");
 
-    // basic validation
     if (!apiKey.trim()) {
       setErr("API key is required.");
       return;
@@ -81,12 +90,9 @@ export default function ConnectProviderModal({
         };
       } else if (isPolygon) {
         path = "/integrations/polygon/keys";
-        body = {
-          api_key: apiKey.trim(),
-        };
+        body = { api_key: apiKey.trim() };
       } else {
         setErr("This provider does not support API key connections yet.");
-        setBusy(false);
         return;
       }
 
@@ -99,7 +105,7 @@ export default function ConnectProviderModal({
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.detail || "Failed to save API keys.");
 
-      await onConnected?.(); // ✅ refresh list
+      await onConnected?.();
       onClose?.();
     } catch (e) {
       setErr(e?.message || "Failed to connect.");
@@ -113,7 +119,7 @@ export default function ConnectProviderModal({
       className="cp-modal-overlay"
       role="presentation"
       onMouseDown={(e) => {
-        // Only close if the actual overlay was clicked (not children)
+        if (busy) return;
         if (e.target === e.currentTarget) onClose?.();
       }}
     >
@@ -130,7 +136,13 @@ export default function ConnectProviderModal({
             <p className="cp-modal-subtitle">{provider.desc}</p>
           </div>
 
-          <button className="cp-modal-x" onClick={onClose} aria-label="Close">
+          <button
+            className="cp-modal-x"
+            onClick={() => !busy && onClose?.()}
+            aria-label="Close"
+            disabled={busy}
+            title={busy ? "Saving…" : "Close"}
+          >
             ✕
           </button>
         </header>
@@ -165,6 +177,7 @@ export default function ConnectProviderModal({
                       className="cp-input"
                       value={mode}
                       onChange={(e) => setMode(e.target.value)}
+                      disabled={busy}
                     >
                       <option value="paper">Paper</option>
                       <option value="live">Live</option>
@@ -175,11 +188,14 @@ export default function ConnectProviderModal({
                 <div className="cp-field">
                   <label className="cp-label">API Key</label>
                   <input
+                    ref={apiKeyRef}
                     className="cp-input"
                     value={apiKey}
                     onChange={(e) => setApiKey(e.target.value)}
                     placeholder="Paste your API key"
                     autoComplete="off"
+                    disabled={busy}
+                    inputMode="text"
                   />
                 </div>
 
@@ -188,10 +204,13 @@ export default function ConnectProviderModal({
                     <label className="cp-label">API Secret</label>
                     <input
                       className="cp-input"
+                      type="password"
                       value={apiSecret}
                       onChange={(e) => setApiSecret(e.target.value)}
                       placeholder="Paste your API secret"
                       autoComplete="off"
+                      disabled={busy}
+                      inputMode="text"
                     />
                   </div>
                 )}
@@ -220,7 +239,7 @@ export default function ConnectProviderModal({
                 <button
                   className="cp-btn cp-btn--secondary"
                   onClick={handleLearnMore}
-                  disabled={!docsUrl}
+                  disabled={busy || !docsUrl}
                 >
                   Learn more
                 </button>

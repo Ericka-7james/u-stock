@@ -19,18 +19,56 @@ function alpacaAction() {
   return { label: "Connected Apps", href: "/connected-apps" };
 }
 
-// ✅ NEW helper: detect “feed/entitlement” style errors
+// ✅ tighter + fixed precedence
 function looksLikeAlpacaFeedOrEntitlement(msg = "") {
   const m = String(msg || "").toLowerCase();
-  return (
+
+  const hasForbidden =
+    m.includes("forbidden") || m.includes("not authorized") || m.includes("unauthorized");
+
+  const mentionsFeed =
     m.includes("sip") ||
-    m.includes("iex") && m.includes("forbidden") ||
+    m.includes("iex") ||
     m.includes("entitlement") ||
     m.includes("subscription") ||
-    m.includes("not authorized") ||
-    m.includes("forbidden") ||
-    m.includes("market data") && m.includes("not available")
+    (m.includes("market data") && (m.includes("not available") || hasForbidden));
+
+  // “IEX forbidden” or “SIP forbidden” style messages
+  if (mentionsFeed && hasForbidden) return true;
+
+  // common entitlement phrasing
+  if (m.includes("entitlement") || m.includes("subscription")) return true;
+
+  return false;
+}
+
+function extractMessage(detail, text) {
+  return (
+    String(detail?.message || detail?.detail || "").trim() ||
+    String(text || "").trim() ||
+    ""
   );
+}
+
+function makeUiError({
+  title,
+  body,
+  status,
+  code,
+  feature,
+  statusText,
+  detail,
+  raw,
+  action,
+}) {
+  return {
+    title,
+    body,
+    status,
+    code,
+    ...(action ? { action } : {}),
+    debug: { feature, status, statusText, detail, raw },
+  };
 }
 
 /**
@@ -60,21 +98,23 @@ export async function explainResponseError(res, { feature = "request" } = {}) {
 
   // ---- Common auth errors ----
   if (status === 401) {
-    return {
+    return makeUiError({
       title: "Session expired",
       body: "You’re signed out or your session expired.\n\nFix: Sign in again, then retry.",
       status,
       code: code || "NOT_AUTHENTICATED",
-      debug: { feature, status, statusText, detail, raw: data || text },
-    };
+      feature,
+      statusText,
+      detail,
+      raw: data || text,
+    });
   }
 
-  // ---- Provider / Alpaca style errors ----
-  const msg = (detail?.message || detail?.detail || text || "").toLowerCase();
+  const msg = extractMessage(detail, text).toLowerCase();
 
-  // ✅ NEW: distinguish “forbidden / entitlement / subscription” from “invalid key”
+  // ---- Provider / Alpaca style errors ----
   if (status === 403 || code === "ALPACA_FEED_FORBIDDEN" || looksLikeAlpacaFeedOrEntitlement(msg)) {
-    return {
+    return makeUiError({
       title: "Alpaca data feed not available",
       body:
         "Your Alpaca account doesn’t have access to this market data feed (often SIP).\n\n" +
@@ -82,25 +122,30 @@ export async function explainResponseError(res, { feature = "request" } = {}) {
       status,
       code: code || "ALPACA_FEED_FORBIDDEN",
       action: alpacaAction(),
-      debug: { feature, status, statusText, detail, raw: data || text },
-    };
+      feature,
+      statusText,
+      detail,
+      raw: data || text,
+    });
   }
 
   if (status === 403) {
-    // generic 403 fallback (non-feed related)
-    return {
+    return makeUiError({
       title: "Access blocked",
       body:
         "This action isn’t allowed for your account/session.\n\n" +
         "Fix: Refresh the page. If it keeps happening, sign out and back in.",
       status,
       code: code || "FORBIDDEN",
-      debug: { feature, status, statusText, detail, raw: data || text },
-    };
+      feature,
+      statusText,
+      detail,
+      raw: data || text,
+    });
   }
 
   if (code === "ALPACA_NOT_CONNECTED" || msg.includes("not connected")) {
-    return {
+    return makeUiError({
       title: "Alpaca not connected",
       body:
         "You haven’t connected Alpaca yet.\n\n" +
@@ -108,12 +153,15 @@ export async function explainResponseError(res, { feature = "request" } = {}) {
       status,
       code: code || "ALPACA_NOT_CONNECTED",
       action: alpacaAction(),
-      debug: { feature, status, statusText, detail, raw: data || text },
-    };
+      feature,
+      statusText,
+      detail,
+      raw: data || text,
+    });
   }
 
   if (code === "ALPACA_INVALID_KEY" || msg.includes("invalid api key") || msg.includes("invalid api")) {
-    return {
+    return makeUiError({
       title: "Alpaca keys rejected",
       body:
         "Your Alpaca API key/secret looks invalid or expired.\n\n" +
@@ -121,40 +169,48 @@ export async function explainResponseError(res, { feature = "request" } = {}) {
       status,
       code: code || "ALPACA_INVALID_KEY",
       action: alpacaAction(),
-      debug: { feature, status, statusText, detail, raw: data || text },
-    };
+      feature,
+      statusText,
+      detail,
+      raw: data || text,
+    });
   }
 
   if (msg.includes("timeout") || msg.includes("timed out")) {
-    return {
+    return makeUiError({
       title: "Connection timed out",
       body:
         "The backend took too long to respond.\n\n" +
         "Fix: Retry in a moment. If it persists, check your internet or restart the backend.",
       status,
       code: code || "TIMEOUT",
-      debug: { feature, status, statusText, detail, raw: data || text },
-    };
+      feature,
+      statusText,
+      detail,
+      raw: data || text,
+    });
   }
 
   // ---- Generic fallback ----
   const fallbackText =
-    detail?.message ||
-    detail?.detail ||
+    extractMessage(detail, text) ||
     (typeof data === "string" ? data : null) ||
     (text ? `Backend returned non-JSON (${status}).` : null) ||
     `${status} ${statusText}`.trim() ||
     "Server error";
 
-  return {
+  return makeUiError({
     title: "Server error",
     body:
       `${fallbackText}\n\n` +
       "Fix: Refresh and try again. If it keeps happening, sign out/in or restart the backend.",
     status,
     code: code || "SERVER_ERROR",
-    debug: { feature, status, statusText, detail, raw: data || text },
-  };
+    feature,
+    statusText,
+    detail,
+    raw: data || text,
+  });
 }
 
 /**
@@ -167,19 +223,16 @@ export function explainAnyError(err, { feature = "request" } = {}) {
 
   if (typeof err === "object" && err.title && err.body) return err;
 
-  // If apiGet attached status/detail/payload, use it
+  // object-like errors (apiGet, thrown payloads, etc.)
   if (typeof err === "object") {
     const status = err.status || err?.payload?.status || 0;
     const detailObj = normalizeBackendDetail(err.detail || err?.payload?.detail) || null;
-    const msg = String(
-      detailObj?.message ||
-      detailObj?.detail ||
-      err.message ||
-      ""
-    ).toLowerCase();
     const code = detailObj?.code || err.code || err?.payload?.code || null;
 
-    // ✅ NEW: feed/entitlement handling
+    const msg = String(
+      detailObj?.message || detailObj?.detail || err.message || ""
+    ).toLowerCase();
+
     if (status === 403 || code === "ALPACA_FEED_FORBIDDEN" || looksLikeAlpacaFeedOrEntitlement(msg)) {
       return {
         title: "Alpaca data feed not available",
@@ -194,7 +247,8 @@ export function explainAnyError(err, { feature = "request" } = {}) {
     if (code === "ALPACA_NOT_CONNECTED" || msg.includes("not connected")) {
       return {
         title: "Alpaca not connected",
-        body: "You haven’t connected Alpaca yet.\n\nFix: Go to Connected Apps and add your Alpaca API key + secret.",
+        body:
+          "You haven’t connected Alpaca yet.\n\nFix: Go to Connected Apps and add your Alpaca API key + secret.",
         action: alpacaAction(),
         debug: { feature, raw: err },
       };
@@ -241,7 +295,8 @@ export function explainAnyError(err, { feature = "request" } = {}) {
     if (lower.includes("not connected") || lower.includes("alpaca not connected")) {
       return {
         title: "Alpaca not connected",
-        body: "You haven’t connected Alpaca yet.\n\nFix: Go to Connected Apps and add your Alpaca API key + secret.",
+        body:
+          "You haven’t connected Alpaca yet.\n\nFix: Go to Connected Apps and add your Alpaca API key + secret.",
         action: alpacaAction(),
         debug: { feature, raw: err },
       };
@@ -280,7 +335,8 @@ export function explainAnyError(err, { feature = "request" } = {}) {
     if (msg.includes("not connected") || msg.includes("alpaca not connected")) {
       return {
         title: "Alpaca not connected",
-        body: "You haven’t connected Alpaca yet.\n\nFix: Go to Connected Apps and add your Alpaca API key + secret.",
+        body:
+          "You haven’t connected Alpaca yet.\n\nFix: Go to Connected Apps and add your Alpaca API key + secret.",
         action: alpacaAction(),
         debug: { feature, raw: err },
       };

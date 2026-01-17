@@ -1,1 +1,0 @@
-# EMA Trend Bot

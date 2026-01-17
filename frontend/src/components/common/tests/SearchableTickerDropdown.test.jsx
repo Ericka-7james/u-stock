@@ -39,7 +39,6 @@ describe("SearchableTickerDropdown", () => {
       />
     );
 
-    // scope to the trigger button so we don’t match an option later
     const btn = screen.getByRole("button");
     expect(within(btn).getByText("MSFT")).toBeInTheDocument();
   });
@@ -56,8 +55,6 @@ describe("SearchableTickerDropdown", () => {
     const { input, list } = openMenu();
 
     expect(input).toBeInTheDocument();
-
-    // scope to the options list so AAPL label in button doesn’t collide
     expect(within(list).getByText("AAPL")).toBeInTheDocument();
     expect(within(list).getByText("MSFT")).toBeInTheDocument();
   });
@@ -95,7 +92,6 @@ describe("SearchableTickerDropdown", () => {
 
     expect(within(list).getByText(/no matches/i)).toBeInTheDocument();
 
-    // label should still be visible on the button (don’t assert it disappears)
     const btn = screen.getByRole("button");
     expect(within(btn).getByText("AAPL")).toBeInTheDocument();
   });
@@ -109,7 +105,6 @@ describe("SearchableTickerDropdown", () => {
       />
     );
 
-    // open + filter
     let { input, list } = openMenu();
     fireEvent.change(input, { target: { value: "AM" } });
 
@@ -118,10 +113,8 @@ describe("SearchableTickerDropdown", () => {
     expect(onChange).toHaveBeenCalledTimes(1);
     expect(onChange).toHaveBeenCalledWith("AMZN");
 
-    // menu should close
     expect(screen.queryByPlaceholderText(/type to filter/i)).not.toBeInTheDocument();
 
-    // reopen: filter should be cleared → list shows all
     ({ list } = openMenu());
     expect(within(list).getByText("AAPL")).toBeInTheDocument();
     expect(within(list).getByText("AMZN")).toBeInTheDocument();
@@ -158,8 +151,23 @@ describe("SearchableTickerDropdown", () => {
 
     const { list } = openMenu();
 
-    // only count real options inside the list (not the label)
     const items = within(list).getAllByRole("listitem");
     expect(items.length).toBe(300);
+  });
+
+  test("Escape closes the menu", () => {
+    render(
+      <SearchableTickerDropdown
+        allTickers={["AAPL", "MSFT"]}
+        currentTicker="AAPL"
+        onChange={onChange}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button"));
+    expect(screen.getByPlaceholderText(/type to filter/i)).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.queryByPlaceholderText(/type to filter/i)).not.toBeInTheDocument();
   });
 });

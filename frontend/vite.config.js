@@ -30,5 +30,12 @@ export default defineConfig(({ mode }) => {
       port: 5173,
       strictPort: true,
     },
+
+    // ✅ ADD THIS: makes React Testing Library work (document/window available)
+    test: {
+      environment: "jsdom",
+      globals: true,
+      setupFiles: "./src/test/setup.js",
+    },
   };
 });

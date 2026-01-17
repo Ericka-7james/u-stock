@@ -1,12 +1,27 @@
-import { useState } from "react";
+// src/components/common/HelpTooltip.jsx
+import { useEffect, useRef, useState } from "react";
 import "../../css/common/HelpTooltip.css";
 
 export default function HelpTooltip({ title = "Help", children }) {
   const [open, setOpen] = useState(false);
+  const closeBtnRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+
+    // focus close for accessibility
+    closeBtnRef.current?.focus?.();
+
+    const onKey = (e) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
 
   return (
     <>
-      {/* Tiny "?" button that opens the help modal */}
       <button
         type="button"
         className="help-icon-button"
@@ -16,17 +31,21 @@ export default function HelpTooltip({ title = "Help", children }) {
         ?
       </button>
 
-      {/* Full-screen popover/modal */}
       {open && (
         <div
           className="help-popover-backdrop"
           onClick={() => setOpen(false)}
+          role="presentation"
         >
           <div
             className="help-popover"
+            role="dialog"
+            aria-modal="true"
+            aria-label={title}
             onClick={(e) => e.stopPropagation()}
           >
             <button
+              ref={closeBtnRef}
               type="button"
               className="help-popover__close"
               aria-label="Close help"

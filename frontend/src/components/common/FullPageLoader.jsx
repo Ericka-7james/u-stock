@@ -1,3 +1,4 @@
+// src/components/common/FullPageLoader.jsx
 import { useEffect, useState } from "react";
 import "../../css/common/FullPageLoader.css";
 
@@ -13,26 +14,21 @@ export default function FullPageLoader({ label = "Loading…" }) {
   useEffect(() => {
     const id = setInterval(() => {
       setFrame((i) => (i + 1) % FRAMES.length);
-    }, 120); // tweak: 100–150ms feels best
+    }, 120);
 
     return () => clearInterval(id);
   }, []);
 
   return (
-    <div
-      className="fpl-wrap"
-      role="status"
-      aria-live="polite"
-      aria-label={label}
-    >
+    <div className="fpl-wrap" role="status" aria-live="polite" aria-label={label}>
       <div className="fpl-card">
-        {/* 🔁 RUN CYCLE */}
         <img
+          data-testid="fpl-frame"
           src={FRAMES[frame]}
           alt=""
           className="fpl-loader-image"
+          aria-hidden="true"
         />
-
         <div className="fpl-text">{label}</div>
       </div>
     </div>

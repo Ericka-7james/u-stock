@@ -1,24 +1,45 @@
-import { useEffect, useState } from "react";
+// src/components/dashboard/cards/MacroCard.jsx
+import { useEffect, useMemo, useState } from "react";
 import HelpTooltip from "../../common/HelpTooltip.jsx";
 import "../../../css/dashboard/cards/MacroCard.css";
 
 function fmtPct(x) {
-  if (x === null || x === undefined || Number.isNaN(Number(x))) return "—";
-  return `${Number(x).toFixed(2)}%`;
+  const n = Number(x);
+  if (x === null || x === undefined || Number.isNaN(n)) return "—";
+  return `${n.toFixed(2)}%`;
 }
 
 function fmtRate(x) {
-  if (x === null || x === undefined || Number.isNaN(Number(x))) return "—";
-  return `${Number(x).toFixed(2)}%`;
+  const n = Number(x);
+  if (x === null || x === undefined || Number.isNaN(n)) return "—";
+  return `${n.toFixed(2)}%`;
+}
+
+function safeRiskClass(risk) {
+  const r = String(risk || "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9_-]+/g, "");
+  return r || "unknown";
 }
 
 function RiskPill({ risk }) {
-  const r = (risk || "").toLowerCase();
+  const cls = useMemo(() => safeRiskClass(risk), [risk]);
   return (
-    <span className={`macro-pill macro-pill--${r || "unknown"}`}>
+    <span className={`macro-pill macro-pill--${cls}`}>
       {risk || "Unknown"}
     </span>
   );
+}
+
+async function safeReadJson(res) {
+  const ct = res?.headers?.get?.("content-type") || "";
+  if (!ct.includes("application/json")) return null;
+  try {
+    return await res.json();
+  } catch {
+    return null;
+  }
 }
 
 export default function MacroCard() {
@@ -27,24 +48,39 @@ export default function MacroCard() {
 
   useEffect(() => {
     let alive = true;
+    const ctrl = new AbortController();
 
     async function run() {
       try {
         setErr("");
-        const res = await fetch("/api/macro/summary", { credentials: "include" });
-        const json = await res.json();
-        if (!res.ok) throw new Error(json?.detail || "Failed to load macro");
+
+        const res = await fetch("/api/macro/summary", {
+          credentials: "include",
+          signal: ctrl.signal,
+        });
+
+        const json = await safeReadJson(res);
+        const detail =
+          json?.detail ||
+          (res.ok ? null : `Failed to load macro (${res.status})`);
+
+        if (!res.ok) throw new Error(detail || "Failed to load macro");
+
         if (alive) setData(json);
       } catch (e) {
-        if (alive) setErr(String(e?.message || e));
+        if (!alive) return;
+        if (e?.name === "AbortError") return;
+        setErr(String(e?.message || e));
       }
     }
 
     run();
-    const t = setInterval(run, 60_000); // refresh 1/min (backend cached anyway)
+    const t = setInterval(run, 60_000);
+
     return () => {
       alive = false;
       clearInterval(t);
+      ctrl.abort();
     };
   }, []);
 
@@ -53,8 +89,13 @@ export default function MacroCard() {
       <div className="macro-header">
         <div className="macro-title">
           <span>Macro</span>
-          <HelpTooltip text="US macro snapshot (FRED): rates, inflation (CPI YoY), labor, and a simple risk signal." />
+
+          <HelpTooltip title="Macro help">
+            US macro snapshot (FRED): rates, inflation (CPI YoY), labor, and a
+            simple risk signal.
+          </HelpTooltip>
         </div>
+
         <RiskPill risk={data?.risk} />
       </div>
 

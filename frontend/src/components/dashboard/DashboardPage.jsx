@@ -19,6 +19,30 @@ import "../../css/dashboard/cards/CardShared.css";
 
 const LAST_TICKER_KEY = "ustock:last_ticker";
 
+// -------- Small in-memory caches (stale-while-revalidate) --------
+const CACHE_TTL_MS = 60_000;
+
+const leadersCache = {
+  ts: 0,
+  items: [],
+  meta: { source: "alpaca_movers" },
+};
+
+const oppCache = {
+  ts: 0,
+  data: { crypto: [], stocks: [], funds: [] },
+};
+
+function isFresh(ts) {
+  return Date.now() - Number(ts || 0) < CACHE_TTL_MS;
+}
+
+function toError(e) {
+  if (e instanceof Error) return e;
+  const msg = typeof e === "string" ? e : e?.message ? String(e.message) : JSON.stringify(e);
+  return new Error(msg);
+}
+
 async function apiGet(path, { signal } = {}) {
   const res = await fetch(path, {
     method: "GET",
@@ -34,7 +58,11 @@ async function apiGet(path, { signal } = {}) {
 
   if (!res.ok) {
     const detail =
-      typeof json === "object" && json?.detail ? json.detail : typeof json === "string" ? json : null;
+      typeof json === "object" && json?.detail
+        ? json.detail
+        : typeof json === "string"
+        ? json
+        : null;
     const code = typeof json === "object" && json?.code ? json.code : null;
 
     const msg =
@@ -52,6 +80,17 @@ async function apiGet(path, { signal } = {}) {
   }
 
   return typeof json === "object" ? json : { ok: true, raw: json };
+}
+
+// Retry once for transient failures (but never retry aborts)
+async function apiGetWithRetry(path, { signal } = {}) {
+  try {
+    return await apiGet(path, { signal });
+  } catch (e) {
+    if (signal?.aborted) throw e;
+    // one quick retry
+    return await apiGet(path, { signal });
+  }
 }
 
 function readIsDarkMode() {
@@ -85,6 +124,18 @@ function normalizeSymbol(sym) {
 function isTvSafe(sym) {
   const s = String(sym || "").trim().toUpperCase();
   return /^[A-Z]+$/.test(s); // rejects VLN.WS, BRK.B, etc.
+}
+
+function isTradingViewOrigin(origin) {
+  // allow https://*.tradingview.com only
+  try {
+    const u = new URL(String(origin || ""));
+    if (u.protocol !== "https:") return false;
+    const host = (u.hostname || "").toLowerCase();
+    return host === "tradingview.com" || host.endsWith(".tradingview.com");
+  } catch {
+    return false;
+  }
 }
 
 function BodyWithInlineAction({ body, action, onAction }) {
@@ -162,33 +213,50 @@ function ErrorBanner({ title, body, debug, action, onAction }) {
 
 /** Market Leaders */
 function useMarketLeaders() {
-  const [items, setItems] = useState([]);
-  const [meta, setMeta] = useState({ source: "alpaca_movers" });
+  const [items, setItems] = useState(() => (isFresh(leadersCache.ts) ? leadersCache.items : []));
+  const [meta, setMeta] = useState(() => (isFresh(leadersCache.ts) ? leadersCache.meta : { source: "alpaca_movers" }));
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState(null); // Error | null
 
   useEffect(() => {
     const ac = new AbortController();
     let alive = true;
 
     async function run() {
-      setLoading(true);
-      setError("");
+      // show loading only if we don't already have fresh data
+      const hasFresh = isFresh(leadersCache.ts) && Array.isArray(leadersCache.items);
+      if (!hasFresh) setLoading(true);
+      setError(null);
 
       try {
-        const json = await apiGet("/api/market/leaders?market=stocks&direction=up&limit=8", { signal: ac.signal });
+        const json = await apiGetWithRetry(
+          "/api/market/leaders?market=stocks&direction=up&limit=8",
+          { signal: ac.signal }
+        );
         if (!alive) return;
 
-        setItems(Array.isArray(json?.items) ? json.items : []);
-        setMeta({
+        const nextItems = Array.isArray(json?.items) ? json.items : [];
+        const nextMeta = {
           source: json?.source || { code: "alpaca_movers", label: "Alpaca market movers (today)" },
           asOf: json?.asOf || null,
-        });
+        };
+
+        setItems(nextItems);
+        setMeta(nextMeta);
+
+        leadersCache.ts = Date.now();
+        leadersCache.items = nextItems;
+        leadersCache.meta = nextMeta;
       } catch (e) {
         if (!alive) return;
-        setError(String(e?.message || e));
-        setItems([]);
-        setMeta({ source: "alpaca_movers" });
+        if (ac.signal.aborted) return;
+
+        const err = toError(e);
+        setError(err);
+
+        // keep cached/previous items if we have them; do not hard wipe unless none
+        if (!Array.isArray(items) || items.length === 0) setItems([]);
+        setMeta((m) => m || { source: "alpaca_movers" });
       } finally {
         if (!alive) return;
         setLoading(false);
@@ -200,6 +268,7 @@ function useMarketLeaders() {
       alive = false;
       ac.abort();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return { items, meta, loading, error };
@@ -207,26 +276,37 @@ function useMarketLeaders() {
 
 /** Bot Opportunities (internal) */
 function useBotOpportunities() {
-  const [data, setData] = useState({ crypto: [], stocks: [], funds: [] });
+  const [data, setData] = useState(() => (isFresh(oppCache.ts) ? oppCache.data : { crypto: [], stocks: [], funds: [] }));
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState(null); // Error | null
 
   useEffect(() => {
     const ac = new AbortController();
     let alive = true;
 
     async function run() {
-      setLoading(true);
-      setError("");
+      const hasFresh = isFresh(oppCache.ts) && oppCache.data;
+      if (!hasFresh) setLoading(true);
+      setError(null);
 
       try {
-        const json = await apiGet("/api/opportunities/bot/top?limit=8", { signal: ac.signal });
+        const json = await apiGetWithRetry("/api/opportunities/bot/top?limit=8", { signal: ac.signal });
         if (!alive) return;
-        setData(json || { crypto: [], stocks: [], funds: [] });
+
+        const next = json || { crypto: [], stocks: [], funds: [] };
+        setData(next);
+
+        oppCache.ts = Date.now();
+        oppCache.data = next;
       } catch (e) {
         if (!alive) return;
-        setError(String(e?.message || e));
-        setData({ crypto: [], stocks: [], funds: [] });
+        if (ac.signal.aborted) return;
+
+        const err = toError(e);
+        setError(err);
+
+        // keep cached/previous data if present
+        if (!data) setData({ crypto: [], stocks: [], funds: [] });
       } finally {
         if (!alive) return;
         setLoading(false);
@@ -238,6 +318,7 @@ function useBotOpportunities() {
       alive = false;
       ac.abort();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return { data, loading, error };
@@ -275,8 +356,7 @@ export default function DashboardPage() {
   // TradingView -> update ticker
   useEffect(() => {
     const handler = (e) => {
-      const origin = String(e.origin || "");
-      if (!origin.includes("tradingview.com")) return;
+      if (!isTradingViewOrigin(e?.origin)) return;
 
       let msg = e.data;
       if (typeof msg === "string") {
@@ -309,7 +389,10 @@ export default function DashboardPage() {
   const { bars: alpacaBars, loading: alpacaLoading, error: alpacaError, meta: alpacaMeta } =
     useAlpacaDailyBars(currentTicker, 220);
 
-  const alpacaHistoryBySymbol = useMemo(() => ({ [currentTicker]: alpacaBars || [] }), [currentTicker, alpacaBars]);
+  const alpacaHistoryBySymbol = useMemo(
+    () => ({ [currentTicker]: alpacaBars || [] }),
+    [currentTicker, alpacaBars]
+  );
 
   const [tradePreset, setTradePreset] = useState("Week");
   const { data: tradePerfData, loading: tradePerfLoading, error: tradePerfError } =
@@ -359,6 +442,8 @@ export default function DashboardPage() {
           />
 
           {tradePerfLoading ? <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>Loading…</div> : null}
+          {oppLoading ? <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>Loading…</div> : null}
+          {leadersLoading ? <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>Loading…</div> : null}
 
           {oppErrUI ? (
             <ErrorBanner
@@ -432,7 +517,6 @@ export default function DashboardPage() {
               backendSnapshot={null}
             />
 
-            {/* ✅ NEW: Macro card directly under Sentiment */}
             <div style={{ marginTop: 12 }}>
               <MacroCard />
             </div>

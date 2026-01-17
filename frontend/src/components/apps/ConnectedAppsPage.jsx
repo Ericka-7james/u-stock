@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import AppShell from "../layout/AppShell";
 import "../../css/apps/ConnectedAppsPage.css";
 import { useAuth } from "../../context/AuthContext";
@@ -48,27 +48,54 @@ export default function ConnectedAppsPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [activeProviderKey, setActiveProviderKey] = useState(null);
 
+  // Guard against setting state after unmount + avoid racey responses
+  const mountedRef = useRef(false);
+  const reqIdRef = useRef(0);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
   const activeProvider = useMemo(
     () => PROVIDERS.find((p) => p.key === activeProviderKey) || null,
     [activeProviderKey]
   );
 
-  async function loadConnections() {
-    setError("");
-    setDismissed((d) => ({ ...d, genericError: false }));
+  const safeSet = useCallback((fn) => {
+    if (!mountedRef.current) return;
+    fn();
+  }, []);
+
+  const loadConnections = useCallback(async () => {
+    const myReqId = ++reqIdRef.current;
+
+    safeSet(() => {
+      setError("");
+      setDismissed((d) => ({ ...d, genericError: false }));
+    });
 
     if (!isAuthed) {
-      setApps([]);
-      setNotice("");
+      safeSet(() => {
+        setApps([]);
+        setNotice("");
+        setLoading(false);
+      });
       return;
     }
 
-    setLoading(true);
+    safeSet(() => setLoading(true));
+
     try {
       const res = await authFetch("/integrations", { method: "GET" });
 
+      // If a newer request started, ignore this response
+      if (myReqId !== reqIdRef.current) return;
+
       if (res.status === 401) {
-        setApps([]);
+        safeSet(() => setApps([]));
         throw new Error("Session expired — please sign in again.");
       }
 
@@ -79,32 +106,38 @@ export default function ConnectedAppsPage() {
         throw err;
       }
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
 
-      setNotice(data?.message || "");
-      setDismissed((d) => ({ ...d, notConnected: false }));
-
-      // ✅ backend returns { items: [...] }
+      // backend returns { items: [...] } (support legacy { apps: [...] })
       const list =
         (Array.isArray(data?.items) && data.items) ||
         (Array.isArray(data?.apps) && data.apps) ||
         [];
 
-      setApps(list);
+      safeSet(() => {
+        setNotice(data?.message || "");
+        setDismissed((d) => ({ ...d, notConnected: false }));
+        setApps(list);
+      });
     } catch (e) {
-      setApps([]);
-      setNotice("");
       const ui = e?._ui;
-      setError(ui ? `${ui.title}\n\n${ui.body}` : (e?.message || "Could not load connected apps."));
+      safeSet(() => {
+        setApps([]);
+        setNotice("");
+        setError(
+          ui ? `${ui.title}\n\n${ui.body}` : (e?.message || "Could not load connected apps.")
+        );
+      });
     } finally {
-      setLoading(false);
+      // If a newer request started, don't stomp its loading state
+      if (myReqId !== reqIdRef.current) return;
+      safeSet(() => setLoading(false));
     }
-  }
+  }, [authFetch, isAuthed, safeSet]);
 
   useEffect(() => {
     loadConnections();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthed]);
+  }, [loadConnections]);
 
   const statusByProvider = useMemo(() => {
     const map = new Map();
@@ -156,9 +189,13 @@ export default function ConnectedAppsPage() {
   };
 
   const handleLogout = async () => {
-    await logout?.();
-    setApps([]);
-    setNotice("");
+    try {
+      await logout?.();
+    } finally {
+      // clear local UI regardless
+      setApps([]);
+      setNotice("");
+    }
   };
 
   return (
@@ -180,6 +217,7 @@ export default function ConnectedAppsPage() {
                 onClick={handleLogout}
                 title="Clears the HttpOnly cookie session"
                 style={{ height: 40, alignSelf: "flex-start" }}
+                disabled={loading}
               >
                 Log out
               </button>
@@ -255,7 +293,7 @@ export default function ConnectedAppsPage() {
                       <button
                         className="connected-btn connected-btn--secondary"
                         onClick={() => alert("Disconnect flow will be wired next.")}
-                        disabled={!isAuthed}
+                        disabled={!isAuthed || loading}
                         title={!isAuthed ? "Sign in to manage connections" : ""}
                       >
                         Disconnect
@@ -263,7 +301,7 @@ export default function ConnectedAppsPage() {
                       <button
                         className="connected-btn connected-btn--primary"
                         onClick={loadConnections}
-                        disabled={!isAuthed}
+                        disabled={!isAuthed || loading}
                         title={!isAuthed ? "Sign in first" : ""}
                       >
                         Refresh
@@ -274,6 +312,7 @@ export default function ConnectedAppsPage() {
                       <button
                         className="connected-btn connected-btn--primary"
                         onClick={() => openConnectModal(p.key)}
+                        disabled={loading}
                       >
                         Connect
                       </button>
@@ -281,6 +320,7 @@ export default function ConnectedAppsPage() {
                       <button
                         className="connected-btn connected-btn--secondary"
                         onClick={() => openDocs(p.key)}
+                        disabled={loading}
                       >
                         Learn more
                       </button>

@@ -1,15 +1,22 @@
 // src/components/charts/TradingViewEmbed.jsx
 import { useEffect, useMemo, useRef } from "react";
 
-function ensureTvScriptLoaded() {
-  // Load tv.js once
-  if (window.__TV_JS_LOADING__) return window.__TV_JS_LOADING__;
+let tvLoadPromise = null;
+
+export function ensureTvScriptLoaded() {
+  if (typeof window === "undefined" || typeof document === "undefined") {
+    return Promise.reject(new Error("TradingViewEmbed requires a browser environment"));
+  }
+
   if (window.TradingView) return Promise.resolve(true);
 
-  window.__TV_JS_LOADING__ = new Promise((resolve, reject) => {
-    const existing = document.querySelector('script[src="https://s3.tradingview.com/tv.js"]');
+  if (tvLoadPromise) return tvLoadPromise;
+
+  tvLoadPromise = new Promise((resolve, reject) => {
+    const src = "https://s3.tradingview.com/tv.js";
+    const existing = document.querySelector(`script[src="${src}"]`);
+
     if (existing) {
-      // If script exists but TradingView isn't ready yet, wait a tick
       const check = () => {
         if (window.TradingView) resolve(true);
         else setTimeout(check, 50);
@@ -19,7 +26,7 @@ function ensureTvScriptLoaded() {
     }
 
     const script = document.createElement("script");
-    script.src = "https://s3.tradingview.com/tv.js";
+    script.src = src;
     script.async = true;
 
     script.onload = () => resolve(true);
@@ -28,7 +35,7 @@ function ensureTvScriptLoaded() {
     document.head.appendChild(script);
   });
 
-  return window.__TV_JS_LOADING__;
+  return tvLoadPromise;
 }
 
 export default function TradingViewEmbed({
@@ -39,6 +46,8 @@ export default function TradingViewEmbed({
   autosize = true,
 }) {
   const hostRef = useRef(null);
+
+  const safeHeight = Math.max(120, Number(height) || 420);
 
   // Unique container id per component instance
   const containerId = useMemo(() => {
@@ -52,15 +61,18 @@ export default function TradingViewEmbed({
     async function mount() {
       if (!hostRef.current) return;
 
-      // Clear previous widget DOM
       hostRef.current.innerHTML = `<div id="${containerId}" style="height:100%;width:100%"></div>`;
 
       try {
         await ensureTvScriptLoaded();
         if (cancelled) return;
 
-        // eslint-disable-next-line no-undef
-        new TradingView.widget({
+        if (!window.TradingView?.widget) {
+          throw new Error("TradingView.widget is not available");
+        }
+
+        // eslint-disable-next-line no-new
+        new window.TradingView.widget({
           autosize,
           symbol,
           interval,
@@ -75,16 +87,19 @@ export default function TradingViewEmbed({
         });
       } catch (e) {
         if (cancelled) return;
-        // Fallback message
-        hostRef.current.innerHTML = `<div style="padding:12px;font-size:12px;opacity:.8">TradingView failed to load.</div>`;
+        hostRef.current.innerHTML =
+          `<div style="padding:12px;font-size:12px;opacity:.8">TradingView failed to load.</div>`;
       }
     }
 
     mount();
+
     return () => {
       cancelled = true;
+      // Clear DOM (prevents stale widget remnants)
+      if (hostRef.current) hostRef.current.innerHTML = "";
     };
   }, [symbol, interval, theme, autosize, containerId]);
 
-  return <div ref={hostRef} style={{ height, width: "100%" }} />;
+  return <div ref={hostRef} style={{ height: safeHeight, width: "100%" }} />;
 }
