@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 import time
+from dataclasses import asdict, is_dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -57,6 +58,10 @@ def _write_market_gate_hint(until_epoch: float) -> None:
 
 
 def _get_us_market_session(api: UStockAPI) -> Optional[Dict[str, Any]]:
+    """
+    Expects backend to implement:
+      GET /api/market/us/session
+    """
     try:
         return api.get("/api/market/us/session")
     except Exception:
@@ -64,6 +69,9 @@ def _get_us_market_session(api: UStockAPI) -> Optional[Dict[str, Any]]:
 
 
 def _maybe_market_closed(api: UStockAPI) -> Tuple[bool, Optional[float], str]:
+    """
+    Returns (closed?, next_open_epoch?, reason)
+    """
     session = _get_us_market_session(api)
     if isinstance(session, dict) and session.get("ok") is True:
         is_open = bool(session.get("is_open"))
@@ -130,6 +138,9 @@ def _compute_bias_15m(closes: List[float], cfg: EMATrendConfig) -> Optional[str]
 
 
 def run(api: Optional[UStockAPI] = None, cfg: Optional[EMATrendConfig] = None) -> List[TradeIntent]:
+    """
+    Core bot loop. Returns TradeIntent list.
+    """
     global _MARKET_CLOSED_UNTIL
 
     created_api = api is None
@@ -147,14 +158,31 @@ def run(api: Optional[UStockAPI] = None, cfg: Optional[EMATrendConfig] = None) -
             _log_throttled("outside_window", one_line("ema_trend", counters), every_seconds=300)
             return []
 
-        # market closed gate
+        # ✅ market session gate (early)
+        # If weekend/closed, set a gate and return immediately so runner sees "paused".
+        now = time.time()
+        if now >= _MARKET_CLOSED_UNTIL:
+            closed, until, reason = _maybe_market_closed(api)
+            if closed:
+                mins = int(os.getenv("MARKET_CLOSED_RECHECK_MINUTES", "120"))
+                _MARKET_CLOSED_UNTIL = float(until or (time.time() + mins * 60.0))
+                _write_market_gate_hint(_MARKET_CLOSED_UNTIL)
+                _log_throttled(
+                    "market_closed",
+                    f"US market closed. Gating until {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(_MARKET_CLOSED_UNTIL))} ({reason}).",
+                    every_seconds=60,
+                )
+                inc(counters, "market_gated")
+                return []
+
+        # market closed gate (cached)
         now = time.time()
         if now < _MARKET_CLOSED_UNTIL:
             inc(counters, "market_gated")
             _log_throttled(
-                "market_closed",
+                "market_gated_cached",
                 f"US market gated until {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(_MARKET_CLOSED_UNTIL))}. Skipping.",
-                every_seconds=600,
+                every_seconds=120,
             )
             return []
 
@@ -267,6 +295,7 @@ def run(api: Optional[UStockAPI] = None, cfg: Optional[EMATrendConfig] = None) -
             inc(counters, "candidates")
 
         # ---- market gate if everything empty ----
+        # Keep this as a safety net if the bars route is down / auth fails
         if not any_symbol_had_data:
             closed, until, reason = _maybe_market_closed(api)
             if closed and until:
@@ -275,7 +304,7 @@ def run(api: Optional[UStockAPI] = None, cfg: Optional[EMATrendConfig] = None) -
                 _log_throttled(
                     "market_gate_set",
                     f"No symbols returned bars. Setting market gate until {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(_MARKET_CLOSED_UNTIL))} ({reason}).",
-                    every_seconds=300,
+                    every_seconds=60,
                 )
             return []
 
@@ -295,3 +324,46 @@ def run(api: Optional[UStockAPI] = None, cfg: Optional[EMATrendConfig] = None) -
                 api.close()
             except Exception:
                 pass
+
+
+# --------------------------------------------------------------------
+# ✅ Stable runner entrypoint (this is what your runner should call)
+# --------------------------------------------------------------------
+def generate_intents(api: UStockAPI, config: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """
+    Stable interface for runner:
+      intents = generate_intents(api, config_dict)
+
+    Returns list of JSON-ready dicts (TradeIntent).
+    """
+    intents = _generate_intents_internal(api=api, config=config)
+
+    out: List[Dict[str, Any]] = []
+    for it in intents or []:
+        if isinstance(it, dict):
+            out.append(it)
+        elif is_dataclass(it):
+            out.append(asdict(it))
+        else:
+            # fallback: best-effort
+            out.append(dict(getattr(it, "__dict__", {})))
+    return out
+
+
+def _generate_intents_internal(*, api: UStockAPI, config: Dict[str, Any]) -> List[TradeIntent]:
+    """
+    Adapter: config dict (from backend /api/bots/config) -> EMATrendConfig -> run()
+    Keeps bot logic isolated and runner-friendly.
+    """
+    cfg = EMATrendConfig()
+
+    # Best-effort: apply only keys that exist on EMATrendConfig
+    if isinstance(config, dict):
+        for k, v in config.items():
+            if hasattr(cfg, k):
+                try:
+                    setattr(cfg, k, v)
+                except Exception:
+                    pass
+
+    return run(api=api, cfg=cfg)

@@ -1,4 +1,4 @@
-# u-stock-bots/bots/_shared/http.py
+# u-stock-bots/bots/_shared/ustock_http.py
 from __future__ import annotations
 
 import os
@@ -95,3 +95,8 @@ class UStockAPI:
 
     def get(self, path: str, params: Optional[Dict[str, Any]] = None) -> Any:
         return self.request("GET", path, params=params)
+
+    def post(self, path: str, json: Optional[Dict[str, Any]] = None) -> Any:
+        return self.request("POST", path, json=json)
+
+
