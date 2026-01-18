@@ -350,20 +350,14 @@ def generate_intents(api: UStockAPI, config: Dict[str, Any]) -> List[Dict[str, A
     return out
 
 
-def _generate_intents_internal(*, api: UStockAPI, config: Dict[str, Any]) -> List[TradeIntent]:
+def generate_output(api, config):
     """
-    Adapter: config dict (from backend /api/bots/config) -> EMATrendConfig -> run()
-    Keeps bot logic isolated and runner-friendly.
+    Runner-facing adapter.
+    Strategy only — NO execution here.
     """
-    cfg = EMATrendConfig()
+    intents = generate_intents(api, config)
+    return {
+        "intents": intents,
+        "events": [],  # execution happens in engine
+    }
 
-    # Best-effort: apply only keys that exist on EMATrendConfig
-    if isinstance(config, dict):
-        for k, v in config.items():
-            if hasattr(cfg, k):
-                try:
-                    setattr(cfg, k, v)
-                except Exception:
-                    pass
-
-    return run(api=api, cfg=cfg)

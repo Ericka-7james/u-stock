@@ -3,13 +3,14 @@ from __future__ import annotations
 
 import os
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from bots._shared.ustock_http import UStockAPI
-
+from runner.engine import BotEngine
+from runner.supabase import upload_transaction_events
 
 LOOP_SECONDS = int(os.getenv("RUNNER_LOOP_SECONDS", "5"))
-BOT_ID = os.getenv("RUNNER_BOT_ID", "ema_trend")  # you can extend to multiple later
+BOT_ID = os.getenv("RUNNER_BOT_ID", "ema_trend")
 
 
 def _now() -> int:
@@ -20,17 +21,15 @@ def _sleep_smart(seconds: float) -> None:
     time.sleep(max(0.2, float(seconds)))
 
 
-def _market_session(api: UStockAPI) -> Dict[str, Any]:
-    # Expected: { ok: true, is_open: bool, next_open: epoch, reason: "...", ... }
-    try:
-        data = api.get("/api/market/us/session")
-        return data if isinstance(data, dict) else {"ok": False}
-    except Exception:
-        return {"ok": False}
+def _normalize_mode(raw: Any) -> str:
+    m = str(raw or "paper").strip().lower()
+    return m if m in ("paper", "live") else "paper"
 
 
-def _get_status(api: UStockAPI, bot_id: str) -> Dict[str, Any]:
-    return api.get("/api/bots/status", params={"bot_id": bot_id})
+def _extract_mode_cfg(status: Dict[str, Any]) -> Tuple[str, Dict[str, Any]]:
+    cfg = (status.get("config") or {}) if isinstance(status.get("config"), dict) else {}
+    mode = _normalize_mode(status.get("mode") or cfg.get("mode") or "paper")
+    return mode, cfg
 
 
 def _heartbeat(
@@ -43,41 +42,86 @@ def _heartbeat(
     next_open_epoch: Optional[int] = None,
     last_error: Optional[str] = None,
 ) -> None:
-    payload: Dict[str, Any] = {
-        "bot_id": bot_id,
-        "state": state,  # running | paused | stopped
-        "mode": mode,
-        "last_run": _now(),
-        "paused_reason": paused_reason,
-        "next_open_epoch": next_open_epoch,
-        "last_error": last_error,
-    }
-    api.post("/api/bots/heartbeat", json=payload)
+    api.post(
+        "/api/bots/heartbeat",
+        json={
+            "bot_id": bot_id,
+            "state": state,
+            "mode": mode,
+            "last_run": _now(),
+            "paused_reason": paused_reason,
+            "next_open_epoch": next_open_epoch,
+            "last_error": last_error,
+        },
+    )
 
 
-def _submit_intents(api: UStockAPI, bot_id: str, items: List[Dict[str, Any]]) -> None:
-    api.post("/api/bots/submit-intents", json={"bot_id": bot_id, "ts": _now(), "items": items})
+def _submit_intents(api: UStockAPI, bot_id: str, intents: List[Dict[str, Any]]) -> None:
+    api.post("/api/bots/submit-intents", json={"bot_id": bot_id, "ts": _now(), "items": intents})
 
 
-# ----------------------------------------------------------
-# EMA bot adapter (plug your real ema_trend logic in here)
-# ----------------------------------------------------------
-def compute_intents_for_ema_trend(api: UStockAPI, cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """
-    Runs the real EMA Trend bot and converts TradeIntent -> JSON dict.
-    """
-    from bots.ema_trend.bot import run as ema_run
-    from bots.ema_trend.config import EMATrendConfig
+def _get_status(api: UStockAPI, bot_id: str) -> Dict[str, Any]:
+    return api.get("/api/bots/status", params={"bot_id": bot_id})
 
-    # Merge backend runtime config -> EMATrendConfig if fields overlap
-    # (anything unknown is ignored by dataclass if you do **cfg safely)
+
+def _market_session(api: UStockAPI) -> Dict[str, Any]:
     try:
-        bot_cfg = EMATrendConfig(**{k: v for k, v in (cfg or {}).items() if hasattr(EMATrendConfig(), k)})
+        data = api.get("/api/market/us/session")
+        return data if isinstance(data, dict) else {"ok": False}
     except Exception:
-        bot_cfg = EMATrendConfig()
+        return {"ok": False}
 
-    intents = ema_run(api=api, cfg=bot_cfg) or []
-    return [i.__dict__ for i in intents]
+
+# ----------------------------------------------------------
+# Bot compatibility adapter (multiple bot API shapes)
+# ----------------------------------------------------------
+def _compute_intents_for_ema_trend(api: UStockAPI, cfg: Dict[str, Any]) -> Dict[str, Any]:
+    from bots.ema_trend import bot as ema_bot  # type: ignore
+
+    # A) Preferred: generate_output(api, config) -> {"intents":[...], "events":[...]}
+    gen_out = getattr(ema_bot, "generate_output", None)
+    if callable(gen_out):
+        out = gen_out(api=api, config=cfg)
+        if isinstance(out, dict):
+            intents = out.get("intents") or []
+            events = out.get("events") or []
+            return {
+                "intents": intents if isinstance(intents, list) else [],
+                "events": events if isinstance(events, list) else [],
+            }
+
+    # B) generate_intents(api, config) -> [dict...]
+    gen_intents = getattr(ema_bot, "generate_intents", None)
+    if callable(gen_intents):
+        intents = gen_intents(api=api, config=cfg)
+        return {"intents": intents if isinstance(intents, list) else [], "events": []}
+
+    # C) legacy run(api=..., cfg=dataclass) -> [TradeIntent...]
+    try:
+        from dataclasses import asdict, is_dataclass
+        from bots.ema_trend.config import EMATrendConfig  # type: ignore
+
+        bot_cfg = EMATrendConfig()
+        if isinstance(cfg, dict):
+            for k, v in cfg.items():
+                if hasattr(bot_cfg, k):
+                    try:
+                        setattr(bot_cfg, k, v)
+                    except Exception:
+                        pass
+
+        intents_raw = ema_bot.run(api=api, cfg=bot_cfg) or []
+        intents_out: List[Dict[str, Any]] = []
+        for it in intents_raw:
+            if isinstance(it, dict):
+                intents_out.append(it)
+            elif is_dataclass(it):
+                intents_out.append(asdict(it))
+            else:
+                intents_out.append(dict(getattr(it, "__dict__", {})))
+        return {"intents": intents_out, "events": []}
+    except Exception:
+        return {"intents": [], "events": []}
 
 
 def main() -> None:
@@ -87,21 +131,21 @@ def main() -> None:
     with UStockAPI(base_url=base_url, timeout=15) as api:
         while True:
             t0 = time.time()
+            mode = "paper"
 
             try:
                 status = _get_status(api, BOT_ID)
-                state = str(status.get("state") or "stopped")
-                mode = str(status.get("mode") or (status.get("config") or {}).get("mode") or "paper")
-                cfg = (status.get("config") or {}) if isinstance(status.get("config"), dict) else {}
+                state = str(status.get("state") or "stopped").strip().lower()
 
                 if state != "running":
-                    # Not running -> do nothing (but runner stays alive)
                     _sleep_smart(LOOP_SECONDS - (time.time() - t0))
                     continue
 
+                mode, cfg = _extract_mode_cfg(status)
+
+                # market gate
                 sess = _market_session(api)
                 is_open = bool(sess.get("is_open")) if sess.get("ok") else True  # fail-open locally
-
                 if not is_open:
                     paused_reason = str(sess.get("reason") or "Market closed")
                     next_open = sess.get("next_open")
@@ -119,23 +163,38 @@ def main() -> None:
                     _sleep_smart(LOOP_SECONDS - (time.time() - t0))
                     continue
 
-                # Market open -> compute intents
-                intents = compute_intents_for_ema_trend(api, cfg)
+                # ----------------
+                # STRATEGY
+                # ----------------
+                result = _compute_intents_for_ema_trend(api, cfg)
+                intents = [x for x in (result.get("intents") or []) if isinstance(x, dict)]
+                strat_events = [x for x in (result.get("events") or []) if isinstance(x, dict)]
 
-                # Submit + heartbeat
                 _submit_intents(api, BOT_ID, intents)
+
+                # ----------------
+                # EXECUTION (always routed by mode)
+                # ----------------
+                engine = BotEngine(mode=mode)
+                tx_events = engine.execute_intents(intents)
+
+                # ----------------
+                # SUPABASE (tx-only)
+                # ----------------
+                # Combine any strategy events (if any) with tx events;
+                # uploader filters to TRANSACTION_EVENT_TYPES only.
+                combined: List[Dict[str, Any]] = []
+                combined.extend(strat_events)
+                combined.extend(tx_events)
+
+                upload_transaction_events(BOT_ID, mode, combined)
+
                 _heartbeat(api, bot_id=BOT_ID, state="running", mode=mode, last_error=None)
 
             except Exception as e:
-                # Runner should never die; report error to backend for the UI
+                # runner must never die
                 try:
-                    _heartbeat(
-                        api,
-                        bot_id=BOT_ID,
-                        state="running",
-                        mode="paper",
-                        last_error=repr(e),
-                    )
+                    _heartbeat(api, bot_id=BOT_ID, state="running", mode=mode, last_error=repr(e))
                 except Exception:
                     pass
 
