@@ -1,5 +1,5 @@
 // frontend/src/components/dashboard/cards/TradePerformancePanel.jsx
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import BotControlCard from "./BotControlCard.jsx";
 import "../../../css/dashboard/cards/TradePerformancePanel.css";
 
@@ -118,7 +118,10 @@ function OpportunityTable({ title, rows, emptyMessage, onPickSymbol, sourceLabel
 
   return (
     <div className="tpOppMiniTable" style={{ overflow: "hidden", borderRadius: 14 }}>
-      <div className="tpOppMiniTitle" style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10 }}>
+      <div
+        className="tpOppMiniTitle"
+        style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10 }}
+      >
         <span>{title}</span>
         {sourceLabel ? (
           <span style={{ fontSize: 12, opacity: 0.7, whiteSpace: "nowrap" }}>Source: {sourceLabel}</span>
@@ -159,6 +162,178 @@ function OpportunityTable({ title, rows, emptyMessage, onPickSymbol, sourceLabel
         )}
       </div>
     </div>
+  );
+}
+
+/* -------------------------------------------
+   Bot Intents section (visible bot value)
+-------------------------------------------- */
+
+function fmtTime(epochSec) {
+  const t = Number(epochSec);
+  if (!Number.isFinite(t) || t <= 0) return "—";
+  try {
+    return new Date(t * 1000).toLocaleString();
+  } catch {
+    return "—";
+  }
+}
+
+function fmtSide(side) {
+  const s = String(side || "").trim().toLowerCase();
+  if (s === "buy") return "BUY";
+  if (s === "sell") return "SELL";
+  return (String(side || "—") || "—").toUpperCase();
+}
+
+function fmtConf(v) {
+  const x = Number(v);
+  return Number.isFinite(x) ? x.toFixed(2) : "—";
+}
+
+function safeSym(it) {
+  return String(it?.symbol || "").trim().toUpperCase();
+}
+
+function BotIntentsCard({ botRunning, botId, onPickSymbol }) {
+  const [items, setItems] = useState([]);
+  const [ts, setTs] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  const lastBotIdRef = useRef("");
+
+  async function refresh() {
+    const id = String(botId || "").trim();
+    if (!id) return;
+
+    setErr("");
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/bots/intents?bot_id=${encodeURIComponent(id)}&limit=10`, {
+        credentials: "include",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.detail || "Failed to load intents");
+
+      const list = Array.isArray(data?.items) ? data.items : [];
+      setItems(list);
+      setTs(Number(data?.ts) || 0);
+    } catch (e) {
+      setErr(String(e?.message || e));
+      setItems([]);
+      setTs(0);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Poll when bot is running or paused (runner alive)
+  useEffect(() => {
+    const id = String(botId || "").trim();
+
+    if (!botRunning || !id) {
+      setItems([]);
+      setTs(0);
+      setErr("");
+      lastBotIdRef.current = id;
+      return;
+    }
+
+    // If bot changes, clear old intents immediately
+    if (lastBotIdRef.current && lastBotIdRef.current !== id) {
+      setItems([]);
+      setTs(0);
+      setErr("");
+    }
+    lastBotIdRef.current = id;
+
+    refresh();
+    const t = setInterval(() => refresh(), 7000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [botRunning, botId]);
+
+  return (
+    <CardShell title="Bot Intents" className="tpSpan2">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 }}>
+        <div style={{ fontSize: 12, opacity: 0.75, fontWeight: 800 }}>
+          {botRunning ? (
+            <>
+              Showing latest 10 from <span className="mono">{botId || "bot"}</span> · Updated{" "}
+              <span className="mono">{ts ? fmtTime(ts) : "—"}</span>
+            </>
+          ) : (
+            "Start a bot to generate intents."
+          )}
+        </div>
+
+        <button
+          className="tpTab"
+          type="button"
+          onClick={refresh}
+          disabled={!botRunning || !botId || busy}
+          style={{ height: 34 }}
+        >
+          Refresh
+        </button>
+      </div>
+
+      {err ? (
+        <div className="tpEmpty" style={{ marginTop: 10 }}>
+          Error: {err}
+        </div>
+      ) : null}
+
+      <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
+        {busy && !items.length ? (
+          <div className="tpEmpty">Loading intents…</div>
+        ) : items.length ? (
+          items.map((it, idx) => {
+            const sym = safeSym(it);
+            if (!isAlphaOnlySymbol(sym)) return null;
+
+            const side = fmtSide(it?.side);
+            const entry = nn(it?.entry);
+            const stop = nn(it?.stop);
+            const tp = nn(it?.take_profit ?? it?.takeProfit ?? it?.tp);
+            const conf = it?.confidence;
+
+            const sub = `Entry ${entry === null ? "—" : fmtMoney(entry)} · Stop ${stop === null ? "—" : fmtMoney(
+              stop
+            )} · TP ${tp === null ? "—" : fmtMoney(tp)} · Conf ${fmtConf(conf)}`;
+
+            const score = Number.isFinite(Number(conf)) ? Number(conf) : null;
+
+            return (
+              <PillRow
+                key={`${sym}-${idx}`}
+                symbol={`${sym} · ${side}`}
+                score={score}
+                sub={sub}
+                onClick={
+                  onPickSymbol
+                    ? () => {
+                        onPickSymbol(sym);
+                      }
+                    : undefined
+                }
+              />
+            );
+          })
+        ) : (
+          <div className="tpEmpty">
+            {botRunning
+              ? "No intents yet. (On weekends/market closed, runner pauses. When market opens and bot logic submits intents, they show here.)"
+              : "No bot running."}
+          </div>
+        )}
+      </div>
+
+      <div className="tpOppFootnote" style={{ marginTop: 12 }}>
+        Click an intent to load the symbol in the chart. Intents are suggestions, not orders.
+      </div>
+    </CardShell>
   );
 }
 
@@ -301,6 +476,9 @@ export default function TradePerformancePanel({ data, onChangeRange, opportuniti
             <MiniStat label="Aligned" value={String(aligned.length)} tone={aligned.length ? "pos" : ""} />
             <MiniStat label="Internal Picks" value={String(oppStocks.length)} />
           </div>
+
+          {/* ✅ NEW: visible bot value */}
+          <BotIntentsCard botRunning={botRunning} botId={botName} onPickSymbol={onPickSymbol} />
 
           <CardShell title="Top Day Trades (Opportunity)" className="tpSpan2">
             <div className="tpOppGrid">

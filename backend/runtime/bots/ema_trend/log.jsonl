@@ -1,1 +1,16 @@
 {"ts": 1768666258, "level": "info", "message": "Bot started", "meta": {"mode": "paper"}}
+{"ts": 1768683017, "level": "info", "message": "Bot started", "meta": {"mode": "paper"}}
+{"ts": 1768683021, "level": "info", "message": "Bot started", "meta": {"mode": "paper"}}
+{"ts": 1768691189, "level": "info", "message": "Bot started", "meta": {"mode": "paper"}}
+{"ts": 1768691228, "level": "info", "message": "Bot started", "meta": {"mode": "paper"}}
+{"ts": 1768691536, "level": "info", "message": "State changed", "meta": {"from": "running", "to": "paused", "reason": "Weekend"}}
+{"ts": 1768693211, "level": "error", "message": "Runner error", "meta": {"error": "ConnectionError(ProtocolError('Connection aborted.', ConnectionResetError(10054, 'An existing connection was forcibly closed by the remote host', None, 10054, None)))"}}
+{"ts": 1768693216, "level": "info", "message": "State changed", "meta": {"from": "running", "to": "paused", "reason": "Weekend"}}
+{"ts": 1768698257, "level": "error", "message": "Runner error", "meta": {"error": "ConnectionError(ProtocolError('Connection aborted.', ConnectionResetError(10054, 'An existing connection was forcibly closed by the remote host', None, 10054, None)))"}}
+{"ts": 1768698262, "level": "info", "message": "State changed", "meta": {"from": "running", "to": "paused", "reason": "Weekend"}}
+{"ts": 1768698602, "level": "error", "message": "Runner error", "meta": {"error": "ConnectionError(ProtocolError('Connection aborted.', ConnectionAbortedError(10053, 'An established connection was aborted by the software in your host machine', None, 10053, None)))"}}
+{"ts": 1768698607, "level": "info", "message": "State changed", "meta": {"from": "running", "to": "paused", "reason": "Weekend"}}
+{"ts": 1768736301, "level": "error", "message": "Runner error", "meta": {"error": "ConnectionError(ProtocolError('Connection aborted.', ConnectionAbortedError(10053, 'An established connection was aborted by the software in your host machine', None, 10053, None)))"}}
+{"ts": 1768736304, "level": "info", "message": "State changed", "meta": {"from": "running", "to": "paused", "reason": "Weekend"}}
+{"ts": 1768754253, "level": "error", "message": "Runner error", "meta": {"error": "ConnectionError(ProtocolError('Connection aborted.', ConnectionResetError(10054, 'An existing connection was forcibly closed by the remote host', None, 10054, None)))"}}
+{"ts": 1768773429, "level": "info", "message": "State changed", "meta": {"from": "running", "to": "paused", "reason": "Weekend"}}

@@ -115,26 +115,59 @@ def opportunities_for_runner(
 @router.get("/bot/top")
 def top_bot_opportunities(
     limit: int = Query(8, ge=1, le=50),
+    bot_id: Optional[str] = Query(None),
 ):
     """
-    Internal opportunities:
-    - later: computed from bot performance + strategy fit
-    - now: placeholder so UI has a stable route + friendly message
-
-    Returns:
-    {
-      ok: true,
-      requiresBotRunning: true,
-      message: "...",
-      items: []
-    }
+    Returns the most recent intents from the current running bot (runtime store).
+    If bot_id is provided, return that bot's last intents.
     """
+    from pathlib import Path
+    import json
+
+    runtime_dir = Path(__file__).resolve().parents[2] / "runtime" / "bots"
+
+    def read_json(path: Path, default):
+        try:
+            if not path.exists():
+                return default
+            return json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            return default
+
+    # If not provided, infer "active" bot by scanning for state=running (simple v1)
+    picked_bot = (bot_id or "").strip() or None
+    if picked_bot is None:
+        if runtime_dir.exists():
+            for d in runtime_dir.iterdir():
+                if not d.is_dir():
+                    continue
+                st = read_json(d / "state.json", {})
+                if st.get("state") == "running":
+                    picked_bot = d.name
+                    break
+
+    if picked_bot is None:
+        return {
+            "ok": True,
+            "source": "bot_profitability",
+            "requiresBotRunning": True,
+            "message": "No bot is running yet. Start a bot to generate opportunities.",
+            "items": [],
+            "asOf": _now_epoch(),
+            "limit": limit,
+        }
+
+    bot_dir = runtime_dir / picked_bot
+    intents = read_json(bot_dir / "intents.json", {"items": [], "ts": 0})
+    items = list(intents.get("items") or [])[: int(limit)]
+    ts = int(intents.get("ts") or 0)
+
     return {
         "ok": True,
         "source": "bot_profitability",
-        "requiresBotRunning": True,
-        "message": "No bot is running yet. Start a bot to generate opportunities.",
-        "items": [],
-        "asOf": _now_epoch(),
+        "requiresBotRunning": False,
+        "bot_id": picked_bot,
+        "items": items,
+        "asOf": ts or _now_epoch(),
         "limit": limit,
     }

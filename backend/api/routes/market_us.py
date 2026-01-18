@@ -3,12 +3,18 @@ from __future__ import annotations
 
 import os
 import time
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Tuple, Optional
 
 import requests
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 
 from api.core.security import require_user, decrypt_secret, get_supabase_service
+
+try:
+    from zoneinfo import ZoneInfo
+except Exception:
+    ZoneInfo = None  # type: ignore
 
 router = APIRouter(prefix="/api/market", tags=["market"])
 
@@ -164,6 +170,88 @@ def _unwrap_payload(payload: Any) -> Dict[str, Any]:
         base = base["movers"]
 
     return base if isinstance(base, dict) else {}
+
+
+# --------------------------------------------------------------------
+# ✅ NEW: market session endpoint used by bots + UI
+# --------------------------------------------------------------------
+def _et_now() -> datetime:
+    if ZoneInfo is not None:
+        return datetime.now(ZoneInfo("America/New_York"))
+    # fallback (should be rare)
+    return datetime.now(timezone.utc)
+
+
+def _next_weekday(d: datetime) -> datetime:
+    # Monday=0 .. Sunday=6
+    out = d
+    while out.weekday() >= 5:
+        out = out + timedelta(days=1)
+    return out
+
+
+def _session_dict() -> Dict[str, Any]:
+    """
+    Minimal, scalable session logic:
+    - Stocks open Mon-Fri
+    - Regular session 9:30am–4:00pm ET
+    - (Holidays/half-days can be added later via a calendar provider)
+    """
+    now = _et_now()
+
+    # Weekend
+    if now.weekday() >= 5:
+        nxt = _next_weekday(now.replace(hour=9, minute=30, second=0, microsecond=0))
+        return {
+            "ok": True,
+            "market": "us_stocks",
+            "is_open": False,
+            "reason": "Weekend",
+            "now_et": now.isoformat(),
+            "next_open": int(nxt.timestamp()),
+            "asOf": _now_epoch(),
+        }
+
+    open_dt = now.replace(hour=9, minute=30, second=0, microsecond=0)
+    close_dt = now.replace(hour=16, minute=0, second=0, microsecond=0)
+
+    if now < open_dt:
+        return {
+            "ok": True,
+            "market": "us_stocks",
+            "is_open": False,
+            "reason": "Pre-market",
+            "now_et": now.isoformat(),
+            "next_open": int(open_dt.timestamp()),
+            "asOf": _now_epoch(),
+        }
+
+    if now >= close_dt:
+        nxt_day = _next_weekday((now + timedelta(days=1)).replace(hour=9, minute=30, second=0, microsecond=0))
+        return {
+            "ok": True,
+            "market": "us_stocks",
+            "is_open": False,
+            "reason": "After-hours",
+            "now_et": now.isoformat(),
+            "next_open": int(nxt_day.timestamp()),
+            "asOf": _now_epoch(),
+        }
+
+    return {
+        "ok": True,
+        "market": "us_stocks",
+        "is_open": True,
+        "reason": "Regular session",
+        "now_et": now.isoformat(),
+        "next_open": None,
+        "asOf": _now_epoch(),
+    }
+
+
+@router.get("/us/session")
+def market_us_session():
+    return _session_dict()
 
 
 @router.get("/leaders")

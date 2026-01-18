@@ -1,1 +1,1 @@
-{"bot_id": "ema_trend", "state": "running", "mode": "paper", "last_error": null, "paused_reason": null}
+{"bot_id":"ema_trend","state":"paused","mode":"paper","last_error":null,"paused_reason":"Weekend","last_run":1768773429,"next_open_epoch":1768833000}
