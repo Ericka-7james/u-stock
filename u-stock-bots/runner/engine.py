@@ -4,14 +4,12 @@ from __future__ import annotations
 import os
 import time
 from dataclasses import asdict, is_dataclass
-from typing import Any, Dict, List, Optional, Protocol, Tuple
+from typing import Any, Dict, List, Optional, Protocol
 
 from bots._shared.types import TradeIntent
 
-# your existing execution result + protocol
 from bots.execution.base import OrderResult
-
-# your placeholder executor (can expand later)
+from bots.execution.paper import PaperExecutor
 from bots.execution.tradestation import TradeStationExecutor
 
 
@@ -33,22 +31,15 @@ def _intent_from_dict(d: Dict[str, Any]) -> TradeIntent:
     """
     Convert JSON dict -> TradeIntent dataclass.
 
-    This assumes your intent dict keys match TradeIntent fields.
-    If you later add/remove fields, keep this as the canonical conversion point.
+    Keep this as the canonical conversion point.
     """
     return TradeIntent(**d)
 
 
-def _result_to_event(
-    *,
-    bot_mode: str,
-    intent: TradeIntent,
-    result: OrderResult,
-) -> Dict[str, Any]:
+def _result_to_event(*, bot_mode: str, intent: TradeIntent, result: OrderResult) -> Dict[str, Any]:
     status = str(result.status or "").strip().lower()
     symbol = getattr(intent, "symbol", None)
 
-    # Map executor result -> transaction event type
     if status in ("submitted", "accepted", "ok"):
         evt_type = "order_submitted"
         level = "info"
@@ -58,6 +49,9 @@ def _result_to_event(
     elif status in ("canceled", "cancelled"):
         evt_type = "order_canceled"
         level = "info"
+    elif status in ("not_implemented",):
+        evt_type = "order_failed"
+        level = "error"
     else:
         evt_type = "order_failed"
         level = "error"
@@ -82,7 +76,7 @@ class BotEngine:
     Execution engine for one runner instance.
 
     - mode: 'paper' or 'live'
-    - executor_name: which broker/executor adapter to use
+    - executor_name: which broker adapter to use (default via env)
     """
 
     def __init__(self, *, mode: str, executor_name: Optional[str] = None):
@@ -92,24 +86,24 @@ class BotEngine:
 
     def _build_executor(self) -> ExecutorLike:
         """
-        Today: TradeStationExecutor placeholder.
-        Tomorrow: add AlpacaExecutor, IBKRExecutor, etc.
+        Production-ready behavior:
+          - paper mode always uses PaperExecutor unless you explicitly override
+          - live mode can choose broker adapter; defaults to TradeStationExecutor stub today
         """
-        # You can enforce "no live without creds" here later if needed.
-        # For now, we allow mode=live but executor may still be sim until wired.
+        if self.mode == "paper":
+            # If you later add per-broker paper sims, you can respect executor_name here.
+            return PaperExecutor()
+
+        # live mode:
         if self.executor_name in ("tradestation", "ts"):
             return TradeStationExecutor()
 
-        # Default fallback
+        # fallback
         return TradeStationExecutor()
 
     def execute_intents(self, intents: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
         Convert intents -> place orders -> return transaction events.
-
-        IMPORTANT:
-          - If you want strategy-only runs, just don't call this.
-          - This does NOT spam Supabase; it only returns tx-like events.
         """
         if not intents:
             return []
@@ -129,7 +123,12 @@ class BotEngine:
                         "event_type": "order_failed",
                         "level": "error",
                         "symbol": str(raw.get("symbol") or "").upper().strip() if isinstance(raw, dict) else None,
-                        "payload": {"mode": self.mode, "error": "Invalid TradeIntent shape", "detail": repr(e), "raw": raw},
+                        "payload": {
+                            "mode": self.mode,
+                            "error": "Invalid TradeIntent shape",
+                            "detail": repr(e),
+                            "raw": raw,
+                        },
                     }
                 )
                 continue
@@ -144,7 +143,11 @@ class BotEngine:
                         "event_type": "order_failed",
                         "level": "error",
                         "symbol": str(getattr(intent, "symbol", "")).upper().strip() or None,
-                        "payload": {"mode": self.mode, "error": repr(e), "intent": asdict(intent) if is_dataclass(intent) else raw},
+                        "payload": {
+                            "mode": self.mode,
+                            "error": repr(e),
+                            "intent": asdict(intent) if is_dataclass(intent) else raw,
+                        },
                     }
                 )
 

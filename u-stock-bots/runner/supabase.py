@@ -6,7 +6,7 @@ import json
 import os
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 from urllib.parse import urljoin
 
 import requests
@@ -50,7 +50,6 @@ def _chunk(xs: List[Any], size: int) -> List[List[Any]]:
 
 
 def _deadletter_path() -> Path:
-    # default: u-stock-bots/runtime/deadletter/supabase_events.jsonl
     base = (os.getenv("RUNNER_RUNTIME_DIR") or "").strip()
     if base:
         root = Path(base).expanduser().resolve()
@@ -66,17 +65,27 @@ def _write_deadletter(rows: List[Dict[str, Any]], error: str) -> None:
     if not rows:
         return
     path = _deadletter_path()
-    rec = {
-        "ts": _now_iso(),
-        "error": error,
-        "count": len(rows),
-        "rows": rows,
-    }
+
+    # keep deadletter smaller (don’t dump huge payloads unbounded)
+    slim_rows: List[Dict[str, Any]] = []
+    for r in rows:
+        slim_rows.append(
+            {
+                "ts": r.get("ts"),
+                "bot_id": r.get("bot_id"),
+                "mode": r.get("mode"),
+                "event_type": r.get("event_type"),
+                "symbol": r.get("symbol"),
+                "event_id": r.get("event_id"),
+            }
+        )
+
+    rec = {"ts": _now_iso(), "error": error, "count": len(rows), "rows": slim_rows}
+
     try:
         with path.open("a", encoding="utf-8") as f:
             f.write(json.dumps(rec, ensure_ascii=False) + "\n")
     except Exception:
-        # best-effort only
         pass
 
 
@@ -89,17 +98,12 @@ def _hash_event_id(parts: List[str]) -> str:
 
 
 def _event_id_for_row(row: Dict[str, Any]) -> str:
-    """
-    Deterministic idempotency key.
-    If the same order submission is retried, it creates the same event_id.
-    """
     bot_id = str(row.get("bot_id") or "")
     mode = str(row.get("mode") or "")
     event_type = str(row.get("event_type") or "")
     symbol = str(row.get("symbol") or "")
     payload = row.get("payload") or {}
 
-    # prefer stable identifiers inside payload if present
     order_id = str(payload.get("order_id") or payload.get("id") or "")
     intent = payload.get("intent") or {}
     entry = str(intent.get("entry") or "")
@@ -141,7 +145,6 @@ def _build_rows(bot_id: str, mode: str, events: List[Dict[str, Any]]) -> List[Di
             "payload": payload,
         }
 
-        # ✅ Idempotency key column (add this column in Supabase)
         row["event_id"] = evt.get("event_id") or _event_id_for_row(row)
         rows.append(row)
 
@@ -149,10 +152,6 @@ def _build_rows(bot_id: str, mode: str, events: List[Dict[str, Any]]) -> List[Di
 
 
 def _post_rows(rows: List[Dict[str, Any]]) -> None:
-    """
-    Insert rows via PostgREST.
-    Assumes table has UNIQUE(event_id) so duplicates are ignored/blocked.
-    """
     if not rows:
         return
     if not sb_enabled():
@@ -168,10 +167,8 @@ def _post_rows(rows: List[Dict[str, Any]]) -> None:
         "apikey": key,
         "Authorization": f"Bearer {key}",
         "Content-Type": "application/json",
-        "Prefer": "return=minimal",
-        # Let server ignore duplicates if you set unique constraint; otherwise it errors.
-        # If you want explicit upsert semantics, you can add:
-        # "Prefer": "resolution=ignore-duplicates,return=minimal"
+        # ✅ ignore duplicates if table has UNIQUE(event_id)
+        "Prefer": "resolution=ignore-duplicates,return=minimal",
     }
 
     r = requests.post(url, headers=headers, json=rows, timeout=timeout)
@@ -182,7 +179,7 @@ def _post_rows(rows: List[Dict[str, Any]]) -> None:
 
 def upload_transaction_events(bot_id: str, mode: str, events: List[Dict[str, Any]]) -> None:
     """
-    Upload ONLY transaction events (filtered). Batched. Retries. Dead-letter on failure.
+    Upload ONLY transaction events. Batched. Retries. Dead-letter on failure.
     """
     if not events:
         return

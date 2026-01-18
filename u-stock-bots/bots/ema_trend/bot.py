@@ -40,16 +40,34 @@ def _log_throttled(key: str, msg: str, every_seconds: int = 300) -> None:
         _log(msg)
 
 
-def _write_market_gate_hint(until_epoch: float) -> None:
+def _write_market_gate_hint(until_epoch: float, *, bot_id: str = "ema_trend") -> None:
+    """
+    Writes a small file to OUTPUT_DIR so a runner/UI can show:
+      - market is closed
+      - when we plan to re-check
+    Production tweak:
+      - per-bot filename to avoid collisions if multiple bots write hints
+    """
     out_dir = os.getenv("OUTPUT_DIR") or ""
     if not out_dir:
         return
+
+    safe_bot = "".join(ch for ch in str(bot_id or "ema_trend") if ch.isalnum() or ch in ("-", "_")).strip() or "ema_trend"
+
     try:
         p = Path(out_dir).expanduser().resolve()
         p.mkdir(parents=True, exist_ok=True)
-        hint = p / "market_gate.json"
+
+        hint = p / f"market_gate_{safe_bot}.json"
         hint.write_text(
-            f'{{"market":"us_stocks","closed_until":{int(until_epoch)},"ts":{int(time.time())}}}',
+            (
+                "{"
+                f"\"bot_id\":\"{safe_bot}\","
+                "\"market\":\"us_stocks\","
+                f"\"closed_until\":{int(until_epoch)},"
+                f"\"ts\":{int(time.time())}"
+                "}"
+            ),
             encoding="utf-8",
         )
     except Exception:
@@ -159,14 +177,13 @@ def run(api: Optional[UStockAPI] = None, cfg: Optional[EMATrendConfig] = None) -
             return []
 
         # ✅ market session gate (early)
-        # If weekend/closed, set a gate and return immediately so runner sees "paused".
         now = time.time()
         if now >= _MARKET_CLOSED_UNTIL:
             closed, until, reason = _maybe_market_closed(api)
             if closed:
                 mins = int(os.getenv("MARKET_CLOSED_RECHECK_MINUTES", "120"))
                 _MARKET_CLOSED_UNTIL = float(until or (time.time() + mins * 60.0))
-                _write_market_gate_hint(_MARKET_CLOSED_UNTIL)
+                _write_market_gate_hint(_MARKET_CLOSED_UNTIL, bot_id=cfg.bot_id)
                 _log_throttled(
                     "market_closed",
                     f"US market closed. Gating until {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(_MARKET_CLOSED_UNTIL))} ({reason}).",
@@ -295,12 +312,12 @@ def run(api: Optional[UStockAPI] = None, cfg: Optional[EMATrendConfig] = None) -
             inc(counters, "candidates")
 
         # ---- market gate if everything empty ----
-        # Keep this as a safety net if the bars route is down / auth fails
+        # Safety net if bars route is down / auth fails / etc.
         if not any_symbol_had_data:
             closed, until, reason = _maybe_market_closed(api)
             if closed and until:
                 _MARKET_CLOSED_UNTIL = float(until)
-                _write_market_gate_hint(_MARKET_CLOSED_UNTIL)
+                _write_market_gate_hint(_MARKET_CLOSED_UNTIL, bot_id=cfg.bot_id)
                 _log_throttled(
                     "market_gate_set",
                     f"No symbols returned bars. Setting market gate until {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(_MARKET_CLOSED_UNTIL))} ({reason}).",
@@ -329,6 +346,14 @@ def run(api: Optional[UStockAPI] = None, cfg: Optional[EMATrendConfig] = None) -
 # --------------------------------------------------------------------
 # ✅ Stable runner entrypoint (this is what your runner should call)
 # --------------------------------------------------------------------
+def _generate_intents_internal(api: UStockAPI, config: Dict[str, Any]) -> List[TradeIntent]:
+    """
+    Internal adapter so runner-facing APIs cannot crash due to missing glue.
+    """
+    cfg = EMATrendConfig(**(config or {}))
+    return run(api=api, cfg=cfg)
+
+
 def generate_intents(api: UStockAPI, config: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
     Stable interface for runner:
@@ -345,12 +370,11 @@ def generate_intents(api: UStockAPI, config: Dict[str, Any]) -> List[Dict[str, A
         elif is_dataclass(it):
             out.append(asdict(it))
         else:
-            # fallback: best-effort
             out.append(dict(getattr(it, "__dict__", {})))
     return out
 
 
-def generate_output(api, config):
+def generate_output(api: UStockAPI, config: Dict[str, Any]) -> Dict[str, Any]:
     """
     Runner-facing adapter.
     Strategy only — NO execution here.
@@ -360,4 +384,3 @@ def generate_output(api, config):
         "intents": intents,
         "events": [],  # execution happens in engine
     }
-

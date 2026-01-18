@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import os
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Callable
 
 from bots._shared.ustock_http import UStockAPI
 from runner.engine import BotEngine
@@ -17,8 +17,8 @@ def _now() -> int:
     return int(time.time())
 
 
-def _sleep_smart(seconds: float) -> None:
-    time.sleep(max(0.2, float(seconds)))
+def _sleep_smart(seconds: float, *, sleep_fn: Callable[[float], None] = time.sleep) -> None:
+    sleep_fn(max(0.2, float(seconds)))
 
 
 def _normalize_mode(raw: Any) -> str:
@@ -54,6 +54,14 @@ def _heartbeat(
             "last_error": last_error,
         },
     )
+
+
+def _safe_heartbeat(api: UStockAPI, **kwargs: Any) -> None:
+    try:
+        _heartbeat(api, **kwargs)
+    except Exception:
+        # never let heartbeat kill the runner
+        return
 
 
 def _submit_intents(api: UStockAPI, bot_id: str, intents: List[Dict[str, Any]]) -> None:
@@ -124,12 +132,22 @@ def _compute_intents_for_ema_trend(api: UStockAPI, cfg: Dict[str, Any]) -> Dict[
         return {"intents": [], "events": []}
 
 
-def main() -> None:
+def main(*, max_loops: Optional[int] = None, sleep_fn: Callable[[float], None] = time.sleep) -> None:
+    """
+    max_loops: for tests; if None, runs forever.
+    sleep_fn: injectable for tests.
+    """
     base_url = os.getenv("USTOCK_API_BASE", "http://127.0.0.1:8000")
     print(f"[runner] starting | base={base_url} | bot_id={BOT_ID} | loop={LOOP_SECONDS}s")
 
+    loops = 0
+
     with UStockAPI(base_url=base_url, timeout=15) as api:
         while True:
+            if max_loops is not None and loops >= int(max_loops):
+                return
+            loops += 1
+
             t0 = time.time()
             mode = "paper"
 
@@ -138,7 +156,7 @@ def main() -> None:
                 state = str(status.get("state") or "stopped").strip().lower()
 
                 if state != "running":
-                    _sleep_smart(LOOP_SECONDS - (time.time() - t0))
+                    _sleep_smart(LOOP_SECONDS - (time.time() - t0), sleep_fn=sleep_fn)
                     continue
 
                 mode, cfg = _extract_mode_cfg(status)
@@ -151,7 +169,7 @@ def main() -> None:
                     next_open = sess.get("next_open")
                     next_open_epoch = int(next_open) if isinstance(next_open, (int, float)) else None
 
-                    _heartbeat(
+                    _safe_heartbeat(
                         api,
                         bot_id=BOT_ID,
                         state="paused",
@@ -160,7 +178,7 @@ def main() -> None:
                         next_open_epoch=next_open_epoch,
                         last_error=None,
                     )
-                    _sleep_smart(LOOP_SECONDS - (time.time() - t0))
+                    _sleep_smart(LOOP_SECONDS - (time.time() - t0), sleep_fn=sleep_fn)
                     continue
 
                 # ----------------
@@ -173,7 +191,7 @@ def main() -> None:
                 _submit_intents(api, BOT_ID, intents)
 
                 # ----------------
-                # EXECUTION (always routed by mode)
+                # EXECUTION (routed by mode)
                 # ----------------
                 engine = BotEngine(mode=mode)
                 tx_events = engine.execute_intents(intents)
@@ -181,24 +199,19 @@ def main() -> None:
                 # ----------------
                 # SUPABASE (tx-only)
                 # ----------------
-                # Combine any strategy events (if any) with tx events;
-                # uploader filters to TRANSACTION_EVENT_TYPES only.
                 combined: List[Dict[str, Any]] = []
                 combined.extend(strat_events)
                 combined.extend(tx_events)
 
                 upload_transaction_events(BOT_ID, mode, combined)
 
-                _heartbeat(api, bot_id=BOT_ID, state="running", mode=mode, last_error=None)
+                _safe_heartbeat(api, bot_id=BOT_ID, state="running", mode=mode, last_error=None)
 
             except Exception as e:
                 # runner must never die
-                try:
-                    _heartbeat(api, bot_id=BOT_ID, state="running", mode=mode, last_error=repr(e))
-                except Exception:
-                    pass
+                _safe_heartbeat(api, bot_id=BOT_ID, state="running", mode=mode, last_error=repr(e))
 
-            _sleep_smart(LOOP_SECONDS - (time.time() - t0))
+            _sleep_smart(LOOP_SECONDS - (time.time() - t0), sleep_fn=sleep_fn)
 
 
 if __name__ == "__main__":
