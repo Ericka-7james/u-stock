@@ -1,161 +1,154 @@
-// src/components/pages/SubredditsPage.jsx
+// src/components/pages/DatasourcesPage.jsx
 import { Link } from "react-router-dom";
-
 import AppShell from "../layout/AppShell";
+import "../../css/pages/DatasourcesPage.css";
 
-import '../../css/pages/DatasourcesPage.css';
+/**
+ * NOTE (2026):
+ * This page used to import legacy "raw" config lists (trackedTickers, sources).
+ * Those files are no longer part of the current U-Stock frontend.
+ *
+ * For now, keep this page build-safe and aligned with the current direction:
+ * - Document the active data layer at a high level
+ * - Avoid importing stale config that breaks Vite builds
+ * - Provide links to the core dashboard + connected apps
+ */
 
+const DATA_SOURCES = [
+  {
+    title: "Market data (prices & bars)",
+    description:
+      "Real-time and historical market data used to power charts, market leaders, and bot decisions.",
+    items: [
+      {
+        name: "Alpaca",
+        role: "Broker + market data",
+        notes:
+          "Primary integration for account connectivity, quotes/bars, and trade execution (paper/live depending on mode).",
+      },
+      {
+        name: "TradingView",
+        role: "Charting UI",
+        notes:
+          "Embedded charting for visualization and quick symbol inspection (UI-only; not a source of truth).",
+      },
+    ],
+  },
+  {
+    title: "Signals & indicators (computed)",
+    description:
+      "Derived features computed in U-Stock (not purchased feeds): EMA trend logic, ATR risk sizing, chop filters, and confidence scoring.",
+    items: [
+      {
+        name: "EMA / bias + entry timeframes",
+        role: "Trend direction + entry conditions",
+        notes:
+          "EMA bias on higher timeframe; entry conditions on lower timeframe; filters block choppy regimes.",
+      },
+      {
+        name: "ATR + risk bounds",
+        role: "Risk guardrails",
+        notes:
+          "ATR-based stop placement with min/max risk percent constraints; ensures consistent stop sanity.",
+      },
+      {
+        name: "Weighted confidence",
+        role: "Ranking",
+        notes:
+          "Scores signals using a weighted breakdown (ATR, risk, confirmation) and clamps output to 0..1.",
+      },
+    ],
+  },
+  {
+    title: "Persistence & telemetry",
+    description:
+      "Operational event tracking for bot execution and system debugging.",
+    items: [
+      {
+        name: "Supabase",
+        role: "Event store",
+        notes:
+          "Uploads transaction events only (idempotent event_id, batching, retries, deadletter on failure).",
+      },
+      {
+        name: "NDJSON Journal",
+        role: "Local audit trail",
+        notes:
+          "Append-only journal for intents/orders/exits designed to be best-effort and never crash the runner.",
+      },
+    ],
+  },
+];
 
-import { PRICE_SOURCES } from "../../config/raw/pricesSources";
-import { FUNDAMENTAL_SOURCES } from "../../config/raw/fundamentalsSources";
-import { MACRO_SOURCES } from "../../config/raw/macroSources";
-import { REDDIT_SOURCES } from "../../config/raw/redditSources";
-import { TRACKED_TICKERS } from "../../config/raw/trackedTickers";
-
-export default function DatasourcePage() {
-  const totalPriceSources = PRICE_SOURCES?.length ?? 0;
-  const totalFundamentalSources = FUNDAMENTAL_SOURCES?.length ?? 0;
-  const totalMacroSources = MACRO_SOURCES?.length ?? 0;
-  const totalTrackedTickers = TRACKED_TICKERS?.length ?? 0;
-
+export default function DatasourcesPage() {
   return (
     <AppShell>
-        {/* HERO */}
-        <header className="data-hero">
-          <div className="data-hero-text">
-            <h1 className="page-title">Data sources & quant pipeline</h1>
-            <p className="muted">
-              This page documents the core inputs behind the u-Stock prototype:
-              market prices, fundamentals, and macro data, plus the future
-              sentiment layer. It&apos;s modeled after how real quant teams
-              think about building a clean, explainable data pipeline before
-              ranking opportunities.
-            </p>
-          </div>
+      {/* HERO */}
+      <header className="data-hero">
+        <div className="data-hero-text">
+          <h1 className="page-title">Data sources & pipeline</h1>
+          <p className="muted">
+            This page documents the current U-Stock data layer: where market data
+            comes from, what is computed internally, and how execution events
+            are logged for visibility. Older prototype config imports were
+            removed so this page stays aligned with the current app.
+          </p>
+        </div>
 
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
           <Link to="/" className="back-link-pill">
             ← Back to dashboard
           </Link>
-        </header>
+          <Link to="/connected-apps" className="back-link-pill">
+            Connected apps →
+          </Link>
+        </div>
+      </header>
 
-        {/* SUMMARY CARD */}
-        <section className="data-summary-card">
-          <h2>Configuration at a glance</h2>
-          <p className="muted">
-            Right now this demo tracks{" "}
-            <strong>{totalTrackedTickers}</strong> core tickers using{" "}
-            <strong>{totalPriceSources}</strong> price feeds,{" "}
-            <strong>{totalFundamentalSources}</strong> fundamentals APIs, and{" "}
-            <strong>{totalMacroSources}</strong> macroeconomic sources.
-            The Reddit/alt-data layer is designed but intentionally paused so
-            the focus stays on the core trading pipeline.
-          </p>
-        </section>
+      {/* SUMMARY CARD */}
+      <section className="data-summary-card">
+        <h2>Configuration at a glance</h2>
+        <p className="muted">
+          U-Stock treats strategy as{" "}
+          <strong>signal generation</strong> (TradeIntents) and keeps{" "}
+          <strong>execution</strong> separate (paper/live modes). Market data is
+          pulled through broker/data integrations, indicators are computed
+          internally, and transaction events are persisted for auditing and
+          performance tracking.
+        </p>
+      </section>
 
-        {/* GRID OF SOURCE CATEGORIES */}
-        <section className="data-section-grid">
-          {/* Prices */}
-          <article className="data-card">
-            <h3>Market prices</h3>
-            <p className="muted small">
-              Daily and intraday OHLCV data used for trend, volatility,
-              in-play scores, and intraday range metrics in the dashboard.
-            </p>
+      {/* GRID OF SOURCE CATEGORIES */}
+      <section className="data-section-grid">
+        {DATA_SOURCES.map((block) => (
+          <article className="data-card" key={block.title}>
+            <h3>{block.title}</h3>
+            <p className="muted small">{block.description}</p>
+
             <ul className="data-list">
-              {PRICE_SOURCES.map((src) => (
-                <li key={src.id || src.name}>
+              {block.items.map((src) => (
+                <li key={`${block.title}-${src.name}`}>
                   <div className="data-item-title">
-                    {src.name || src.label}
-                    {src.role && (
-                      <span className="data-pill">{src.role}</span>
-                    )}
+                    {src.name}
+                    {src.role && <span className="data-pill">{src.role}</span>}
                   </div>
-                  {src.notes && (
-                    <p className="data-item-notes">{src.notes}</p>
-                  )}
-                  {src.url && (
-                    <a
-                      href={src.url}
-                      className="data-item-link"
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      API docs →
-                    </a>
-                  )}
+                  {src.notes && <p className="data-item-notes">{src.notes}</p>}
                 </li>
               ))}
             </ul>
           </article>
+        ))}
+      </section>
 
-          {/* Fundamentals */}
-          <article className="data-card">
-            <h3>Fundamentals</h3>
-            <p className="muted small">
-              Valuation, profitability, leverage, and ownership metrics used to
-              give context to price action and to build richer ranking features.
-            </p>
-            <ul className="data-list">
-              {FUNDAMENTAL_SOURCES.map((src) => (
-                <li key={src.id || src.name}>
-                  <div className="data-item-title">
-                    {src.name || src.label}
-                    {src.role && (
-                      <span className="data-pill">{src.role}</span>
-                    )}
-                  </div>
-                  {src.notes && (
-                    <p className="data-item-notes">{src.notes}</p>
-                  )}
-                  {src.url && (
-                    <a
-                      href={src.url}
-                      className="data-item-link"
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      API docs →
-                    </a>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </article>
-
-          {/* Macro */}
-          <article className="data-card">
-            <h3>Macro & state of the economy</h3>
-            <p className="muted small">
-              Inflation, interest rates, unemployment, and growth data that help
-              explain why entire markets, sectors, or factors move together.
-            </p>
-            <ul className="data-list">
-              {MACRO_SOURCES.map((src) => (
-                <li key={src.id || src.name}>
-                  <div className="data-item-title">
-                    {src.name || src.label}
-                    {src.role && (
-                      <span className="data-pill">{src.role}</span>
-                    )}
-                  </div>
-                  {src.notes && (
-                    <p className="data-item-notes">{src.notes}</p>
-                  )}
-                  {src.url && (
-                    <a
-                      href={src.url}
-                      className="data-item-link"
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      API docs →
-                    </a>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </article>
-        </section>
+      {/* FOOTNOTE */}
+      <section className="data-summary-card" style={{ marginTop: 18 }}>
+        <h2>Why this page exists</h2>
+        <p className="muted">
+          When U-Stock evolves, this page is the “single source of truth” for
+          what feeds the system. Keeping it accurate prevents stale prototype
+          config (like tracked tickers lists) from drifting and breaking builds.
+        </p>
+      </section>
     </AppShell>
   );
 }
