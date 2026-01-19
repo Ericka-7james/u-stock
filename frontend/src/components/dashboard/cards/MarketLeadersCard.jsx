@@ -1,4 +1,5 @@
 // frontend/src/components/dashboard/cards/MarketLeadersCard.jsx
+import { useMemo, useState } from "react";
 import "../../../css/dashboard/cards/MarketLeadersCard.css";
 
 function n(x) {
@@ -53,6 +54,12 @@ export default function MarketLeadersCard({
   loading = false,
   onSelectSymbol,
 }) {
+  const [moreOpen, setMoreOpen] = useState(false);
+
+  // show 4 in-card; modal shows up to 7
+  const CARD_MAX = 4;
+  const MODAL_MAX = 7;
+
   const raw = Array.isArray(items) ? items : [];
   const list = raw
     .map((r) => ({
@@ -61,43 +68,59 @@ export default function MarketLeadersCard({
     }))
     .filter((r) => isAlphaOnly(r.symbol));
 
-  // Determine if any item had computed prevClose (backend or frontend fallback)
-  let anyComputed = false;
+  const { rows, anyComputed } = useMemo(() => {
+    let computed = false;
 
-  const rows = list.map((r) => {
-    const sym = r.symbol;
-    const pctMove = r?.score ?? r?.changePct;
+    const out = list.map((r) => {
+      const sym = r.symbol;
+      const pctMove = r?.score ?? r?.changePct;
 
-    const last = n(r?.last);
+      const last = n(r?.last);
 
-    let prev = n(r?.prevClose);
-    if (prev !== null && prev <= 0) prev = null;
+      let prev = n(r?.prevClose);
+      if (prev !== null && prev <= 0) prev = null;
 
-    const backendComputed = Boolean(r?.prevCloseComputed);
+      const backendComputed = Boolean(r?.prevCloseComputed);
 
-    let computedHere = false;
-    if (prev === null) {
-      const fb = computePrevFallback(last, pctMove);
-      if (fb !== null) {
-        prev = fb;
-        computedHere = true;
+      let computedHere = false;
+      if (prev === null) {
+        const fb = computePrevFallback(last, pctMove);
+        if (fb !== null) {
+          prev = fb;
+          computedHere = true;
+        }
       }
-    }
 
-    if (backendComputed || computedHere) anyComputed = true;
+      if (backendComputed || computedHere) computed = true;
 
-    return {
-      sym,
-      pctMove,
-      last,
-      prev,
-    };
-  });
+      return {
+        sym,
+        pctMove,
+        last,
+        prev,
+      };
+    });
+
+    return { rows: out, anyComputed: computed };
+  }, [list]);
 
   const sourceLabel =
     meta?.source_label ||
     meta?.sourceLabel ||
-    (anyComputed ? "ALPACA+Computed" : (meta?.source?.label || meta?.source || "ALPACA"));
+    (anyComputed ? "ALPACA+Computed" : meta?.source?.label || meta?.source || "ALPACA");
+
+  const cardRows = rows.slice(0, CARD_MAX);
+  const modalRows = rows.slice(0, MODAL_MAX);
+  const hasMore = rows.length > CARD_MAX;
+
+  function handlePick(sym) {
+    onSelectSymbol?.(sym);
+    setMoreOpen(false);
+  }
+
+  function closeModal() {
+    setMoreOpen(false);
+  }
 
   return (
     <section className="mlCard">
@@ -113,11 +136,9 @@ export default function MarketLeadersCard({
 
       <div className="mlBody">
         {loading ? (
-          Array.from({ length: 10 }).map((_, i) => (
-            <div key={i} className="mlRow mlRowSkeleton" />
-          ))
-        ) : rows.length ? (
-          rows.map((r, i) => {
+          Array.from({ length: CARD_MAX }).map((_, i) => <div key={i} className="mlRow mlRowSkeleton" />)
+        ) : cardRows.length ? (
+          cardRows.map((r, i) => {
             const scoreTone = toneForScore(r.pctMove);
             const showSecondLine = r.last !== null || r.prev !== null;
 
@@ -126,7 +147,7 @@ export default function MarketLeadersCard({
                 key={`${r.sym}-${i}`}
                 type="button"
                 className="mlRow"
-                onClick={() => onSelectSymbol?.(r.sym)}
+                onClick={() => handlePick(r.sym)}
                 title={r.sym}
               >
                 <div className="mlRowTop">
@@ -157,6 +178,14 @@ export default function MarketLeadersCard({
         ) : (
           <div className="mlEmpty">No leaders returned yet.</div>
         )}
+
+        {!loading && hasMore ? (
+          <div className="mlMoreRow">
+            <button type="button" className="mlMoreBtn" onClick={() => setMoreOpen(true)} title="View more leaders">
+              View more
+            </button>
+          </div>
+        ) : null}
       </div>
 
       <div className="mlFoot">
@@ -164,6 +193,75 @@ export default function MarketLeadersCard({
         {meta?.asOf ? <span className="mlFootSep"> · </span> : null}
         {meta?.asOf ? <span>As of {new Date(meta.asOf * 1000).toLocaleTimeString()}</span> : null}
       </div>
+
+      {/* Modal */}
+      {moreOpen ? (
+        <div className="mlModalBackdrop" onClick={closeModal}>
+          <div className="mlModal" onClick={(e) => e.stopPropagation()}>
+            <div className="mlModalHeader">
+              <div>
+                <div className="mlModalTitle">More market leaders</div>
+                <div className="mlModalSub">Showing up to {MODAL_MAX}. Click one to load the chart.</div>
+              </div>
+
+              <button type="button" className="mlModalClose" onClick={closeModal} aria-label="Close">
+                ×
+              </button>
+            </div>
+
+            <div className="mlTableHead mlModalHead">
+              <div>Symbol</div>
+              <div className="right">Move</div>
+            </div>
+
+            <div className="mlBody mlModalBody">
+              {modalRows.length ? (
+                modalRows.map((r, i) => {
+                  const scoreTone = toneForScore(r.pctMove);
+                  const showSecondLine = r.last !== null || r.prev !== null;
+
+                  return (
+                    <button
+                      key={`modal-${r.sym}-${i}`}
+                      type="button"
+                      className="mlRow"
+                      onClick={() => handlePick(r.sym)}
+                      title={r.sym}
+                    >
+                      <div className="mlRowTop">
+                        <div className="mlSymbol" title={r.sym}>
+                          {r.sym}
+                        </div>
+
+                        <div className={`mlScore ${scoreTone}`}>
+                          {fmtPct(r.pctMove)}
+                          {n(r.pctMove) !== null ? (
+                            <span className="mlArrow">{n(r.pctMove) >= 0 ? "↑" : "↓"}</span>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      {showSecondLine ? (
+                        <div className="mlRowSub">
+                          <span>Last price: {r.last === null ? "—" : `${fmtMoney(r.last)} (USD/share)`}</span>
+                          <span className="dot">·</span>
+                          <span>Prev close: {r.prev === null ? "—" : `${fmtMoney(r.prev)} (USD/share)`}</span>
+                        </div>
+                      ) : (
+                        <div className="mlRowSub muted">—</div>
+                      )}
+                    </button>
+                  );
+                })
+              ) : (
+                <div className="mlEmpty">No leaders returned yet.</div>
+              )}
+            </div>
+
+            <div className="mlModalFoot">Source: {sourceLabel}</div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

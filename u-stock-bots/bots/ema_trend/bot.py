@@ -1,6 +1,7 @@
 # u-stock-bots/bots/ema_trend/bot.py
 from __future__ import annotations
 
+import json
 import os
 import time
 from dataclasses import asdict, is_dataclass
@@ -40,38 +41,63 @@ def _log_throttled(key: str, msg: str, every_seconds: int = 300) -> None:
         _log(msg)
 
 
-def _write_market_gate_hint(until_epoch: float, *, bot_id: str = "ema_trend") -> None:
+def _safe_bot_id(bot_id: str) -> str:
+    safe = "".join(ch for ch in str(bot_id or "ema_trend") if ch.isalnum() or ch in ("-", "_")).strip()
+    return safe or "ema_trend"
+
+
+def _atomic_write_json(path: Path, payload: Dict[str, Any]) -> None:
+    """
+    Atomic-ish write to avoid partial/corrupted JSON (important on Pi + sudden restarts).
+    """
+    try:
+        tmp = path.with_suffix(path.suffix + ".tmp")
+        tmp.write_text(json.dumps(payload, separators=(",", ":"), ensure_ascii=True), encoding="utf-8")
+        tmp.replace(path)
+    except Exception:
+        # never let hinting break trading logic
+        pass
+
+
+def _write_market_gate_hint(
+    *,
+    until_epoch: float,
+    reason: str,
+    bot_id: str = "ema_trend",
+    market: str = "us_stocks",
+) -> None:
     """
     Writes a small file to OUTPUT_DIR so a runner/UI can show:
       - market is closed
       - when we plan to re-check
-    Production tweak:
+
+    Production tweaks:
       - per-bot filename to avoid collisions if multiple bots write hints
+      - JSON-safe (no string concat)
+      - atomic write to reduce corruption risk
+      - includes effective_state + reason for UI mapping
     """
     out_dir = os.getenv("OUTPUT_DIR") or ""
     if not out_dir:
         return
 
-    safe_bot = "".join(ch for ch in str(bot_id or "ema_trend") if ch.isalnum() or ch in ("-", "_")).strip() or "ema_trend"
+    safe_bot = _safe_bot_id(bot_id)
 
     try:
         p = Path(out_dir).expanduser().resolve()
         p.mkdir(parents=True, exist_ok=True)
 
         hint = p / f"market_gate_{safe_bot}.json"
-        hint.write_text(
-            (
-                "{"
-                f"\"bot_id\":\"{safe_bot}\","
-                "\"market\":\"us_stocks\","
-                f"\"closed_until\":{int(until_epoch)},"
-                f"\"ts\":{int(time.time())}"
-                "}"
-            ),
-            encoding="utf-8",
-        )
+        payload = {
+            "bot_id": safe_bot,
+            "market": market,
+            "effective_state": "waiting_for_market",
+            "reason": str(reason or "market_closed"),
+            "closed_until": int(until_epoch),
+            "ts": int(time.time()),
+        }
+        _atomic_write_json(hint, payload)
     except Exception:
-        # never let hinting break trading logic
         pass
 
 
@@ -183,7 +209,7 @@ def run(api: Optional[UStockAPI] = None, cfg: Optional[EMATrendConfig] = None) -
             if closed:
                 mins = int(os.getenv("MARKET_CLOSED_RECHECK_MINUTES", "120"))
                 _MARKET_CLOSED_UNTIL = float(until or (time.time() + mins * 60.0))
-                _write_market_gate_hint(_MARKET_CLOSED_UNTIL, bot_id=cfg.bot_id)
+                _write_market_gate_hint(until_epoch=_MARKET_CLOSED_UNTIL, reason=reason, bot_id=cfg.bot_id)
                 _log_throttled(
                     "market_closed",
                     f"US market closed. Gating until {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(_MARKET_CLOSED_UNTIL))} ({reason}).",
@@ -317,7 +343,7 @@ def run(api: Optional[UStockAPI] = None, cfg: Optional[EMATrendConfig] = None) -
             closed, until, reason = _maybe_market_closed(api)
             if closed and until:
                 _MARKET_CLOSED_UNTIL = float(until)
-                _write_market_gate_hint(_MARKET_CLOSED_UNTIL, bot_id=cfg.bot_id)
+                _write_market_gate_hint(until_epoch=_MARKET_CLOSED_UNTIL, reason=reason, bot_id=cfg.bot_id)
                 _log_throttled(
                     "market_gate_set",
                     f"No symbols returned bars. Setting market gate until {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(_MARKET_CLOSED_UNTIL))} ({reason}).",

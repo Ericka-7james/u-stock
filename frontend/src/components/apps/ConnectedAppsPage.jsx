@@ -124,9 +124,7 @@ export default function ConnectedAppsPage() {
       safeSet(() => {
         setApps([]);
         setNotice("");
-        setError(
-          ui ? `${ui.title}\n\n${ui.body}` : (e?.message || "Could not load connected apps.")
-        );
+        setError(ui ? `${ui.title}\n\n${ui.body}` : (e?.message || "Could not load connected apps."));
       });
     } finally {
       // If a newer request started, don't stomp its loading state
@@ -331,6 +329,35 @@ export default function ConnectedAppsPage() {
             );
           })}
         </div>
+
+        {/* ✅ Small navigation helper (production polish) */}
+        <section className="connected-note">
+          <h4 className="connected-note-title">Next steps</h4>
+          <ul className="connected-note-list">
+            <li>
+              Start/pause strategies in{" "}
+              <button
+                type="button"
+                className="connected-btn connected-btn--secondary"
+                style={{ padding: "4px 10px", marginLeft: 6 }}
+                onClick={() => navigate("/bots")}
+              >
+                Bot Runner
+              </button>
+            </li>
+            <li>
+              Review activity in{" "}
+              <button
+                type="button"
+                className="connected-btn connected-btn--secondary"
+                style={{ padding: "4px 10px", marginLeft: 6 }}
+                onClick={() => navigate("/datasources")}
+              >
+                Bot Logs
+              </button>
+            </li>
+          </ul>
+        </section>
 
         <section className="connected-note">
           <h4 className="connected-note-title">What this unlocks</h4>

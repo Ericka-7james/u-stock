@@ -6,7 +6,7 @@ import os
 import re
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
@@ -27,15 +27,32 @@ STATE_DIR.mkdir(parents=True, exist_ok=True)
 
 # -----------------------------
 # "Production-ish" knobs
-# (tune later or env override)
 # -----------------------------
-BOT_ID_RE = re.compile(r"^[a-zA-Z0-9_]{1,64}$")  # safe folder name
-MAX_LOG_LINES = int(os.getenv("USTOCK_BOT_LOG_MAX_LINES", "2000"))  # per bot log.jsonl
-MAX_LOG_BYTES = int(os.getenv("USTOCK_BOT_LOG_MAX_BYTES", "2000000"))  # ~2MB safety
+BOT_ID_RE = re.compile(r"^[a-zA-Z0-9_]{1,64}$")
+MAX_LOG_LINES = int(os.getenv("USTOCK_BOT_LOG_MAX_LINES", "2000"))
+MAX_LOG_BYTES = int(os.getenv("USTOCK_BOT_LOG_MAX_BYTES", "2000000"))
 MAX_INTENTS_STORED = int(os.getenv("USTOCK_BOT_INTENTS_MAX_ITEMS", "200"))
-MAX_INTENTS_RETURN = 50  # GET /intents limit max (API-level)
+MAX_INTENTS_RETURN = 50
 MAX_ERROR_LEN = 800
-WRITE_JSON_INDENT = None  # keep compact in runtime files
+WRITE_JSON_INDENT = None
+
+# Heartbeat / offline detection
+HEARTBEAT_STALE_SECONDS = int(os.getenv("USTOCK_BOT_HEARTBEAT_STALE_SECONDS", "25"))
+
+# Canonical states (effective)
+EFFECTIVE_STATES = {
+    "starting",
+    "running",
+    "waiting_for_market",
+    "paused",
+    "stopped",
+    "degraded",
+    "error",
+    "offline",
+}
+
+# Canonical intents (desired)
+INTENTS = {"running", "paused"}
 
 # -----------------------------
 # Helpers
@@ -71,10 +88,6 @@ def _read_json(path: Path, default: Any) -> Any:
 
 
 def _atomic_write_text(path: Path, text: str) -> None:
-    """
-    Atomic-ish write: write to temp then replace.
-    Prevents partial/corrupted json if process dies mid-write.
-    """
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(text, encoding="utf-8")
     tmp.replace(path)
@@ -86,29 +99,20 @@ def _write_json(path: Path, payload: Any) -> None:
 
 
 def _trim_log_file(log_path: Path) -> None:
-    """
-    Keep log file from growing forever:
-    - if > MAX_LOG_BYTES, keep tail lines
-    - always cap to MAX_LOG_LINES
-    """
     if not log_path.exists():
         return
-
     try:
-        # Fast path: if small enough, only enforce line cap
         size = log_path.stat().st_size
         lines = log_path.read_text(encoding="utf-8").splitlines()
 
         if len(lines) > MAX_LOG_LINES:
-            lines = lines[-MAX_LOG_LINES :]
+            lines = lines[-MAX_LOG_LINES:]
 
-        # If file is too big, also reduce lines more aggressively
         if size > MAX_LOG_BYTES and len(lines) > 300:
-            lines = lines[-min(MAX_LOG_LINES, 800) :]
+            lines = lines[-min(MAX_LOG_LINES, 800):]
 
         _atomic_write_text(log_path, "\n".join(lines) + ("\n" if lines else ""))
     except Exception:
-        # never break request path due to trimming
         return
 
 
@@ -127,7 +131,7 @@ def _append_log(bot_id: str, level: str, message: str, meta: Optional[Dict[str, 
 def _default_config() -> Dict[str, Any]:
     return {
         "mode": "paper",  # paper | live
-        "risk_per_trade": 0.005,  # 0.5%
+        "risk_per_trade": 0.005,
         "max_trades_per_day": 3,
         "min_confidence": 0.62,
     }
@@ -138,23 +142,16 @@ def _normalize_mode(x: Any) -> str:
     return m if m in ("paper", "live") else "paper"
 
 
-def _normalize_state(x: Any, default: str = "running") -> str:
-    s = str(x or "").strip().lower()
-    return s if s in ("running", "paused", "stopped") else default
-
-
 def _safe_int(x: Any, default: int = 0) -> int:
     try:
-        v = int(x)
-        return v
+        return int(x)
     except Exception:
         return default
 
 
 def _safe_float(x: Any, default: float = 0.0) -> float:
     try:
-        v = float(x)
-        return v
+        return float(x)
     except Exception:
         return default
 
@@ -183,6 +180,125 @@ def _normalize_error(x: Any) -> Optional[str]:
     return s[:MAX_ERROR_LEN]
 
 
+def _normalize_intent(x: Any, default: str = "paused") -> str:
+    v = str(x or "").strip().lower()
+    return v if v in INTENTS else default
+
+
+def _normalize_effective_state(x: Any, default: str = "stopped") -> str:
+    v = str(x or "").strip().lower()
+    return v if v in EFFECTIVE_STATES else default
+
+
+def _compute_offline(intent: str, heartbeat_at: int, updated_at: int) -> Tuple[bool, Optional[int]]:
+    now = _now_epoch()
+
+    # If user wants it running but we have never received a heartbeat -> offline
+    if intent == "running" and not heartbeat_at:
+        age = now - int(updated_at or now)
+        return (age > HEARTBEAT_STALE_SECONDS, age)
+
+    if not heartbeat_at:
+        return (False, None)
+
+    age = now - int(heartbeat_at)
+    return (age > HEARTBEAT_STALE_SECONDS, age)
+
+
+def _state_doc_defaults(bot_id: str) -> Dict[str, Any]:
+    return {
+        "bot_id": bot_id,
+        # Intent: what user wants
+        "intent": "paused",
+        # Effective: what runner/bot is doing
+        "effective_state": "stopped",
+        "reason_code": None,
+        "message": None,
+        "mode": "paper",
+        "last_run": 0,
+        "last_tick": 0,
+        "heartbeat_at": 0,
+        "paused_reason": None,
+        "next_open_epoch": None,
+        "last_error": None,
+        "updated_at": 0,
+    }
+
+
+def _read_state(bot_id: str) -> Dict[str, Any]:
+    d = _bot_dir(bot_id)
+    raw = _read_json(d / "state.json", {})
+    base = _state_doc_defaults(bot_id)
+    if isinstance(raw, dict):
+        base.update(raw)
+    # normalize key fields
+    base["intent"] = _normalize_intent(base.get("intent"), default="paused")
+    base["effective_state"] = _normalize_effective_state(base.get("effective_state"), default="stopped")
+    base["mode"] = _normalize_mode(base.get("mode"))
+    base["last_run"] = _safe_int(base.get("last_run"), 0)
+    base["last_tick"] = _safe_int(base.get("last_tick"), 0)
+    base["heartbeat_at"] = _safe_int(base.get("heartbeat_at"), 0)
+    base["updated_at"] = _safe_int(base.get("updated_at"), 0)
+    base["paused_reason"] = _normalize_paused_reason(base.get("paused_reason"))
+    base["next_open_epoch"] = _normalize_next_open_epoch(base.get("next_open_epoch"))
+    base["last_error"] = _normalize_error(base.get("last_error"))
+    base["reason_code"] = (str(base.get("reason_code")).strip() if base.get("reason_code") else None)
+    base["message"] = (str(base.get("message")).strip() if base.get("message") else None)
+    return base
+
+
+def _write_state(bot_id: str, state: Dict[str, Any]) -> None:
+    d = _bot_dir(bot_id)
+    _write_json(d / "state.json", state)
+
+
+def _status_view(bot_id: str) -> Dict[str, Any]:
+    """
+    API-friendly status shape consumed by UI.
+    Adds derived OFFLINE detection.
+    """
+    d = _bot_dir(bot_id)
+    state = _read_state(bot_id)
+    cfg = _read_json(d / "config.json", _default_config())
+    intents_doc = _read_json(d / "intents.json", {"items": [], "ts": 0})
+
+    items = intents_doc.get("items") or []
+    if not isinstance(items, list):
+        items = []
+
+    effective = str(state.get("effective_state") or "stopped").lower()
+    heartbeat_at = int(state.get("heartbeat_at") or 0)
+
+    intent = str(state.get("intent") or "paused").lower()
+    updated_at = int(state.get("updated_at") or 0)
+
+    is_offline, age = _compute_offline(intent, heartbeat_at, updated_at)
+
+    if is_offline:
+        effective = "offline"
+
+    return {
+        "bot_id": bot_id,
+        # Desired vs actual
+        "intent": str(state.get("intent") or "paused"),  # running | paused
+        "effective_state": effective,  # running | waiting_for_market | paused | offline | ...
+        "reason_code": state.get("reason_code"),
+        "message": state.get("message"),
+        # Helpful timestamps
+        "heartbeatAt": heartbeat_at,
+        "heartbeatAgeSec": age,
+        "lastRun": int(state.get("last_run") or 0),
+        "lastTick": int(state.get("last_tick") or 0),
+        # Trading context
+        "mode": str(state.get("mode") or cfg.get("mode") or "paper"),
+        "nextOpenEpoch": state.get("next_open_epoch"),
+        "pausedReason": state.get("paused_reason"),
+        "lastError": state.get("last_error"),
+        "lastIntents": len(items),
+        "config": cfg,
+    }
+
+
 # -----------------------------
 # API
 # -----------------------------
@@ -190,7 +306,6 @@ def _normalize_error(x: Any) -> Optional[str]:
 
 @router.get("/available")
 def available():
-    # Later: load from registry/config; for now keep static list
     bots = [
         {"id": "ema_trend", "name": "EMA Trend Bot", "description": "EMA reclaim + ATR gate + chop filter"},
     ]
@@ -202,142 +317,176 @@ def status(bot_id: str = Query(...)):
     bid = _clean_bot_id(bot_id)
     if not bid:
         return JSONResponse(status_code=400, content={"detail": "bot_id required"})
+    return _status_view(bid)
 
-    d = _bot_dir(bid)
-    state = _read_json(d / "state.json", {})
-    cfg = _read_json(d / "config.json", _default_config())
-    intents_doc = _read_json(d / "intents.json", {"items": [], "ts": 0})
 
-    items = intents_doc.get("items") or []
-    if not isinstance(items, list):
-        items = []
+@router.get("/statuses")
+def statuses():
+    """
+    Returns all known bot statuses.
 
-    out = {
-        "bot_id": bid,
-        "state": str(state.get("state", "stopped")),  # running | paused | stopped
-        "mode": str(state.get("mode", cfg.get("mode", "paper"))),
-        "lastRun": int(state.get("last_run") or 0),
-        "lastIntents": len(items),
-        "lastError": state.get("last_error"),
-        "pausedReason": state.get("paused_reason"),
-        "nextOpenEpoch": state.get("next_open_epoch"),
-        "config": cfg,
-    }
-    return out
+    UI-friendly:
+      { statuses: { "<bot_id>": { ...status }, ... } }
+    """
+    out: Dict[str, Any] = {}
+    try:
+        for d in STATE_DIR.iterdir():
+            if d.is_dir():
+                bid = _clean_bot_id(d.name)
+                if not bid:
+                    continue
+                out[bid] = _status_view(bid)
+    except Exception:
+        pass
+    return {"statuses": out}
 
 
 @router.post("/start")
 def start(payload: Dict[str, Any]):
+    """
+    Start => intent=running.
+    (Runner may still report waiting_for_market, etc.)
+    """
     bid = _clean_bot_id(payload.get("bot_id"))
     if not bid:
         return JSONResponse(status_code=400, content={"detail": "bot_id required"})
 
     mode = _normalize_mode(payload.get("mode"))
 
-    d = _bot_dir(bid)
-    state = _read_json(d / "state.json", {})
+    state = _read_state(bid)
+    prev_effective = state.get("effective_state")
 
     state.update(
         {
             "bot_id": bid,
-            "state": "running",
+            "intent": "running",
+            "effective_state": "starting",
+            "reason_code": "manual_start",
+            "message": "Starting…",
             "mode": mode,
-            "last_run": int(state.get("last_run") or 0),
             "last_error": None,
             "paused_reason": None,
             "next_open_epoch": None,
+            "updated_at": _now_epoch(),
         }
     )
-    _write_json(d / "state.json", state)
-    _append_log(bid, "info", "Bot started", {"mode": mode})
+    _write_state(bid, state)
 
-    return {"ok": True, "bot_id": bid, "state": "running", "mode": mode}
-
+    _append_log(bid, "info", "Intent set: running", {"mode": mode, "prev_effective_state": prev_effective})
+    return {"ok": True, "bot_id": bid, "intent": "running", "effective_state": "starting", "mode": mode}
 
 @router.post("/stop")
-def stop(bot_id: str = Query(...)):
-    bid = _clean_bot_id(bot_id)
+def stop(payload: Optional[Dict[str, Any]] = None, bot_id: Optional[str] = Query(None)):
+    raw = bot_id or (payload or {}).get("bot_id")
+    bid = _clean_bot_id(raw)
     if not bid:
         return JSONResponse(status_code=400, content={"detail": "bot_id required"})
 
-    d = _bot_dir(bid)
-    state = _read_json(d / "state.json", {})
-    prev_state = state.get("state")
+    paused_reason = _normalize_paused_reason((payload or {}).get("paused_reason")) or "manual_pause"
+
+    state = _read_state(bid)
+    prev_intent = state.get("intent")
+    prev_eff = state.get("effective_state")
 
     state.update(
         {
             "bot_id": bid,
-            "state": "stopped",
-            "paused_reason": None,
+            "intent": "paused",
+            "effective_state": "paused",
+            "reason_code": "manual_pause",
+            "message": "Paused.",
+            "paused_reason": paused_reason,
             "next_open_epoch": None,
+            "last_error": None,
+            "updated_at": _now_epoch(),
         }
     )
-    _write_json(d / "state.json", state)
+    _write_state(bid, state)
 
-    if prev_state != "stopped":
-        _append_log(bid, "info", "Bot stopped", {})
+    if prev_intent != "paused" or prev_eff != "paused":
+        _append_log(bid, "info", "Intent set: paused", {"prev_intent": prev_intent, "prev_effective_state": prev_eff})
 
-    return {"ok": True, "bot_id": bid, "state": "stopped"}
-
+    return {"ok": True, "bot_id": bid, "intent": "paused", "effective_state": "paused"}
 
 @router.post("/heartbeat")
 def heartbeat(payload: Dict[str, Any]):
     """
-    Runner calls this each loop so UI can show:
-      - pausedReason / nextOpenEpoch
-      - lastRun
-      - lastError
+    Runner calls this each loop.
 
     IMPORTANT:
-    - Do NOT spam logs every loop.
-    - Only log on state transitions or errors.
+    - store both intent + effective_state
+    - do NOT spam logs every loop
+    - log only on state transitions or new errors
     """
     bid = _clean_bot_id(payload.get("bot_id"))
     if not bid:
         return JSONResponse(status_code=400, content={"detail": "bot_id required"})
 
-    state_in = _normalize_state(payload.get("state"), default="running")
+    intent_in = _normalize_intent(payload.get("intent"), default="running")
+    eff_in = _normalize_effective_state(payload.get("effective_state"), default="running")
+
     mode = _normalize_mode(payload.get("mode"))
+    heartbeat_at = _safe_int(payload.get("heartbeat_at"), default=_now_epoch())
     last_run = _safe_int(payload.get("last_run"), default=_now_epoch())
+    last_tick = _safe_int(payload.get("last_tick"), default=0)
 
     paused_reason = _normalize_paused_reason(payload.get("paused_reason"))
     next_open_epoch = _normalize_next_open_epoch(payload.get("next_open_epoch"))
     last_error = _normalize_error(payload.get("last_error"))
 
-    d = _bot_dir(bid)
-    state = _read_json(d / "state.json", {})
-    prev_state = state.get("state")
+    reason_code = payload.get("reason_code")
+    reason_code = str(reason_code).strip() if reason_code else None
+
+    message = payload.get("message")
+    message = str(message).strip() if message else None
+
+    state = _read_state(bid)
+    prev_eff = state.get("effective_state")
+    prev_intent = state.get("intent")
     prev_error = state.get("last_error")
 
     state.update(
         {
             "bot_id": bid,
-            "state": state_in,
+            "intent": intent_in,
+            "effective_state": eff_in,
+            "reason_code": reason_code,
+            "message": message,
             "mode": mode,
+            "heartbeat_at": heartbeat_at,
             "last_run": last_run,
+            "last_tick": last_tick,
             "paused_reason": paused_reason,
             "next_open_epoch": next_open_epoch,
             "last_error": last_error,
+            "updated_at": _now_epoch(),
         }
     )
-    _write_json(d / "state.json", state)
+    _write_state(bid, state)
 
     # Log only when interesting
     if last_error and last_error != prev_error:
         _append_log(bid, "error", "Runner error", {"error": last_error})
-    elif prev_state != state_in:
-        _append_log(bid, "info", "State changed", {"from": prev_state, "to": state_in, "reason": paused_reason})
+    elif (prev_eff != eff_in) or (prev_intent != intent_in):
+        _append_log(
+            bid,
+            "info",
+            "State changed",
+            {
+                "from_effective": prev_eff,
+                "to_effective": eff_in,
+                "from_intent": prev_intent,
+                "to_intent": intent_in,
+                "reason": paused_reason,
+                "reason_code": reason_code,
+            },
+        )
 
-    return {"ok": True, "bot_id": bid, "state": state_in, "ts": _now_epoch()}
+    return {"ok": True, "bot_id": bid, "intent": intent_in, "effective_state": eff_in, "ts": _now_epoch()}
 
 
 @router.post("/submit-intents")
 def submit_intents(payload: Dict[str, Any]):
-    """
-    Runner submits latest intents list for UI to read via GET /api/bots/intents
-
-    Stored in runtime/bots/<bot_id>/intents.json
-    """
     bid = _clean_bot_id(payload.get("bot_id"))
     if not bid:
         return JSONResponse(status_code=400, content={"detail": "bot_id required"})
@@ -348,13 +497,12 @@ def submit_intents(payload: Dict[str, Any]):
     if not isinstance(items, list):
         return JSONResponse(status_code=400, content={"detail": "items must be a list"})
 
-    # Cap stored size
     items = items[:MAX_INTENTS_STORED]
 
     d = _bot_dir(bid)
     _write_json(d / "intents.json", {"ts": ts, "items": items})
 
-    # This can be noisy; keep as debug-ish info but still useful for you right now.
+    # Keep for now (useful while building), but you can downgrade later
     _append_log(bid, "info", "Intents submitted", {"count": len(items), "ts": ts})
     return {"ok": True, "bot_id": bid, "count": len(items), "ts": ts}
 
@@ -386,7 +534,7 @@ def log(bot_id: str = Query(...), limit: int = Query(50, ge=1, le=300)):
 
     try:
         lines = log_path.read_text(encoding="utf-8").splitlines()
-        tail = lines[-int(limit) :]
+        tail = lines[-int(limit):]
         out: List[Dict[str, Any]] = []
         for ln in tail:
             try:
@@ -422,7 +570,6 @@ def set_config(payload: Dict[str, Any]):
     d = _bot_dir(bid)
     existing = _read_json(d / "config.json", _default_config())
 
-    # Merge with basic normalization
     merged = dict(existing)
     merged.update(config)
 

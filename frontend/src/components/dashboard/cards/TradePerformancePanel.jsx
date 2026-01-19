@@ -228,7 +228,7 @@ function BotIntentsCard({ botRunning, botId, onPickSymbol }) {
     }
   }
 
-  // Poll when bot is running or paused (runner alive)
+  // Poll when bot is running/armed (runner alive)
   useEffect(() => {
     const id = String(botId || "").trim();
 
@@ -324,7 +324,7 @@ function BotIntentsCard({ botRunning, botId, onPickSymbol }) {
         ) : (
           <div className="tpEmpty">
             {botRunning
-              ? "No intents yet. (On weekends/market closed, runner pauses. When market opens and bot logic submits intents, they show here.)"
+              ? "No intents yet. (When market opens and bot logic submits intents, they show here.)"
               : "No bot running."}
           </div>
         )}
@@ -419,13 +419,55 @@ export default function TradePerformancePanel({ data, onChangeRange, opportuniti
     return out.slice(0, 6);
   }, [leadersClean, oppStocks]);
 
-  // NOTE: BotControlCard should pass {running, bot_id, state, pausedReason,...}
-  const botRunning = Boolean(activeBot?.running || activeBot?.state === "running" || activeBot?.state === "paused");
+  // NOTE: BotControlCard should pass {running, bot_id, state/effective_state, pausedReason,...}
+  const botStateRaw = String(
+    activeBot?.effective_state ?? activeBot?.effectiveState ?? activeBot?.state ?? ""
+  )
+    .trim()
+    .toLowerCase();
+
+  // Treat "waiting_for_market" and "starting" as ARMED/ACTIVE (not OFF)
+  const botRunning = Boolean(
+    activeBot?.running ||
+      botStateRaw === "running" ||
+      botStateRaw === "waiting_for_market" ||
+      botStateRaw === "starting" ||
+      botStateRaw === "paused"
+  );
+
   const botName = String(activeBot?.bot_id || "").trim();
 
   const safe = data || { start: "", end: "", trades: [] };
   const trades = Array.isArray(safe.trades) ? safe.trades : [];
   const winRate = trades.length ? (trades.filter((t) => n(t.pnl) > 0).length / trades.length) * 100 : 0;
+
+  // Bot Status card label/sub/tone based on effective state
+  const botStatusValue =
+    botStateRaw === "running"
+      ? "LIVE"
+      : botStateRaw === "waiting_for_market"
+      ? "WAITING"
+      : botStateRaw === "starting"
+      ? "STARTING"
+      : botStateRaw === "paused"
+      ? "PAUSED"
+      : botRunning
+      ? "LIVE"
+      : "OFF";
+
+  const botStatusSub =
+    botStateRaw === "waiting_for_market"
+      ? activeBot?.pausedReason || "Market closed"
+      : botStateRaw === "starting"
+      ? "Booting up…"
+      : botStateRaw === "paused"
+      ? activeBot?.pausedReason || "Manually paused"
+      : botRunning
+      ? "Using bot alignment"
+      : "Leaders-only (Phase 1)";
+
+  const botStatusTone =
+    botStateRaw === "running" || botStateRaw === "waiting_for_market" || botStateRaw === "starting" ? "pos" : botRunning ? "pos" : "neg";
 
   return (
     <section className="tpPanel">
@@ -436,7 +478,7 @@ export default function TradePerformancePanel({ data, onChangeRange, opportuniti
           </div>
 
           <p className="tpSubtitle">
-            {botRunning ? `Bot running: ${botName || "Unknown bot"}` : "No bot running — start a bot to unlock bot-aligned picks."}
+            {botRunning ? `Bot active: ${botName || "Unknown bot"}` : "No bot running — start a bot to unlock bot-aligned picks."}
           </p>
         </div>
 
@@ -458,15 +500,9 @@ export default function TradePerformancePanel({ data, onChangeRange, opportuniti
 
           <BigStat
             label="Bot Status"
-            value={activeBot?.state === "paused" ? "PAUSED" : botRunning ? "LIVE" : "OFF"}
-            sub={
-              activeBot?.state === "paused"
-                ? activeBot?.pausedReason || "Market closed"
-                : botRunning
-                ? "Using bot alignment"
-                : "Leaders-only (Phase 1)"
-            }
-            tone={botRunning ? "pos" : "neg"}
+            value={botStatusValue}
+            sub={botStatusSub}
+            tone={botStatusTone}
           />
 
           <BigStat label="Trades Context" value={`${trades.length}`} sub={`Win rate ${fmtPct(winRate)}`} />

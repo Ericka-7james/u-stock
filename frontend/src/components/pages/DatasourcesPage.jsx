@@ -113,6 +113,36 @@ function safeJson(x) {
   }
 }
 
+function normalizeEffective(x) {
+  const v = String(x || "").toLowerCase();
+  if (
+    v === "waiting_for_market" ||
+    v === "running" ||
+    v === "paused" ||
+    v === "starting" ||
+    v === "stopping" ||
+    v === "degraded" ||
+    v === "error" ||
+    v === "offline"
+  ) {
+    return v;
+  }
+  if (v === "stopped") return "paused";
+  if (v === "failed") return "error";
+  return "unknown";
+}
+
+function statusPill(effective) {
+  if (effective === "running") return { label: "Running", cls: "botrun-pill botrun-pill--on" };
+  if (effective === "waiting_for_market") return { label: "Waiting for market", cls: "botrun-pill botrun-pill--warn" };
+  if (effective === "paused") return { label: "Paused", cls: "botrun-pill botrun-pill--paused" };
+  if (effective === "offline") return { label: "Offline", cls: "botrun-pill botrun-pill--off" };
+  if (effective === "error") return { label: "Error", cls: "botrun-pill botrun-pill--bad" };
+  if (effective === "starting") return { label: "Starting…", cls: "botrun-pill" };
+  if (effective === "stopping") return { label: "Stopping…", cls: "botrun-pill" };
+  return { label: "Unknown", cls: "botrun-pill" };
+}
+
 // --------------------
 // Market Leaders hook
 // --------------------
@@ -178,8 +208,6 @@ function useMarketLeaders() {
 
 // --------------------
 // Bot Logs Card
-// - Shows max 3 entries in-card
-// - "View all" opens modal w/ scroll
 // --------------------
 function BotLogsCard({ defaultBotId = "ema_trend", maxPreview = 3 }) {
   const [botId, setBotId] = useState(defaultBotId);
@@ -188,6 +216,9 @@ function BotLogsCard({ defaultBotId = "ema_trend", maxPreview = 3 }) {
   const [items, setItems] = useState([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+
+  // Status (new)
+  const [botStatus, setBotStatus] = useState(null);
 
   // Filters
   const [q, setQ] = useState("");
@@ -230,13 +261,23 @@ function BotLogsCard({ defaultBotId = "ema_trend", maxPreview = 3 }) {
     }
   }
 
+  async function refreshStatus() {
+    try {
+      const s = await apiGetWithRetry(`/api/bots/status?bot_id=${encodeURIComponent(safeStr(botId, "ema_trend"))}`);
+      setBotStatus(s);
+    } catch {
+      setBotStatus(null);
+    }
+  }
+
   useEffect(() => {
     const fresh = isFresh(logsCache.ts) && logsCache.key === cacheKey;
     if (fresh) {
       setItems(Array.isArray(logsCache.items) ? logsCache.items : []);
-      return;
+    } else {
+      refresh();
     }
-    refresh();
+    refreshStatus();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [botId, limit]);
 
@@ -281,13 +322,23 @@ function BotLogsCard({ defaultBotId = "ema_trend", maxPreview = 3 }) {
     return list.slice(Math.max(0, list.length - maxPreview));
   }, [filtered, maxPreview]);
 
+  const eff = normalizeEffective(botStatus?.effective_state || botStatus?.state);
+  const pill = statusPill(eff);
+  const nextOpen = botStatus?.nextOpenEpoch || botStatus?.next_open_epoch || null;
+
   return (
     <>
       <section className="panel ds-panel ds-botlogs">
         <div className="ds-card-header">
           <div className="ds-card-header-left">
-            <div className="ds-title-row">
+            <div className="ds-title-row" style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <h2 className="ds-card-title">Bot Logs</h2>
+              <span className={pill.cls} title="Bot effective state">{pill.label}</span>
+              {eff === "waiting_for_market" && nextOpen ? (
+                <span className="ds-card-subtitle" style={{ margin: 0 }}>
+                  • Next open: {fmtTime(nextOpen)}
+                </span>
+              ) : null}
             </div>
             <p className="ds-card-subtitle">
               Filter bot activity by day, status, and search terms. Preview shows the latest {maxPreview} entries.
@@ -371,7 +422,7 @@ function BotLogsCard({ defaultBotId = "ema_trend", maxPreview = 3 }) {
             </select>
           </label>
 
-          <button type="button" className="ds-btn ds-btn-primary" onClick={refresh} disabled={busy}>
+          <button type="button" className="ds-btn ds-btn-primary" onClick={() => { refresh(); refreshStatus(); }} disabled={busy}>
             {busy ? "Refreshing…" : "Refresh"}
           </button>
 
@@ -463,7 +514,6 @@ export default function DatasourcesPage() {
 
   return (
     <AppShell>
-      {/* HERO */}
       <header className="data-hero">
         <div className="data-hero-text">
           <h1 className="page-title">Market Leaders & Bot Logs</h1>
@@ -483,7 +533,6 @@ export default function DatasourcesPage() {
         </div>
       </header>
 
-      {/* ✅ 2-up on large screens, stacked on small */}
       <main className="ds-main">
         <div className="ds-left">
           <MarketLeadersCard
@@ -501,7 +550,6 @@ export default function DatasourcesPage() {
                 localStorage.setItem("ustock:last_ticker", clean);
               } catch {}
 
-              // Most reliable: dashboard can read query or localStorage
               navigate(`/?ticker=${encodeURIComponent(clean)}`);
             }}
           />

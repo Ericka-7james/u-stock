@@ -20,19 +20,37 @@ async function safeErrorMessage(res) {
   return `Backend returned non-JSON (${res.status}). First 80 chars: ${text.slice(0, 80)}`;
 }
 
-function normalizeState(s) {
-  const v = String(s || "").toLowerCase();
-  if (v === "running" || v === "on") return "running";
+function normalizeEffectiveState(s) {
+  const v = String(s || "").toLowerCase().trim();
+  if (v === "running") return "running";
+  if (v === "waiting_for_market" || v === "waiting") return "waiting_for_market";
   if (v === "paused") return "paused";
-  if (v === "stopped" || v === "off") return "stopped";
+  if (v === "offline") return "offline";
   if (v === "error" || v === "failed") return "error";
+  if (v === "starting") return "starting";
+  if (v === "stopped") return "stopped";
+  if (v === "degraded") return "degraded";
   return "unknown";
 }
 
-function formatUpdatedAt(v) {
-  if (!v) return "";
-  // keep it simple (don’t assume timezone formatting)
-  return String(v).replace("T", " ").replace("Z", "");
+function formatUpdatedAtEpoch(epoch) {
+  const t = Number(epoch || 0);
+  if (!Number.isFinite(t) || t <= 0) return "";
+  try {
+    return new Date(t * 1000).toLocaleString();
+  } catch {
+    return "";
+  }
+}
+
+function formatNextOpen(epoch) {
+  const t = Number(epoch || 0);
+  if (!Number.isFinite(t) || t <= 0) return "";
+  try {
+    return new Date(t * 1000).toLocaleString();
+  } catch {
+    return "";
+  }
 }
 
 export default function BotRunnerCard() {
@@ -47,15 +65,12 @@ export default function BotRunnerCard() {
   const [error, setError] = useState("");
 
   const BOT_OPTIONS = useMemo(
-    () => [
-      { id: "orb", name: "ORB (Opening Range Breakout)" },
-      { id: "ema_vwap", name: "EMA Trend (9/21 + VWAP filter)" },
-    ],
+    () => [{ id: "ema_trend", name: "EMA Trend Bot" }],
     []
   );
 
-  const [selectedBotId, setSelectedBotId] = useState(BOT_OPTIONS[0]?.id || "orb");
-  const [botStatuses, setBotStatuses] = useState({});
+  const [selectedBotId, setSelectedBotId] = useState(BOT_OPTIONS[0]?.id || "ema_trend");
+  const [botStatuses, setBotStatuses] = useState({}); // { [botId]: statusObj }
 
   // Logs modal state
   const [logsOpen, setLogsOpen] = useState(false);
@@ -78,26 +93,51 @@ export default function BotRunnerCard() {
 
   const selectedStatus = useMemo(() => {
     const s = botStatuses?.[selectedBotId] || {};
-    const raw = normalizeState(s.state);
+    const eff = normalizeEffectiveState(s.effective_state || s.effectiveState || s.state);
     return {
-      rawState: raw, // running | paused | stopped | error | unknown
+      botId: selectedBotId,
+      intent: String(s.intent || "").toLowerCase() || "paused",
+      effective: eff,
+      reasonCode: s.reason_code || s.reasonCode || "",
       message: s.message || "",
-      updatedAt: s.updated_at || s.updatedAt || "",
+      heartbeatAt: s.heartbeatAt || s.heartbeat_at || 0,
+      lastTick: s.lastTick || s.last_tick || 0,
+      nextOpenEpoch: s.nextOpenEpoch || s.next_open_epoch || 0,
+      pausedReason: s.pausedReason || s.paused_reason || "",
+      lastError: s.lastError || s.last_error || "",
     };
   }, [botStatuses, selectedBotId]);
 
   const statusPill = useMemo(() => {
-    const st = selectedStatus.rawState;
-    if (st === "running") return { label: "Running", cls: "botrun-pill botrun-pill--on" };
-    if (st === "paused") return { label: "Paused", cls: "botrun-pill botrun-pill--paused" };
-    if (st === "stopped") return { label: "Stopped", cls: "botrun-pill botrun-pill--off" };
-    if (st === "error") return { label: "Error", cls: "botrun-pill botrun-pill--bad" };
-    return { label: "Unknown", cls: "botrun-pill" };
-  }, [selectedStatus.rawState]);
+    const st = selectedStatus.effective;
 
-  const runningBots = useMemo(() => {
-    return BOT_OPTIONS.filter((b) => normalizeState(botStatuses?.[b.id]?.state) === "running");
+    if (st === "running") return { label: "Running", cls: "botrun-pill botrun-pill--on" };
+    if (st === "waiting_for_market") return { label: "Waiting for market", cls: "botrun-pill botrun-pill--wait" };
+    if (st === "paused") return { label: "Paused", cls: "botrun-pill botrun-pill--paused" };
+    if (st === "starting") return { label: "Starting…", cls: "botrun-pill" };
+    if (st === "offline") return { label: "Offline", cls: "botrun-pill botrun-pill--off" };
+    if (st === "error") return { label: "Error", cls: "botrun-pill botrun-pill--bad" };
+    if (st === "degraded") return { label: "Degraded", cls: "botrun-pill botrun-pill--warn" };
+    if (st === "stopped") return { label: "Stopped", cls: "botrun-pill botrun-pill--off" };
+    return { label: "Unknown", cls: "botrun-pill" };
+  }, [selectedStatus.effective]);
+
+  const activeBots = useMemo(() => {
+    // "Active" means intent running (even if waiting_for_market)
+    return BOT_OPTIONS.filter((b) => {
+      const s = botStatuses?.[b.id] || {};
+      const intent = String(s.intent || "").toLowerCase();
+      const eff = normalizeEffectiveState(s.effective_state || s.effectiveState || s.state);
+      if (eff === "offline") return false;
+      return intent === "running" || eff === "running" || eff === "waiting_for_market";
+    });
   }, [BOT_OPTIONS, botStatuses]);
+
+  const activeSummary = useMemo(() => {
+    const running = activeBots.filter((b) => normalizeEffectiveState(botStatuses?.[b.id]?.effective_state) === "running");
+    const waiting = activeBots.filter((b) => normalizeEffectiveState(botStatuses?.[b.id]?.effective_state) === "waiting_for_market");
+    return { runningCount: running.length, waitingCount: waiting.length, total: activeBots.length };
+  }, [activeBots, botStatuses]);
 
   useEffect(() => {
     const aliveRef = { alive: true };
@@ -114,7 +154,7 @@ export default function BotRunnerCard() {
         if (!res.ok) throw new Error(await safeErrorMessage(res));
         const data = await res.json();
 
-        const apps = Array.isArray(data?.apps) ? data.apps : [];
+        const apps = Array.isArray(data?.apps) ? data.apps : Array.isArray(data?.items) ? data.items : [];
         const alp = apps.find((a) => String(a?.provider || "").toLowerCase() === "alpaca");
         const status = String(alp?.status || "not_connected").toLowerCase();
 
@@ -134,12 +174,11 @@ export default function BotRunnerCard() {
       }
 
       try {
-        const res = await authFetch("/bots/status", { method: "GET" });
+        const res = await authFetch("/bots/statuses", { method: "GET" });
         if (!res.ok) throw new Error(await safeErrorMessage(res));
         const data = await res.json();
 
-        const statuses = data?.statuses && typeof data.statuses === "object" ? data.statuses : data;
-
+        const statuses = data?.statuses && typeof data.statuses === "object" ? data.statuses : {};
         if (!aliveRef.alive) return;
         setBotStatuses(statuses || {});
       } catch (e) {
@@ -173,10 +212,10 @@ export default function BotRunnerCard() {
 
   async function refreshStatuses() {
     try {
-      const res = await authFetch("/bots/status", { method: "GET" });
+      const res = await authFetch("/bots/statuses", { method: "GET" });
       if (!res.ok) throw new Error(await safeErrorMessage(res));
       const data = await res.json();
-      setBotStatuses(data?.statuses || data || {});
+      setBotStatuses(data?.statuses || {});
     } catch (e) {
       setError(e?.message || "Could not refresh bot statuses.");
     }
@@ -204,7 +243,7 @@ export default function BotRunnerCard() {
       });
       if (!res.ok) throw new Error(await safeErrorMessage(res));
 
-      setNotice(`Started ${selectedBot.name}.`);
+      setNotice(`Set ${selectedBot.name} to RUN. (It may wait for market.)`);
       await refreshStatuses();
     } catch (e) {
       setError(e?.message || "Could not start bot.");
@@ -225,9 +264,10 @@ export default function BotRunnerCard() {
 
     setBusy(true);
     try {
+      // backend accepts either query param or body
       const res = await authFetch("/bots/stop", {
         method: "POST",
-        body: JSON.stringify({ bot_id: selectedBot.id }),
+        body: JSON.stringify({ bot_id: selectedBot.id, paused_reason: "manual_pause" }),
       });
       if (!res.ok) throw new Error(await safeErrorMessage(res));
 
@@ -247,7 +287,7 @@ export default function BotRunnerCard() {
     setLogsBotId(bot.id);
     setLogsBotName(bot.name);
     setLogsText(msg || "No logs yet for this bot.");
-    setLogsUpdatedAt(formatUpdatedAt(s.updated_at || s.updatedAt || ""));
+    setLogsUpdatedAt(formatUpdatedAtEpoch(s.heartbeatAt || s.heartbeat_at || 0));
     setLogsOpen(true);
   }
 
@@ -255,8 +295,50 @@ export default function BotRunnerCard() {
     setLogsOpen(false);
   }
 
-  const canStart = isAuthed && alpacaStatus === "connected" && selectedStatus.rawState !== "running";
-  const canPause = isAuthed && selectedStatus.rawState === "running";
+  const canStart =
+    isAuthed &&
+    alpacaStatus === "connected" &&
+    selectedStatus.intent !== "running" &&
+    selectedStatus.effective !== "running" &&
+    selectedStatus.effective !== "waiting_for_market" &&
+    selectedStatus.effective !== "starting";
+
+  const canPause =
+    isAuthed &&
+    (selectedStatus.intent === "running" ||
+      selectedStatus.effective === "running" ||
+      selectedStatus.effective === "waiting_for_market" ||
+      selectedStatus.effective === "starting");
+
+  const helperLine = useMemo(() => {
+    const eff = selectedStatus.effective;
+
+    if (eff === "waiting_for_market") {
+      const when = formatNextOpen(selectedStatus.nextOpenEpoch);
+      return when ? `Healthy. Waiting for market open (${when}).` : "Healthy. Waiting for market open.";
+    }
+
+    if (eff === "paused") {
+      return selectedStatus.pausedReason ? `Paused (${selectedStatus.pausedReason}).` : "Paused. Will not trade.";
+    }
+
+    if (eff === "running") {
+      const tick = formatUpdatedAtEpoch(selectedStatus.lastTick);
+      return tick ? `Loop active. Last tick: ${tick}.` : "Loop active.";
+    }
+
+    if (eff === "offline") {
+      const hb = formatUpdatedAtEpoch(selectedStatus.heartbeatAt);
+      return hb ? `No heartbeat. Last seen: ${hb}.` : "No heartbeat from runner.";
+    }
+
+    if (eff === "starting") return "Booting up…";
+
+    if (eff === "error") return selectedStatus.lastError ? `Error: ${selectedStatus.lastError}` : "Error state.";
+    if (eff === "degraded") return "Running but missing a dependency.";
+    if (eff === "stopped") return "Stopped.";
+    return selectedStatus.message || "Status unknown.";
+  }, [selectedStatus]);
 
   return (
     <section className="panel botrun-panel">
@@ -265,13 +347,12 @@ export default function BotRunnerCard() {
           <div className="botrun-titleRow">
             <h3 className="botrun-title">Bot Runner</h3>
 
-            <HelpTooltip title="Bot Runner">
-              <p style={{ marginTop: 0 }}>
-                Start/pause strategies here. The “Currently running” list shows active bots.
-              </p>
+            <HelpTooltip title="Bot Runner states">
               <ul style={{ margin: 0, paddingLeft: 18 }}>
-                <li><strong>Logs</strong> shows the bot’s latest messages.</li>
-                <li><strong>Alpaca must be connected</strong> to start bots.</li>
+                <li><strong>Running</strong> — loop is active.</li>
+                <li><strong>Waiting for market</strong> — intent is RUN, but market is closed.</li>
+                <li><strong>Paused</strong> — manually paused (won’t trade even if market is open).</li>
+                <li><strong>Offline</strong> — no heartbeat from runner (Pi down / process dead).</li>
               </ul>
               <p style={{ marginBottom: 0 }}>
                 Manage connections in{" "}
@@ -288,7 +369,7 @@ export default function BotRunnerCard() {
           </div>
 
           <p className="botrun-subtitle">
-            Select a strategy, check its status, and start/pause it from here.
+            Start/pause bots. “Waiting for market” is healthy and will auto-start at open.
           </p>
         </div>
 
@@ -349,33 +430,55 @@ export default function BotRunnerCard() {
               ))}
             </select>
           </div>
+
+          <div className="botrun-muted" style={{ marginTop: 10 }}>
+            {helperLine}
+          </div>
+
+          {selectedStatus.reasonCode ? (
+            <div className="botrun-muted" style={{ marginTop: 6 }}>
+              Reason: <span className="mMono">{selectedStatus.reasonCode}</span>
+            </div>
+          ) : null}
         </div>
 
-        {/* Right: running list with LOGS button */}
+        {/* Right: active list */}
         <div className="botrun-box">
           <div className="botrun-boxHeader">
-            <div className="botrun-boxTitle">Currently running</div>
-            <div className="botrun-muted">{runningBots.length} active</div>
+            <div className="botrun-boxTitle">Active (Run intent)</div>
+            <div className="botrun-muted">
+              {activeSummary.total} total · {activeSummary.runningCount} running · {activeSummary.waitingCount} waiting
+            </div>
           </div>
 
           {loading ? (
             <div className="botrun-muted">Loading status…</div>
-          ) : runningBots.length === 0 ? (
-            <div className="botrun-muted">No bots are running right now.</div>
+          ) : activeBots.length === 0 ? (
+            <div className="botrun-muted">No bots are active right now.</div>
           ) : (
             <ul className="botrun-runningList">
-              {runningBots.map((b) => (
-                <li key={b.id} className="botrun-runningItem">
-                  <span className="botrun-runningName">{b.name}</span>
-                  <button
-                    type="button"
-                    className="botrun-logsBtn"
-                    onClick={() => openLogsFor(b)}
-                  >
-                    Logs
-                  </button>
-                </li>
-              ))}
+              {activeBots.map((b) => {
+                const eff = normalizeEffectiveState(botStatuses?.[b.id]?.effective_state);
+                const label =
+                  eff === "running" ? "Running" : eff === "waiting_for_market" ? "Waiting" : eff;
+                const cls =
+                  eff === "running"
+                    ? "botrun-pill botrun-pill--on"
+                    : eff === "waiting_for_market"
+                    ? "botrun-pill botrun-pill--wait"
+                    : "botrun-pill";
+                return (
+                  <li key={b.id} className="botrun-runningItem">
+                    <span className="botrun-runningName">{b.name}</span>
+                    <span className={cls} style={{ marginLeft: 8 }}>
+                      {label}
+                    </span>
+                    <button type="button" className="botrun-logsBtn" onClick={() => openLogsFor(b)}>
+                      Logs
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>

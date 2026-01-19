@@ -36,19 +36,29 @@ def _heartbeat(
     api: UStockAPI,
     *,
     bot_id: str,
-    state: str,
+    intent: str,
+    effective_state: str,
     mode: str,
+    message: Optional[str] = None,
+    reason_code: Optional[str] = None,
     paused_reason: Optional[str] = None,
     next_open_epoch: Optional[int] = None,
     last_error: Optional[str] = None,
+    last_tick: Optional[int] = None,
 ) -> None:
+    now = _now()
     api.post(
         "/api/bots/heartbeat",
         json={
             "bot_id": bot_id,
-            "state": state,
+            "intent": intent,
+            "effective_state": effective_state,
             "mode": mode,
-            "last_run": _now(),
+            "heartbeat_at": now,
+            "last_run": now,
+            "last_tick": int(last_tick or now),
+            "reason_code": reason_code,
+            "message": message,
             "paused_reason": paused_reason,
             "next_open_epoch": next_open_epoch,
             "last_error": last_error,
@@ -60,7 +70,6 @@ def _safe_heartbeat(api: UStockAPI, **kwargs: Any) -> None:
     try:
         _heartbeat(api, **kwargs)
     except Exception:
-        # never let heartbeat kill the runner
         return
 
 
@@ -153,9 +162,23 @@ def main(*, max_loops: Optional[int] = None, sleep_fn: Callable[[float], None] =
 
             try:
                 status = _get_status(api, BOT_ID)
-                state = str(status.get("state") or "stopped").strip().lower()
 
-                if state != "running":
+                # NEW contract: intent drives whether runner should operate
+                intent = str(status.get("intent") or "paused").strip().lower()
+                effective_state = str(status.get("effective_state") or "stopped").strip().lower()
+
+                if intent != "running":
+                    # If user paused it, report paused occasionally but don't spam
+                    _safe_heartbeat(
+                        api,
+                        bot_id=BOT_ID,
+                        intent="paused",
+                        effective_state="paused",
+                        mode=_normalize_mode(status.get("mode") or "paper"),
+                        reason_code="intent_paused",
+                        message="Paused by user.",
+                        last_error=None,
+                    )
                     _sleep_smart(LOOP_SECONDS - (time.time() - t0), sleep_fn=sleep_fn)
                     continue
 
@@ -172,8 +195,11 @@ def main(*, max_loops: Optional[int] = None, sleep_fn: Callable[[float], None] =
                     _safe_heartbeat(
                         api,
                         bot_id=BOT_ID,
-                        state="paused",
+                        intent="running",
+                        effective_state="waiting_for_market",
                         mode=mode,
+                        reason_code="market_closed",
+                        message="Waiting for market open.",
                         paused_reason=paused_reason,
                         next_open_epoch=next_open_epoch,
                         last_error=None,
@@ -205,11 +231,29 @@ def main(*, max_loops: Optional[int] = None, sleep_fn: Callable[[float], None] =
 
                 upload_transaction_events(BOT_ID, mode, combined)
 
-                _safe_heartbeat(api, bot_id=BOT_ID, state="running", mode=mode, last_error=None)
+                _safe_heartbeat(
+                    api,
+                    bot_id=BOT_ID,
+                    intent="running",
+                    effective_state="running",
+                    mode=mode,
+                    reason_code="loop_ok",
+                    message="Loop active.",
+                    last_error=None,
+                    last_tick=_now(),
+                )
 
             except Exception as e:
-                # runner must never die
-                _safe_heartbeat(api, bot_id=BOT_ID, state="running", mode=mode, last_error=repr(e))
+                _safe_heartbeat(
+                    api,
+                    bot_id=BOT_ID,
+                    intent="running",
+                    effective_state="error",
+                    mode=mode,
+                    reason_code="runner_exception",
+                    message="Runner exception.",
+                    last_error=repr(e),
+                )
 
             _sleep_smart(LOOP_SECONDS - (time.time() - t0), sleep_fn=sleep_fn)
 

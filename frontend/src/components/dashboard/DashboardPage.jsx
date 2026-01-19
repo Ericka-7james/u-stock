@@ -324,6 +324,125 @@ function useBotOpportunities() {
   return { data, loading, error };
 }
 
+// ✅ Runner/Bot status mapping (dashboard-level)
+const UI_STATE = {
+  RUNNING: "running",
+  PAUSED: "paused",
+  STOPPED: "stopped",
+  WAITING_FOR_MARKET: "waiting_for_market",
+  ERROR: "error",
+  OFFLINE: "offline",
+  UNKNOWN: "unknown",
+};
+
+function normalizeBotState(raw, message = "") {
+  const v = String(raw || "").trim().toLowerCase();
+  const msg = String(message || "").toLowerCase();
+
+  if (v === "waiting_for_market" || v === "waiting" || v === "market_closed" || v === "gated") return UI_STATE.WAITING_FOR_MARKET;
+  if (v === "running" || v === "on" || v === "active") return UI_STATE.RUNNING;
+  if (v === "paused") return UI_STATE.PAUSED;
+  if (v === "stopped" || v === "off" || v === "idle") return UI_STATE.STOPPED;
+  if (v === "error" || v === "failed" || v === "crashed") return UI_STATE.ERROR;
+  if (v === "offline") return UI_STATE.OFFLINE;
+
+  if (msg.includes("market closed") || msg.includes("market gated") || msg.includes("gating until")) return UI_STATE.WAITING_FOR_MARKET;
+
+  return UI_STATE.UNKNOWN;
+}
+
+function useRunnerSummary(pollMs = 7000) {
+  const [statuses, setStatuses] = useState({});
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const ac = new AbortController();
+    let alive = true;
+
+    async function load() {
+      try {
+        const res = await fetch("/bots/status", { credentials: "include", signal: ac.signal });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data?.detail || `Request failed (${res.status})`);
+        const s = data?.statuses && typeof data.statuses === "object" ? data.statuses : data;
+        if (!alive) return;
+        setStatuses(s || {});
+        setError(null);
+      } catch (e) {
+        if (!alive) return;
+        if (ac.signal.aborted) return;
+        setError(e);
+      }
+    }
+
+    load();
+    const t = window.setInterval(load, pollMs);
+
+    return () => {
+      alive = false;
+      ac.abort();
+      window.clearInterval(t);
+    };
+  }, [pollMs]);
+
+  const summary = useMemo(() => {
+    const ids = Object.keys(statuses || {});
+    if (!ids.length) {
+      return {
+        anyRunning: false,
+        anyWaiting: false,
+        anyPaused: false,
+        primary: { state: UI_STATE.UNKNOWN, botId: "", label: "Unknown" },
+        statuses,
+        error,
+      };
+    }
+
+    const mapped = ids.map((id) => {
+      const s = statuses[id] || {};
+      const raw = s.effective_state || s.effectiveState || s.state || "";
+      const msg = s.message || "";
+      const ui = normalizeBotState(raw, msg);
+      return { id, ui, msg, updatedAt: s.updated_at || s.updatedAt || "" };
+    });
+
+    const anyRunning = mapped.some((m) => m.ui === UI_STATE.RUNNING);
+    const anyWaiting = mapped.some((m) => m.ui === UI_STATE.WAITING_FOR_MARKET);
+    const anyPaused = mapped.some((m) => m.ui === UI_STATE.PAUSED);
+
+    // Pick a “primary” for display:
+    // running > waiting > paused > error > other
+    const pick =
+      mapped.find((m) => m.ui === UI_STATE.RUNNING) ||
+      mapped.find((m) => m.ui === UI_STATE.WAITING_FOR_MARKET) ||
+      mapped.find((m) => m.ui === UI_STATE.PAUSED) ||
+      mapped.find((m) => m.ui === UI_STATE.ERROR) ||
+      mapped[0];
+
+    const label =
+      pick.ui === UI_STATE.RUNNING
+        ? "Running"
+        : pick.ui === UI_STATE.WAITING_FOR_MARKET
+        ? "Waiting for market"
+        : pick.ui === UI_STATE.PAUSED
+        ? "Paused"
+        : pick.ui === UI_STATE.ERROR
+        ? "Error"
+        : "Unknown";
+
+    return {
+      anyRunning,
+      anyWaiting,
+      anyPaused,
+      primary: { state: pick.ui, botId: pick.id, label, message: pick.msg, updatedAt: pick.updatedAt },
+      statuses,
+      error,
+    };
+  }, [statuses, error]);
+
+  return summary;
+}
+
 export default function DashboardPage() {
   const navigate = useNavigate();
 
@@ -407,8 +526,23 @@ export default function DashboardPage() {
   const { data: oppData, loading: oppLoading, error: oppError } = useBotOpportunities();
   const oppErrUI = oppError ? explainAnyError(oppError, { feature: "bot_opportunities" }) : null;
 
-  // ✅ stub for now — later we’ll wire this to runner telemetry
-  const activeBot = { running: false, name: "" };
+  // ✅ real runner summary (production-ready states)
+  const runner = useRunnerSummary(7000);
+
+  // Backward-compatible shape for existing cards, plus richer fields for future use
+  const activeBot = useMemo(() => {
+    const p = runner.primary || {};
+    return {
+      running: Boolean(runner.anyRunning),
+      name: p.botId || "",
+      state: p.state || UI_STATE.UNKNOWN,
+      label: p.label || "Unknown",
+      message: p.message || "",
+      updatedAt: p.updatedAt || "",
+      anyWaiting: Boolean(runner.anyWaiting),
+      anyPaused: Boolean(runner.anyPaused),
+    };
+  }, [runner]);
 
   return (
     <AppShell>

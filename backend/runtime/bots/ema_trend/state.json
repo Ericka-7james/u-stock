@@ -1,1 +1,1 @@
-{"bot_id":"ema_trend","state":"paused","mode":"paper","last_error":null,"paused_reason":"Weekend","last_run":1768773429,"next_open_epoch":1768833000}
+{"bot_id":"ema_trend","intent":"running","effective_state":"waiting_for_market","reason_code":"market_closed","message":"Waiting for market open.","mode":"paper","last_run":1768862316,"last_tick":1768862316,"heartbeat_at":1768862316,"paused_reason":"After-hours","next_open_epoch":1768919400,"last_error":null,"updated_at":1768862316}

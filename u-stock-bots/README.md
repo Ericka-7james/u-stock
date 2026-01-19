@@ -224,4 +224,4 @@ License
 Internal / private (for now).
 Designed to support future licensing of strategies or platform components.
 
-Built with intention. Tested with discipline. 🚀
+Built with intention. Tested with discipline. 🚀data
