@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent, within } from "@testing-library/react";
 
 // ✅ mock router navigate
 const mockNavigate = vi.fn();
@@ -50,7 +50,8 @@ function jsonResponse(data, { ok = true, status = 200, headers } = {}) {
     status,
     headers: {
       get: (k) => {
-        if (k?.toLowerCase() === "content-type") return headers?.["content-type"] || "application/json";
+        if (k?.toLowerCase() === "content-type")
+          return headers?.["content-type"] || "application/json";
         return null;
       },
     },
@@ -89,7 +90,9 @@ describe("ConnectedAppsPage", () => {
     render(<ConnectedAppsPage />);
 
     await waitFor(() => {
-      expect(mockAuth.authFetch).toHaveBeenCalledWith("/integrations", { method: "GET" });
+      expect(mockAuth.authFetch).toHaveBeenCalledWith("/integrations", {
+        method: "GET",
+      });
     });
 
     // Should reflect status mapping
@@ -187,5 +190,44 @@ describe("ConnectedAppsPage", () => {
     fireEvent.click(refreshButtons[0]);
 
     await waitFor(() => expect(mockAuth.authFetch).toHaveBeenCalledTimes(2));
+  });
+
+  it("shows Disconnect/Refresh only for connected providers (and Connect/Learn more only for unconnected)", async () => {
+    mockAuth.isAuthed = true;
+    mockAuth.authFetch.mockResolvedValue(
+      jsonResponse({
+        apps: [
+          { provider: "alpaca", status: "connected" },
+          { provider: "polygon", status: "not_connected" },
+          { provider: "tradingview", status: "not_connected" },
+        ],
+      })
+    );
+
+    render(<ConnectedAppsPage />);
+    await waitFor(() => expect(mockAuth.authFetch).toHaveBeenCalled());
+
+    // Grab provider cards in render order (matches PROVIDERS order in component)
+    const cards = document.querySelectorAll(".connected-card");
+    expect(cards.length).toBeGreaterThanOrEqual(3);
+
+    const alpacaCard = cards[0];
+    const polygonCard = cards[1];
+
+    // Connected provider card -> Disconnect + Refresh, no Connect/Learn more
+    const alpaca = within(alpacaCard);
+    expect(alpaca.getByText("Connected")).toBeInTheDocument();
+    expect(alpaca.getByRole("button", { name: "Disconnect" })).toBeInTheDocument();
+    expect(alpaca.getByRole("button", { name: /Refresh/i })).toBeInTheDocument();
+    expect(alpaca.queryByRole("button", { name: "Connect" })).toBeNull();
+    expect(alpaca.queryByRole("button", { name: /Learn more/i })).toBeNull();
+
+    // Unconnected provider card -> Connect + Learn more, no Disconnect/Refresh
+    const polygon = within(polygonCard);
+    expect(polygon.getByText("Not connected")).toBeInTheDocument();
+    expect(polygon.getByRole("button", { name: "Connect" })).toBeInTheDocument();
+    expect(polygon.getByRole("button", { name: /Learn more/i })).toBeInTheDocument();
+    expect(polygon.queryByRole("button", { name: "Disconnect" })).toBeNull();
+    expect(polygon.queryByRole("button", { name: /Refresh/i })).toBeNull();
   });
 });

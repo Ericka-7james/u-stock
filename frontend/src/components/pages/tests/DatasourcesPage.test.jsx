@@ -1,117 +1,204 @@
-import { render, screen } from "@testing-library/react";
+// src/components/pages/tests/DatasourcesPage.test.jsx
+import { render, screen, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Mock AuthContext so NavBar/AppShell can call useAuth safely
+// --------------------
+// Mocks (MUST be before importing the page)
+// --------------------
+
+// ✅ Make useAuth "shape-safe" for AppShell + Nav + any other consumers.
 vi.mock("../../../context/AuthContext", () => ({
   useAuth: () => ({
     user: null,
+    loading: false,
+    isAuthed: false,
     login: vi.fn(),
     signup: vi.fn(),
     logout: vi.fn(),
+    refreshSession: vi.fn(),
+    authFetch: vi.fn(),
   }),
 }));
 
-/**
- * Mock config modules used by the page so tests are stable.
- * Adjust paths if your project structure differs.
- */
-vi.mock("../../../config/raw/pricesSources", () => ({
-  PRICE_SOURCES: [
-    { id: "yahoo", name: "Yahoo Finance", url: "https://example.com/yahoo" },
-    { id: "alpaca", name: "Alpaca", url: "https://example.com/alpaca" },
-  ],
-}));
-
-vi.mock("../../../config/raw/fundamentalsSources", () => ({
-  FUNDAMENTAL_SOURCES: [
-    { id: "fmp", name: "Financial Modeling Prep", url: "https://example.com/fmp" },
-  ],
-}));
-
-vi.mock("../../../config/raw/macroSources", () => ({
-  MACRO_SOURCES: [
-    { id: "fred", name: "FRED", url: "https://example.com/fred" },
-    { id: "bea", name: "BEA", url: "https://example.com/bea" },
-    { id: "bls", name: "BLS", url: "https://example.com/bls" },
-  ],
-}));
-
-// Imported but not used in your current JSX, but you import it — so mock it anyway.
-vi.mock("../../../config/raw/redditSources", () => ({
-  REDDIT_SOURCES: [{ id: "reddit", name: "Reddit" }],
-}));
-
-vi.mock("../../../config/raw/trackedTickers", () => ({
-  TRACKED_TICKERS: ["AAPL", "MSFT", "TSLA", "NVDA"],
-}));
-
-// ✅ IMPORTANT: make sure this import matches your real file name/path.
-// If your file is actually DatasourcesPage.jsx, use "../DatasourcesPage".
-// If it's DatasourcePage.jsx, use "../DatasourcePage".
-import DatasourcePage from "../DatasourcesPage"; // <-- change if needed
-
-describe("DatasourcesPage", () => {
-  function renderPage() {
-    return render(
-      <MemoryRouter>
-        <DatasourcePage />
-      </MemoryRouter>
+// ✅ Mock Modal to avoid portal/body issues and keep assertions easy
+// IMPORTANT: define the component INSIDE the factory (vi.mock is hoisted)
+vi.mock("../../common/Modal.jsx", () => ({
+  default: function MockModal({ open, title, children, footer, onClose }) {
+    if (!open) return null;
+    return (
+      <div role="dialog" aria-label={title}>
+        <div>{title}</div>
+        <button type="button" onClick={onClose}>
+          Close
+        </button>
+        <div>{children}</div>
+        <div>{footer}</div>
+      </div>
     );
-  }
+  },
+}));
 
-  it("renders the page title and hero description", () => {
+// Mock useNavigate so we can assert it
+const mockNavigate = vi.fn();
+vi.mock("react-router-dom", async () => {
+  const actual = await vi.importActual("react-router-dom");
+  return { ...actual, useNavigate: () => mockNavigate };
+});
+
+// Import AFTER mocks
+import DatasourcesPage from "../DatasourcesPage";
+
+// --------------------
+// Helpers
+// --------------------
+function makeLeadersResponse() {
+  return {
+    items: [
+      { symbol: "VERO", last: 8.0, prevClose: 7.65 },
+      { symbol: "JFBR", last: 1.29, prevClose: 0.56 },
+    ],
+    source: { code: "alpaca_movers", label: "Alpaca market movers (today)" },
+    // ✅ valid ISO so we don't render "Invalid Date"
+    asOf: "2025-01-18T21:10:00Z",
+  };
+}
+
+function makeLogsResponse() {
+  return {
+    items: [
+      {
+        ts: 1737253802,
+        level: "error",
+        message: "Runner error",
+        meta: { code: "E_RUN" },
+        bot_id: "ema_trend",
+      },
+      {
+        ts: 1737253847,
+        level: "info",
+        message: "State changed",
+        meta: { from: "running", to: "paused" },
+        bot_id: "ema_trend",
+      },
+      {
+        ts: 1737253900,
+        level: "warn",
+        message: "Retrying submit",
+        meta: { attempt: 1 },
+        bot_id: "ema_trend",
+      },
+    ],
+  };
+}
+
+function mockFetchRouter() {
+  return vi.fn(async (input) => {
+    const url = String(input);
+
+    if (url.startsWith("/api/market/leaders")) {
+      return { ok: true, status: 200, json: async () => makeLeadersResponse() };
+    }
+
+    if (url.startsWith("/api/bots/log")) {
+      return { ok: true, status: 200, json: async () => makeLogsResponse() };
+    }
+
+    return { ok: false, status: 404, json: async () => ({ detail: "Not found" }) };
+  });
+}
+
+function renderPage() {
+  return render(
+    <MemoryRouter initialEntries={["/data-sources"]}>
+      <DatasourcesPage />
+    </MemoryRouter>
+  );
+}
+
+beforeEach(() => {
+  mockNavigate.mockReset();
+  localStorage.clear();
+  globalThis.fetch = mockFetchRouter();
+});
+
+// --------------------
+// Tests
+// --------------------
+describe("DatasourcesPage", () => {
+  it("renders hero title + description + top links", async () => {
     renderPage();
 
     expect(
-      screen.getByRole("heading", { name: /data sources & quant pipeline/i })
+      await screen.findByRole("heading", { name: /market leaders & bot logs/i })
     ).toBeInTheDocument();
 
     expect(
-      screen.getByText(/this page documents the core inputs/i)
+      screen.getByText(/see today’s top movers and review bot activity/i)
     ).toBeInTheDocument();
+
+    expect(screen.getByRole("link", { name: /back to dashboard/i })).toHaveAttribute(
+      "href",
+      "/"
+    );
+
+    // One in hero, one inside Bot Logs header (Connected apps →)
+    expect(screen.getAllByRole("link", { name: /connected apps/i }).length).toBeGreaterThanOrEqual(
+      1
+    );
   });
 
-  it('renders the "Back to dashboard" link', () => {
+  it("renders Market leaders and loads symbols", async () => {
     renderPage();
 
-    const back = screen.getByRole("link", { name: /back to dashboard/i });
-    expect(back).toHaveAttribute("href", "/");
+    expect(await screen.findByText("VERO")).toBeInTheDocument();
+    expect(screen.getByText("JFBR")).toBeInTheDocument();
+
+    expect(screen.getByText(/alpaca market movers \(today\)/i)).toBeInTheDocument();
   });
 
-  it("renders the configuration summary with correct counts", () => {
+  it("clicking a leader stores ticker and navigates to dashboard", async () => {
     renderPage();
 
-    // Based on our mocks:
-    // tracked tickers = 4
-    // price feeds = 2
-    // fundamentals APIs = 1
-    // macro sources = 3
-    expect(screen.getByText("4")).toBeInTheDocument();
-    expect(screen.getByText("2")).toBeInTheDocument();
-    expect(screen.getByText("1")).toBeInTheDocument();
-    expect(screen.getByText("3")).toBeInTheDocument();
+    await screen.findByText("VERO");
 
+    // Buttons have no accessible name; click via title attribute (matches your DOM)
+    const veroBtn = document.querySelector('button.mlRow[title="VERO"]');
+    expect(veroBtn).toBeTruthy();
+
+    fireEvent.click(veroBtn);
+
+    expect(localStorage.getItem("ustock:last_ticker")).toBe("VERO");
+    expect(mockNavigate).toHaveBeenCalledWith("/?ticker=VERO");
+  });
+
+  it("renders Bot Logs card + preview rows", async () => {
+    renderPage();
+
+    // ✅ Use role-based query (more robust than findByText)
     expect(
-      screen.getByText(/configuration at a glance/i)
+      await screen.findByRole("heading", { name: /bot logs/i })
     ).toBeInTheDocument();
+
+    // Preview rows (fetched)
+    expect(await screen.findByText("Retrying submit")).toBeInTheDocument();
+    expect(screen.getByText("State changed")).toBeInTheDocument();
+    expect(screen.getByText("Runner error")).toBeInTheDocument();
+
+    expect(screen.getByRole("button", { name: /refresh/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /view all/i })).toBeInTheDocument();
   });
 
-  it("renders each category section headers", () => {
+  it('opens modal when clicking "View all"', async () => {
     renderPage();
 
-    expect(screen.getByRole("heading", { name: /market prices/i })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: /fundamentals/i })).toBeInTheDocument();
-    expect(
-      screen.getByRole("heading", { name: /macro & state of the economy/i })
-    ).toBeInTheDocument();
-  });
+    // Wait for the card to exist (role-based)
+    await screen.findByRole("heading", { name: /bot logs/i });
 
-  it('renders "API docs →" links for sources that include urls', () => {
-    renderPage();
+    fireEvent.click(screen.getByRole("button", { name: /view all/i }));
 
-    // We mocked 2 + 1 + 3 sources with urls => 6 links total
-    const apiLinks = screen.getAllByRole("link", { name: /api docs →/i });
-    expect(apiLinks.length).toBe(6);
+    // Modal title comes from the component: "Bot log · ema_trend · YYYY-MM-DD"
+    expect(screen.getByRole("dialog", { name: /bot log/i })).toBeInTheDocument();
+    expect(screen.getByText("Runner error")).toBeInTheDocument();
   });
 });

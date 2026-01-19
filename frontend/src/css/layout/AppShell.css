@@ -34,7 +34,8 @@ body {
   background: var(--ustock-bg-page);
   display: flex;
   position: relative;
-  overflow-x: hidden;
+  overflow-x: clip;  /* better than hidden for layout */
+  overflow-y: visible;
 }
 
 /* when navOpen = true, margin-left is added to content (desktop only) */

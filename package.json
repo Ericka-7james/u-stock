@@ -1,0 +1,18 @@
+{
+  "name": "u-stock-root",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "test:backend": "cross-env ENV=test PYTHONPATH=backend pytest -q --no-cov backend/api",
+    "test:backend:unit": "cross-env ENV=test PYTHONPATH=backend pytest -q backend/api -m \"not slow\"",
+    "test:backend:cov": "cross-env ENV=test PYTHONPATH=backend pytest backend/api --cov=backend/api --cov-report=term-missing",
+
+    "test:frontend": "npm --prefix frontend run test",
+    "test:frontend:ui": "npm --prefix frontend run test:ui",
+
+    "test:all": "npm run test:frontend && npm run test:backend"
+  },
+  "devDependencies": {
+    "cross-env": "^10.1.0"
+  }
+}

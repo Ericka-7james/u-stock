@@ -27,6 +27,12 @@ dist-ssr
 *.sln
 *.sw?
 
+auth.db
+*.db
+runtime/
+*.sqlite
+*.sqlite3
+
 # dotenv environment variables
 .env
 .env.local

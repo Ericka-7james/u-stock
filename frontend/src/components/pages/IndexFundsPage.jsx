@@ -2,79 +2,37 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
-import { useFundamentalsSnapshot } from "../../hooks/raw/useFundamentalsSnapshot";
 import AppShell from "../layout/AppShell";
-
 import "../../css/pages/IndexFundsPage.css";
 
-const INDEX_FUNDS = [
-  {
-    ticker: "VTI",
-    name: "Vanguard Total Stock Market ETF",
-    blurb: "Tracks the entire U.S. stock market with very low fees.",
-  },
-  {
-    ticker: "VOO",
-    name: "Vanguard S&P 500 ETF",
-    blurb: "Follows the S&P 500; classic diversified U.S. large-cap exposure.",
-  },
-  {
-    ticker: "VTSAX",
-    name: "Vanguard Total Stock Market Index Fund Admiral Shares",
-    blurb: "Mutual fund version of VTI; simple ‘own the market’ core holding.",
-  },
-  {
-    ticker: "FXAIX",
-    name: "Fidelity 500 Index Fund",
-    blurb: "Fidelity’s S&P 500 index fund with a rock-bottom expense ratio.",
-  },
-  {
-    ticker: "SWTSX",
-    name: "Schwab Total Stock Market Index Fund",
-    blurb: "Schwab’s low-cost total U.S. market index alternative.",
-  },
-];
+/**
+ * IndexFundsPage (Current U-Stock)
+ * --------------------------------------------
+ * This page used to depend on a legacy fundamentals snapshot hook.
+ * That hook/file path is no longer part of the current app direction.
+ *
+ * For now this page is "docs-first":
+ * - No legacy imports
+ * - No API calls
+ * - Explains how index funds fit into U-Stock’s strategy + bot pipeline
+ *
+ * Later, if you want live data:
+ * - Add a backend endpoint for ETF fundamentals (or reuse your market data provider)
+ * - Reintroduce a small hook under src/hooks/ that calls /api/... with AuthContext authFetch
+ */
 
-function formatMarketCap(value) {
-  if (value == null) return "—";
-  const n = Number(value);
-  if (!Number.isFinite(n)) return "—";
-  if (n >= 1e12) return (n / 1e12).toFixed(1) + "T";
-  if (n >= 1e9) return (n / 1e9).toFixed(1) + "B";
-  if (n >= 1e6) return (n / 1e6).toFixed(1) + "M";
-  return n.toLocaleString();
-}
+const INDEX_FUNDS = [
+  { ticker: "VTI", name: "Vanguard Total Stock Market ETF", blurb: "Total U.S. stock market exposure." },
+  { ticker: "VOO", name: "Vanguard S&P 500 ETF", blurb: "S&P 500 exposure; large-cap U.S. baseline." },
+  { ticker: "QQQ", name: "Invesco QQQ Trust", blurb: "NASDAQ-100 exposure; growth/tech-heavy proxy." },
+  { ticker: "SPY", name: "SPDR S&P 500 ETF Trust", blurb: "Highly liquid S&P 500 tracker (popular for trading)." },
+  { ticker: "IWM", name: "iShares Russell 2000 ETF", blurb: "Small-cap U.S. exposure; risk-on proxy." },
+];
 
 export default function IndexFundsPage() {
   const [activeTab, setActiveTab] = useState("about"); // "about" | "funds"
 
-  const {
-    data: fundamentalsData,
-    loading: fundamentalsLoading,
-    meta: fundamentalsMeta,
-  } = useFundamentalsSnapshot();
-
-  const fundamentalsMap = useMemo(() => {
-    const map = {};
-    const data = Array.isArray(fundamentalsData) ? fundamentalsData : [];
-    for (const f of data) {
-      if (!f?.ticker) continue;
-      map[f.ticker.toUpperCase()] = f;
-    }
-    return map;
-  }, [fundamentalsData]);
-
-  const fundsWithData = useMemo(
-    () =>
-      INDEX_FUNDS.map((fund) => {
-        const tickerKey = fund.ticker.toUpperCase();
-        return {
-          ...fund,
-          fundamentals: fundamentalsMap[tickerKey] || null,
-        };
-      }),
-    [fundamentalsMap],
-  );
+  const funds = useMemo(() => INDEX_FUNDS, []);
 
   return (
     <AppShell>
@@ -82,22 +40,16 @@ export default function IndexFundsPage() {
         {/* Hero card */}
         <header className="panel index-hero">
           <div className="index-hero-text">
-            <h1 className="page-title">Index Funds & Quant Foundations</h1>
+            <h1 className="page-title">Index Funds & System Baselines</h1>
             <p className="muted">
-              This page highlights broad index funds that often sit at the core
-              of systematic trading and portfolio strategies. It combines simple
-              fundamentals with educational context on how quants think about
-              diversified &quot;building blocks&quot; before hunting for niche
-              alpha.
+              Index ETFs are the “baseline” of the market. In U-Stock terms, they’re useful for:
+              (1) understanding what the market is doing overall, and (2) giving your bots context
+              for trend, volatility, and risk-on vs risk-off days.
             </p>
-            {fundamentalsMeta?.generatedAt && (
-              <p className="index-hero-meta">
-                Fundamentals snapshot:{" "}
-                <span>
-                  {new Date(fundamentalsMeta.generatedAt).toLocaleString()}
-                </span>
-              </p>
-            )}
+            <p className="muted" style={{ marginTop: 8 }}>
+              This page is currently documentation-only while the frontend is being modernized and tested.
+              Live ETF fundamentals can be added back once the backend endpoint is finalized.
+            </p>
           </div>
 
           <Link to="/" className="back-link-pill">
@@ -113,140 +65,102 @@ export default function IndexFundsPage() {
               className={"tab-btn " + (activeTab === "about" ? "tab-btn--active" : "")}
               onClick={() => setActiveTab("about")}
             >
-              Index funds & core exposure
+              Why index funds matter
             </button>
             <button
               type="button"
               className={"tab-btn " + (activeTab === "funds" ? "tab-btn--active" : "")}
               onClick={() => setActiveTab("funds")}
             >
-              Funds in this snapshot
+              Index universe (starter)
             </button>
           </div>
         </div>
 
-        {/* Content below tabs */}
+        {/* Content */}
         {activeTab === "about" ? (
           <>
-            {/* CARD 1 — How index funds work */}
             <section className="panel index-about-panel">
-              <h3>How index funds work</h3>
+              <h3>What index funds are</h3>
               <p className="muted">
-                An index fund is a basket of stocks that tracks a specific
-                market index like the S&amp;P 500 or the total U.S. stock
-                market. Instead of trying to pick individual winners, you buy a
-                slice of the entire market.
+                An index fund (or ETF) holds a basket of stocks to track an index (like the S&P 500).
+                Instead of picking individual winners, you’re buying broad exposure.
               </p>
 
               <ul className="about-list">
                 <li>
-                  <strong>Passive exposure:</strong> the fund mirrors an index
-                  instead of being actively traded.
+                  <strong>Market baseline (beta):</strong> helpful reference for “is it just the market moving?”
                 </li>
                 <li>
-                  <strong>Low costs:</strong> fewer trades and less research
-                  overhead usually mean low fees.
+                  <strong>Liquidity + structure:</strong> many are highly liquid and trade cleanly intraday.
                 </li>
                 <li>
-                  <strong>Diversification:</strong> a single fund can hold
-                  hundreds or thousands of companies.
+                  <strong>Risk context:</strong> SPY/QQQ strength or weakness often predicts how stocks behave that day.
                 </li>
                 <li>
-                  <strong>Core holding:</strong> many quants treat broad index
-                  funds as the &quot;beta&quot; or market baseline their
-                  strategies build on top of.
+                  <strong>Regime detection:</strong> trend/range conditions on major ETFs can help select bot behavior later.
                 </li>
               </ul>
             </section>
 
-            {/* CARD 2 — How quants source data & find “gold mines” */}
             <section className="panel index-about-panel">
-              <h3 className="fundamentals-title">
-                How quants source data & find &quot;the gold mine&quot;
-              </h3>
-
+              <h3 className="fundamentals-title">How this ties into U-Stock</h3>
               <div className="fundamentals-explain">
                 <p>
-                  Before chasing complex signals, quantitative researchers build
-                  a clean, reliable data foundation. This u-Stock prototype
-                  mirrors that approach:
+                  U-Stock is evolving into a multi-bot system where strategy creates <strong>TradeIntents</strong> and
+                  the runner/engine handles <strong>execution</strong>.
                 </p>
 
                 <ul className="metrics-list">
                   <li>
-                    <strong>Market prices:</strong> daily and intraday OHLCV
-                    data fetched via APIs (e.g. Yahoo Finance wrappers) to
-                    understand trend, volatility, and liquidity.
+                    <strong>Signal generation:</strong> bots (like EMA Trend) read prices/bars, compute indicators,
+                    and produce intents (entry/stop/take-profit + confidence).
                   </li>
                   <li>
-                    <strong>Fundamentals:</strong> company-level metrics like PE
-                    ratios, market caps, margins, and balance sheet strength to
-                    layer in quality and valuation.
+                    <strong>Execution separation:</strong> paper/live executors place bracket orders and emit transaction events.
                   </li>
                   <li>
-                    <strong>Macro context:</strong> inflation, rates, and growth
-                    data to explain why entire sectors or factors might move
-                    together.
+                    <strong>Telemetry:</strong> transaction events can be uploaded to Supabase (tx-only, idempotent event_id).
                   </li>
                   <li>
-                    <strong>Alternative data (future layer):</strong> news,
-                    social, and behavior data to identify pockets of attention
-                    or stress that might not show up in prices yet.
+                    <strong>Next upgrade:</strong> use index ETFs as “market state” inputs to choose bots dynamically.
                   </li>
                 </ul>
 
                 <p className="muted">
-                  The &quot;gold mine&quot; isn&apos;t a single magical signal.
-                  It&apos;s the combination of clean inputs, sensible
-                  indicators, and disciplined ranking of opportunities—exactly
-                  what this project is designed to demonstrate.
+                  The goal is not a single magical indicator. It’s clean inputs, stable risk rules, and consistent
+                  decision-making that can scale.
                 </p>
               </div>
             </section>
           </>
         ) : (
           <section className="panel">
-            {fundamentalsLoading ? (
-              <p className="muted">
-                Loading fundamentals snapshot (PE, market cap)…{" "}
-              </p>
-            ) : (
-              <div className="fund-grid">
-                {fundsWithData.map((fund) => (
-                  <article key={fund.ticker} className="fund-card">
-                    <header className="fund-card-header">
-                      <div>
-                        <div className="fund-ticker">{fund.ticker}</div>
-                        <div className="fund-name">{fund.name}</div>
-                      </div>
-                    </header>
-
-                    <p className="fund-blurb">{fund.blurb}</p>
-
-                    <div className="fund-metrics-row">
-                      <div className="fund-metric">
-                        <span className="fund-metric-label">PE:</span>
-                        <span className="fund-metric-value">
-                          {fund.fundamentals?.pe != null &&
-                          Number.isFinite(Number(fund.fundamentals.pe))
-                            ? Number(fund.fundamentals.pe).toFixed(1)
-                            : "N/A"}
-                        </span>
-                      </div>
-
-                      <div className="fund-metric">
-                        <span className="fund-metric-label">Market Cap:</span>
-                        <span className="fund-metric-value">
-                          {fund.fundamentals?.marketCap != null
-                            ? formatMarketCap(fund.fundamentals.marketCap)
-                            : "N/A"}
-                        </span>
-                      </div>
+            <div className="fund-grid">
+              {funds.map((fund) => (
+                <article key={fund.ticker} className="fund-card">
+                  <header className="fund-card-header">
+                    <div>
+                      <div className="fund-ticker">{fund.ticker}</div>
+                      <div className="fund-name">{fund.name}</div>
                     </div>
-                  </article>
-                ))}
-              </div>
-            )}
+                  </header>
+
+                  <p className="fund-blurb">{fund.blurb}</p>
+
+                  <div className="fund-metrics-row">
+                    <div className="fund-metric">
+                      <span className="fund-metric-label">Role:</span>
+                      <span className="fund-metric-value">Baseline / regime context</span>
+                    </div>
+                    <div className="fund-metric">
+                      <span className="fund-metric-label">Data:</span>
+                      <span className="fund-metric-value">Embed/UI now, API later</span>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
           </section>
         )}
       </div>

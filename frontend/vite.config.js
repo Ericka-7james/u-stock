@@ -1,27 +1,41 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-export default defineConfig({
-  plugins: [react()],
-  server: {
-    proxy: {
-      "/api": {
-        target: "http://localhost:8000",
-        changeOrigin: true,
-      },
+// Local dev: proxy /api -> backend
+const API_TARGET = process.env.VITE_API_PROXY_TARGET || "http://localhost:8000";
+
+export default defineConfig(({ mode }) => {
+  const isDev = mode === "development";
+
+  return {
+    plugins: [react()],
+    server: {
+      host: "localhost",          // ✅ was 127.0.0.1
+      port: 5173,
+      strictPort: true,
+      proxy: isDev
+        ? {
+            "/api": {
+              target: API_TARGET,  // ✅ default localhost:8000
+              changeOrigin: true,
+              secure: false,
+              // optional but helpful:
+              // ws: false,
+            },
+          }
+        : undefined,
     },
-  },
-  test: {
-    environment: "jsdom",
-    setupFiles: "./src/test/setupTests.js",
-    coverage: {
-      provider: "v8",
-      all: true,
-      lines: 70,
-      functions: 70,
-      branches: 70,
-      statements: 70,
+    preview: {
+      host: "localhost",          // ✅ was 127.0.0.1
+      port: 5173,
+      strictPort: true,
     },
-    globals: true,
-  },
+
+    // ✅ ADD THIS: makes React Testing Library work (document/window available)
+    test: {
+      environment: "jsdom",
+      globals: true,
+      setupFiles: "./src/setup.js",
+    },
+  };
 });

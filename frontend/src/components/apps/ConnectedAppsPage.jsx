@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import AppShell from "../layout/AppShell";
 import "../../css/apps/ConnectedAppsPage.css";
 import { useAuth } from "../../context/AuthContext";
 import ConnectProviderModal from "./ConnectProviderModal";
 import { useNavigate } from "react-router-dom";
+import { explainResponseError } from "../common/errorMessages";
 
 const PROVIDERS = [
   {
@@ -47,54 +48,95 @@ export default function ConnectedAppsPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [activeProviderKey, setActiveProviderKey] = useState(null);
 
+  // Guard against setting state after unmount + avoid racey responses
+  const mountedRef = useRef(false);
+  const reqIdRef = useRef(0);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
   const activeProvider = useMemo(
     () => PROVIDERS.find((p) => p.key === activeProviderKey) || null,
     [activeProviderKey]
   );
 
-  async function loadConnections() {
-    setError("");
-    setDismissed((d) => ({ ...d, genericError: false }));
+  const safeSet = useCallback((fn) => {
+    if (!mountedRef.current) return;
+    fn();
+  }, []);
+
+  const loadConnections = useCallback(async () => {
+    const myReqId = ++reqIdRef.current;
+
+    safeSet(() => {
+      setError("");
+      setDismissed((d) => ({ ...d, genericError: false }));
+    });
 
     if (!isAuthed) {
-      setApps([]);
-      setNotice("");
+      safeSet(() => {
+        setApps([]);
+        setNotice("");
+        setLoading(false);
+      });
       return;
     }
 
-    setLoading(true);
+    safeSet(() => setLoading(true));
+
     try {
       const res = await authFetch("/integrations", { method: "GET" });
 
+      // If a newer request started, ignore this response
+      if (myReqId !== reqIdRef.current) return;
+
       if (res.status === 401) {
-        setApps([]);
+        safeSet(() => setApps([]));
         throw new Error("Session expired — please sign in again.");
       }
+
       if (!res.ok) {
-        const msg = await safeErrorMessage(res);
-        throw new Error(msg);
+        const ui = await explainResponseError(res, { feature: "integrations_list" });
+        const err = new Error(ui.body);
+        err._ui = ui;
+        throw err;
       }
 
-      const data = await res.json();
-      setNotice(data?.message || "");
-      setDismissed((d) => ({ ...d, notConnected: false }));
+      const data = await res.json().catch(() => ({}));
 
-      setApps(Array.isArray(data?.apps) ? data.apps : []);
+      // backend returns { items: [...] } (support legacy { apps: [...] })
+      const list =
+        (Array.isArray(data?.items) && data.items) ||
+        (Array.isArray(data?.apps) && data.apps) ||
+        [];
+
+      safeSet(() => {
+        setNotice(data?.message || "");
+        setDismissed((d) => ({ ...d, notConnected: false }));
+        setApps(list);
+      });
     } catch (e) {
-      setApps([]);
-      setNotice("");
-      setError(e?.message || "Could not load connected apps.");
+      const ui = e?._ui;
+      safeSet(() => {
+        setApps([]);
+        setNotice("");
+        setError(ui ? `${ui.title}\n\n${ui.body}` : (e?.message || "Could not load connected apps."));
+      });
     } finally {
-      setLoading(false);
+      // If a newer request started, don't stomp its loading state
+      if (myReqId !== reqIdRef.current) return;
+      safeSet(() => setLoading(false));
     }
-  }
+  }, [authFetch, isAuthed, safeSet]);
 
   useEffect(() => {
     loadConnections();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthed]);
+  }, [loadConnections]);
 
-  // Normalize statuses from backend
   const statusByProvider = useMemo(() => {
     const map = new Map();
     for (const a of apps) {
@@ -105,7 +147,6 @@ export default function ConnectedAppsPage() {
     return map;
   }, [apps]);
 
-  // ✅ Define ONCE (NOT inside map) — used for gating the notice banner
   const hasAnyConnected = useMemo(() => {
     for (const p of PROVIDERS) {
       const status = statusByProvider.get(p.key) || "not_connected";
@@ -146,9 +187,13 @@ export default function ConnectedAppsPage() {
   };
 
   const handleLogout = async () => {
-    await logout?.();
-    setApps([]);
-    setNotice("");
+    try {
+      await logout?.();
+    } finally {
+      // clear local UI regardless
+      setApps([]);
+      setNotice("");
+    }
   };
 
   return (
@@ -170,6 +215,7 @@ export default function ConnectedAppsPage() {
                 onClick={handleLogout}
                 title="Clears the HttpOnly cookie session"
                 style={{ height: 40, alignSelf: "flex-start" }}
+                disabled={loading}
               >
                 Log out
               </button>
@@ -189,7 +235,18 @@ export default function ConnectedAppsPage() {
           </CloseableBanner>
         )}
 
-        {/* ✅ Only show "not connected" notice if NONE are connected */}
+        {import.meta.env.DEV && !!error && !dismissed.genericError && (
+          <details style={{ marginTop: 10, fontSize: 12, opacity: 0.75 }}>
+            <summary>Debug tips</summary>
+            <div style={{ whiteSpace: "pre-wrap" }}>
+              If this is local dev:
+              {"\n"}- confirm backend is running on :8000
+              {"\n"}- confirm cookies are being set (Network tab → auth/login)
+              {"\n"}- confirm proxy is active (vite.config.js)
+            </div>
+          </details>
+        )}
+
         {isAuthed && !!notice && !dismissed.notConnected && !hasAnyConnected && (
           <CloseableBanner onClose={() => dismissBanner("notConnected")}>
             {notice}
@@ -234,7 +291,7 @@ export default function ConnectedAppsPage() {
                       <button
                         className="connected-btn connected-btn--secondary"
                         onClick={() => alert("Disconnect flow will be wired next.")}
-                        disabled={!isAuthed}
+                        disabled={!isAuthed || loading}
                         title={!isAuthed ? "Sign in to manage connections" : ""}
                       >
                         Disconnect
@@ -242,7 +299,7 @@ export default function ConnectedAppsPage() {
                       <button
                         className="connected-btn connected-btn--primary"
                         onClick={loadConnections}
-                        disabled={!isAuthed}
+                        disabled={!isAuthed || loading}
                         title={!isAuthed ? "Sign in first" : ""}
                       >
                         Refresh
@@ -253,6 +310,7 @@ export default function ConnectedAppsPage() {
                       <button
                         className="connected-btn connected-btn--primary"
                         onClick={() => openConnectModal(p.key)}
+                        disabled={loading}
                       >
                         Connect
                       </button>
@@ -260,6 +318,7 @@ export default function ConnectedAppsPage() {
                       <button
                         className="connected-btn connected-btn--secondary"
                         onClick={() => openDocs(p.key)}
+                        disabled={loading}
                       >
                         Learn more
                       </button>
@@ -270,6 +329,35 @@ export default function ConnectedAppsPage() {
             );
           })}
         </div>
+
+        {/* ✅ Small navigation helper (production polish) */}
+        <section className="connected-note">
+          <h4 className="connected-note-title">Next steps</h4>
+          <ul className="connected-note-list">
+            <li>
+              Start/pause strategies in{" "}
+              <button
+                type="button"
+                className="connected-btn connected-btn--secondary"
+                style={{ padding: "4px 10px", marginLeft: 6 }}
+                onClick={() => navigate("/bots")}
+              >
+                Bot Runner
+              </button>
+            </li>
+            <li>
+              Review activity in{" "}
+              <button
+                type="button"
+                className="connected-btn connected-btn--secondary"
+                style={{ padding: "4px 10px", marginLeft: 6 }}
+                onClick={() => navigate("/datasources")}
+              >
+                Bot Logs
+              </button>
+            </li>
+          </ul>
+        </section>
 
         <section className="connected-note">
           <h4 className="connected-note-title">What this unlocks</h4>
@@ -317,19 +405,4 @@ function CloseableBanner({ children, onClose }) {
       </div>
     </div>
   );
-}
-
-async function safeErrorMessage(res) {
-  const ct = res.headers.get("content-type") || "";
-  if (ct.includes("application/json")) {
-    try {
-      const data = await res.json();
-      return data?.detail || `${res.status} ${res.statusText}`;
-    } catch {
-      return `${res.status} ${res.statusText}`;
-    }
-  }
-
-  const text = await res.text();
-  return `Backend returned non-JSON (${res.status}). First 60 chars: ${text.slice(0, 60)}`;
 }

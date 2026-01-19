@@ -5,7 +5,6 @@ import { MemoryRouter } from "react-router-dom";
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import SignupPage from "../SignupPage";
 
-// ✅ mock AppShell so layout changes don't break tests
 vi.mock("../../layout/AppShell", () => ({
   default: ({ children }) => <div data-testid="app-shell">{children}</div>,
 }));
@@ -24,24 +23,22 @@ function renderSignup() {
   );
 }
 
-// helper: fill valid baseline fields
-async function fillValidForm(user, overrides = {}) {
+async function fillBaseValid(user, overrides = {}) {
   const name = overrides.name ?? "Test User";
   const email = overrides.email ?? "test@example.com";
-  const phone = overrides.phone ?? "5555555555"; // optional
-  const password = overrides.password ?? "VeryStrongPass1!"; // 16 chars, valid
+  const phone = overrides.phone; // allow undefined / null
+  const password = overrides.password ?? "VeryStrongPass1!";
 
   await user.type(screen.getByRole("textbox", { name: /name/i }), name);
   await user.type(screen.getByRole("textbox", { name: /email/i }), email);
 
-  // phone is optional; fill only if provided override != null
-  if (overrides.phone !== null) {
-    await user.type(
-      screen.getByPlaceholderText(/\(555\) 555-5555/i),
-      phone
-    );
+  if (phone !== undefined) {
+    if (phone !== null) {
+      await user.type(screen.getByPlaceholderText(/\(555\) 555-5555/i), phone);
+    }
   }
 
+  // password input is type=password; use label
   await user.type(screen.getByLabelText(/^password$/i), password);
 }
 
@@ -77,6 +74,20 @@ describe("SignupPage validation and behavior", () => {
     expect(mockSignup).not.toHaveBeenCalled();
   });
 
+  test("phone is optional (blank phone should not block submit)", async () => {
+    const user = userEvent.setup();
+    renderSignup();
+
+    mockSignup.mockResolvedValueOnce();
+
+    // don't type anything into phone at all
+    await fillBaseValid(user, { phone: undefined });
+
+    await user.click(screen.getByRole("button", { name: /^sign up$/i }));
+
+    await waitFor(() => expect(mockSignup).toHaveBeenCalledTimes(1));
+  });
+
   test("shows error when phone number has too few digits (if provided)", async () => {
     const user = userEvent.setup();
     renderSignup();
@@ -92,6 +103,21 @@ describe("SignupPage validation and behavior", () => {
       await screen.findByText(/please enter a valid phone number \(10–15 digits\)\./i)
     ).toBeInTheDocument();
     expect(mockSignup).not.toHaveBeenCalled();
+  });
+
+  test("accepts formatted phone as long as digits count is valid", async () => {
+    const user = userEvent.setup();
+    renderSignup();
+
+    mockSignup.mockResolvedValueOnce();
+
+    await fillBaseValid(user, {
+      phone: " (555) 555-5555 ",
+      password: "VeryStrongPass1!",
+    });
+
+    await user.click(screen.getByRole("button", { name: /^sign up$/i }));
+    await waitFor(() => expect(mockSignup).toHaveBeenCalledTimes(1));
   });
 
   test("shows error when password is shorter than 12 characters", async () => {
@@ -110,17 +136,52 @@ describe("SignupPage validation and behavior", () => {
     expect(mockSignup).not.toHaveBeenCalled();
   });
 
+  test("rejects password that contains the email local-part", async () => {
+    const user = userEvent.setup();
+    renderSignup();
+
+    await fillBaseValid(user, {
+      name: "Test User",
+      email: "karen@example.com",
+      phone: undefined,
+      password: "MyKarenPassword1!", // contains 'karen'
+    });
+
+    await user.click(screen.getByRole("button", { name: /^sign up$/i }));
+
+    expect(await screen.findByText(/must not contain your email/i)).toBeInTheDocument();
+    expect(mockSignup).not.toHaveBeenCalled();
+  });
+
+  test("rejects password that contains the name/username", async () => {
+    const user = userEvent.setup();
+    renderSignup();
+
+    await fillBaseValid(user, {
+      name: "Ericka",
+      email: "test@example.com",
+      phone: undefined,
+      password: "ErickaIsGreat1!",
+    });
+
+    await user.click(screen.getByRole("button", { name: /^sign up$/i }));
+
+    expect(await screen.findByText(/must not contain your name\/username/i)).toBeInTheDocument();
+    expect(mockSignup).not.toHaveBeenCalled();
+  });
+
   test("calls signup with trimmed values when valid (phone is UI-only)", async () => {
     const user = userEvent.setup();
     renderSignup();
 
-    // valid + with whitespace
+    mockSignup.mockResolvedValueOnce();
+
     await user.type(screen.getByRole("textbox", { name: /name/i }), "  Test User  ");
     await user.type(screen.getByRole("textbox", { name: /email/i }), "  test@example.com  ");
     await user.type(screen.getByPlaceholderText(/\(555\) 555-5555/i), " (555) 555-5555 ");
     await user.type(screen.getByLabelText(/^password$/i), "VeryStrongPass1!");
 
-    // choose a non-default avatar to prove selection works
+    // choose a non-default avatar
     await user.click(screen.getByRole("button", { name: "📊" }));
 
     await user.click(screen.getByRole("button", { name: /^sign up$/i }));
@@ -135,12 +196,25 @@ describe("SignupPage validation and behavior", () => {
     });
   });
 
+  test("default avatar remains 📈 if user doesn't change it", async () => {
+    const user = userEvent.setup();
+    renderSignup();
+
+    mockSignup.mockResolvedValueOnce();
+
+    await fillBaseValid(user, { phone: undefined });
+    await user.click(screen.getByRole("button", { name: /^sign up$/i }));
+
+    await waitFor(() => expect(mockSignup).toHaveBeenCalledTimes(1));
+    expect(mockSignup.mock.calls[0][0].avatar).toBe("📈");
+  });
+
   test("shows backend error message when signup throws", async () => {
     const user = userEvent.setup();
     mockSignup.mockRejectedValueOnce(new Error("Backend exploded"));
 
     renderSignup();
-    await fillValidForm(user);
+    await fillBaseValid(user, { phone: undefined });
 
     await user.click(screen.getByRole("button", { name: /^sign up$/i }));
 
@@ -159,7 +233,7 @@ describe("SignupPage validation and behavior", () => {
     );
 
     renderSignup();
-    await fillValidForm(user);
+    await fillBaseValid(user, { phone: undefined });
 
     await user.click(screen.getByRole("button", { name: /^sign up$/i }));
 

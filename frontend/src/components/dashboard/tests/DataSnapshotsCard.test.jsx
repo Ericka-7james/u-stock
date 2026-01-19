@@ -1,5 +1,6 @@
+// src/components/dashboard/tests/DataSnapshotsCard.test.jsx
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { describe, test, expect, vi, beforeEach, afterEach } from "vitest";
 import DataSnapshotsCard from "../cards/DataSnapshotsCard.jsx";
 
@@ -7,12 +8,10 @@ describe("DataSnapshotsCard", () => {
   let localeSpy;
 
   beforeEach(() => {
-    // Make date formatting deterministic across machines/timezones
+    // deterministic date formatting across machines/timezones
     localeSpy = vi
       .spyOn(Date.prototype, "toLocaleString")
       .mockImplementation(function () {
-        // `this` is the Date instance
-        // show something stable but still tied to input
         return `LOCAL(${this.toISOString()})`;
       });
   });
@@ -21,27 +20,32 @@ describe("DataSnapshotsCard", () => {
     localeSpy?.mockRestore?.();
   });
 
-  test("renders header and labels", () => {
-    render(
-      <DataSnapshotsCard signalsMeta={{}} pricesMeta={{}} priceSymbols={[]} />
-    );
+  function getUniverseRow() {
+    // Find the <strong> label, then go up to the <li>
+    const labelEl = screen.getByText(/universe size \(prices\):/i);
+    return labelEl.closest("li");
+  }
 
-    expect(screen.getByRole("heading", { name: /data snapshots/i })).toBeInTheDocument();
+  test("renders header + rows", () => {
+    render(<DataSnapshotsCard signalsMeta={{}} pricesMeta={{}} priceSymbols={[]} />);
+
+    expect(
+      screen.getByRole("heading", { name: /data snapshots/i })
+    ).toBeInTheDocument();
+
     expect(screen.getByText(/signals:/i)).toBeInTheDocument();
     expect(screen.getByText(/prices:/i)).toBeInTheDocument();
     expect(screen.getByText(/universe size \(prices\):/i)).toBeInTheDocument();
   });
 
   test("shows em dash when generatedAt is missing", () => {
-    render(
-      <DataSnapshotsCard signalsMeta={{}} pricesMeta={{}} priceSymbols={[]} />
-    );
+    render(<DataSnapshotsCard signalsMeta={{}} pricesMeta={{}} priceSymbols={[]} />);
 
-    // There should be two "—" values: one for Signals and one for Prices
+    // There are two rows that show an em dash: Signals & Prices
     expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(2);
   });
 
-  test("formats generatedAt times for signals and prices (stable)", () => {
+  test("formats generatedAt for signals and prices (stable)", () => {
     const signalsGeneratedAt = "2024-01-02T15:30:00.000Z";
     const pricesGeneratedAt = "2024-01-03T10:00:00.000Z";
 
@@ -66,7 +70,9 @@ describe("DataSnapshotsCard", () => {
       />
     );
 
-    expect(screen.getByText("3")).toBeInTheDocument();
+    const row = getUniverseRow();
+    expect(row).toBeTruthy();
+    expect(within(row).getByText("3")).toBeInTheDocument();
   });
 
   test("falls back to priceSymbols length when pricesMeta.universe is missing", () => {
@@ -78,7 +84,9 @@ describe("DataSnapshotsCard", () => {
       />
     );
 
-    expect(screen.getByText("4")).toBeInTheDocument();
+    const row = getUniverseRow();
+    expect(row).toBeTruthy();
+    expect(within(row).getByText("4")).toBeInTheDocument();
   });
 
   test("falls back to priceSymbols length when pricesMeta.universe is not an array", () => {
@@ -90,7 +98,9 @@ describe("DataSnapshotsCard", () => {
       />
     );
 
-    expect(screen.getByText("2")).toBeInTheDocument();
+    const row = getUniverseRow();
+    expect(row).toBeTruthy();
+    expect(within(row).getByText("2")).toBeInTheDocument();
   });
 
   test("shows '---' when neither universe nor priceSymbols are usable", () => {
@@ -102,6 +112,8 @@ describe("DataSnapshotsCard", () => {
       />
     );
 
-    expect(screen.getByText("---")).toBeInTheDocument();
+    const row = getUniverseRow();
+    expect(row).toBeTruthy();
+    expect(within(row).getByText("---")).toBeInTheDocument();
   });
 });

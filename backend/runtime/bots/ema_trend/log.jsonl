@@ -1,0 +1,29 @@
+{"ts": 1768666258, "level": "info", "message": "Bot started", "meta": {"mode": "paper"}}
+{"ts": 1768683017, "level": "info", "message": "Bot started", "meta": {"mode": "paper"}}
+{"ts": 1768683021, "level": "info", "message": "Bot started", "meta": {"mode": "paper"}}
+{"ts": 1768691189, "level": "info", "message": "Bot started", "meta": {"mode": "paper"}}
+{"ts": 1768691228, "level": "info", "message": "Bot started", "meta": {"mode": "paper"}}
+{"ts": 1768691536, "level": "info", "message": "State changed", "meta": {"from": "running", "to": "paused", "reason": "Weekend"}}
+{"ts": 1768693211, "level": "error", "message": "Runner error", "meta": {"error": "ConnectionError(ProtocolError('Connection aborted.', ConnectionResetError(10054, 'An existing connection was forcibly closed by the remote host', None, 10054, None)))"}}
+{"ts": 1768693216, "level": "info", "message": "State changed", "meta": {"from": "running", "to": "paused", "reason": "Weekend"}}
+{"ts": 1768698257, "level": "error", "message": "Runner error", "meta": {"error": "ConnectionError(ProtocolError('Connection aborted.', ConnectionResetError(10054, 'An existing connection was forcibly closed by the remote host', None, 10054, None)))"}}
+{"ts": 1768698262, "level": "info", "message": "State changed", "meta": {"from": "running", "to": "paused", "reason": "Weekend"}}
+{"ts": 1768698602, "level": "error", "message": "Runner error", "meta": {"error": "ConnectionError(ProtocolError('Connection aborted.', ConnectionAbortedError(10053, 'An established connection was aborted by the software in your host machine', None, 10053, None)))"}}
+{"ts": 1768698607, "level": "info", "message": "State changed", "meta": {"from": "running", "to": "paused", "reason": "Weekend"}}
+{"ts": 1768736301, "level": "error", "message": "Runner error", "meta": {"error": "ConnectionError(ProtocolError('Connection aborted.', ConnectionAbortedError(10053, 'An established connection was aborted by the software in your host machine', None, 10053, None)))"}}
+{"ts": 1768736304, "level": "info", "message": "State changed", "meta": {"from": "running", "to": "paused", "reason": "Weekend"}}
+{"ts": 1768754253, "level": "error", "message": "Runner error", "meta": {"error": "ConnectionError(ProtocolError('Connection aborted.', ConnectionResetError(10054, 'An existing connection was forcibly closed by the remote host', None, 10054, None)))"}}
+{"ts": 1768773429, "level": "info", "message": "State changed", "meta": {"from": "running", "to": "paused", "reason": "Weekend"}}
+{"ts": 1768851228, "level": "info", "message": "Intent set: running", "meta": {"mode": "paper", "prev_effective_state": "stopped"}}
+{"ts": 1768851237, "level": "info", "message": "Intent set: running", "meta": {"mode": "paper", "prev_effective_state": "starting"}}
+{"ts": 1768859651, "level": "info", "message": "Intent set: running", "meta": {"mode": "paper", "prev_effective_state": "starting"}}
+{"ts": 1768859662, "level": "info", "message": "Intent set: running", "meta": {"mode": "paper", "prev_effective_state": "starting"}}
+{"ts": 1768860851, "level": "info", "message": "State changed", "meta": {"from_effective": "stopped", "to_effective": "paused", "from_intent": "paused", "to_intent": "paused", "reason": null, "reason_code": "intent_paused"}}
+{"ts": 1768860855, "level": "info", "message": "Intent set: running", "meta": {"mode": "paper", "prev_effective_state": "paused"}}
+{"ts": 1768860856, "level": "info", "message": "State changed", "meta": {"from_effective": "starting", "to_effective": "waiting_for_market", "from_intent": "running", "to_intent": "running", "reason": "After-hours", "reason_code": "market_closed"}}
+{"ts": 1768860869, "level": "info", "message": "Intent set: running", "meta": {"mode": "paper", "prev_effective_state": "waiting_for_market"}}
+{"ts": 1768860871, "level": "info", "message": "State changed", "meta": {"from_effective": "starting", "to_effective": "waiting_for_market", "from_intent": "running", "to_intent": "running", "reason": "After-hours", "reason_code": "market_closed"}}
+{"ts": 1768860940, "level": "info", "message": "Intent set: running", "meta": {"mode": "paper", "prev_effective_state": "waiting_for_market"}}
+{"ts": 1768860941, "level": "info", "message": "State changed", "meta": {"from_effective": "starting", "to_effective": "waiting_for_market", "from_intent": "running", "to_intent": "running", "reason": "After-hours", "reason_code": "market_closed"}}
+{"ts": 1768862130, "level": "info", "message": "Intent set: running", "meta": {"mode": "paper", "prev_effective_state": "waiting_for_market"}}
+{"ts": 1768862131, "level": "info", "message": "State changed", "meta": {"from_effective": "starting", "to_effective": "waiting_for_market", "from_intent": "running", "to_intent": "running", "reason": "After-hours", "reason_code": "market_closed"}}

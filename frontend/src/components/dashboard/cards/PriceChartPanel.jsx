@@ -9,6 +9,7 @@ function loadTradingViewScript() {
 
     const existing = document.querySelector('script[data-tv="true"]');
     if (existing) {
+      // If it already exists, attach listeners (but also resolve if it already loaded)
       existing.addEventListener("load", resolve);
       existing.addEventListener("error", reject);
       return;
@@ -35,8 +36,9 @@ export default function PriceChartPanel({ currentTicker = "AAPL", isDarkMode = f
   const containerIdRef = useRef(`tv-${Math.random().toString(16).slice(2)}`);
   const widgetRef = useRef(null);
 
-  // Create / recreate on theme changes.
-  // (We DO NOT recreate on ticker changes; the embed owns symbol search anyway.)
+  // ✅ Recreate on theme OR ticker changes.
+  // TradingView free embed doesn't always support clean live switching,
+  // so hard rebuild is the most reliable approach.
   useEffect(() => {
     let alive = true;
 
@@ -45,20 +47,24 @@ export default function PriceChartPanel({ currentTicker = "AAPL", isDarkMode = f
         await loadTradingViewScript();
         if (!alive) return;
 
-        // 🔥 Hard cleanup: wipe container + remove old widget reference
+        const symbol = normalizeSymbol(currentTicker) || "AAPL";
+
+        // 🔥 Hard cleanup: wipe container + drop old widget reference
         const containerEl = document.getElementById(containerIdRef.current);
         if (containerEl) containerEl.innerHTML = "";
         widgetRef.current = null;
 
-        // Recreate with new theme
         widgetRef.current = new window.TradingView.widget({
           container_id: containerIdRef.current,
-          symbol: normalizeSymbol(currentTicker) || "AAPL",
+          symbol,
           interval: "D",
           autosize: true,
           theme: isDarkMode ? "dark" : "light",
           locale: "en",
+
+          // Keep search enabled inside the chart
           allow_symbol_change: true,
+
           hide_top_toolbar: false,
           hide_side_toolbar: false,
           withdateranges: true,
@@ -72,8 +78,8 @@ export default function PriceChartPanel({ currentTicker = "AAPL", isDarkMode = f
     return () => {
       alive = false;
     };
-    // ✅ only theme changes trigger rebuild
-  }, [isDarkMode]);
+    // ✅ IMPORTANT: ticker changes must rebuild too
+  }, [isDarkMode, currentTicker]);
 
   return (
     <section className="panel panel-chart">
@@ -85,7 +91,7 @@ export default function PriceChartPanel({ currentTicker = "AAPL", isDarkMode = f
               <HelpTooltip title="What is the Price action viewer?">
                 <p>This chart is powered by TradingView.</p>
                 <p className="help-popover__note">
-                  Theme updates require recreating the free embed.
+                  Theme and external symbol updates require recreating the free embed.
                 </p>
               </HelpTooltip>
             </div>

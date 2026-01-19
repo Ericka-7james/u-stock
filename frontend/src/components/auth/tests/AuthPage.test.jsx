@@ -9,15 +9,12 @@ import AuthPage from "../AuthPage";
 const mockLogin = vi.fn();
 const mockNavigate = vi.fn();
 
-// ✅ Mock AppShell so layout/auth dependencies don't break the test
 vi.mock("../../layout/AppShell", () => ({
   default: ({ children }) => <div data-testid="app-shell">{children}</div>,
 }));
 
-// Mock AuthContext so AuthPage can call useAuth()
 vi.mock("../../../context/AuthContext", () => ({
   useAuth: () => ({
-    // include extra fields so future components don't crash
     user: null,
     isAuthed: false,
     loading: false,
@@ -27,7 +24,6 @@ vi.mock("../../../context/AuthContext", () => ({
   }),
 }));
 
-// Partially mock react-router-dom to override useNavigate but keep real stuff
 vi.mock("react-router-dom", async () => {
   const actual = await vi.importActual("react-router-dom");
   return {
@@ -77,7 +73,6 @@ describe("AuthPage", () => {
     await user.click(screen.getByRole("button", { name: /sign in →/i }));
 
     await waitFor(() => expect(mockLogin).toHaveBeenCalledTimes(1));
-
     expect(mockLogin).toHaveBeenCalledWith("test@example.com", "MySecretPass!");
   });
 
@@ -93,6 +88,40 @@ describe("AuthPage", () => {
     await user.click(screen.getByRole("button", { name: /sign in →/i }));
 
     expect(await screen.findByText(/invalid credentials/i)).toBeInTheDocument();
+  });
+
+  test("shows fallback error when login throws without a message", async () => {
+    const user = userEvent.setup();
+    mockLogin.mockRejectedValueOnce({});
+
+    renderAuth();
+
+    await user.type(screen.getByPlaceholderText(/email/i), "test@example.com");
+    await user.type(screen.getByPlaceholderText(/password/i), "wrongpass!");
+
+    await user.click(screen.getByRole("button", { name: /sign in →/i }));
+
+    expect(await screen.findByText(/unable to sign in/i)).toBeInTheDocument();
+  });
+
+  test("clears previous error on a new submit attempt", async () => {
+    const user = userEvent.setup();
+
+    mockLogin.mockRejectedValueOnce(new Error("Invalid credentials"));
+    renderAuth();
+
+    await user.type(screen.getByPlaceholderText(/email/i), "test@example.com");
+    await user.type(screen.getByPlaceholderText(/password/i), "wrongpass!");
+
+    await user.click(screen.getByRole("button", { name: /sign in →/i }));
+    expect(await screen.findByText(/invalid credentials/i)).toBeInTheDocument();
+
+    // next attempt should clear error immediately
+    mockLogin.mockResolvedValueOnce();
+    await user.click(screen.getByRole("button", { name: /sign in →/i }));
+
+    await waitFor(() => expect(mockLogin).toHaveBeenCalledTimes(2));
+    expect(screen.queryByText(/invalid credentials/i)).not.toBeInTheDocument();
   });
 
   test("shows loading state while login is in progress", async () => {
@@ -123,7 +152,6 @@ describe("AuthPage", () => {
     renderAuth();
 
     await user.click(screen.getByRole("button", { name: /create an account →/i }));
-
     expect(mockNavigate).toHaveBeenCalledWith("/auth/signup");
   });
 
@@ -132,7 +160,6 @@ describe("AuthPage", () => {
     renderAuth();
 
     await user.click(screen.getByRole("button", { name: /^sign up$/i }));
-
     expect(mockNavigate).toHaveBeenCalledWith("/auth/signup");
   });
 });

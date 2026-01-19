@@ -1,6 +1,12 @@
 // src/components/dashboard/StatSummary.jsx
 import "../../../css/dashboard/cards/StatSummary.css";
 
+function toValidDate(value) {
+  if (!value) return null;
+  const d = new Date(value);
+  return Number.isFinite(d.getTime()) ? d : null;
+}
+
 export default function StatSummary({
   signalsMeta,
   signalsData,
@@ -21,29 +27,17 @@ export default function StatSummary({
     ? priceSymbols.length
     : 0;
 
-  // Top in-play ticker from signals
-  const top = signalsList[0];
-  const topTicker = top?.ticker ?? "—";
-  const topScore =
-    typeof top?.score === "number" ? top.score.toFixed(2) : "—";
+  // 3) Latest snapshot time across signals + prices (safe)
+  const dates = [toValidDate(signalsMeta?.generatedAt), toValidDate(pricesMeta?.generatedAt)]
+    .filter(Boolean);
 
-  // 3) Latest snapshot time across signals + prices
-  let lastRun = null;
-  const times = [];
-  if (signalsMeta?.generatedAt) {
-    times.push(new Date(signalsMeta.generatedAt));
-  }
-  if (pricesMeta?.generatedAt) {
-    times.push(new Date(pricesMeta.generatedAt));
-  }
-  if (times.length > 0) {
-    const maxTs = new Date(Math.max(...times.map((t) => t.getTime())));
-    lastRun = maxTs;
-  }
+  const lastRun =
+    dates.length > 0
+      ? new Date(Math.max(...dates.map((d) => d.getTime())))
+      : null;
 
   return (
     <div className="stat-row">
-      {/* Card 1: signals universe (ranked tickers) */}
       <div className="panel stat-card stat-card--accent-blue">
         <div className="stat-label">Signals universe</div>
         <div className="stat-value">{signalsUniverseSize}</div>
@@ -52,7 +46,6 @@ export default function StatSummary({
         </div>
       </div>
 
-      {/* Card 2: price coverage */}
       <div className="panel stat-card stat-card--accent-orange">
         <div className="stat-label">Price coverage</div>
         <div className="stat-value">{pricesUniverseSize}</div>
@@ -61,7 +54,6 @@ export default function StatSummary({
         </div>
       </div>
 
-      {/* Card 3: last time *any* dataset was refreshed */}
       <div className="panel stat-card stat-card--accent-teal">
         <div className="stat-label">Last data refresh</div>
         <div className="stat-value">
@@ -73,9 +65,7 @@ export default function StatSummary({
             : "—"}
         </div>
         <div className="stat-caption">
-          {lastRun
-            ? lastRun.toLocaleDateString()
-            : "Run fetchers + indicators"}
+          {lastRun ? lastRun.toLocaleDateString() : "Run fetchers + indicators"}
         </div>
       </div>
     </div>

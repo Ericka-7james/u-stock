@@ -1,100 +1,157 @@
-import { render, screen } from "@testing-library/react";
-import { describe, it, expect, vi } from "vitest";
+// src/components/dashboard/tests/PriceChartPanel.test.jsx
+import React from "react";
+import { render, screen, cleanup, waitFor } from "@testing-library/react";
+import { describe, test, expect, vi, beforeEach, afterEach } from "vitest";
 import PriceChartPanel from "../cards/PriceChartPanel.jsx";
 
-/**
- * Mock child components so we only test PriceChartPanel wiring
- */
-vi.mock("../../common/SearchableTickerDropdown.jsx", () => ({
-  default: ({ currentTicker }) => (
-    <div data-testid="ticker-dropdown">
-      Dropdown: {currentTicker || "none"}
-    </div>
-  ),
-}));
-
+// keep tests focused on PriceChartPanel; tooltip tested elsewhere
 vi.mock("../../common/HelpTooltip.jsx", () => ({
   default: ({ title, children }) => (
-    <button aria-label={title} data-testid="help-tooltip">
-      ?
-      <div hidden>{children}</div>
-    </button>
-  ),
-}));
-
-vi.mock("../cards/PriceChart.jsx", () => ({
-  default: ({ ticker, data, loading }) => (
-    <div data-testid="price-chart">
-      Chart: {ticker} | points: {data?.length ?? 0} | loading:{" "}
-      {String(loading)}
+    <div data-testid="help-tooltip">
+      <span>{title}</span>
+      <div>{children}</div>
     </div>
   ),
 }));
 
-describe("PriceChartPanel", () => {
-  const baseProps = {
-    allTickers: ["AAPL", "MSFT", "TSLA"],
-    currentTicker: "AAPL",
-    onSelectTicker: vi.fn(),
-    currentSeries: [
-      { dateLabel: "2024-01-01", close: 100 },
-      { dateLabel: "2024-01-02", close: 101 },
-    ],
-    loading: false,
-    pricesMeta: { generatedAt: "2024-01-03T12:00:00Z" },
+function stubTradingView() {
+  window.TradingView = {
+    widget: vi.fn(),
   };
+}
 
-  it("renders title and subtitle text", () => {
-    render(<PriceChartPanel {...baseProps} />);
+describe("PriceChartPanel", () => {
+  beforeEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+    delete window.TradingView;
+    document.querySelectorAll('script[data-tv="true"]').forEach((n) => n.remove());
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+    delete window.TradingView;
+  });
+
+  test("renders title + subtitle", () => {
+    stubTradingView();
+
+    render(<PriceChartPanel currentTicker="AAPL" isDarkMode={false} />);
 
     expect(
       screen.getByRole("heading", { name: /price action viewer/i })
     ).toBeInTheDocument();
 
     expect(
-      screen.getByText(/select a ticker or type to filter the universe/i)
+      screen.getByText(/search any symbol directly in the chart/i)
     ).toBeInTheDocument();
   });
 
-  it("renders HelpTooltip with correct aria-label", () => {
-    render(<PriceChartPanel {...baseProps} />);
+  test("injects tv.js script when TradingView.widget is not available yet", async () => {
+    const appendSpy = vi.spyOn(document.head, "appendChild");
 
-    const helpButton = screen.getByLabelText(
-      /what is the price action viewer\?/i
-    );
+    render(<PriceChartPanel currentTicker="AAPL" isDarkMode={false} />);
 
-    expect(helpButton).toBeInTheDocument();
-    expect(helpButton).toHaveAttribute("data-testid", "help-tooltip");
+    await waitFor(() => {
+      expect(appendSpy).toHaveBeenCalled();
+    });
+
+    const script = document.querySelector('script[data-tv="true"]');
+    expect(script).toBeTruthy();
+    expect(script.getAttribute("src")).toBe("https://s3.tradingview.com/tv.js");
   });
 
-  it("renders SearchableTickerDropdown with current ticker", () => {
-    render(<PriceChartPanel {...baseProps} />);
+  test("does not inject tv.js script when one already exists", async () => {
+    const existing = document.createElement("script");
+    existing.src = "https://s3.tradingview.com/tv.js";
+    existing.async = true;
+    existing.dataset.tv = "true";
+    document.head.appendChild(existing);
 
-    expect(screen.getByTestId("ticker-dropdown")).toHaveTextContent(
-      "AAPL"
-    );
+    const appendSpy = vi.spyOn(document.head, "appendChild");
+
+    render(<PriceChartPanel currentTicker="AAPL" isDarkMode={false} />);
+
+    await Promise.resolve();
+
+    expect(appendSpy).not.toHaveBeenCalled();
+    expect(document.querySelectorAll('script[data-tv="true"]').length).toBe(1);
   });
 
-  it("passes props through to PriceChart", () => {
-    render(<PriceChartPanel {...baseProps} />);
+  test("creates TradingView widget with normalized symbol + light theme", async () => {
+    stubTradingView();
 
-    const chart = screen.getByTestId("price-chart");
-    expect(chart).toHaveTextContent("Chart: AAPL");
-    expect(chart).toHaveTextContent("points: 2");
-    expect(chart).toHaveTextContent("loading: false");
+    render(<PriceChartPanel currentTicker="nasdaq:msft" isDarkMode={false} />);
+
+    await waitFor(() => {
+      expect(window.TradingView.widget).toHaveBeenCalledTimes(1);
+    });
+
+    const args = window.TradingView.widget.mock.calls[0][0];
+
+    expect(args.symbol).toBe("MSFT");
+    expect(args.theme).toBe("light");
+    expect(args.interval).toBe("D");
+    expect(args.autosize).toBe(true);
+    expect(args.allow_symbol_change).toBe(true);
+    expect(String(args.container_id)).toMatch(/^tv-/);
   });
 
-  it("handles empty series + loading state", () => {
-    render(
-      <PriceChartPanel
-        {...baseProps}
-        currentSeries={[]}
-        loading={true}
-      />
+  test("rebuilds widget when ticker changes", async () => {
+    stubTradingView();
+
+    const { rerender } = render(
+      <PriceChartPanel currentTicker="AAPL" isDarkMode={false} />
     );
 
-    const chart = screen.getByTestId("price-chart");
-    expect(chart).toHaveTextContent("points: 0");
-    expect(chart).toHaveTextContent("loading: true");
+    await waitFor(() => {
+      expect(window.TradingView.widget).toHaveBeenCalledTimes(1);
+    });
+
+    rerender(<PriceChartPanel currentTicker="TSLA" isDarkMode={false} />);
+
+    await waitFor(() => {
+      expect(window.TradingView.widget).toHaveBeenCalledTimes(2);
+    });
+
+    const call2 = window.TradingView.widget.mock.calls[1][0];
+    expect(call2.symbol).toBe("TSLA");
+    expect(call2.theme).toBe("light");
+  });
+
+  test("rebuilds widget when theme changes", async () => {
+    stubTradingView();
+
+    const { rerender } = render(
+      <PriceChartPanel currentTicker="AAPL" isDarkMode={false} />
+    );
+
+    await waitFor(() => {
+      expect(window.TradingView.widget).toHaveBeenCalledTimes(1);
+    });
+
+    rerender(<PriceChartPanel currentTicker="AAPL" isDarkMode={true} />);
+
+    await waitFor(() => {
+      expect(window.TradingView.widget).toHaveBeenCalledTimes(2);
+    });
+
+    const call2 = window.TradingView.widget.mock.calls[1][0];
+    expect(call2.theme).toBe("dark");
+    expect(call2.symbol).toBe("AAPL");
+  });
+
+  test("falls back to AAPL when currentTicker is empty", async () => {
+    stubTradingView();
+
+    render(<PriceChartPanel currentTicker="" isDarkMode={false} />);
+
+    await waitFor(() => {
+      expect(window.TradingView.widget).toHaveBeenCalledTimes(1);
+    });
+
+    const args = window.TradingView.widget.mock.calls[0][0];
+    expect(args.symbol).toBe("AAPL");
   });
 });

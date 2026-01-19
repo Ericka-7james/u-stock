@@ -1,6 +1,7 @@
 // src/components/common/SearchableTickerDropdown.jsx
-import { useMemo, useState, useRef, useEffect } from "react";
-import "../../css/SearchableTickerDropdown.css";
+import { useMemo, useState, useRef, useEffect, useCallback } from "react";
+import "../../css/common/SearchableTickerDropdown.css";
+
 const MAX_VISIBLE_OPTIONS = 300;
 
 export default function SearchableTickerDropdown({
@@ -12,43 +13,52 @@ export default function SearchableTickerDropdown({
   const [filter, setFilter] = useState("");
   const dropdownRef = useRef(null);
 
+  const close = useCallback(() => {
+    setIsOpen(false);
+    setFilter("");
+  }, []);
+
   useEffect(() => {
     if (!isOpen) return;
 
     function handleClickOutside(e) {
       if (!dropdownRef.current) return;
-      if (!dropdownRef.current.contains(e.target)) {
-        setIsOpen(false);
-      }
+      if (!dropdownRef.current.contains(e.target)) close();
+    }
+
+    function handleKeyDown(e) {
+      if (e.key === "Escape") close();
     }
 
     document.addEventListener("mousedown", handleClickOutside);
     document.addEventListener("touchstart", handleClickOutside);
+    window.addEventListener("keydown", handleKeyDown);
 
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
       document.removeEventListener("touchstart", handleClickOutside);
+      window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [isOpen]);
+  }, [isOpen, close]);
 
   const filteredTickers = useMemo(() => {
     const universe = Array.isArray(allTickers) ? allTickers : [];
     if (!filter.trim()) return universe;
 
     const q = filter.trim().toUpperCase();
-    return universe.filter((sym) => sym.toUpperCase().startsWith(q));
+    return universe.filter((sym) => String(sym).toUpperCase().startsWith(q));
   }, [allTickers, filter]);
 
-  const optionsTickers = useMemo(() => {
-    return filteredTickers.slice(0, MAX_VISIBLE_OPTIONS);
-  }, [filteredTickers]);
+  const optionsTickers = useMemo(
+    () => filteredTickers.slice(0, MAX_VISIBLE_OPTIONS),
+    [filteredTickers]
+  );
 
   const label = currentTicker || "Select…";
 
   const handleSelect = (sym) => {
-    onChange(sym);
-    setIsOpen(false);
-    setFilter("");
+    onChange?.(sym);
+    close();
   };
 
   return (
@@ -57,6 +67,8 @@ export default function SearchableTickerDropdown({
         type="button"
         className="chart-select chart-select--button"
         onClick={() => setIsOpen((open) => !open)}
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
       >
         <span className="chart-select-label">{label}</span>
         <span className="chart-select-caret">▾</span>
@@ -72,7 +84,7 @@ export default function SearchableTickerDropdown({
             onChange={(e) => setFilter(e.target.value)}
           />
 
-          <ul className="chart-select-options">
+          <ul className="chart-select-options" role="list">
             {optionsTickers.length === 0 ? (
               <li className="chart-select-option chart-select-option--empty">
                 No matches
@@ -83,9 +95,7 @@ export default function SearchableTickerDropdown({
                   key={sym}
                   className={
                     "chart-select-option" +
-                    (sym === currentTicker
-                      ? " chart-select-option--active"
-                      : "")
+                    (sym === currentTicker ? " chart-select-option--active" : "")
                   }
                   onClick={() => handleSelect(sym)}
                 >

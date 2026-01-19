@@ -1,18 +1,17 @@
 # api/alpaca_trading.py
-import os
+from __future__ import annotations
+
 import requests
 from datetime import datetime, timezone, timedelta
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 from fastapi import APIRouter, HTTPException, Request, Response
 
-from .core.security import (
-    require_user,
-    decrypt_secret,
-    get_supabase_service,
-)
+from .core.security import require_user, decrypt_secret, get_supabase_service
 
 router = APIRouter(prefix="/alpaca/trading", tags=["alpaca-trading"])
+
+_REQUEST_TIMEOUT_SECONDS = 12
 
 
 def _load_alpaca_keys(sb, user_id: str) -> Tuple[str, str, str]:
@@ -28,26 +27,46 @@ def _load_alpaca_keys(sb, user_id: str) -> Tuple[str, str, str]:
     rows = res.data or []
     row = rows[0] if rows else None
     if not row:
-        raise HTTPException(status_code=400, detail="Alpaca not connected for this user")
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "ALPACA_NOT_CONNECTED",
+                "message": "Alpaca not connected for this user",
+                "hint": "Connect Alpaca in Connected Apps.",
+            },
+        )
 
     if str(row.get("status", "")).lower() != "connected":
-        raise HTTPException(status_code=400, detail="Alpaca is not marked connected")
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "ALPACA_NOT_CONNECTED",
+                "message": "Alpaca is not marked connected",
+                "hint": "Reconnect Alpaca in Connected Apps.",
+            },
+        )
 
     api_key = decrypt_secret(row.get("api_key_enc"))
     api_secret = decrypt_secret(row.get("api_secret_enc"))
-    mode = (row.get("mode") or "paper").lower()
+    mode = str(row.get("mode") or "paper").lower().strip()
+    if mode not in ("paper", "live"):
+        mode = "paper"
 
     if not api_key or not api_secret:
-        raise HTTPException(status_code=400, detail="Alpaca keys missing or unreadable")
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "ALPACA_KEYS_MISSING",
+                "message": "Alpaca keys missing or unreadable",
+                "hint": "Reconnect Alpaca in Connected Apps.",
+            },
+        )
 
     return api_key, api_secret, mode
 
 
 def _alpaca_headers(api_key: str, api_secret: str) -> Dict[str, str]:
-    return {
-        "APCA-API-KEY-ID": api_key,
-        "APCA-API-SECRET-KEY": api_secret,
-    }
+    return {"APCA-API-KEY-ID": api_key, "APCA-API-SECRET-KEY": api_secret}
 
 
 def _trading_base_url(mode: str) -> str:
@@ -58,9 +77,24 @@ def _iso(dt: datetime) -> str:
     return dt.astimezone(timezone.utc).isoformat()
 
 
-def _parse_dt(s: str) -> datetime:
-    s2 = (s or "").replace("Z", "+00:00")
-    return datetime.fromisoformat(s2).astimezone(timezone.utc)
+def _format_day(dt: datetime) -> str:
+    """
+    Windows-safe formatter (avoids %-d).
+    Example: Jan 3, 2026
+    """
+    dt = dt.astimezone(timezone.utc)
+    return f"{dt.strftime('%b')} {dt.day}, {dt.year}"
+
+
+def _parse_dt(s: str) -> datetime | None:
+    """
+    Returns UTC datetime or None if parsing fails.
+    """
+    try:
+        s2 = (s or "").replace("Z", "+00:00")
+        return datetime.fromisoformat(s2).astimezone(timezone.utc)
+    except Exception:
+        return None
 
 
 def _clamp_preset(p: str) -> str:
@@ -90,21 +124,27 @@ def _as_float(x: Any, default: float = 0.0) -> float:
         return default
 
 
+def _safe_get(url: str, params: Dict[str, Any], headers: Dict[str, str]) -> requests.Response:
+    try:
+        return requests.get(url, params=params, headers=headers, timeout=_REQUEST_TIMEOUT_SECONDS)
+    except requests.RequestException as e:
+        raise HTTPException(status_code=502, detail={"code": "NETWORK_ERROR", "message": "Request failed", "raw": repr(e)})
+
+
 def _fifo_realized_trades_from_fills(
     fills: List[Dict[str, Any]],
     slippage_bps: float = 0.0,
     fee_bps: float = 0.0,
 ) -> List[Dict[str, Any]]:
-    """
-    Convert fills into realized 'trade' records using FIFO matching.
-    Phase 1: good enough to power performance charts / expectancy.
-    """
-    rows = sorted(fills, key=lambda f: (f.get("transaction_time") or f.get("t") or ""))
+    rows = sorted(fills or [], key=lambda f: (f.get("transaction_time") or f.get("t") or f.get("timestamp") or ""))
 
     lots: Dict[str, List[Dict[str, Any]]] = {}
     trades_out: List[Dict[str, Any]] = []
 
     for f in rows:
+        if not isinstance(f, dict):
+            continue
+
         symbol = str(f.get("symbol") or "").upper().strip()
         side = str(f.get("side") or "").lower().strip()
         qty = _as_float(f.get("qty") or f.get("cum_qty") or f.get("filled_qty") or 0.0)
@@ -115,6 +155,8 @@ def _fifo_realized_trades_from_fills(
             continue
 
         t = _parse_dt(str(t_raw))
+        if t is None:
+            continue
 
         if side == "buy":
             lots.setdefault(symbol, []).append({"qty": qty, "price": price, "openedAt": _iso(t)})
@@ -165,82 +207,6 @@ def _fifo_realized_trades_from_fills(
     return trades_out
 
 
-@router.get("/orders")
-def list_orders(
-    request: Request,
-    response: Response,
-    status: str = "all",
-    limit: int = 200,
-    direction: str = "desc",
-    after: Optional[str] = None,
-    until: Optional[str] = None,
-):
-    try:
-        user = require_user(request, response)
-        sb = get_supabase_service()
-        api_key, api_secret, mode = _load_alpaca_keys(sb, user["id"])
-
-        limit = max(1, min(int(limit), 500))
-        base = _trading_base_url(mode)
-        url = f"{base}/v2/orders"
-        params: Dict[str, Any] = {"status": status, "limit": limit, "direction": direction}
-        if after:
-            params["after"] = after
-        if until:
-            params["until"] = until
-
-        r = requests.get(url, params=params, headers=_alpaca_headers(api_key, api_secret), timeout=12)
-        if r.status_code >= 400:
-            raise HTTPException(status_code=502, detail=f"alpaca_orders_error {r.status_code}: {r.text}")
-
-        return {"ok": True, "mode": mode, "orders": r.json()}
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"alpaca_orders_failed: {repr(e)}")
-
-
-@router.get("/fills")
-def list_fills(
-    request: Request,
-    response: Response,
-    activity_types: str = "FILL",
-    direction: str = "desc",
-    page_size: int = 200,
-    after: Optional[str] = None,
-    until: Optional[str] = None,
-):
-    try:
-        user = require_user(request, response)
-        sb = get_supabase_service()
-        api_key, api_secret, mode = _load_alpaca_keys(sb, user["id"])
-
-        page_size = max(1, min(int(page_size), 500))
-        base = _trading_base_url(mode)
-        url = f"{base}/v2/account/activities"
-        params: Dict[str, Any] = {
-            "activity_types": activity_types,
-            "direction": direction,
-            "page_size": page_size,
-        }
-        if after:
-            params["after"] = after
-        if until:
-            params["until"] = until
-
-        r = requests.get(url, params=params, headers=_alpaca_headers(api_key, api_secret), timeout=12)
-        if r.status_code >= 400:
-            raise HTTPException(status_code=502, detail=f"alpaca_fills_error {r.status_code}: {r.text}")
-
-        return {"ok": True, "mode": mode, "fills": r.json()}
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"alpaca_fills_failed: {repr(e)}")
-
-
 @router.get("/summary")
 def trade_summary(
     request: Request,
@@ -267,9 +233,27 @@ def trade_summary(
             "until": _iso(end_dt),
         }
 
-        r = requests.get(url, params=params, headers=_alpaca_headers(api_key, api_secret), timeout=12)
+        r = _safe_get(url, params=params, headers=_alpaca_headers(api_key, api_secret))
+
+        if r.status_code in (401, 403):
+            raise HTTPException(
+                status_code=401,
+                detail={
+                    "code": "ALPACA_INVALID_KEY",
+                    "message": "Alpaca rejected the API key/secret.",
+                    "hint": "Reconnect Alpaca in Connected Apps.",
+                },
+            )
         if r.status_code >= 400:
-            raise HTTPException(status_code=502, detail=f"alpaca_summary_fills_error {r.status_code}: {r.text}")
+            raise HTTPException(
+                status_code=502,
+                detail={
+                    "code": "ALPACA_TRADING_API_ERROR",
+                    "message": "Alpaca trading API error.",
+                    "hint": "Retry, then reconnect Alpaca if it persists.",
+                    "raw": (r.text or "")[:300],
+                },
+            )
 
         fills = r.json() or []
         trades = _fifo_realized_trades_from_fills(
@@ -282,11 +266,11 @@ def trade_summary(
             "ok": True,
             "mode": mode,
             "preset": preset_norm,
-            "start": start_dt.strftime("%b %-d, %Y") if os.name != "nt" else start_dt.strftime("%b %d, %Y"),
-            "end": end_dt.strftime("%b %-d, %Y") if os.name != "nt" else end_dt.strftime("%b %d, %Y"),
+            "start": _format_day(start_dt),
+            "end": _format_day(end_dt),
             "trades": trades,
             "meta": {
-                "fills_count": len(fills),
+                "fills_count": len(fills) if isinstance(fills, list) else 0,
                 "trades_count": len(trades),
                 "slippage_bps": slippage_bps,
                 "fee_bps": fee_bps,
@@ -298,4 +282,12 @@ def trade_summary(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"alpaca_trade_summary_failed: {repr(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "code": "TRADE_SUMMARY_FAILED",
+                "message": "Trade summary failed",
+                "hint": "Check backend logs",
+                "raw": repr(e),
+            },
+        )

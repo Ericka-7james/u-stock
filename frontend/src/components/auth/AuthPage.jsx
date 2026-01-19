@@ -2,8 +2,15 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import "./AuthPage.css";
+import "../../css/auth/AuthPage.css";
 import AppShell from "../layout/AppShell";
+
+function getErrorMessage(err) {
+  if (!err) return "Unable to sign in";
+  if (typeof err === "string") return err;
+  if (typeof err === "object" && "message" in err && err.message) return String(err.message);
+  return "Unable to sign in";
+}
 
 export default function AuthPage() {
   const { login } = useAuth();
@@ -17,13 +24,15 @@ export default function AuthPage() {
 
   const handleLogin = async (e) => {
     e.preventDefault();
+    if (loginLoading) return;
+
     setLoginError("");
     setLoginLoading(true);
     try {
       await login(loginEmail.trim(), loginPassword);
-      // if login succeeds, AuthGate / routes will take user to dashboard
+      // If login succeeds, AuthGate / routes will take user to dashboard
     } catch (err) {
-      setLoginError(err.message || "Unable to sign in");
+      setLoginError(getErrorMessage(err));
     } finally {
       setLoginLoading(false);
     }
@@ -47,11 +56,13 @@ export default function AuthPage() {
                   <span className="auth-input-icon">📧</span>
                   <input
                     type="email"
+                    name="email"
                     placeholder="Email"
                     value={loginEmail}
                     onChange={(e) => setLoginEmail(e.target.value)}
                     required
                     autoComplete="username"
+                    disabled={loginLoading}
                   />
                 </label>
 
@@ -59,15 +70,21 @@ export default function AuthPage() {
                   <span className="auth-input-icon">🔒</span>
                   <input
                     type="password"
+                    name="password"
                     autoComplete="current-password"
                     placeholder="Password"
                     value={loginPassword}
                     onChange={(e) => setLoginPassword(e.target.value)}
                     required
+                    disabled={loginLoading}
                   />
                 </label>
 
-                {loginError && <p className="auth-error">{loginError}</p>}
+                {loginError && (
+                  <p className="auth-error" role="alert" aria-live="polite">
+                    {loginError}
+                  </p>
+                )}
 
                 <button
                   type="submit"
@@ -89,12 +106,14 @@ export default function AuthPage() {
                 <button
                   type="button"
                   onClick={goToSignup}
+                  disabled={loginLoading}
                   style={{
                     border: "none",
                     background: "transparent",
                     color: "var(--ustock-green-main)",
-                    cursor: "pointer",
+                    cursor: loginLoading ? "not-allowed" : "pointer",
                     fontWeight: 600,
+                    opacity: loginLoading ? 0.7 : 1,
                   }}
                 >
                   Create an account →
@@ -108,14 +127,14 @@ export default function AuthPage() {
             <div className="auth-right-inner">
               <h2 className="auth-right-title">U-Stock Radar Suite</h2>
               <p className="auth-right-text">
-                Log in to see your market dashboard, signals, and sentiment in
-                one place.
+                Log in to see your market dashboard, signals, and sentiment in one place.
               </p>
 
               <button
                 type="button"
                 className="auth-secondary-btn"
                 onClick={goToSignup}
+                disabled={loginLoading}
               >
                 Sign Up
               </button>

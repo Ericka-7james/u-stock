@@ -1,29 +1,39 @@
+// src/components/charts/CandleChart.jsx
 export default function CandleChart({ candles = [], height = 220 }) {
-  const data = candles.slice(-60); // last 60 candles
+  const safeHeight = Math.max(80, Number(height) || 220);
+
+  // Normalize + keep last 60 valid candles
+  const data = (Array.isArray(candles) ? candles : [])
+    .filter((d) => d && Number.isFinite(d.o) && Number.isFinite(d.h) && Number.isFinite(d.l) && Number.isFinite(d.c))
+    .slice(-60);
+
   if (!data.length) return <div style={{ opacity: 0.7 }}>Waiting for ticks…</div>;
 
   const w = 900;
-  const h = height;
+  const h = safeHeight;
   const pad = 12;
 
   const highs = data.map((d) => d.h);
   const lows = data.map((d) => d.l);
-  const maxY = Math.max(...highs);
-  const minY = Math.min(...lows);
+
+  const maxY = highs.reduce((m, v) => (v > m ? v : m), -Infinity);
+  const minY = lows.reduce((m, v) => (v < m ? v : m), +Infinity);
 
   const xStep = (w - pad * 2) / Math.max(1, data.length);
+
   const yScale = (val) => {
-    if (maxY === minY) return h / 2;
+    if (!Number.isFinite(maxY) || !Number.isFinite(minY) || maxY === minY) return h / 2;
     return pad + ((maxY - val) / (maxY - minY)) * (h - pad * 2);
   };
 
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} style={{ width: "100%", height }}>
+    <svg viewBox={`0 0 ${w} ${h}`} style={{ width: "100%", height: safeHeight }}>
       {/* axis line */}
       <line x1={0} y1={h - 1} x2={w} y2={h - 1} stroke="currentColor" opacity="0.15" />
 
       {data.map((c, i) => {
         const x = pad + i * xStep + xStep * 0.5;
+
         const yH = yScale(c.h);
         const yL = yScale(c.l);
         const yO = yScale(c.o);
@@ -35,8 +45,10 @@ export default function CandleChart({ candles = [], height = 220 }) {
         const bodyH = Math.max(2, bodyBot - bodyTop);
         const bodyW = Math.max(3, xStep * 0.55);
 
+        const key = c.t != null ? String(c.t) : `candle_${i}`;
+
         return (
-          <g key={c.t}>
+          <g key={key} data-testid="candle">
             {/* wick */}
             <line x1={x} y1={yH} x2={x} y2={yL} stroke="currentColor" opacity="0.55" />
             {/* body */}

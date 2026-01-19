@@ -1,27 +1,10 @@
-// src/config/config.js
+// frontend/src/config/config.js
+// Centralized config for frontend network calls.
+// Works in dev (Vite proxy) and prod (absolute API base if needed).
 
-// Detect environment based on Vite
-const isDev = import.meta.env.DEV;
+// In dev you typically want "" so fetch("/api/...") hits the Vite proxy.
+// In prod you can set VITE_API_BASE="https://your-domain.com" (no trailing slash).
+export const API_BASE = (import.meta.env.VITE_API_BASE ?? "").replace(/\/+$/, "");
 
-// Local dev backend
-const LOCAL_API = "http://localhost:8000";
-
-// Deployed backend (replace with your real URL once you deploy FastAPI)
-const PROD_API = "https://u-stock-backend.vercel.app";
-
-// 👇 Named export that AuthContext.jsx imports
+// Backend routes are all under /api
 export const API_PREFIX = "/api";
-
-export const API_BASE =
-  import.meta.env.DEV
-    ? "http://localhost:8000"   // local FastAPI
-    : "";                       // production 
-
-
-// Optional: version + feature flags if you want them later
-export const APP_VERSION = "1.0.0";
-
-export const FEATURES = {
-  ENABLE_SENTIMENT: false,
-  ENABLE_BACKTESTING: false,
-};

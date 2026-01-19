@@ -1,6 +1,5 @@
 /* ========= DATA SOURCES PAGE ====================================== */
 
-/* Wrapper tweaks */
 .data-sources-page {
   padding-bottom: 40px;
 }
@@ -31,16 +30,6 @@
   margin-bottom: 4px;
 }
 
-.data-hero-meta {
-  margin-top: 8px;
-  font-size: 13px;
-  color: var(--ustock-text-muted);
-}
-
-.data-hero-meta span {
-  font-weight: 600;
-}
-
 /* Back button pill */
 .back-link-pill {
   display: inline-flex;
@@ -51,11 +40,10 @@
   background: var(--ustock-bg-card-soft);
   color: var(--ustock-green-main);
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 600;
   text-decoration: none;
   box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
-  transition: transform 0.15s ease, box-shadow 0.15s ease,
-    background 0.15s ease;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
 }
 
 .back-link-pill:hover {
@@ -64,127 +52,283 @@
   background: var(--ustock-bg-card);
 }
 
-/* ========= SUMMARY CARD =========================================== */
-
-.data-summary-card {
-  background: var(--ustock-bg-card);
-  border-radius: 18px;
-  padding: 18px 20px;
-  margin-bottom: 20px;
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
-  border: 1px solid var(--ustock-border-card);
-  border-top: 4px solid var(--ustock-green-main);
-  color: var(--ustock-text-main);
-}
-
-.data-summary-card h2 {
-  margin: 0 0 6px;
-  font-size: 18px;
-  color: var(--ustock-text-strong);
-}
-
-.loading-note {
-  font-size: 12px;
-  margin: 6px 0 12px;
-}
-
-/* ========= GRID OF CATEGORY CARDS ================================= */
-
-.data-section-grid {
+/* ✅ Layout: stacked on small, side-by-side on large */
+.ds-main {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 18px;
+  grid-template-columns: 1fr;
+  gap: 18px; /* space between when stacked */
   align-items: flex-start;
+  width: 100%;
+  min-width: 0;
 }
 
-/* Each category card */
-.data-card {
-  background: var(--ustock-bg-card);
-  border-radius: 18px;
-  padding: 16px 18px 18px;
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
-  border: 1px solid var(--ustock-border-card);
-  border-top: 4px solid var(--ustock-green-main);
-  color: var(--ustock-text-main);
+.ds-left,
+.ds-right {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+  min-width: 0;
 }
 
-.data-card h3 {
-  margin: 0 0 6px;
-  font-size: 16px;
-  color: var(--ustock-text-strong);
+.ds-left > *,
+.ds-right > * {
+  min-width: 0;
 }
 
-.data-card .small {
-  font-size: 12px;
-  margin-bottom: 10px;
-  color: var(--ustock-text-muted);
+/* Large screens */
+@media (min-width: 1024px) {
+  .ds-main {
+    grid-template-columns: minmax(0, 440px) minmax(0, 1fr);
+    gap: 1.5rem;
+    align-items: start;
+  }
 }
 
-/* List inside each category */
-.data-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-.data-list li {
-  padding: 8px 0;
-  border-bottom: 1px solid var(--ustock-border-card);
-}
-
-.data-list li:last-child {
-  border-bottom: none;
-}
-
-.data-item-title {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--ustock-text-strong);
-}
-
-.data-item-notes {
-  margin: 4px 0 0;
-  font-size: 12px;
-  color: var(--ustock-text-muted);
-}
-
-.data-item-link {
-  margin-top: 4px;
-  display: inline-block;
-  font-size: 12px;
-  color: #059669;
-  text-decoration: none;
-}
-
-.data-item-link:hover {
-  text-decoration: underline;
-}
-
-/* Pills for roles / tiers (these can stay bright on both themes) */
-.data-pill {
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-size: 11px;
-  background: #ecfdf3;
-  color: #166534;
-  border: 1px solid rgba(22, 101, 52, 0.18);
-}
-
-.data-pill--outline {
-  background: transparent;
-  color: #0f766e;
-  border-color: rgba(15, 118, 110, 0.4);
-}
-
-/* ========= Mobile tweaks ========================================== */
-
+/* Mobile tweaks */
 @media (max-width: 768px) {
   .data-hero {
     flex-direction: column;
     align-items: flex-start;
   }
+}
+
+/* ========= Bot Logs styling (U-Stock friendly) ==================== */
+
+.ds-panel {
+  padding: 18px 18px 20px;
+  min-width: 0;
+}
+
+/* Header feels like dashboard */
+.ds-card-header {
+  background: radial-gradient(
+    circle at top left,
+    var(--ustock-green-soft) 0%,
+    var(--ustock-bg-card-soft) 35%,
+    var(--ustock-bg-card) 100%
+  );
+  padding: 12px 14px;
+  border-radius: 12px;
+  margin-bottom: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  border: 1px solid var(--ustock-border-card);
+  min-width: 0;
+}
+
+.ds-card-header-left {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.ds-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.ds-card-title {
+  margin: 0;
+  font-size: 18px;
+  color: var(--ustock-text-main);
+}
+
+.ds-card-subtitle {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ustock-text-strong);
+  opacity: 0.92;
+}
+
+.ds-card-header-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* little bot id pill */
+.ds-pill {
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  background: rgba(5, 150, 105, 0.12);
+  border: 1px solid rgba(5, 150, 105, 0.22);
+  color: var(--ustock-green-main);
+}
+
+/* Controls row */
+.ds-controls {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  align-items: flex-end;
+}
+
+.ds-field {
+  display: grid;
+  gap: 4px;
+}
+
+.ds-field-day {
+  min-width: 170px;
+}
+
+.ds-field-search {
+  flex: 1 1 260px;
+  min-width: 220px;
+}
+
+.ds-label {
+  font-size: 12px;
+  opacity: 0.78;
+  font-weight: 700;
+}
+
+/* Inputs (U-Stock style) */
+.ds-input {
+  padding: 9px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--ustock-border-card);
+  background: var(--ustock-bg-card-soft);
+  color: var(--ustock-text-main);
+  outline: none;
+  min-width: 0;
+  transition: box-shadow 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
+}
+
+.ds-input:focus {
+  border-color: rgba(5, 150, 105, 0.45);
+  box-shadow: 0 0 0 4px rgba(5, 150, 105, 0.12);
+}
+
+/* Buttons: override “botBtn” look for this page */
+.ds-btn {
+  height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
+  font-weight: 800;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: transform 0.12s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+  white-space: nowrap;
+}
+
+.ds-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.ds-btn-primary {
+  background: var(--ustock-green-main);
+  color: #ffffff;
+  border-color: rgba(5, 150, 105, 0.35);
+  box-shadow: 0 10px 28px rgba(5, 150, 105, 0.18);
+}
+
+.ds-btn-primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 36px rgba(5, 150, 105, 0.24);
+}
+
+.ds-btn-secondary {
+  background: var(--ustock-bg-card-soft);
+  color: var(--ustock-green-main);
+  border-color: var(--ustock-border-card);
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.10);
+}
+
+.ds-btn-secondary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.14);
+  background: var(--ustock-bg-card);
+}
+
+/* Log rows */
+.ds-log-list {
+  margin-top: 12px;
+  display: grid;
+  gap: 12px;
+}
+
+.ds-log-row {
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 14px;
+  padding: 12px 12px;
+  background: rgba(248, 250, 252, 0.65);
+}
+
+.ds-log-row--fail {
+  border-color: rgba(239, 68, 68, 0.28);
+  background: rgba(254, 242, 242, 0.70);
+}
+
+.ds-log-meta {
+  font-weight: 900;
+  font-size: 12px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  opacity: 0.9;
+}
+
+.ds-log-msg {
+  margin-top: 6px;
+  font-weight: 850;
+  color: var(--ustock-text-main);
+}
+
+.ds-log-pre {
+  margin-top: 10px;
+  font-size: 12px;
+  opacity: 0.88;
+  white-space: pre-wrap;
+  max-height: 160px;
+  overflow: auto;
+  background: rgba(15, 23, 42, 0.04);
+  border: 1px solid rgba(148, 163, 184, 0.20);
+  border-radius: 12px;
+  padding: 10px;
+}
+
+/* ========= Market Leaders padding fix (Datasources only) ============ */
+/* Fix slight left/right padding mismatch inside leader “pill” rows on this page only.
+   These selectors are intentionally broad to match whichever classnames exist in MarketLeadersCard. */
+
+.ds-left .ml-row,
+.ds-left .leader-row,
+.ds-left .leaders-row,
+.ds-left .market-leader-row,
+.ds-left .leaderItem,
+.ds-left .leader-item {
+  padding-left: 14px !important;
+  padding-right: 14px !important;
+  box-sizing: border-box;
+}
+
+.ds-left .ml-move,
+.ds-left .leader-move,
+.ds-left .leaders-move,
+.ds-left .moveCol,
+.ds-left .move-col,
+.ds-left .ml-right,
+.ds-left .leader-right {
+  margin-right: 0 !important;
+  padding-right: 0 !important;
+}
+
+.ds-left .ml-row,
+.ds-left .leader-row,
+.ds-left .leaders-row,
+.ds-left .market-leader-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
 }

@@ -1,12 +1,18 @@
+/* ========= FULL PAGE LOADER ============================ */
+
 .fpl-wrap {
   position: fixed;
   inset: 0;
-  background: var(--bg, #f9fafb);
+
+  /* Match loader animation background */
+  background: #fffdf7;
+
   display: grid;
   place-items: center;
   z-index: 9999;
 }
 
+/* Loader card (logo + text container) */
 .fpl-card {
   display: flex;
   flex-direction: column;
@@ -14,6 +20,7 @@
   gap: 16px;
 }
 
+/* Loader image */
 .fpl-loader-image {
   width: 220px;
   height: 220px;
@@ -22,8 +29,9 @@
   pointer-events: none;
 }
 
+/* Loading text */
 .fpl-text {
   font-size: 0.95rem;
-  color: #4b5563;
+  color: #4b5563; /* neutral gray, still readable on cream */
   letter-spacing: 0.02em;
 }

@@ -1,5 +1,5 @@
 // src/components/dashboard/cards/SentimentCard.jsx
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import "../../../css/dashboard/cards/SentimentCard.css";
 
 const SENTIMENT_MODES = [
@@ -17,8 +17,11 @@ export default function SentimentCard({
 }) {
   const [mode, setMode] = useState("ALL");
   const [showHelp, setShowHelp] = useState(false);
+  const closeBtnRef = useRef(null);
 
-  const history = symbol ? historyBySymbol[symbol] || [] : [];
+  const safeHistoryBySymbol =
+    historyBySymbol && typeof historyBySymbol === "object" ? historyBySymbol : {};
+  const history = symbol ? safeHistoryBySymbol[symbol] || [] : [];
 
   // Local fallback sentiment from price history only
   const localSentiment = useMemo(
@@ -42,7 +45,6 @@ export default function SentimentCard({
         overallScore: backendSnapshot.overall_score,
       };
     }
-    // local fallback
     if (localSentiment?.hasEnoughData) {
       return {
         source: "local",
@@ -66,8 +68,22 @@ export default function SentimentCard({
     };
   }, [backendSnapshot, localSentiment]);
 
-  const hasData = sentiment.hasEnoughData;
+  const hasData = Boolean(sentiment.hasEnoughData);
   const displayTicker = symbol || "—";
+
+  // Help modal: ESC closes + focus close button
+  useEffect(() => {
+    if (!showHelp) return;
+
+    closeBtnRef.current?.focus?.();
+
+    const onKey = (e) => {
+      if (e.key === "Escape") setShowHelp(false);
+    };
+
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [showHelp]);
 
   return (
     <section className="sentiment-card">
@@ -138,21 +154,20 @@ export default function SentimentCard({
           )}
         </div>
 
-        {/* VIEW dropdown – same style as chart dropdown */}
         <SentimentModeDropdown mode={mode} onChange={setMode} />
       </header>
 
-      {/* FULL-SCREEN HELP MODAL */}
       {showHelp && (
         <div
           className="help-popover-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Sentiment explanation"
           onClick={() => setShowHelp(false)}
         >
-          <div
-            className="help-popover"
-            onClick={(e) => e.stopPropagation()}
-          >
+          <div className="help-popover" onClick={(e) => e.stopPropagation()}>
             <button
+              ref={closeBtnRef}
               type="button"
               className="help-popover__close"
               aria-label="Close explanation"
@@ -160,34 +175,40 @@ export default function SentimentCard({
             >
               ×
             </button>
-            <h3 className="help-popover__title">What does this “Sentiment” mean?</h3>
 
-              <p className="help-popover__text">
-                Right now, this card is <strong>price-derived sentiment</strong> — it summarizes what the
-                price has been doing recently. It does <strong>not</strong> include news, social media,
-                fundamentals, or macro data yet.
-              </p>
+            <h3 className="help-popover__title">
+              What does this “Sentiment” mean?
+            </h3>
 
-              <ul className="help-popover__list">
-                <li>
-                  <strong>Price-based</strong> looks at recent returns (1D, 5D, ~20D) and labels the move
-                  as bullish/bearish/neutral.
-                </li>
-                <li>
-                  <strong>Volatility</strong> uses realized volatility from daily returns to describe
-                  whether price action is calm, normal, or stressed.
-                </li>
-                <li>
-                  <strong>Technical</strong> compares the latest close to moving averages (20/50-day) to
-                  detect trend vs mixed/range behavior.
-                </li>
-              </ul>
+            <p className="help-popover__text">
+              Right now, this card is <strong>price-derived sentiment</strong> —
+              it summarizes what the price has been doing recently. It does{" "}
+              <strong>not</strong> include news, social media, fundamentals, or
+              macro data yet.
+            </p>
 
-              <p className="help-popover__note">
-                <strong>Exploration only.</strong> This is not a trading signal or investment advice.
-                Next upgrades: combine price signals with news + social sentiment + fundamentals, and
-                store decision logs with confidence + outcome tracking.
-              </p>
+            <ul className="help-popover__list">
+              <li>
+                <strong>Price-based</strong> looks at recent returns (1D, 5D,
+                ~20D) and labels the move as bullish/bearish/neutral.
+              </li>
+              <li>
+                <strong>Volatility</strong> uses realized volatility from daily
+                returns to describe whether price action is calm, normal, or
+                stressed.
+              </li>
+              <li>
+                <strong>Technical</strong> compares the latest close to moving
+                averages (20/50-day) to detect trend vs mixed/range behavior.
+              </li>
+            </ul>
+
+            <p className="help-popover__note">
+              <strong>Exploration only.</strong> This is not a trading signal or
+              investment advice. Next upgrades: combine price signals with news
+              + social sentiment + fundamentals, and store decision logs with
+              confidence + outcome tracking.
+            </p>
           </div>
         </div>
       )}
@@ -250,11 +271,7 @@ export default function SentimentCard({
                 {sentiment.crossSection?.ret_20d_pct != null && (
                   <div className="sentiment-metric">
                     <dt>20D Return Rank</dt>
-                    <dd>
-                      {formatPercentile(
-                        sentiment.crossSection.ret_20d_pct
-                      )}
-                    </dd>
+                    <dd>{formatPercentile(sentiment.crossSection.ret_20d_pct)}</dd>
                   </div>
                 )}
               </dl>
@@ -347,13 +364,13 @@ export default function SentimentCard({
   );
 }
 
-/* ---------- Dropdown for VIEW (matches ticker styles) ---------------------- */
+/* ---------- Dropdown for VIEW (keyboard + click-outside) ------------------- */
 
 function SentimentModeDropdown({ mode, onChange }) {
   const [isOpen, setIsOpen] = useState(false);
+  const wrapRef = useRef(null);
 
-  const current =
-    SENTIMENT_MODES.find((m) => m.value === mode) || SENTIMENT_MODES[0];
+  const current = SENTIMENT_MODES.find((m) => m.value === mode) || SENTIMENT_MODES[0];
   const labelText = mode === "ALL" ? "View" : current.label;
 
   const handleSelect = (value) => {
@@ -361,8 +378,28 @@ function SentimentModeDropdown({ mode, onChange }) {
     setIsOpen(false);
   };
 
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const onDocClick = (e) => {
+      if (!wrapRef.current) return;
+      if (!wrapRef.current.contains(e.target)) setIsOpen(false);
+    };
+
+    const onKey = (e) => {
+      if (e.key === "Escape") setIsOpen(false);
+    };
+
+    document.addEventListener("mousedown", onDocClick);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [isOpen]);
+
   return (
-    <div className="chart-search-dropdown sentiment-mode-dropdown">
+    <div ref={wrapRef} className="chart-search-dropdown sentiment-mode-dropdown">
       <button
         type="button"
         className="chart-select chart-select--button"
@@ -377,18 +414,24 @@ function SentimentModeDropdown({ mode, onChange }) {
 
       {isOpen && (
         <div className="chart-select-menu">
-          <ul className="chart-select-options" role="listbox">
+          <ul className="chart-select-options" role="listbox" aria-label="Sentiment modes">
             {SENTIMENT_MODES.map((option) => (
               <li
                 key={option.value}
                 role="option"
+                tabIndex={0}
+                aria-selected={option.value === mode}
                 className={
                   "chart-select-option" +
-                  (option.value === mode
-                    ? " chart-select-option--active"
-                    : "")
+                  (option.value === mode ? " chart-select-option--active" : "")
                 }
                 onClick={() => handleSelect(option.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    handleSelect(option.value);
+                  }
+                }}
               >
                 {option.label}
               </li>
@@ -401,7 +444,6 @@ function SentimentModeDropdown({ mode, onChange }) {
 }
 
 /* ---------- Formatting helpers & fallback sentiment (unchanged) ------------ */
-// (keep everything from formatPct down exactly as in your current file)
 function formatPct(v) {
   if (v === null || v === undefined || isNaN(v)) return "—";
   return `${v >= 0 ? "+" : ""}${v.toFixed(2)}%`;
@@ -434,7 +476,6 @@ function classForPct(v) {
 }
 
 /* ---------- Local fallback sentiment (unchanged from your original) ------- */
-
 function computeSentimentFromHistory(history = []) {
   if (!Array.isArray(history) || history.length < 3) {
     return {

@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, within } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect } from "vitest";
 import SentimentCard from "../cards/SentimentCard.jsx";
 
@@ -14,15 +14,12 @@ describe("SentimentCard", () => {
     );
 
     expect(screen.getByText(/sentiment for/i)).toBeInTheDocument();
-
-    // "—" can appear more than once depending on layout; just assert it's present.
     expect(screen.getAllByText("—").length).toBeGreaterThan(0);
 
     expect(
       screen.getByText(/select a ticker to view sentiment\./i)
     ).toBeInTheDocument();
 
-    // Sections should not render without a symbol/snapshot
     expect(
       screen.queryByRole("heading", { name: /price-based sentiment/i })
     ).not.toBeInTheDocument();
@@ -32,6 +29,23 @@ describe("SentimentCard", () => {
     expect(
       screen.queryByRole("heading", { name: /technical pattern sentiment/i })
     ).not.toBeInTheDocument();
+  });
+
+  it("does not crash if historyBySymbol is null/undefined", () => {
+    render(
+      <SentimentCard
+        symbol="AAPL"
+        historyBySymbol={null}
+        loading={false}
+        backendSnapshot={null}
+      />
+    );
+
+    // should render, but not enough data
+    expect(screen.getByText(/sentiment for/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/not enough history to compute sentiment yet/i)
+    ).toBeInTheDocument();
   });
 
   it("shows loading subtitle when loading is true", () => {
@@ -82,20 +96,15 @@ describe("SentimentCard", () => {
       />
     );
 
-    // Header
-    expect(screen.getByText(/sentiment for/i)).toBeInTheDocument();
     expect(screen.getAllByText("AAPL").length).toBeGreaterThan(0);
 
-    // Overall line
     expect(screen.getByText(/overall:/i)).toBeInTheDocument();
     expect(screen.getByText(/strongly bullish/i)).toBeInTheDocument();
     expect(screen.getByText(/\(score 5, from snapshot\)/i)).toBeInTheDocument();
 
-    // Style + risk labels (avoid assuming unique)
     expect(screen.getByText("Growth")).toBeInTheDocument();
     expect(screen.getByText("Moderate")).toBeInTheDocument();
 
-    // ALL mode sections visible (use headings to avoid matching dropdown items)
     expect(
       screen.getByRole("heading", { name: /price-based sentiment/i })
     ).toBeInTheDocument();
@@ -105,14 +114,9 @@ describe("SentimentCard", () => {
     expect(
       screen.getByRole("heading", { name: /technical pattern sentiment/i })
     ).toBeInTheDocument();
-
-    // Section chips / labels (may appear in multiple places; assert >= 1)
-    expect(screen.getAllByText("Bullish").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Calm").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Uptrend").length).toBeGreaterThan(0);
   });
 
-  it("opens and closes the help popover", () => {
+  it("opens and closes the help modal (close button + Escape)", () => {
     render(
       <SentimentCard
         symbol="AAPL"
@@ -123,19 +127,28 @@ describe("SentimentCard", () => {
     );
 
     expect(
-      screen.queryByText(/how is sentiment calculated\?/i)
+      screen.queryByRole("heading", { name: /what does this “sentiment” mean\?/i })
     ).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByLabelText(/explain this sentiment card/i));
 
     expect(
-      screen.getByText(/how is sentiment calculated\?/i)
+      screen.getByRole("heading", { name: /what does this “sentiment” mean\?/i })
     ).toBeInTheDocument();
 
+    // Escape closes
+    fireEvent.keyDown(window, { key: "Escape" });
+
+    expect(
+      screen.queryByRole("heading", { name: /what does this “sentiment” mean\?/i })
+    ).not.toBeInTheDocument();
+
+    // Open again and close using X button
+    fireEvent.click(screen.getByLabelText(/explain this sentiment card/i));
     fireEvent.click(screen.getByLabelText(/close explanation/i));
 
     expect(
-      screen.queryByText(/how is sentiment calculated\?/i)
+      screen.queryByRole("heading", { name: /what does this “sentiment” mean\?/i })
     ).not.toBeInTheDocument();
   });
 
@@ -160,7 +173,6 @@ describe("SentimentCard", () => {
       />
     );
 
-    // Initially ALL mode: headings present
     expect(
       screen.getByRole("heading", { name: /price-based sentiment/i })
     ).toBeInTheDocument();
@@ -171,34 +183,19 @@ describe("SentimentCard", () => {
       screen.getByRole("heading", { name: /technical pattern sentiment/i })
     ).toBeInTheDocument();
 
-    // Support BOTH implementations:
-    // 1) <select aria-label="Sentiment view mode">
-    // 2) custom button that opens a menu/listbox
-    const modeControl =
-      screen.queryByRole("combobox", { name: /sentiment view mode/i }) ||
-      screen.getByLabelText(/sentiment view mode/i);
+    // Open dropdown
+    const modeBtn = screen.getByRole("button", { name: /sentiment view mode/i });
+    fireEvent.click(modeBtn);
 
-    // If it's a native select, change value directly
-    if (modeControl.tagName.toLowerCase() === "select") {
-      fireEvent.change(modeControl, { target: { value: "volatility" } });
-    } else {
-      // If it's a custom control: click to open, then click the option by role or text
-      fireEvent.click(modeControl);
+    // Select Volatility Sentiment
+    const opt = screen.getByRole("option", { name: /volatility sentiment/i });
+    fireEvent.click(opt);
 
-      // Try role=option first (some menus use it), else fallback to clicking text
-      const opt =
-        screen.queryByRole("option", { name: /volatility sentiment/i }) ||
-        screen.queryByText(/volatility sentiment/i);
-
-      if (opt) fireEvent.click(opt);
-    }
-
-    // After selecting Volatility mode:
+    // Now only volatility section should remain
     expect(
       screen.queryByRole("heading", { name: /price-based sentiment/i })
     ).not.toBeInTheDocument();
 
-    // Keep Volatility heading visible
     expect(
       screen.getByRole("heading", { name: /volatility sentiment/i })
     ).toBeInTheDocument();

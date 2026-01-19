@@ -1,9 +1,33 @@
-// src/components/dashboard/tests/TopSignalsCard.test.jsx
-import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent, within } from "@testing-library/react";
+// frontend/src/components/dashboard/tests/TopSignalsCard.test.jsx
+import React from "react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { render, screen, fireEvent, within, cleanup } from "@testing-library/react";
 import TopSignalsCard from "../cards/TopSignalsCard.jsx";
 
+// Mock HelpTooltip so we don't depend on its internal DOM
+vi.mock("../../common/HelpTooltip", () => ({
+  default: ({ title, children }) => (
+    <div data-testid="help-tooltip">
+      <button type="button" aria-label={title}>
+        Help
+      </button>
+      <div>{children}</div>
+    </div>
+  ),
+}));
+
 describe("TopSignalsCard", () => {
+  let logSpy;
+
+  beforeEach(() => {
+    logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    cleanup();
+    logSpy.mockRestore();
+  });
+
   it("renders title and help tooltip trigger", () => {
     render(
       <TopSignalsCard
@@ -17,7 +41,7 @@ describe("TopSignalsCard", () => {
 
     expect(screen.getByText(/top signals/i)).toBeInTheDocument();
 
-    // HelpTooltip renders a button with aria-label === title
+    // HelpTooltip mock provides a button with aria-label === title
     expect(
       screen.getByRole("button", { name: /how are top signals ranked\?/i })
     ).toBeInTheDocument();
@@ -36,6 +60,9 @@ describe("TopSignalsCard", () => {
 
     expect(screen.getByText(/loading signals/i)).toBeInTheDocument();
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
+
+    // log once for loading state
+    expect(logSpy).toHaveBeenCalled();
   });
 
   it("shows empty state when no signals and not loading", () => {
@@ -49,10 +76,14 @@ describe("TopSignalsCard", () => {
       />
     );
 
+    // Updated copy
+    expect(screen.getByText(/no signals available yet\./i)).toBeInTheDocument();
     expect(
-      screen.getByText(/no signals available\. run your fetchers \+ indicator scripts\./i)
+      screen.getByText(/start your backend ranking endpoint or run your pipeline/i)
     ).toBeInTheDocument();
+
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    expect(logSpy).toHaveBeenCalled();
   });
 
   it("renders a table with expected headers when signals exist", () => {
@@ -92,24 +123,8 @@ describe("TopSignalsCard", () => {
     const onSelectTicker = vi.fn();
 
     const signals = [
-      {
-        ticker: "AAPL",
-        score: 1.2345,
-        components: {
-          daily: { close_return_1d: 0.0123 },
-          intraday: { intraday_return: 0.0045 },
-          multiday: { return_5d: 0.0678 },
-        },
-      },
-      {
-        ticker: "MSFT",
-        score: 0.9876,
-        components: {
-          daily: { close_return_1d: -0.001 },
-          intraday: { intraday_return: 0.002 },
-          multiday: { return_5d: -0.0123 },
-        },
-      },
+      { ticker: "AAPL", score: 1.2345, components: {} },
+      { ticker: "MSFT", score: 0.9876, components: {} },
       { ticker: "GOOG", score: 0.5, components: {} },
       { ticker: "TSLA", score: -0.4, components: {} },
       { ticker: "AMZN", score: 2.0, components: {} },
@@ -140,31 +155,21 @@ describe("TopSignalsCard", () => {
     expect(aaplRow).not.toBeNull();
     expect(aaplRow).toHaveClass("mini-table-row--active");
 
-    // Click AAPL row triggers selection
     fireEvent.click(aaplRow);
     expect(onSelectTicker).toHaveBeenCalledTimes(1);
     expect(onSelectTicker).toHaveBeenCalledWith("AAPL");
   });
 
-  it("formats numeric fields and shows dashes when missing", () => {
+  it("normalizes alternative row shapes (symbol + daily/return fields)", () => {
     const signals = [
+      // Uses `symbol` instead of `ticker`
+      // Uses daily.return_1d, intraday.return_intraday, multiday.r5d
       {
-        ticker: "AAPL",
-        score: 1.2,
-        components: {
-          daily: { close_return_1d: 0.0123 }, // 1.2%
-          intraday: { intraday_return: 0.0045 }, // 0.5%
-          multiday: { return_5d: 0.0678 }, // 6.8%
-        },
-      },
-      {
-        ticker: "ZZZZ",
-        // score missing -> —
-        components: {
-          daily: {}, // —
-          intraday: {}, // —
-          multiday: {}, // —
-        },
+        symbol: "msft",
+        score: "2.5",
+        daily: { return_1d: 0.01 }, // 1.0%
+        intraday: { return_intraday: 0.005 }, // 0.5%
+        multiday: { r5d: 0.02 }, // 2.0%
       },
     ];
 
@@ -180,25 +185,45 @@ describe("TopSignalsCard", () => {
 
     const table = screen.getByRole("table");
 
-    // AAPL formatted values
-    expect(within(table).getByText("1.20")).toBeInTheDocument(); // score toFixed(2)
-    expect(within(table).getByText("1.2%")).toBeInTheDocument();
-    expect(within(table).getByText("0.4%")).toBeInTheDocument();
-    expect(within(table).getByText("6.8%")).toBeInTheDocument();
+    // ticker uppercased
+    expect(within(table).getByText("MSFT")).toBeInTheDocument();
 
-    // Missing values show "—" (at least one present in that row)
-    // We scope to the ZZZZ row so we don't accidentally match other dashes.
-    const zRow = within(table).getByText("ZZZZ").closest("tr");
-    expect(zRow).not.toBeNull();
-    expect(within(zRow).getAllByText("—").length).toBeGreaterThanOrEqual(1);
+    // score numeric string -> toFixed(2)
+    expect(within(table).getByText("2.50")).toBeInTheDocument();
+
+    // returns shown as pct with one decimal
+    expect(within(table).getByText("1.0%")).toBeInTheDocument();
+    expect(within(table).getByText("0.5%")).toBeInTheDocument();
+    expect(within(table).getByText("2.0%")).toBeInTheDocument();
+  });
+
+  it("shows dashes when numeric fields missing", () => {
+    const signals = [
+      { ticker: "ZZZZ", components: {} }, // score missing, components missing
+    ];
+
+    render(
+      <TopSignalsCard
+        signals={signals}
+        signalsMeta={null}
+        currentTicker=""
+        onSelectTicker={vi.fn()}
+        loading={false}
+      />
+    );
+
+    const table = screen.getByRole("table");
+    const row = within(table).getByText("ZZZZ").closest("tr");
+    expect(row).not.toBeNull();
+
+    // score + 1d + intraday + 5d => should include multiple dashes
+    expect(within(row).getAllByText("—").length).toBeGreaterThanOrEqual(2);
   });
 
   it("renders rankingDescription caption when provided", () => {
     render(
       <TopSignalsCard
-        signals={[
-          { ticker: "AAPL", score: 1, components: {} },
-        ]}
+        signals={[{ ticker: "AAPL", score: 1, components: {} }]}
         signalsMeta={{ rankingDescription: "Ranked by composite signal score." }}
         currentTicker=""
         onSelectTicker={vi.fn()}
@@ -209,5 +234,34 @@ describe("TopSignalsCard", () => {
     expect(
       screen.getByText(/ranked by composite signal score\./i)
     ).toBeInTheDocument();
+  });
+
+  it("does not spam logs when rerendered with same state", () => {
+    const signals = [{ ticker: "AAPL", score: 1, components: {} }];
+
+    const { rerender } = render(
+      <TopSignalsCard
+        signals={signals}
+        signalsMeta={null}
+        currentTicker=""
+        onSelectTicker={vi.fn()}
+        loading={false}
+      />
+    );
+
+    const firstCalls = logSpy.mock.calls.length;
+
+    // rerender with same inputs should not log again due to internal key tracking
+    rerender(
+      <TopSignalsCard
+        signals={signals}
+        signalsMeta={null}
+        currentTicker=""
+        onSelectTicker={vi.fn()}
+        loading={false}
+      />
+    );
+
+    expect(logSpy.mock.calls.length).toBe(firstCalls);
   });
 });

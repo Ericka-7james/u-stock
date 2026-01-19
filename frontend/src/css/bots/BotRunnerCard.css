@@ -1,0 +1,221 @@
+/* src/css/bots/botRunnerCard.css */
+
+.botrun-panel { display:flex; flex-direction:column; gap:12px; }
+
+.botrun-top { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; }
+
+.botrun-titleRow { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+
+.botrun-title { margin:0; font-size:18px; font-weight:750; color: var(--ustock-text-strong, #0f172a); }
+
+.botrun-subtitle { margin:6px 0 0; font-size:13px; color: var(--ustock-text-muted, #475569); max-width:70ch; }
+
+.botrun-actions { display:flex; gap:10px; align-items:center; }
+
+/* Buttons */
+.botrun-btn {
+  border-radius: 14px;
+  padding: 10px 14px;
+  font-weight: 700;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: transform 120ms ease, opacity 120ms ease, background 120ms ease;
+}
+.botrun-btn:disabled { opacity:0.55; cursor:not-allowed; transform:none; }
+
+.botrun-btn--start {
+  background: rgba(33, 194, 117, 0.20);
+  border-color: rgba(33, 194, 117, 0.35);
+  color: var(--ustock-text-strong, #0f172a);
+}
+.botrun-btn--start:hover:not(:disabled) { transform: translateY(-1px); background: rgba(33, 194, 117, 0.26); }
+
+.botrun-btn--pause {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: rgba(33, 194, 117, 0.35);
+  color: var(--ustock-text-strong, #0f172a);
+}
+.botrun-btn--pause:hover:not(:disabled) { transform: translateY(-1px); background: rgba(33, 194, 117, 0.10); }
+
+.botrun-linkBtn {
+  margin-left: 10px;
+  background: transparent;
+  border: none;
+  color: var(--ustock-green-main, #21c275);
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+}
+
+/* Banners */
+.botrun-banner {
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 13px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--ustock-text-strong, #0f172a);
+}
+.botrun-banner--ok { border-color: rgba(33, 194, 117, 0.30); background: rgba(33, 194, 117, 0.10); }
+.botrun-banner--warn { border-color: rgba(245, 158, 11, 0.30); background: rgba(245, 158, 11, 0.08); }
+.botrun-banner--error { border-color: rgba(239, 68, 68, 0.30); background: rgba(239, 68, 68, 0.08); }
+
+/* Pills */
+.botrun-pill {
+  display:inline-flex;
+  align-items:center;
+  padding:6px 10px;
+  border-radius:999px;
+  font-size:12px;
+  border:1px solid rgba(15, 23, 42, 0.10);
+  background: rgba(255,255,255,0.85);
+  color: var(--ustock-text-strong, #0f172a);
+}
+.botrun-pill--on { border-color: rgba(33, 194, 117, 0.35); background: rgba(33, 194, 117, 0.12); }
+.botrun-pill--off { opacity:0.85; }
+.botrun-pill--warn { border-color: rgba(245,158,11,0.35); background: rgba(245,158,11,0.10); }
+.botrun-pill--bad { border-color: rgba(239,68,68,0.35); background: rgba(239,68,68,0.10); }
+.botrun-pill--paused { border-color: rgba(59,130,246,0.35); background: rgba(59,130,246,0.10); }
+
+/* Layout */
+.botrun-body--new { display:grid; grid-template-columns: 1.25fr 1fr; gap:12px; }
+
+@media (max-width: 900px) {
+  .botrun-top { flex-direction: column; }
+  .botrun-actions { width:100%; justify-content:flex-end; }
+  .botrun-body--new { grid-template-columns: 1fr; }
+}
+
+/* Boxes */
+.botrun-box {
+  border-radius: 14px;
+  border: 1px solid rgba(15, 23, 42, 0.10);
+  background: rgba(255, 255, 255, 0.95);
+  padding: 12px;
+}
+.botrun-boxHeader {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  margin-bottom:10px;
+}
+.botrun-boxTitle {
+  font-size:13px;
+  font-weight:800;
+  color: var(--ustock-text-strong, #0f172a);
+}
+.botrun-muted { font-size:12px; color: var(--ustock-text-muted, #64748b); }
+
+/* Select row + spacing */
+.botrun-rowInline {
+  display:grid;
+  grid-template-columns: 140px 1fr;
+  column-gap: 18px;
+  align-items:center;
+  margin-top: 6px;
+}
+.botrun-labelInline { font-size:12px; color: var(--ustock-text-muted, #64748b); }
+.botrun-selectInline {
+  border-radius:12px;
+  padding:10px 12px;
+  border:1px solid rgba(15,23,42,0.10);
+  background:#fff;
+  color: var(--ustock-text-strong, #0f172a);
+  outline:none;
+}
+
+/* Running list */
+.botrun-runningList { list-style:none; padding:0; margin:0; display:grid; gap:10px; }
+.botrun-runningItem {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:12px;
+  padding:10px 12px;
+  border-radius:12px;
+  border:1px solid rgba(15,23,42,0.08);
+  background: rgba(255,255,255,0.95);
+}
+.botrun-runningName { font-size:13px; color: var(--ustock-text-strong, #0f172a); }
+
+/* ✅ Logs button (replaces Running pill in list) */
+.botrun-logsBtn {
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  border: 1px solid rgba(33, 194, 117, 0.35);
+  background: rgba(33, 194, 117, 0.12);
+  color: var(--ustock-text-strong, #0f172a);
+  transition: transform 120ms ease, background 120ms ease;
+}
+.botrun-logsBtn:hover { transform: translateY(-1px); background: rgba(33, 194, 117, 0.18); }
+
+/* Footer */
+.botrun-foot { font-size:12px; color: var(--ustock-text-muted, #64748b); }
+
+/* ✅ Modal */
+.botrun-modalBackdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 6, 23, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 9999;
+}
+
+.botrun-modal {
+  width: min(720px, 100%);
+  border-radius: 16px;
+  background: #ffffff;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  box-shadow: 0 24px 60px rgba(2, 6, 23, 0.25);
+  padding: 14px;
+  position: relative;
+}
+
+.botrun-modalClose {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid rgba(15, 23, 42, 0.10);
+  background: rgba(255, 255, 255, 0.95);
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 0;
+}
+
+.botrun-modalHeader { padding: 6px 6px 10px; }
+.botrun-modalTitle { font-size: 16px; font-weight: 900; color: #0f172a; }
+.botrun-modalSub { margin-top: 4px; font-size: 12px; color: #64748b; }
+.botrun-modalBot { font-weight: 800; color: #0f172a; }
+
+.botrun-modalBody {
+  border-radius: 14px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(2, 6, 23, 0.03);
+  padding: 12px;
+  max-height: 320px;
+  overflow: auto;
+}
+
+.botrun-logText {
+  margin: 0;
+  white-space: pre-wrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 12.5px;
+  color: #0f172a;
+}
+
+.botrun-modalActions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px 6px 6px;
+}

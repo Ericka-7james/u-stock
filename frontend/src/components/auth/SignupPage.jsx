@@ -1,12 +1,20 @@
 // src/components/auth/SignupPage.jsx
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import AppShell from "../layout/AppShell";
 import { useAuth } from "../../context/AuthContext";
-import "./SignupPage.css";
+import "../../css/auth/SignupPage.css";
+
+function getErrorMessage(err) {
+  if (!err) return "Something went wrong while creating your account.";
+  if (typeof err === "string") return err;
+  if (typeof err === "object" && "message" in err && err.message) return String(err.message);
+  return "Something went wrong while creating your account.";
+}
 
 export default function SignupPage() {
   const { signup } = useAuth();
+  const navigate = useNavigate();
 
   const [name, setName] = useState(""); // maps to username for backend
   const [email, setEmail] = useState("");
@@ -25,6 +33,8 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false);
 
   const avatars = ["📈", "📊", "🤖", "💡"];
+
+  const emailRegex = useMemo(() => /^[^\s@]+@[^\s@]+\.[^\s@]+$/, []);
 
   const validate = () => {
     const nextErrors = {
@@ -45,7 +55,6 @@ export default function SignupPage() {
     }
 
     // --- Email: required + basic pattern ---
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!trimmedEmail || !emailRegex.test(trimmedEmail)) {
       nextErrors.email = "Please enter a valid email address.";
     }
@@ -89,6 +98,7 @@ export default function SignupPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (loading) return;
 
     setErrors((prev) => ({ ...prev, backend: "" }));
 
@@ -105,12 +115,10 @@ export default function SignupPage() {
         avatar,
       });
 
-      // Optional: redirect or show success here
-      // e.g. navigate("/dashboard")
+      // v1 UX: go back to sign-in page after successful signup
+      navigate("/auth");
     } catch (err) {
-      const message =
-        err?.message || "Something went wrong while creating your account.";
-      setErrors((prev) => ({ ...prev, backend: message }));
+      setErrors((prev) => ({ ...prev, backend: getErrorMessage(err) }));
     } finally {
       setLoading(false);
     }
@@ -126,56 +134,91 @@ export default function SignupPage() {
           </p>
 
           {/* backend errors */}
-          {errors.backend && <p className="form-error">{errors.backend}</p>}
+          {errors.backend && (
+            <p className="form-error" role="alert" aria-live="polite">
+              {errors.backend}
+            </p>
+          )}
 
           <form className="signup-form" onSubmit={handleSubmit} noValidate>
             {/* Name */}
-            <label className="signup-field">
+            <label className="signup-field" htmlFor="signup-name">
               <span>Name</span>
               <input
+                id="signup-name"
+                name="name"
                 type="text"
                 required
                 value={name}
                 onChange={(e) => setName(e.target.value)}
+                autoComplete="name"
+                disabled={loading}
               />
-              {errors.name && <p className="signup-error">{errors.name}</p>}
+              {errors.name && (
+                <p className="signup-error" role="alert" aria-live="polite">
+                  {errors.name}
+                </p>
+              )}
             </label>
 
             {/* Email */}
-            <label className="signup-field">
+            <label className="signup-field" htmlFor="signup-email">
               <span>Email</span>
               <input
+                id="signup-email"
+                name="email"
                 type="email"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                autoComplete="email"
+                disabled={loading}
               />
-              {errors.email && <p className="signup-error">{errors.email}</p>}
+              {errors.email && (
+                <p className="signup-error" role="alert" aria-live="polite">
+                  {errors.email}
+                </p>
+              )}
             </label>
 
             {/* Phone (optional) */}
-            <label className="signup-field">
+            <label className="signup-field" htmlFor="signup-phone">
               <span>Phone number (optional)</span>
               <input
+                id="signup-phone"
+                name="phone"
                 type="tel"
                 placeholder="(555) 555-5555"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
+                autoComplete="tel"
+                disabled={loading}
               />
-              {errors.phone && <p className="signup-error">{errors.phone}</p>}
+              {errors.phone && (
+                <p className="signup-error" role="alert" aria-live="polite">
+                  {errors.phone}
+                </p>
+              )}
             </label>
 
             {/* Password */}
-            <label className="signup-field">
+            <label className="signup-field" htmlFor="signup-password">
               <span>Password</span>
               <input
+                id="signup-password"
+                name="password"
                 type="password"
                 autoComplete="new-password"
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                disabled={loading}
               />
-              {errors.password && <p className="signup-error">{errors.password}</p>}
+              {errors.password && (
+                <p className="signup-error" role="alert" aria-live="polite">
+                  {errors.password}
+                </p>
+              )}
             </label>
 
             {/* Avatar selection */}
@@ -191,6 +234,8 @@ export default function SignupPage() {
                       (avatar === icon ? " signup-avatar-chip--active" : "")
                     }
                     onClick={() => setAvatar(icon)}
+                    aria-pressed={avatar === icon}
+                    disabled={loading}
                   >
                     {icon}
                   </button>
