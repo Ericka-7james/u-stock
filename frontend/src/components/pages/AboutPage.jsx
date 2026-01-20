@@ -124,9 +124,11 @@ export default function AboutPage() {
           </div>
         </article>
 
-        {/* Builder card spans 2 columns so those two cards sit next to it */}
+        {/* Builder card spans 2 columns */}
         <article className="about-card about-span2">
-          <h2>About the builder</h2>
+          <div className="about-builderHead">
+            <h2>About the builder</h2>
+          </div>
 
           <div className="about-builderRow">
             <div className="about-avatarWrap" title="Ericka James">
