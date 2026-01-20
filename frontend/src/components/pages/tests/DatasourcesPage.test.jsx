@@ -1,10 +1,8 @@
-// src/components/pages/tests/DatasourcesPage.test.jsx
+// frontend/src/components/pages/tests/DatasourcesPage.test.jsx
+import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-
-// If DatasourcesPage imports charts/images/etc, you may need these mocks:
-// vi.mock("recharts", async () => await import("./__mocks__/recharts")); // example if needed
 
 // Mock AuthContext (AppShell uses it in your app)
 vi.mock("../../../context/AuthContext", () => ({
@@ -12,10 +10,12 @@ vi.mock("../../../context/AuthContext", () => ({
     user: null,
     isAuthed: false,
     refreshSession: vi.fn(),
+    login: vi.fn(),
+    signup: vi.fn(),
+    logout: vi.fn(),
   }),
 }));
 
-// Mock any config used by DatasourcesPage if it hits API_BASE/API_PREFIX
 vi.mock("../../../config/config", () => ({
   API_BASE: "",
   API_PREFIX: "/api",
@@ -23,82 +23,74 @@ vi.mock("../../../config/config", () => ({
 
 import DatasourcesPage from "../DatasourcesPage";
 
+function jsonOk(payload) {
+  return {
+    ok: true,
+    status: 200,
+    json: async () => payload,
+  };
+}
+
 describe("DatasourcesPage", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
 
-    // Global fetch mock
     global.fetch = vi.fn(async (url) => {
       const u = String(url);
 
-      // ✅ Mock endpoints your page calls
-      if (u.includes("/api/market/movers") || u.includes("/api/market/leaders")) {
-        return {
-          ok: true,
-          status: 200,
-          json: async () => ({
-            as_of: "2025-01-18T21:00:00Z",
-            movers: [
-              {
-                symbol: "VERO",
-                last: 8.0,
-                prev_close: 7.65,
-              },
-              {
-                symbol: "JFBR",
-                last: 1.29,
-                prev_close: 0.56,
-              },
-            ],
-            source: "Alpaca market movers (today)",
-          }),
-        };
+      // Market leaders (REAL endpoint your page uses)
+      if (u.includes("/api/market/leaders")) {
+        return jsonOk({
+          items: [
+            { symbol: "VERO", last: 8.0, prev_close: 7.65 },
+            { symbol: "JFBR", last: 1.29, prev_close: 0.56 },
+          ],
+          source: { code: "alpaca_movers", label: "Alpaca market movers (today)" },
+          asOf: "2025-01-18T21:00:00Z",
+        });
       }
 
-      if (u.includes("/api/bots/logs")) {
-        return {
-          ok: true,
-          status: 200,
-          json: async () => ({
-            bot_id: "ema_trend",
-            days: ["2025-01-18"],
-            logs: [
-              {
-                ts: "2025-01-18T21:31:40Z",
-                level: "WARN",
-                message: "Retrying submit",
-                meta: { attempt: 1 },
-              },
-              {
-                ts: "2025-01-18T21:30:47Z",
-                level: "INFO",
-                message: "State changed",
-                meta: { from: "running", to: "paused" },
-              },
-              {
-                ts: "2025-01-18T21:30:02Z",
-                level: "ERROR",
-                message: "Runner error",
-                meta: { code: "E_RUN" },
-              },
-            ],
-            effective_state: "unknown",
-          }),
-        };
+      // Bot logs (REAL endpoint your page uses)
+      if (u.includes("/api/bots/log")) {
+        return jsonOk({
+          items: [
+            {
+              ts: 1737235900,
+              level: "WARN",
+              message: "Retrying submit",
+              meta: { attempt: 1 },
+              bot_id: "ema_trend",
+            },
+            {
+              ts: 1737235847,
+              level: "INFO",
+              message: "State changed",
+              meta: { from: "running", to: "paused" },
+              bot_id: "ema_trend",
+            },
+            {
+              ts: 1737235802,
+              level: "ERROR",
+              message: "Runner error",
+              meta: { code: "E_RUN" },
+              bot_id: "ema_trend",
+            },
+          ],
+        });
       }
 
-      // Default fallback — keeps tests from hanging
-      return {
-        ok: true,
-        status: 200,
-        json: async () => ({}),
-      };
+      // Bot status is called too
+      if (u.includes("/api/bots/status")) {
+        return jsonOk({ effective_state: "unknown" });
+      }
+
+      return jsonOk({});
     });
   });
 
   function renderPage() {
     return render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={["/data-sources"]}>
         <DatasourcesPage />
       </MemoryRouter>
     );
@@ -111,8 +103,6 @@ describe("DatasourcesPage", () => {
       await screen.findByRole("heading", { name: /market leaders & bot logs/i })
     ).toBeInTheDocument();
 
-    // ✅ DO NOT use the “…” ellipsis character in regex.
-    // Match exactly what the DOM has.
     expect(
       await screen.findByRole("heading", { name: "Bot Logs" })
     ).toBeInTheDocument();
@@ -121,24 +111,26 @@ describe("DatasourcesPage", () => {
   it("renders market leader rows and allows clicking a symbol button", async () => {
     renderPage();
 
-    // Wait for a row to exist
+    // ensure leaders loaded
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+
     const jfbrBtn = await screen.findByRole("button", { name: /jfbr/i });
     expect(jfbrBtn).toBeInTheDocument();
 
     fireEvent.click(jfbrBtn);
 
-    // If clicking triggers navigation or callback, assert whatever YOUR component does.
-    // At minimum, ensure it didn't crash:
-    expect(screen.getByText(/market leaders/i)).toBeInTheDocument();
+    // ✅ Avoid ambiguous "market leaders" text (exists in multiple places).
+    // Just verify the hero heading is still present after click.
+    expect(
+      screen.getByRole("heading", { name: /market leaders & bot logs/i })
+    ).toBeInTheDocument();
   });
 
   it("renders bot log preview entries", async () => {
     renderPage();
 
-    // Ensure panel exists
     await screen.findByRole("heading", { name: "Bot Logs" });
 
-    // Your DOM shows these messages, so these should be present
     expect(await screen.findByText(/retrying submit/i)).toBeInTheDocument();
     expect(await screen.findByText(/state changed/i)).toBeInTheDocument();
     expect(await screen.findByText(/runner error/i)).toBeInTheDocument();

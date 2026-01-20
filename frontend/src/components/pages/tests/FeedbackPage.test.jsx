@@ -1,4 +1,5 @@
-// src/components/pages/tests/FeedbackPage.test.jsx
+// frontend/src/components/pages/tests/FeedbackPage.test.jsx
+import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
@@ -14,6 +15,9 @@ vi.mock("../../../context/AuthContext", () => ({
     user: null,
     isAuthed: false,
     refreshSession: vi.fn(),
+    login: vi.fn(),
+    signup: vi.fn(),
+    logout: vi.fn(),
   }),
 }));
 
@@ -35,17 +39,13 @@ describe("FeedbackPage", () => {
   it("renders the feedback form and fields", () => {
     renderPage();
 
-    expect(
-      screen.getByRole("heading", { name: /feedback/i })
-    ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /feedback/i })).toBeInTheDocument();
     expect(screen.getByLabelText(/^name$/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/contact email/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/feedback type/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/^message$/i)).toBeInTheDocument();
 
-    expect(
-      screen.getByRole("button", { name: /send feedback/i })
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /send feedback/i })).toBeInTheDocument();
   });
 
   it("disables submit until message has at least 3 words", async () => {
@@ -55,15 +55,14 @@ describe("FeedbackPage", () => {
     expect(submit).toBeDisabled();
 
     fireEvent.change(screen.getByLabelText(/^message$/i), {
-      target: { value: "Too short" }, // 2 words
+      target: { value: "Too short" },
     });
     expect(submit).toBeDisabled();
 
     fireEvent.change(screen.getByLabelText(/^message$/i), {
-      target: { value: "This is enough" }, // 3 words
+      target: { value: "This is enough" },
     });
 
-    // In tests, captchaRequired=false so captcha never blocks.
     await waitFor(() => expect(submit).not.toBeDisabled());
   });
 
@@ -72,7 +71,6 @@ describe("FeedbackPage", () => {
       ok: true,
       status: 200,
       json: async () => ({ ok: true }),
-      text: async () => JSON.stringify({ ok: true }),
     });
 
     renderPage();
@@ -82,7 +80,7 @@ describe("FeedbackPage", () => {
     });
 
     fireEvent.change(screen.getByLabelText(/^message$/i), {
-      target: { value: "This dashboard is clean" }, // 4 words
+      target: { value: "This dashboard is clean" },
     });
 
     const submit = screen.getByRole("button", { name: /send feedback/i });
@@ -90,13 +88,8 @@ describe("FeedbackPage", () => {
 
     fireEvent.click(submit);
 
-    await waitFor(() => {
-      expect(fetch).toHaveBeenCalledTimes(1);
-    });
-
-    expect(
-      await screen.findByText(/sent!\s*thank you/i)
-    ).toBeInTheDocument();
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText(/sent!\s*thank you/i)).toBeInTheDocument();
   });
 
   it("shows server error when submission fails", async () => {
@@ -104,13 +97,12 @@ describe("FeedbackPage", () => {
       ok: false,
       status: 500,
       json: async () => ({ detail: "Server error" }),
-      text: async () => JSON.stringify({ detail: "Server error" }),
     });
 
     renderPage();
 
     fireEvent.change(screen.getByLabelText(/^message$/i), {
-      target: { value: "Something broke badly" }, // 3 words
+      target: { value: "Something broke badly" },
     });
 
     const submit = screen.getByRole("button", { name: /send feedback/i });
@@ -118,10 +110,7 @@ describe("FeedbackPage", () => {
 
     fireEvent.click(submit);
 
-    await waitFor(() => {
-      expect(fetch).toHaveBeenCalledTimes(1);
-    });
-
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
     expect(await screen.findByText(/server error/i)).toBeInTheDocument();
   });
 
@@ -137,15 +126,11 @@ describe("FeedbackPage", () => {
     });
 
     fireEvent.change(screen.getByLabelText(/^message$/i), {
-      target: { value: "Feature idea: alerts now" }, // 4 words
+      target: { value: "Feature idea: alerts now" },
     });
 
     expect(screen.getByLabelText(/^name$/i)).toHaveValue("Ericka");
-    expect(screen.getByLabelText(/contact email/i)).toHaveValue(
-      "test@example.com"
-    );
-    expect(screen.getByLabelText(/^message$/i)).toHaveValue(
-      "Feature idea: alerts now"
-    );
+    expect(screen.getByLabelText(/contact email/i)).toHaveValue("test@example.com");
+    expect(screen.getByLabelText(/^message$/i)).toHaveValue("Feature idea: alerts now");
   });
 });
