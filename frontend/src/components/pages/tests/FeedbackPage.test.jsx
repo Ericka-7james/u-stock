@@ -1,6 +1,12 @@
+// src/components/pages/tests/FeedbackPage.test.jsx
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
+
+// ✅ Turnstile isn't needed for tests; mock it so render is stable.
+vi.mock("react-turnstile", () => ({
+  default: () => null,
+}));
 
 // Mock AuthContext
 vi.mock("../../../context/AuthContext", () => ({
@@ -15,7 +21,7 @@ import FeedbackPage from "../FeedbackPage";
 
 describe("FeedbackPage", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    global.fetch = vi.fn();
   });
 
   function renderPage() {
@@ -29,16 +35,20 @@ describe("FeedbackPage", () => {
   it("renders the feedback form and fields", () => {
     renderPage();
 
-    expect(screen.getByRole("heading", { name: /feedback/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: /feedback/i })
+    ).toBeInTheDocument();
     expect(screen.getByLabelText(/^name$/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/contact email/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/feedback type/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/^message$/i)).toBeInTheDocument();
 
-    expect(screen.getByRole("button", { name: /send feedback/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /send feedback/i })
+    ).toBeInTheDocument();
   });
 
-  it("disables submit until message has at least 3 words", () => {
+  it("disables submit until message has at least 3 words", async () => {
     renderPage();
 
     const submit = screen.getByRole("button", { name: /send feedback/i });
@@ -47,19 +57,17 @@ describe("FeedbackPage", () => {
     fireEvent.change(screen.getByLabelText(/^message$/i), {
       target: { value: "Too short" }, // 2 words
     });
-
     expect(submit).toBeDisabled();
 
     fireEvent.change(screen.getByLabelText(/^message$/i), {
       target: { value: "This is enough" }, // 3 words
     });
 
-    // In tests (import.meta.env.DEV true), captcha shouldn't block
-    expect(submit).not.toBeDisabled();
+    // In tests, captchaRequired=false so captcha never blocks.
+    await waitFor(() => expect(submit).not.toBeDisabled());
   });
 
   it("submits feedback successfully and shows success message", async () => {
-    // override default fetch mock for this test
     fetch.mockResolvedValueOnce({
       ok: true,
       status: 200,
@@ -77,13 +85,18 @@ describe("FeedbackPage", () => {
       target: { value: "This dashboard is clean" }, // 4 words
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /send feedback/i }));
+    const submit = screen.getByRole("button", { name: /send feedback/i });
+    await waitFor(() => expect(submit).not.toBeDisabled());
+
+    fireEvent.click(submit);
 
     await waitFor(() => {
       expect(fetch).toHaveBeenCalledTimes(1);
     });
 
-    expect(await screen.findByText(/sent!\s*thank you/i)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/sent!\s*thank you/i)
+    ).toBeInTheDocument();
   });
 
   it("shows server error when submission fails", async () => {
@@ -100,7 +113,14 @@ describe("FeedbackPage", () => {
       target: { value: "Something broke badly" }, // 3 words
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /send feedback/i }));
+    const submit = screen.getByRole("button", { name: /send feedback/i });
+    await waitFor(() => expect(submit).not.toBeDisabled());
+
+    fireEvent.click(submit);
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledTimes(1);
+    });
 
     expect(await screen.findByText(/server error/i)).toBeInTheDocument();
   });
@@ -121,7 +141,11 @@ describe("FeedbackPage", () => {
     });
 
     expect(screen.getByLabelText(/^name$/i)).toHaveValue("Ericka");
-    expect(screen.getByLabelText(/contact email/i)).toHaveValue("test@example.com");
-    expect(screen.getByLabelText(/^message$/i)).toHaveValue("Feature idea: alerts now");
+    expect(screen.getByLabelText(/contact email/i)).toHaveValue(
+      "test@example.com"
+    );
+    expect(screen.getByLabelText(/^message$/i)).toHaveValue(
+      "Feature idea: alerts now"
+    );
   });
 });

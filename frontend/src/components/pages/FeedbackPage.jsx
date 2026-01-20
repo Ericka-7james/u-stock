@@ -64,7 +64,8 @@ export default function FeedbackPage() {
   const isTest = import.meta.env.MODE === "test";
   const captchaRequired = !(import.meta.env.DEV || isTest);
 
-  const captchaOk = SITE_KEY ? !!token : !captchaRequired;
+  // ✅ Only enforce token if captcha is REQUIRED (prod). If not required, always OK.
+  const captchaOk = captchaRequired ? (SITE_KEY ? !!token : false) : true;
 
   const canSubmit = useMemo(() => {
     const messageOk = wordCount >= MIN_WORDS && !overLimit;
@@ -94,11 +95,13 @@ export default function FeedbackPage() {
       setStatus(`Please keep your message under ${WORD_LIMIT} words.`);
       return;
     }
-    if (SITE_KEY && !token) {
+
+    // ✅ Captcha validation only when captcha is REQUIRED (prod)
+    if (captchaRequired && SITE_KEY && !token) {
       setStatus("Please complete the captcha.");
       return;
     }
-    if (!SITE_KEY && captchaRequired) {
+    if (captchaRequired && !SITE_KEY) {
       setStatus(
         "Captcha is required in production but VITE_TURNSTILE_SITE_KEY is missing."
       );
@@ -121,7 +124,8 @@ export default function FeedbackPage() {
           email: email.trim() || null,
           feedback_type: feedbackType,
           message: message.trim(),
-          turnstile_token: SITE_KEY ? token : "",
+          // ✅ only send token if captcha is required; otherwise empty string is fine
+          turnstile_token: captchaRequired && SITE_KEY ? token : "",
           honeypot,
         }),
       });
@@ -257,25 +261,27 @@ export default function FeedbackPage() {
             what to build next.
           </p>
 
-          {/* Centered captcha */}
-          <div
-            className="feedback-captcha"
-            style={{ display: "flex", justifyContent: "center" }}
-          >
-            {SITE_KEY ? (
-              <Turnstile
-                sitekey={SITE_KEY}
-                onVerify={(t) => setToken(t)}
-                onExpire={() => setToken(null)}
-                onError={() => setToken(null)}
-              />
-            ) : (
-              <p className="feedback-hint feedback-hint--warn">
-                Captcha isn’t configured. Add{" "}
-                <code>VITE_TURNSTILE_SITE_KEY</code> to your frontend env.
-              </p>
-            )}
-          </div>
+          {/* ✅ Centered captcha (ONLY render when required in prod) */}
+          {captchaRequired ? (
+            <div
+              className="feedback-captcha"
+              style={{ display: "flex", justifyContent: "center" }}
+            >
+              {SITE_KEY ? (
+                <Turnstile
+                  sitekey={SITE_KEY}
+                  onVerify={(t) => setToken(t)}
+                  onExpire={() => setToken(null)}
+                  onError={() => setToken(null)}
+                />
+              ) : (
+                <p className="feedback-hint feedback-hint--warn">
+                  Captcha is required in production but{" "}
+                  <code>VITE_TURNSTILE_SITE_KEY</code> is missing.
+                </p>
+              )}
+            </div>
+          ) : null}
 
           {status ? (
             <div

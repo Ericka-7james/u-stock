@@ -4,19 +4,24 @@ import HelpTooltip from "../../common/HelpTooltip.jsx";
 import Modal from "../../common/Modal.jsx";
 import "../../../css/dashboard/cards/BotControlCard.css";
 
-async function apiGet(url) {
-  const res = await fetch(url, { credentials: "include" });
+/**
+ * Small fetch helpers w/ abort support.
+ * This matters for 24/7 polling (Pi) + fast UI switching (no setState after unmount).
+ */
+async function apiGet(url, { signal } = {}) {
+  const res = await fetch(url, { credentials: "include", signal });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data?.detail || "Request failed");
   return data;
 }
 
-async function apiPost(url, body) {
+async function apiPost(url, body, { signal } = {}) {
   const res = await fetch(url, {
     method: "POST",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: body ? JSON.stringify(body) : undefined,
+    signal,
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data?.detail || "Request failed");
@@ -87,34 +92,83 @@ export default function BotControlCard({
   const statusTimerRef = useRef(null);
   const marketTimerRef = useRef(null);
 
-  const selectedMeta = useMemo(() => available.find((b) => b.id === selected) || null, [available, selected]);
+  // used to avoid setState after unmount + to cancel inflight calls
+  const aliveRef = useRef(true);
+  const inflightRef = useRef({
+    available: null,
+    status: null,
+    market: null,
+    config: null,
+    action: null,
+    log: null,
+  });
+
+  function abortInflight(key) {
+    const cur = inflightRef.current?.[key];
+    if (cur) cur.abort();
+    inflightRef.current[key] = null;
+  }
+
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
+      // abort everything
+      Object.keys(inflightRef.current || {}).forEach((k) => abortInflight(k));
+      // clear timers
+      if (statusTimerRef.current) clearInterval(statusTimerRef.current);
+      if (marketTimerRef.current) clearInterval(marketTimerRef.current);
+    };
+  }, []);
+
+  const selectedMeta = useMemo(
+    () => available.find((b) => b.id === selected) || null,
+    [available, selected]
+  );
 
   // ---- available bots ----
   useEffect(() => {
-    let mounted = true;
+    abortInflight("available");
+    const ac = new AbortController();
+    inflightRef.current.available = ac;
+
     (async () => {
       try {
-        const data = await apiGet("/api/bots/available");
-        if (!mounted) return;
+        const data = await apiGet("/api/bots/available", { signal: ac.signal });
+        if (!aliveRef.current || ac.signal.aborted) return;
+
         const bots = Array.isArray(data?.bots) ? data.bots : [];
         setAvailable(bots);
+
         const fallback = activeBotId || bots?.[0]?.id || "ema_trend";
         setSelected(fallback);
       } catch (e) {
-        if (!mounted) return;
+        if (!aliveRef.current || ac.signal.aborted) return;
         setUiError(String(e?.message || e));
+      } finally {
+        if (inflightRef.current.available === ac) inflightRef.current.available = null;
       }
     })();
-    return () => (mounted = false);
+
+    return () => {
+      ac.abort();
+      if (inflightRef.current.available === ac) inflightRef.current.available = null;
+    };
   }, [activeBotId]);
 
   // ---- market session ----
   async function refreshMarketSession() {
+    abortInflight("market");
+    const ac = new AbortController();
+    inflightRef.current.market = ac;
     try {
-      const data = await apiGet("/api/market/us/session");
+      const data = await apiGet("/api/market/us/session", { signal: ac.signal });
+      if (!aliveRef.current || ac.signal.aborted) return;
       setMarket(data);
     } catch {
       // ignore
+    } finally {
+      if (inflightRef.current.market === ac) inflightRef.current.market = null;
     }
   }
 
@@ -122,20 +176,43 @@ export default function BotControlCard({
   async function refreshStatus(botId = selected) {
     const id = safeStr(botId);
     if (!id) return;
-    const data = await apiGet(`/api/bots/status?bot_id=${encodeURIComponent(id)}`);
-    setStatus(data);
-    onStateChange?.(data);
-    onBotStateChange?.(data);
+
+    abortInflight("status");
+    const ac = new AbortController();
+    inflightRef.current.status = ac;
+
+    try {
+      const data = await apiGet(`/api/bots/status?bot_id=${encodeURIComponent(id)}`, {
+        signal: ac.signal,
+      });
+      if (!aliveRef.current || ac.signal.aborted) return;
+
+      setStatus(data);
+      onStateChange?.(data);
+      onBotStateChange?.(data);
+    } finally {
+      if (inflightRef.current.status === ac) inflightRef.current.status = null;
+    }
   }
 
   // ---- config ----
   async function refreshConfig(botId = selected) {
     const id = safeStr(botId);
     if (!id) return;
+
+    abortInflight("config");
+    const ac = new AbortController();
+    inflightRef.current.config = ac;
+
     try {
-      const data = await apiGet(`/api/bots/config?bot_id=${encodeURIComponent(id)}`);
+      const data = await apiGet(`/api/bots/config?bot_id=${encodeURIComponent(id)}`, {
+        signal: ac.signal,
+      });
+      if (!aliveRef.current || ac.signal.aborted) return;
+
       const cfg = data?.config && typeof data.config === "object" ? data.config : null;
       setConfig(cfg);
+
       if (cfg) {
         setCfgDraft({
           mode: safeStr(cfg.mode, "paper"),
@@ -146,6 +223,8 @@ export default function BotControlCard({
       }
     } catch {
       // ignore for now
+    } finally {
+      if (inflightRef.current.config === ac) inflightRef.current.config = null;
     }
   }
 
@@ -180,29 +259,53 @@ export default function BotControlCard({
   async function start() {
     setUiError("");
     setBusy(true);
+
+    abortInflight("action");
+    const ac = new AbortController();
+    inflightRef.current.action = ac;
+
     try {
-      await apiPost("/api/bots/start", { bot_id: selected, mode: safeStr(cfgDraft.mode, "paper") });
+      await apiPost(
+        "/api/bots/start",
+        { bot_id: selected, mode: safeStr(cfgDraft.mode, "paper") },
+        { signal: ac.signal }
+      );
+      if (!aliveRef.current || ac.signal.aborted) return;
+
       await refreshStatus(selected);
       await refreshMarketSession();
       await refreshConfig(selected);
     } catch (e) {
+      if (!aliveRef.current || ac.signal.aborted) return;
       setUiError(String(e?.message || e));
     } finally {
-      setBusy(false);
+      if (inflightRef.current.action === ac) inflightRef.current.action = null;
+      if (aliveRef.current) setBusy(false);
     }
   }
 
   async function stop() {
     setUiError("");
     setBusy(true);
+
+    abortInflight("action");
+    const ac = new AbortController();
+    inflightRef.current.action = ac;
+
     try {
-      await apiPost(`/api/bots/stop?bot_id=${encodeURIComponent(selected)}`);
+      await apiPost(`/api/bots/stop?bot_id=${encodeURIComponent(selected)}`, null, {
+        signal: ac.signal,
+      });
+      if (!aliveRef.current || ac.signal.aborted) return;
+
       await refreshStatus(selected);
       await refreshMarketSession();
     } catch (e) {
+      if (!aliveRef.current || ac.signal.aborted) return;
       setUiError(String(e?.message || e));
     } finally {
-      setBusy(false);
+      if (inflightRef.current.action === ac) inflightRef.current.action = null;
+      if (aliveRef.current) setBusy(false);
     }
   }
 
@@ -239,20 +342,37 @@ export default function BotControlCard({
     setLogItems([]);
     setLogOpen(true);
     setLogBusy(true);
+
+    abortInflight("log");
+    const ac = new AbortController();
+    inflightRef.current.log = ac;
+
     try {
-      const data = await apiGet(`/api/bots/log?bot_id=${encodeURIComponent(selected)}&limit=120`);
+      const data = await apiGet(
+        `/api/bots/log?bot_id=${encodeURIComponent(selected)}&limit=120`,
+        { signal: ac.signal }
+      );
+      if (!aliveRef.current || ac.signal.aborted) return;
+
       const items = Array.isArray(data?.items) ? data.items : [];
       setLogItems(items.reverse()); // newest at bottom feels better in a modal
     } catch (e) {
+      if (!aliveRef.current || ac.signal.aborted) return;
       setLogErr(String(e?.message || e));
     } finally {
-      setLogBusy(false);
+      if (inflightRef.current.log === ac) inflightRef.current.log = null;
+      if (aliveRef.current) setLogBusy(false);
     }
   }
 
   async function saveConfig() {
     setUiError("");
     setBusy(true);
+
+    abortInflight("action");
+    const ac = new AbortController();
+    inflightRef.current.action = ac;
+
     try {
       const payload = {
         bot_id: selected,
@@ -263,20 +383,28 @@ export default function BotControlCard({
           min_confidence: Math.min(0.99, Math.max(0.0, n(cfgDraft.min_confidence, 0.62))),
         },
       };
-      await apiPost("/api/bots/config", payload);
+
+      await apiPost("/api/bots/config", payload, { signal: ac.signal });
+      if (!aliveRef.current || ac.signal.aborted) return;
+
       await refreshConfig(selected);
       setCfgOpen(false);
     } catch (e) {
+      if (!aliveRef.current || ac.signal.aborted) return;
       setUiError(String(e?.message || e));
     } finally {
-      setBusy(false);
+      if (inflightRef.current.action === ac) inflightRef.current.action = null;
+      if (aliveRef.current) setBusy(false);
     }
   }
 
   const cfgSummary = config
-    ? `Mode ${safeStr(config.mode, "paper")} · Risk ${(n(config.risk_per_trade, 0) * 100).toFixed(2)}% · Max ${Math.floor(
-        n(config.max_trades_per_day, 0)
-      )}/day · Min conf ${n(config.min_confidence, 0).toFixed(2)}`
+    ? `Mode ${safeStr(config.mode, "paper")} · Risk ${(n(config.risk_per_trade, 0) * 100).toFixed(
+        2
+      )}% · Max ${Math.floor(n(config.max_trades_per_day, 0))}/day · Min conf ${n(
+        config.min_confidence,
+        0
+      ).toFixed(2)}`
     : "Not loaded yet";
 
   return (
@@ -362,7 +490,6 @@ export default function BotControlCard({
               </div>
             </div>
 
-            {/* NEW: Risk summary tile */}
             <div className="botTile" style={{ gridColumn: "1 / -1" }}>
               <div className="botTileLabel" style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
                 <span>Mode + Risk Controls</span>
@@ -421,9 +548,7 @@ export default function BotControlCard({
               onChange={(e) => setCfgDraft((s) => ({ ...s, risk_per_trade: e.target.value }))}
               disabled={busy}
             />
-            <div style={{ fontSize: 12, opacity: 0.7 }}>
-              Example: 0.005 = 0.5% risk per trade
-            </div>
+            <div style={{ fontSize: 12, opacity: 0.7 }}>Example: 0.005 = 0.5% risk per trade</div>
           </div>
 
           <div style={{ display: "grid", gap: 6 }}>

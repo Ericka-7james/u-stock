@@ -517,7 +517,9 @@ export default function DashboardPage() {
             currentTicker={currentTicker}
             onSelectTicker={(next) => {
               const clean = normalizeSymbol(next);
-              if (clean) setCurrentTicker(clean);
+              if (!clean) return;
+              if (!isTvSafe(clean)) return;
+              setCurrentTicker(clean);
             }}
             isDarkMode={isDarkMode}
           />

@@ -1,7 +1,7 @@
 // src/components/landing/tests/LandingPage.test.jsx
 import { render, screen, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { vi } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 
 import LandingPage from "../LandingPage";
 
@@ -43,14 +43,10 @@ describe("LandingPage", () => {
     renderLanding();
 
     expect(
-      screen.getByRole("heading", {
-        name: /trade smarter\.\s*build your own edge\./i,
-      })
+      screen.getByRole("heading", { name: /transparent automation\./i })
     ).toBeInTheDocument();
 
-    expect(
-      screen.getByText(/pulls together prices, signals, and sentiment/i)
-    ).toBeInTheDocument();
+    expect(screen.getByText(/clear “what happened/i)).toBeInTheDocument();
 
     expect(
       screen.getByRole("button", { name: /sign in \/ sign up/i })
@@ -68,54 +64,56 @@ describe("LandingPage", () => {
     renderLanding();
 
     expect(
-      screen.getByRole("heading", { name: /what.?s shipping next/i })
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(/paper trading sandbox/i)
+      screen.getByRole("heading", { name: /why u-stock\?/i })
     ).toBeInTheDocument();
 
-    expect(screen.getByText(/clean market view/i)).toBeInTheDocument();
-    expect(screen.getByText(/signals that evolve/i)).toBeInTheDocument();
-    expect(screen.getByText(/your future co-pilot/i)).toBeInTheDocument();
+    expect(screen.getByText(/transparency you can trust/i)).toBeInTheDocument();
+    expect(screen.getByText(/automation with guardrails/i)).toBeInTheDocument();
+    expect(screen.getByText(/protect your edge/i)).toBeInTheDocument();
   });
 
   it("renders the roadmap section content", () => {
     renderLanding();
 
     expect(
-      screen.getByRole("heading", { name: /where this is going/i })
+      screen.getByRole("heading", { name: /what.?s shipping next/i })
+    ).toBeInTheDocument();
+
+    // Appears in BOTH the left list and the right steps
+    expect(screen.getAllByText(/paper trading \+ journaling/i).length).toBeGreaterThan(0);
+
+    // Also appears at least once (left list)
+    expect(
+      screen.getByText(/multi-bot scanning \+ broker execution/i)
+    ).toBeInTheDocument();
+
+    // Right card steps
+    expect(
+      screen.getByText(/research cockpit \+ transparency/i)
     ).toBeInTheDocument();
 
     expect(
-      screen.getByText(/dashboard \+ signals \(now\)/i)
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(/paper trading sandbox/i)
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(/live broker integrations/i)
+      screen.getByText(/automation \+ broker execution/i)
     ).toBeInTheDocument();
   });
 
   it("navigates to /auth when 'Sign in / Sign up' is clicked", () => {
     renderLanding();
 
-    const cta = screen.getByRole("button", {
-      name: /sign in \/ sign up/i,
-    });
+    fireEvent.click(
+      screen.getByRole("button", { name: /sign in \/ sign up/i })
+    );
 
-    fireEvent.click(cta);
     expect(mockNavigate).toHaveBeenCalledWith("/auth");
   });
 
   it("navigates to /auth when 'Get early access' is clicked", () => {
     renderLanding();
 
-    const cta = screen.getByRole("button", {
-      name: /get early access/i,
-    });
+    fireEvent.click(
+      screen.getByRole("button", { name: /get early access/i })
+    );
 
-    fireEvent.click(cta);
     expect(mockNavigate).toHaveBeenCalledWith("/auth");
   });
 });
