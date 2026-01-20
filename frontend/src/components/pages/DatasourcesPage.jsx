@@ -6,6 +6,8 @@ import AppShell from "../layout/AppShell";
 import Modal from "../common/Modal.jsx";
 import MarketLeadersCard from "../dashboard/cards/MarketLeadersCard.jsx";
 
+import lucentLogo from "../../assets/images/companyLogo-logoOnly.png";
+
 import "../../css/pages/DatasourcesPage.css";
 import "../../css/dashboard/cards/CardShared.css";
 import "../../css/dashboard/cards/BotControlCard.css";
@@ -217,15 +219,12 @@ function BotLogsCard({ defaultBotId = "ema_trend", maxPreview = 3 }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
 
-  // Status (new)
   const [botStatus, setBotStatus] = useState(null);
 
-  // Filters
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("all"); // all | success | fail
   const [selectedDay, setSelectedDay] = useState(""); // YYYY-MM-DD
 
-  // Modal
   const [open, setOpen] = useState(false);
 
   const cacheKey = `${botId}|${limit}`;
@@ -243,10 +242,9 @@ function BotLogsCard({ defaultBotId = "ema_trend", maxPreview = 3 }) {
       const data = await apiGetWithRetry(url, { signal: ac.signal });
       const raw = Array.isArray(data?.items) ? data.items : [];
 
-      // newest at bottom
       const ordered = raw.slice().reverse();
-
       setItems(ordered);
+
       logsCache.ts = Date.now();
       logsCache.key = cacheKey;
       logsCache.items = ordered;
@@ -263,7 +261,9 @@ function BotLogsCard({ defaultBotId = "ema_trend", maxPreview = 3 }) {
 
   async function refreshStatus() {
     try {
-      const s = await apiGetWithRetry(`/api/bots/status?bot_id=${encodeURIComponent(safeStr(botId, "ema_trend"))}`);
+      const s = await apiGetWithRetry(
+        `/api/bots/status?bot_id=${encodeURIComponent(safeStr(botId, "ema_trend"))}`
+      );
       setBotStatus(s);
     } catch {
       setBotStatus(null);
@@ -282,9 +282,7 @@ function BotLogsCard({ defaultBotId = "ema_trend", maxPreview = 3 }) {
   }, [botId, limit]);
 
   const availableDays = useMemo(() => {
-    const dayList = (Array.isArray(items) ? items : [])
-      .map((r) => dayKey(r?.ts))
-      .filter(Boolean);
+    const dayList = (Array.isArray(items) ? items : []).map((r) => dayKey(r?.ts)).filter(Boolean);
 
     const uniq = Array.from(new Set(dayList));
     uniq.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
@@ -328,24 +326,27 @@ function BotLogsCard({ defaultBotId = "ema_trend", maxPreview = 3 }) {
 
   return (
     <>
-      <section className="panel ds-panel ds-botlogs">
-        <div className="ds-card-header">
-          <div className="ds-card-header-left">
-            <div className="ds-title-row" style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <h2 className="ds-card-title">Bot Logs</h2>
-              <span className={pill.cls} title="Bot effective state">{pill.label}</span>
+      <section className="panel ds-botlogs">
+        <div className="card-header ds-cardHeader">
+          <div className="card-header-left">
+            <div className="card-title-row">
+              <h2 style={{ margin: 0 }}>Bot Logs</h2>
+
+              <span className={pill.cls} title="Bot effective state">
+                {pill.label}
+              </span>
+
               {eff === "waiting_for_market" && nextOpen ? (
-                <span className="ds-card-subtitle" style={{ margin: 0 }}>
-                  • Next open: {fmtTime(nextOpen)}
-                </span>
+                <span className="ds-inlineMeta">• Next open: {fmtTime(nextOpen)}</span>
               ) : null}
             </div>
-            <p className="ds-card-subtitle">
-              Filter bot activity by day, status, and search terms. Preview shows the latest {maxPreview} entries.
+
+            <p className="card-subtitle" style={{ marginTop: 4 }}>
+              Filter by day, status, and search terms. Preview shows the latest {maxPreview} entries.
             </p>
           </div>
 
-          <div className="ds-card-header-actions">
+          <div className="ds-headerActions">
             <Link to="/connected-apps" className="back-link-pill">
               Connected apps →
             </Link>
@@ -368,7 +369,7 @@ function BotLogsCard({ defaultBotId = "ema_trend", maxPreview = 3 }) {
             </select>
           </label>
 
-          <label className="ds-field ds-field-day">
+          <label className="ds-field">
             <span className="ds-label">Day</span>
             <select
               value={selectedDay || ""}
@@ -422,18 +423,28 @@ function BotLogsCard({ defaultBotId = "ema_trend", maxPreview = 3 }) {
             </select>
           </label>
 
-          <button type="button" className="ds-btn ds-btn-primary" onClick={() => { refresh(); refreshStatus(); }} disabled={busy}>
-            {busy ? "Refreshing…" : "Refresh"}
-          </button>
+          <div className="ds-controlActions">
+            <button
+              type="button"
+              className="mBtn mBtnPrimary"
+              onClick={() => {
+                refresh();
+                refreshStatus();
+              }}
+              disabled={busy}
+            >
+              {busy ? "Refreshing…" : "Refresh"}
+            </button>
 
-          <button
-            type="button"
-            className="ds-btn ds-btn-secondary"
-            onClick={() => setOpen(true)}
-            disabled={busy || (!filtered?.length && !items?.length)}
-          >
-            View all
-          </button>
+            <button
+              type="button"
+              className="mBtn"
+              onClick={() => setOpen(true)}
+              disabled={busy || (!filtered?.length && !items?.length)}
+            >
+              View all
+            </button>
+          </div>
         </div>
 
         {err ? (
@@ -445,12 +456,13 @@ function BotLogsCard({ defaultBotId = "ema_trend", maxPreview = 3 }) {
 
         <div className="ds-log-list">
           {busy && !items.length ? (
-            <div style={{ opacity: 0.75, fontWeight: 800 }}>Loading log…</div>
+            <div className="ds-empty">Loading log…</div>
           ) : preview.length ? (
             preview.map((r, idx) => {
               const level = safeStr(r.level, "info").toUpperCase();
               const msg = safeStr(r.message, "");
               const isFail = isFailishLevel(r?.level);
+
               return (
                 <div key={`${idx}-${r.ts}`} className={`ds-log-row ${isFail ? "ds-log-row--fail" : ""}`}>
                   <div className="mMono ds-log-meta">
@@ -466,7 +478,7 @@ function BotLogsCard({ defaultBotId = "ema_trend", maxPreview = 3 }) {
               );
             })
           ) : (
-            <div style={{ opacity: 0.75, fontWeight: 800 }}>No log entries match these filters yet.</div>
+            <div className="ds-empty">No log entries match these filters yet.</div>
           )}
         </div>
       </section>
@@ -514,45 +526,56 @@ export default function DatasourcesPage() {
 
   return (
     <AppShell>
-      <header className="data-hero">
-        <div className="data-hero-text">
+      {/* HERO CARD */}
+      <section className="ds-hero-card">
+        <div className="ds-hero-left">
           <h1 className="page-title">Market Leaders & Bot Logs</h1>
           <p className="muted">
             See today’s top movers and review bot activity in one place. Use this page to quickly pick a ticker,
             then jump back to the dashboard chart, or search logs to debug success/fail behavior by day.
           </p>
+
+          <div className="ds-hero-actions">
+            <Link to="/" className="back-link-pill">
+              ← Back to dashboard
+            </Link>
+            <Link to="/connected-apps" className="back-link-pill">
+              Connected apps →
+            </Link>
+          </div>
         </div>
 
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <Link to="/" className="back-link-pill">
-            ← Back to dashboard
-          </Link>
-          <Link to="/connected-apps" className="back-link-pill">
-            Connected apps →
-          </Link>
+        <div className="ds-hero-right" aria-label="Lucent Financial logo">
+          <div className="ds-hero-logoPanel">
+            <img src={lucentLogo} alt="Lucent Financial logo" className="ds-hero-logo" />
+          </div>
         </div>
-      </header>
+      </section>
 
+      {/* ✅ Dashboard-like layout */}
       <main className="ds-main">
         <div className="ds-left">
-          <MarketLeadersCard
-            title="Market leaders"
-            subtitle="Top movers from Alpaca (today). Click one to load the chart."
-            items={leaders}
-            meta={leadersMeta}
-            loading={leadersLoading}
-            onSelectSymbol={(sym) => {
-              const clean = normalizeSymbol(sym);
-              if (!clean) return;
-              if (!isTvSafe(clean)) return;
+          {/* ✅ clamp to prevent MarketLeadersCard inner rows from overflowing */}
+          <div className="ds-cardClamp">
+            <MarketLeadersCard
+              title="Market leaders"
+              subtitle="Top movers from Alpaca (today). Click one to load the chart."
+              items={leaders}
+              meta={leadersMeta}
+              loading={leadersLoading}
+              onSelectSymbol={(sym) => {
+                const clean = normalizeSymbol(sym);
+                if (!clean) return;
+                if (!isTvSafe(clean)) return;
 
-              try {
-                localStorage.setItem("ustock:last_ticker", clean);
-              } catch {}
+                try {
+                  localStorage.setItem("ustock:last_ticker", clean);
+                } catch {}
 
-              navigate(`/?ticker=${encodeURIComponent(clean)}`);
-            }}
-          />
+                navigate(`/?ticker=${encodeURIComponent(clean)}`);
+              }}
+            />
+          </div>
         </div>
 
         <div className="ds-right">

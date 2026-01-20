@@ -5,6 +5,8 @@ import { Link } from "react-router-dom";
 import AppShell from "../layout/AppShell";
 import "../../css/pages/IndexFundsPage.css";
 
+import lucentLogo from "../../assets/images/companyLogo-logoOnly.png";
+
 /**
  * Market Baselines (Lucent Financial)
  * -----------------------------------
@@ -54,16 +56,16 @@ const BASELINES = [
 
 export default function IndexFundsPage() {
   const [activeTab, setActiveTab] = useState("baselines"); // "baselines" | "universe"
-
   const baselines = useMemo(() => BASELINES, []);
 
   return (
     <AppShell>
       <div className="index-funds-page">
-        {/* Hero */}
-        <header className="panel index-hero">
-          <div className="index-hero-text">
+        {/* HERO (match AboutPage mechanics) */}
+        <section className="index-hero-card">
+          <div className="index-hero-left">
             <h1 className="page-title">Market Baselines</h1>
+
             <p className="muted">
               These ETFs act as Lucent’s “system context.” They don’t pick trades by themselves — they help interpret
               the environment: risk-on vs risk-off, trend vs range, and volatility.
@@ -72,12 +74,19 @@ export default function IndexFundsPage() {
             <div className="index-hero-meta">
               Status: <span>docs-first</span> (live baseline tiles can be added after the API endpoint is finalized)
             </div>
+
+            <Link to="/" className="back-link-pill">
+              ← Back to dashboard
+            </Link>
           </div>
 
-          <Link to="/" className="back-link-pill">
-            ← Back to dashboard
-          </Link>
-        </header>
+          {/* LOGO takes the entire right side of the hero (same as About) */}
+          <div className="index-hero-right" aria-label="Lucent Financial logo">
+            <div className="index-hero-logoPanel">
+              <img src={lucentLogo} alt="Lucent Financial logo" className="index-hero-logo" />
+            </div>
+          </div>
+        </section>
 
         {/* Tabs */}
         <div className="index-tabs-row">

@@ -2,24 +2,108 @@
   width: 100%;
 }
 
-.connected-header {
-  margin-bottom: 14px;
+/* ========= CONNECTED APPS HERO (match About hero) ========= */
+.connected-hero-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: stretch;
+  gap: 24px;
+
+  padding: 20px 22px;
+  margin-bottom: 24px;
+  border-radius: 18px;
+
+  background: var(--ustock-bg-card);
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+  border: 1px solid var(--ustock-border-card);
+  border-top: 4px solid var(--ustock-green-main);
+  color: var(--ustock-text-main);
+
+  min-width: 0;
 }
 
-.connected-title {
-  margin: 0 0 6px;
-  font-size: 22px;
-  font-weight: 800;
-  color: var(--ustock-text-strong);
+.connected-hero-left {
+  min-width: 0;
+  flex: 1 1 560px;
 }
 
-.connected-subtitle {
-  margin: 0;
+.connected-hero-left .page-title {
+  color: var(--ustock-green-main);
+  margin: 0 0 8px;
+}
+
+.connected-hero-left .muted {
+  max-width: 560px;
+}
+
+.connected-tagline {
+  margin: 0 0 10px;
+}
+
+/* ✅ Right side fixed like About */
+.connected-hero-right {
+  flex: 0 0 420px;
+  max-width: 420px;
+  min-width: 0;
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+}
+
+/* ✅ same panel styling as About */
+.connected-hero-logoPanel {
+  width: 100%;
+  height: 100%;
+  min-height: 260px;
+  border-radius: 18px;
+  overflow: hidden;
+  border: 1px solid var(--ustock-border-card);
+  background: var(--ustock-bg-card-soft);
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ✅ same image constraints as About */
+.connected-hero-logo {
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+/* ✅ Terms pill should behave like About back-link-pill */
+.connected-link-pill {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 14px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--ustock-green-main);
   font-size: 13px;
-  color: var(--ustock-text-muted);
-  max-width: 720px;
+  text-decoration: none;
+  color: var(--ustock-green-main);
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
 }
 
+.connected-link-pill:hover {
+  background: var(--ustock-green-main);
+  color: #f9fafb;
+}
+
+.connected-hero-meta {
+  margin-top: 10px;
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+/* ---------- Banners ---------- */
 .connected-error {
   margin-top: 12px;
   padding: 10px 12px;
@@ -30,6 +114,7 @@
   font-weight: 700;
 }
 
+/* ---------- Grid ---------- */
 .connected-grid {
   margin-top: 16px;
   display: grid;
@@ -81,6 +166,7 @@
   border-color: rgba(15, 118, 110, 0.35);
 }
 
+/* ---------- Tags ---------- */
 .connected-tags {
   display: flex;
   flex-wrap: wrap;
@@ -98,6 +184,7 @@
   color: var(--ustock-text-main);
 }
 
+/* ---------- Actions ---------- */
 .connected-actions {
   display: flex;
   gap: 10px;
@@ -129,12 +216,17 @@
   cursor: not-allowed;
 }
 
+/* ---------- Notes / Sections ---------- */
 .connected-note {
   margin-top: 18px;
   background: var(--ustock-bg-card);
   border: 1px solid var(--ustock-border-card);
   border-radius: 18px;
   padding: 14px;
+}
+
+.connected-note--tight {
+  padding: 12px 14px;
 }
 
 .connected-note-title {
@@ -150,6 +242,39 @@
   font-size: 13px;
 }
 
+.connected-note-list--spaced li {
+  margin: 8px 0;
+}
+
+/* Smaller pill buttons for Next steps */
+.connected-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 10px;
+
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 800;
+
+  border: 1px solid var(--ustock-border-card);
+  background: transparent;
+  color: var(--ustock-text-main);
+  cursor: pointer;
+}
+
+.connected-pill:hover {
+  filter: brightness(0.98);
+}
+
+.connected-emptyHint {
+  margin-top: 14px;
+  font-size: 13px;
+  opacity: 0.85;
+}
+
+/* ---------- Loading ---------- */
 .connected-loading {
   position: fixed;
   left: 16px;
@@ -163,15 +288,36 @@
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.12);
 }
 
-/* responsive */
-@media (max-width: 1000px) {
+/* MOBILE */
+@media (max-width: 768px) {
+  .connected-hero-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .connected-hero-right {
+    flex: 1 1 auto;
+    max-width: none;
+    width: 100%;
+  }
+
+  .connected-hero-logoPanel {
+    min-height: 220px;
+  }
+
   .connected-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 1fr;
   }
 }
 
-@media (max-width: 720px) {
+/* Tablets */
+@media (min-width: 769px) and (max-width: 1024px) {
   .connected-grid {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .connected-hero-right {
+    flex: 0 0 360px;
+    max-width: 360px;
   }
 }
