@@ -21,6 +21,17 @@ vi.mock("react-router-dom", async () => {
   };
 });
 
+vi.mock("../cards/MarketLeadersCard", () => ({
+  default: (props) => (
+    <div data-testid="market-leaders-card">
+      <pre data-testid="leaders-props">{JSON.stringify(props)}</pre>
+      <button data-testid="leaders-select-brkb" onClick={() => props.onSelectSymbol?.("BRK.B")}>
+        pick BRK.B
+      </button>
+    </div>
+  ),
+}));
+
 // Mock hooks used by DashboardPage
 const mockUseAlpacaDailyBars = vi.fn();
 vi.mock("../../../hooks/useAlpacaDailyBars.js", () => ({

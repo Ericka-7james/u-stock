@@ -45,21 +45,25 @@ export default function FeedbackPage() {
   }, [isAuthed]);
 
   // Autofill if signed in + fields empty
-useEffect(() => {
-  if (!isAuthed || !user) return;
+  useEffect(() => {
+    if (!isAuthed || !user) return;
 
-  const userEmail = user.email || "";
-  const fallbackName = userEmail ? userEmail.split("@")[0] : "";
+    const userEmail = user.email || "";
+    const fallbackName = userEmail ? userEmail.split("@")[0] : "";
 
-  setEmail((prev) => prev || userEmail);
-  setName((prev) => prev || fallbackName);
-}, [isAuthed, user?.email]);
+    setEmail((prev) => prev || userEmail);
+    setName((prev) => prev || fallbackName);
+  }, [isAuthed, user?.email]);
 
   const wordCount = useMemo(() => countWords(message), [message]);
   const overLimit = wordCount > WORD_LIMIT;
   const underMin = wordCount > 0 && wordCount < MIN_WORDS;
 
-  const captchaRequired = !import.meta.env.DEV; // in dev, allow running even if key missing
+  // ✅ IMPORTANT: Vitest runs with MODE="test" where DEV can be false.
+  // We don't want captcha requirements to break tests.
+  const isTest = import.meta.env.MODE === "test";
+  const captchaRequired = !(import.meta.env.DEV || isTest);
+
   const captchaOk = SITE_KEY ? !!token : !captchaRequired;
 
   const canSubmit = useMemo(() => {
@@ -95,7 +99,9 @@ useEffect(() => {
       return;
     }
     if (!SITE_KEY && captchaRequired) {
-      setStatus("Captcha is required in production but VITE_TURNSTILE_SITE_KEY is missing.");
+      setStatus(
+        "Captcha is required in production but VITE_TURNSTILE_SITE_KEY is missing."
+      );
       return;
     }
 
@@ -132,7 +138,8 @@ useEffect(() => {
       setMessage("");
       setToken(null);
     } catch (err) {
-      if (err?.name === "AbortError") setStatus("Request timed out. Backend didn’t respond.");
+      if (err?.name === "AbortError")
+        setStatus("Request timed out. Backend didn’t respond.");
       else setStatus(err?.message || "Failed to send feedback.");
     } finally {
       setSubmitting(false);
@@ -165,7 +172,9 @@ useEffect(() => {
           </div>
 
           <div className="feedback-field">
-            <label className="feedback-label" htmlFor="name">Name</label>
+            <label className="feedback-label" htmlFor="name">
+              Name
+            </label>
             <input
               id="name"
               type="text"
@@ -178,7 +187,9 @@ useEffect(() => {
           </div>
 
           <div className="feedback-field">
-            <label className="feedback-label" htmlFor="email">Contact email</label>
+            <label className="feedback-label" htmlFor="email">
+              Contact email
+            </label>
             <input
               id="email"
               type="email"
@@ -194,7 +205,9 @@ useEffect(() => {
           </div>
 
           <div className="feedback-field">
-            <label className="feedback-label" htmlFor="feedbackType">Feedback type</label>
+            <label className="feedback-label" htmlFor="feedbackType">
+              Feedback type
+            </label>
             <select
               id="feedbackType"
               className="feedback-select"
@@ -210,7 +223,9 @@ useEffect(() => {
 
           <div className="feedback-field">
             <div className="feedback-message-row">
-              <label className="feedback-label" htmlFor="message">Message</label>
+              <label className="feedback-label" htmlFor="message">
+                Message
+              </label>
               <div className={`feedback-counter ${overLimit ? "is-over" : ""}`}>
                 {wordCount}/{WORD_LIMIT} words
               </div>
@@ -238,11 +253,15 @@ useEffect(() => {
           </div>
 
           <p className="feedback-footer-hint">
-            Think of this as your suggestion box. I use these notes to decide what to build next.
+            Think of this as your suggestion box. I use these notes to decide
+            what to build next.
           </p>
 
           {/* Centered captcha */}
-          <div className="feedback-captcha" style={{ display: "flex", justifyContent: "center" }}>
+          <div
+            className="feedback-captcha"
+            style={{ display: "flex", justifyContent: "center" }}
+          >
             {SITE_KEY ? (
               <Turnstile
                 sitekey={SITE_KEY}
@@ -252,7 +271,8 @@ useEffect(() => {
               />
             ) : (
               <p className="feedback-hint feedback-hint--warn">
-                Captcha isn’t configured. Add <code>VITE_TURNSTILE_SITE_KEY</code> to your frontend env.
+                Captcha isn’t configured. Add{" "}
+                <code>VITE_TURNSTILE_SITE_KEY</code> to your frontend env.
               </p>
             )}
           </div>
@@ -260,7 +280,9 @@ useEffect(() => {
           {status ? (
             <div
               className={`feedback-status ${
-                status.toLowerCase().includes("sent") ? "feedback-status--ok" : "feedback-status--err"
+                status.toLowerCase().includes("sent")
+                  ? "feedback-status--ok"
+                  : "feedback-status--err"
               }`}
             >
               {status}

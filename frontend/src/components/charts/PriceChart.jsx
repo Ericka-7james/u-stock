@@ -1,5 +1,5 @@
 // src/charts/PriceChart.jsx
-import TradingViewEmbed from "../components/charts/TradingViewEmbed.jsx";
+import TradingViewEmbed from "./TradingViewEmbed.jsx";
 
 function toTradingViewSymbol(ticker) {
   const t = String(ticker || "").trim();

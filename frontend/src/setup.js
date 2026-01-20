@@ -1,34 +1,37 @@
-// src/setup.js
-import "@testing-library/jest-dom";
-import { vi } from "vitest";
+import "@testing-library/jest-dom/vitest";
+import { beforeEach, afterEach, vi } from "vitest";
 
-// Always provide a stable base URL in tests
-vi.stubGlobal("location", new URL("http://localhost/"));
-
-// Global fetch mock so components that fetch on mount don't crash tests
-const okJson = (data = {}) =>
-  Promise.resolve({
+function makeDefaultFetch() {
+  return vi.fn(async () => ({
     ok: true,
     status: 200,
-    json: async () => data,
-    text: async () => JSON.stringify(data),
-  });
+    json: async () => ({}),
+    text: async () => "",
+  }));
+}
 
-vi.stubGlobal("fetch", vi.fn(async (input) => {
-  const url = String(input);
+let defaultFetch = makeDefaultFetch();
 
-  // bot status endpoint used by BotControlCard
-  if (url.includes("/api/bots/status")) {
-    return okJson({
-      bot_id: "ema_trend",
-      intent: "running",
-      effective_state: "waiting_for_market",
-      pausedReason: "market_closed",
-      nextOpenEpoch: null,
-      heartbeatEpoch: Date.now() / 1000
+function ensureMockFetch() {
+  if (!vi.isMockFunction(globalThis.fetch)) {
+    defaultFetch = makeDefaultFetch();
+    Object.defineProperty(globalThis, "fetch", {
+      value: defaultFetch,
+      writable: true,
+      configurable: true,
     });
   }
+}
 
-  // default: ok empty
-  return okJson({});
-}));
+ensureMockFetch();
+
+beforeEach(() => {
+  ensureMockFetch();
+  globalThis.fetch.mockClear();
+});
+
+afterEach(() => {
+  ensureMockFetch();
+  globalThis.fetch.mockReset();
+  globalThis.fetch.mockImplementation(defaultFetch);
+});

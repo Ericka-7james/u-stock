@@ -35,7 +35,14 @@ export default defineConfig(({ mode }) => {
     test: {
       environment: "jsdom",
       globals: true,
-      setupFiles: "./src/setup.js",
+      setupFiles: ["./src/setup.js"],
+
+      // ✅ THIS sets jsdom's window.location origin safely
+      environmentOptions: {
+        jsdom: {
+          url: "http://localhost/",
+        },
+      },
     },
   };
 });

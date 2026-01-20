@@ -68,7 +68,10 @@ describe("LandingPage", () => {
     renderLanding();
 
     expect(
-      screen.getByRole("heading", { name: /why u-stock\?/i })
+      screen.getByRole("heading", { name: /what.?s shipping next/i })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/paper trading sandbox/i)
     ).toBeInTheDocument();
 
     expect(screen.getByText(/clean market view/i)).toBeInTheDocument();

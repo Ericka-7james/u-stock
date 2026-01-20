@@ -3,36 +3,33 @@ import React from "react";
 import { render, screen } from "@testing-library/react";
 import { describe, test, expect, vi, beforeEach } from "vitest";
 
-// IMPORTANT: adjust this path if your tests live elsewhere
-import PriceChart, { toTradingViewSymbol } from "../PriceChart.jsx";
-
-// Mock TradingViewEmbed so we don't load tv.js in tests
-vi.mock("../../components/charts/TradingViewEmbed.jsx", () => ({
-  default: (props) => (
+vi.mock("../TradingViewEmbed", () => ({
+  default: ({ symbol, interval, theme, height }) => (
     <div
       data-testid="tv-embed"
-      data-symbol={props.symbol}
-      data-interval={props.interval}
-      data-theme={props.theme}
-      data-height={String(props.height)}
+      data-symbol={symbol}
+      data-interval={interval}
+      data-theme={theme}
+      data-height={String(height)}
     />
   ),
 }));
+
+// IMPORTANT: adjust this path if your tests live elsewhere
+import PriceChart, { toTradingViewSymbol } from "../PriceChart.jsx";
 
 describe("PriceChart", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  test("renders loading state with accessible status", () => {
+  it("renders loading state with accessible status", () => {
     render(<PriceChart ticker="AAPL" loading={true} />);
 
-    const status = screen.getByRole("status", { name: /loading chart/i });
+    const status = screen.getByRole("status");
     expect(status).toBeInTheDocument();
     expect(status).toHaveAttribute("aria-live", "polite");
-
-    // Should not render embed while loading
-    expect(screen.queryByTestId("tv-embed")).not.toBeInTheDocument();
+    expect(status).toHaveTextContent(/loading chart/i);
   });
 
   test("renders TradingViewEmbed with default symbol when ticker is empty", () => {

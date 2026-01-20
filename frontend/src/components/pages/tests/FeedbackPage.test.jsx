@@ -7,11 +7,9 @@ vi.mock("../../../context/AuthContext", () => ({
   useAuth: () => ({
     user: null,
     isAuthed: false,
+    refreshSession: vi.fn(),
   }),
 }));
-
-// Mock fetch
-global.fetch = vi.fn();
 
 import FeedbackPage from "../FeedbackPage";
 
@@ -37,27 +35,36 @@ describe("FeedbackPage", () => {
     expect(screen.getByLabelText(/feedback type/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/^message$/i)).toBeInTheDocument();
 
-    expect(
-      screen.getByRole("button", { name: /send feedback/i })
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /send feedback/i })).toBeInTheDocument();
   });
 
-  it("shows validation error if message is empty", async () => {
+  it("disables submit until message has at least 3 words", () => {
     renderPage();
 
-    fireEvent.click(
-      screen.getByRole("button", { name: /send feedback/i })
-    );
+    const submit = screen.getByRole("button", { name: /send feedback/i });
+    expect(submit).toBeDisabled();
 
-    expect(
-      await screen.findByText(/please enter a message/i)
-    ).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/^message$/i), {
+      target: { value: "Too short" }, // 2 words
+    });
+
+    expect(submit).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText(/^message$/i), {
+      target: { value: "This is enough" }, // 3 words
+    });
+
+    // In tests (import.meta.env.DEV true), captcha shouldn't block
+    expect(submit).not.toBeDisabled();
   });
 
   it("submits feedback successfully and shows success message", async () => {
+    // override default fetch mock for this test
     fetch.mockResolvedValueOnce({
       ok: true,
+      status: 200,
       json: async () => ({ ok: true }),
+      text: async () => JSON.stringify({ ok: true }),
     });
 
     renderPage();
@@ -67,41 +74,35 @@ describe("FeedbackPage", () => {
     });
 
     fireEvent.change(screen.getByLabelText(/^message$/i), {
-      target: { value: "This dashboard is clean — love the UX." },
+      target: { value: "This dashboard is clean" }, // 4 words
     });
 
-    fireEvent.click(
-      screen.getByRole("button", { name: /send feedback/i })
-    );
+    fireEvent.click(screen.getByRole("button", { name: /send feedback/i }));
 
     await waitFor(() => {
       expect(fetch).toHaveBeenCalledTimes(1);
     });
 
-    expect(
-      await screen.findByText(/thanks! your feedback was sent/i)
-    ).toBeInTheDocument();
+    expect(await screen.findByText(/sent!\s*thank you/i)).toBeInTheDocument();
   });
 
   it("shows server error when submission fails", async () => {
     fetch.mockResolvedValueOnce({
       ok: false,
+      status: 500,
       json: async () => ({ detail: "Server error" }),
+      text: async () => JSON.stringify({ detail: "Server error" }),
     });
 
     renderPage();
 
     fireEvent.change(screen.getByLabelText(/^message$/i), {
-      target: { value: "Something broke." },
+      target: { value: "Something broke badly" }, // 3 words
     });
 
-    fireEvent.click(
-      screen.getByRole("button", { name: /send feedback/i })
-    );
+    fireEvent.click(screen.getByRole("button", { name: /send feedback/i }));
 
-    expect(
-      await screen.findByText(/server error/i)
-    ).toBeInTheDocument();
+    expect(await screen.findByText(/server error/i)).toBeInTheDocument();
   });
 
   it("allows typing into inputs (smoke test)", () => {
@@ -116,11 +117,11 @@ describe("FeedbackPage", () => {
     });
 
     fireEvent.change(screen.getByLabelText(/^message$/i), {
-      target: { value: "Feature idea: alerts!" },
+      target: { value: "Feature idea: alerts now" }, // 4 words
     });
 
     expect(screen.getByLabelText(/^name$/i)).toHaveValue("Ericka");
     expect(screen.getByLabelText(/contact email/i)).toHaveValue("test@example.com");
-    expect(screen.getByLabelText(/^message$/i)).toHaveValue("Feature idea: alerts!");
+    expect(screen.getByLabelText(/^message$/i)).toHaveValue("Feature idea: alerts now");
   });
 });
