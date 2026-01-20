@@ -5,131 +5,161 @@ import { Link } from "react-router-dom";
 import AppShell from "../layout/AppShell";
 import "../../css/pages/IndexFundsPage.css";
 
+import lucentLogo from "../../assets/images/companyLogo-logoOnly.png";
+
 /**
- * IndexFundsPage (Current U-Stock)
- * --------------------------------------------
- * This page used to depend on a legacy fundamentals snapshot hook.
- * That hook/file path is no longer part of the current app direction.
+ * Market Baselines (Lucent Financial)
+ * -----------------------------------
+ * This page is intentionally docs-first.
+ * It explains how Lucent uses broad-market ETFs as context inputs for:
+ * - regime detection (trend vs range)
+ * - risk-on vs risk-off behavior
+ * - volatility awareness and safer automation defaults
  *
- * For now this page is "docs-first":
- * - No legacy imports
- * - No API calls
- * - Explains how index funds fit into U-Stock’s strategy + bot pipeline
- *
- * Later, if you want live data:
- * - Add a backend endpoint for ETF fundamentals (or reuse your market data provider)
- * - Reintroduce a small hook under src/hooks/ that calls /api/... with AuthContext authFetch
+ * Later upgrade path:
+ * - Add /api/market/baselines endpoint returning latest bars + simple computed stats
+ * - Render compact baseline tiles + “today’s regime” summary
  */
 
-const INDEX_FUNDS = [
-  { ticker: "VTI", name: "Vanguard Total Stock Market ETF", blurb: "Total U.S. stock market exposure." },
-  { ticker: "VOO", name: "Vanguard S&P 500 ETF", blurb: "S&P 500 exposure; large-cap U.S. baseline." },
-  { ticker: "QQQ", name: "Invesco QQQ Trust", blurb: "NASDAQ-100 exposure; growth/tech-heavy proxy." },
-  { ticker: "SPY", name: "SPDR S&P 500 ETF Trust", blurb: "Highly liquid S&P 500 tracker (popular for trading)." },
-  { ticker: "IWM", name: "iShares Russell 2000 ETF", blurb: "Small-cap U.S. exposure; risk-on proxy." },
+const BASELINES = [
+  {
+    ticker: "SPY",
+    name: "SPDR S&P 500 ETF Trust",
+    blurb: "Large-cap market baseline and broad risk gauge.",
+    use: ["Market breadth proxy", "Trend/range regime", "Index-relative moves"],
+  },
+  {
+    ticker: "QQQ",
+    name: "Invesco QQQ Trust",
+    blurb: "Growth/tech-heavy proxy; often leads momentum days.",
+    use: ["Risk-on appetite", "Momentum regime", "Volatility sensitivity"],
+  },
+  {
+    ticker: "IWM",
+    name: "iShares Russell 2000 ETF",
+    blurb: "Small-cap proxy; helpful for risk-on vs risk-off read.",
+    use: ["Risk appetite", "Breadth confirmation", "Rotation signal"],
+  },
+  {
+    ticker: "VTI",
+    name: "Vanguard Total Stock Market ETF",
+    blurb: "Total U.S. market exposure; longer-horizon baseline.",
+    use: ["Macro baseline", "Beta reference", "System-wide drift"],
+  },
+  {
+    ticker: "TLT",
+    name: "iShares 20+ Year Treasury Bond ETF",
+    blurb: "Rates-sensitive risk-off baseline (optional but useful).",
+    use: ["Risk-off confirmation", "Macro stress signal", "Hedge context"],
+  },
 ];
 
 export default function IndexFundsPage() {
-  const [activeTab, setActiveTab] = useState("about"); // "about" | "funds"
-
-  const funds = useMemo(() => INDEX_FUNDS, []);
+  const [activeTab, setActiveTab] = useState("baselines"); // "baselines" | "universe"
+  const baselines = useMemo(() => BASELINES, []);
 
   return (
     <AppShell>
       <div className="index-funds-page">
-        {/* Hero card */}
-        <header className="panel index-hero">
-          <div className="index-hero-text">
-            <h1 className="page-title">Index Funds & System Baselines</h1>
+        {/* HERO (match AboutPage mechanics) */}
+        <section className="index-hero-card">
+          <div className="index-hero-left">
+            <h1 className="page-title">Market Baselines</h1>
+
             <p className="muted">
-              Index ETFs are the “baseline” of the market. In U-Stock terms, they’re useful for:
-              (1) understanding what the market is doing overall, and (2) giving your bots context
-              for trend, volatility, and risk-on vs risk-off days.
+              These ETFs act as Lucent’s “system context.” They don’t pick trades by themselves — they help interpret
+              the environment: risk-on vs risk-off, trend vs range, and volatility.
             </p>
-            <p className="muted" style={{ marginTop: 8 }}>
-              This page is currently documentation-only while the frontend is being modernized and tested.
-              Live ETF fundamentals can be added back once the backend endpoint is finalized.
-            </p>
+
+            <div className="index-hero-meta">
+              Status: <span>docs-first</span> (live baseline tiles can be added after the API endpoint is finalized)
+            </div>
+
+            <Link to="/" className="back-link-pill">
+              ← Back to dashboard
+            </Link>
           </div>
 
-          <Link to="/" className="back-link-pill">
-            ← Back to dashboard
-          </Link>
-        </header>
+          {/* LOGO takes the entire right side of the hero (same as About) */}
+          <div className="index-hero-right" aria-label="Lucent Financial logo">
+            <div className="index-hero-logoPanel">
+              <img src={lucentLogo} alt="Lucent Financial logo" className="index-hero-logo" />
+            </div>
+          </div>
+        </section>
 
-        {/* Tabs row */}
+        {/* Tabs */}
         <div className="index-tabs-row">
           <div className="tabs">
             <button
               type="button"
-              className={"tab-btn " + (activeTab === "about" ? "tab-btn--active" : "")}
-              onClick={() => setActiveTab("about")}
+              className={"tab-btn " + (activeTab === "baselines" ? "tab-btn--active" : "")}
+              onClick={() => setActiveTab("baselines")}
             >
-              Why index funds matter
+              How Lucent uses baselines
             </button>
+
             <button
               type="button"
-              className={"tab-btn " + (activeTab === "funds" ? "tab-btn--active" : "")}
-              onClick={() => setActiveTab("funds")}
+              className={"tab-btn " + (activeTab === "universe" ? "tab-btn--active" : "")}
+              onClick={() => setActiveTab("universe")}
             >
-              Index universe (starter)
+              Baseline universe
             </button>
           </div>
         </div>
 
         {/* Content */}
-        {activeTab === "about" ? (
+        {activeTab === "baselines" ? (
           <>
             <section className="panel index-about-panel">
-              <h3>What index funds are</h3>
+              <h3>What “baseline context” means</h3>
               <p className="muted">
-                An index fund (or ETF) holds a basket of stocks to track an index (like the S&P 500).
-                Instead of picking individual winners, you’re buying broad exposure.
+                Lucent treats broad-market ETFs as a reference layer for decision-making. If the overall market is
+                trending cleanly, strategies behave differently than they would in choppy range conditions.
               </p>
 
               <ul className="about-list">
                 <li>
-                  <strong>Market baseline (beta):</strong> helpful reference for “is it just the market moving?”
+                  <strong>Regime detection:</strong> trend vs range helps select safer behavior (or pause automation).
                 </li>
                 <li>
-                  <strong>Liquidity + structure:</strong> many are highly liquid and trade cleanly intraday.
+                  <strong>Risk-on vs risk-off:</strong> small caps and growth strength often signals higher risk appetite.
                 </li>
                 <li>
-                  <strong>Risk context:</strong> SPY/QQQ strength or weakness often predicts how stocks behave that day.
+                  <strong>Volatility awareness:</strong> wider ranges can require smaller sizing or stricter gating rules.
                 </li>
                 <li>
-                  <strong>Regime detection:</strong> trend/range conditions on major ETFs can help select bot behavior later.
+                  <strong>Context for rankings:</strong> a stock moving “with the market” is different from moving on its own.
                 </li>
               </ul>
             </section>
 
             <section className="panel index-about-panel">
-              <h3 className="fundamentals-title">How this ties into U-Stock</h3>
+              <h3 className="fundamentals-title">How this connects to bots + runner states</h3>
               <div className="fundamentals-explain">
-                <p>
-                  U-Stock is evolving into a multi-bot system where strategy creates <strong>TradeIntents</strong> and
-                  the runner/engine handles <strong>execution</strong>.
+                <p className="muted">
+                  Lucent’s direction is “transparent automation.” Strategies can generate <strong>intents</strong>, but
+                  execution is gated and observable.
                 </p>
 
                 <ul className="metrics-list">
                   <li>
-                    <strong>Signal generation:</strong> bots (like EMA Trend) read prices/bars, compute indicators,
-                    and produce intents (entry/stop/take-profit + confidence).
+                    <strong>Strategy layer:</strong> a bot reads bars/indicators and emits TradeIntents (entry/stop/TP).
                   </li>
                   <li>
-                    <strong>Execution separation:</strong> paper/live executors place bracket orders and emit transaction events.
+                    <strong>Runner layer:</strong> applies gating rules like market hours, risk caps, and “wait states.”
                   </li>
                   <li>
-                    <strong>Telemetry:</strong> transaction events can be uploaded to Supabase (tx-only, idempotent event_id).
+                    <strong>Execution layer:</strong> routes paper vs live and records transaction events end-to-end.
                   </li>
                   <li>
-                    <strong>Next upgrade:</strong> use index ETFs as “market state” inputs to choose bots dynamically.
+                    <strong>Baseline layer:</strong> provides environment context to inform gating (ex: “chop day → reduce activity”).
                   </li>
                 </ul>
 
                 <p className="muted">
-                  The goal is not a single magical indicator. It’s clean inputs, stable risk rules, and consistent
-                  decision-making that can scale.
+                  This page defines the baseline layer so your UI has a clean explanation before you wire in live data.
                 </p>
               </div>
             </section>
@@ -137,25 +167,26 @@ export default function IndexFundsPage() {
         ) : (
           <section className="panel">
             <div className="fund-grid">
-              {funds.map((fund) => (
-                <article key={fund.ticker} className="fund-card">
+              {baselines.map((b) => (
+                <article key={b.ticker} className="fund-card">
                   <header className="fund-card-header">
                     <div>
-                      <div className="fund-ticker">{fund.ticker}</div>
-                      <div className="fund-name">{fund.name}</div>
+                      <div className="fund-ticker">{b.ticker}</div>
+                      <div className="fund-name">{b.name}</div>
                     </div>
                   </header>
 
-                  <p className="fund-blurb">{fund.blurb}</p>
+                  <p className="fund-blurb">{b.blurb}</p>
 
                   <div className="fund-metrics-row">
                     <div className="fund-metric">
                       <span className="fund-metric-label">Role:</span>
-                      <span className="fund-metric-value">Baseline / regime context</span>
+                      <span className="fund-metric-value">System context</span>
                     </div>
+
                     <div className="fund-metric">
-                      <span className="fund-metric-label">Data:</span>
-                      <span className="fund-metric-value">Embed/UI now, API later</span>
+                      <span className="fund-metric-label">Used for:</span>
+                      <span className="fund-metric-value">{b.use.join(" • ")}</span>
                     </div>
                   </div>
                 </article>

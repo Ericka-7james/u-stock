@@ -11,75 +11,74 @@ export default function LandingPage() {
 
   return (
     <AppShell>
-              {/* HERO */}
-        <section className="landing-hero">
-          <div className="landing-hero-inner">
-            <div className="landing-hero-left">
-              <h1 className="landing-hero-title">
-                Your trading workspace.
-                <br />
-                One plan. Many bots.
-              </h1>
+      {/* HERO */}
+      <section className="landing-hero">
+        <div className="landing-hero-inner">
+          <div className="landing-hero-left">
+            <h1 className="landing-hero-title">
+              Transparent automation.
+              <br />
+              Built for disciplined execution.
+            </h1>
 
-              <p className="landing-hero-subtitle">
-                U-Stock brings charts, levels, and signal logic into one clean
-                cockpit — so you spend less time tab-hopping and more time
-                executing your edge with discipline.
-              </p> 
+            <p className="landing-hero-subtitle">
+              U-Stock keeps your trading workflow clean: charts, context, risk controls, and execution status
+              in one place. You get clear “what happened / why” visibility — without exposing proprietary
+              strategy internals.
+            </p>
 
-              <div className="landing-hero-ctas">
-                <button className="landing-cta-primary" onClick={goAuth}>
-                  Sign in / Sign up
-                </button>
-              </div>
-            </div>
-
-            {/* RIGHT: static illustration image */}
-            <div className="landing-hero-right">
-              <img
-                src={landingIllustration}
-                alt="U-Stock illustration"
-                className="landing-hero-img"
-              />
+            <div className="landing-hero-ctas">
+              <button className="landing-cta-primary" onClick={goAuth}>
+                Sign in / Sign up
+              </button>
             </div>
           </div>
-        </section>
-        
+
+          {/* RIGHT: static illustration image */}
+          <div className="landing-hero-right">
+            <img
+              src={landingIllustration}
+              alt="U-Stock illustration"
+              className="landing-hero-img"
+            />
+          </div>
+        </div>
+      </section>
+
       <div className="landing-page">
         {/* ABOUT / VALUE SECTION */}
         <section className="landing-section landing-about">
           <div className="landing-section-inner">
             <h2 className="landing-section-title">Why U-Stock?</h2>
             <p className="landing-section-text">
-              Most traders don’t lose because they “don’t know enough.” They lose
-              because decisions get sloppy: unclear levels, inconsistent rules,
-              and no repeatable process. U-Stock keeps your workflow tight —
-              your watchlist, your chart context, and your decision trail in one place.
+              Most traders don’t fail because they lack intelligence — they fail because the process breaks:
+              inconsistent rules, unclear risk, and decisions that drift over time. U-Stock helps you stay
+              consistent with auditable actions, visible risk controls, and automation that’s designed to be
+              monitored (not blindly trusted).
             </p>
 
             <div className="landing-grid-3">
               <div className="landing-feature-card">
-                <h3>Clarity over chaos</h3>
+                <h3>Transparency you can trust</h3>
                 <p>
-                  Fast chart context with price history, trend structure, and key
-                  reference levels — so entries aren’t vibes.
+                  See the state of your system, what it’s doing right now, and what changed — with clear status,
+                  logs, and decision breadcrumbs.
                 </p>
               </div>
 
               <div className="landing-feature-card">
-                <h3>Rules-first signals</h3>
+                <h3>Automation with guardrails</h3>
                 <p>
-                  Signals are built to be auditable: what triggered, where the
-                  invalidation is, and what “good execution” looks like.
+                  Start manual, graduate to paper, then automate only when your rules prove themselves.
+                  Risk controls are first-class — not an afterthought.
                 </p>
               </div>
 
               <div className="landing-feature-card">
-                <h3>From manual → assisted</h3>
+                <h3>Protect your edge</h3>
                 <p>
-                  Start with research and snapshots. Grow into paper trading,
-                  bot-based scanning, and eventually automated execution
-                  (only when your rules prove themselves).
+                  You get clarity on behavior and risk without oversharing proprietary strategy IP. U-Stock
+                  aims for explainability, not reverse-engineering.
                 </p>
               </div>
             </div>
@@ -92,20 +91,21 @@ export default function LandingPage() {
             <div className="landing-roadmap-left">
               <h2 className="landing-section-title">What’s shipping next</h2>
               <p className="landing-section-text">
-                U-Stock is built like a lab: ship small, test fast, and keep
-                what improves real execution. The goal isn’t “more indicators” —
-                it’s higher-quality decisions with strict risk control.
+                U-Stock is built like a lab: ship small, test fast, and keep what improves real execution.
+                The goal isn’t “more indicators” — it’s cleaner decisions, stronger risk control, and automation
+                you can supervise with confidence.
               </p>
 
               <ul className="landing-roadmap-list">
                 <li>
-                  <strong>Now:</strong> charts, market snapshots, and signal-ready structure.
+                  <strong>Now:</strong> charts, snapshots, bot status + logs, and a decision-ready cockpit.
                 </li>
                 <li>
-                  <strong>Next:</strong> paper trading sandbox + trade journaling (R-multiples, screenshots, notes).
+                  <strong>Next:</strong> paper trading + journaling (R-multiples, screenshots, notes).
                 </li>
                 <li>
-                  <strong>Soon:</strong> multi-bot scanner that ranks setups by market state + your rules.
+                  <strong>Soon:</strong> scalable automation: multi-bot scanning + broker execution with strict
+                  safety gates.
                 </li>
               </ul>
 
@@ -121,7 +121,7 @@ export default function LandingPage() {
                 <div className="landing-roadmap-steps">
                   <div className="landing-roadmap-step">
                     <span className="landing-step-dot" />
-                    <span>Research cockpit + snapshots (now)</span>
+                    <span>Research cockpit + transparency (now)</span>
                   </div>
 
                   <div className="landing-roadmap-step">
@@ -131,7 +131,7 @@ export default function LandingPage() {
 
                   <div className="landing-roadmap-step">
                     <span className="landing-step-dot" />
-                    <span>Bot ranking + broker execution</span>
+                    <span>Automation + broker execution (guardrails)</span>
                   </div>
                 </div>
               </div>

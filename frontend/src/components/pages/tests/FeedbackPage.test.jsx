@@ -1,23 +1,31 @@
+// frontend/src/components/pages/tests/FeedbackPage.test.jsx
+import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
+
+// ✅ Turnstile isn't needed for tests; mock it so render is stable.
+vi.mock("react-turnstile", () => ({
+  default: () => null,
+}));
 
 // Mock AuthContext
 vi.mock("../../../context/AuthContext", () => ({
   useAuth: () => ({
     user: null,
     isAuthed: false,
+    refreshSession: vi.fn(),
+    login: vi.fn(),
+    signup: vi.fn(),
+    logout: vi.fn(),
   }),
 }));
-
-// Mock fetch
-global.fetch = vi.fn();
 
 import FeedbackPage from "../FeedbackPage";
 
 describe("FeedbackPage", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    global.fetch = vi.fn();
   });
 
   function renderPage() {
@@ -37,26 +45,31 @@ describe("FeedbackPage", () => {
     expect(screen.getByLabelText(/feedback type/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/^message$/i)).toBeInTheDocument();
 
-    expect(
-      screen.getByRole("button", { name: /send feedback/i })
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /send feedback/i })).toBeInTheDocument();
   });
 
-  it("shows validation error if message is empty", async () => {
+  it("disables submit until message has at least 3 words", async () => {
     renderPage();
 
-    fireEvent.click(
-      screen.getByRole("button", { name: /send feedback/i })
-    );
+    const submit = screen.getByRole("button", { name: /send feedback/i });
+    expect(submit).toBeDisabled();
 
-    expect(
-      await screen.findByText(/please enter a message/i)
-    ).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/^message$/i), {
+      target: { value: "Too short" },
+    });
+    expect(submit).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText(/^message$/i), {
+      target: { value: "This is enough" },
+    });
+
+    await waitFor(() => expect(submit).not.toBeDisabled());
   });
 
   it("submits feedback successfully and shows success message", async () => {
     fetch.mockResolvedValueOnce({
       ok: true,
+      status: 200,
       json: async () => ({ ok: true }),
     });
 
@@ -67,41 +80,38 @@ describe("FeedbackPage", () => {
     });
 
     fireEvent.change(screen.getByLabelText(/^message$/i), {
-      target: { value: "This dashboard is clean — love the UX." },
+      target: { value: "This dashboard is clean" },
     });
 
-    fireEvent.click(
-      screen.getByRole("button", { name: /send feedback/i })
-    );
+    const submit = screen.getByRole("button", { name: /send feedback/i });
+    await waitFor(() => expect(submit).not.toBeDisabled());
 
-    await waitFor(() => {
-      expect(fetch).toHaveBeenCalledTimes(1);
-    });
+    fireEvent.click(submit);
 
-    expect(
-      await screen.findByText(/thanks! your feedback was sent/i)
-    ).toBeInTheDocument();
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText(/sent!\s*thank you/i)).toBeInTheDocument();
   });
 
   it("shows server error when submission fails", async () => {
     fetch.mockResolvedValueOnce({
       ok: false,
+      status: 500,
       json: async () => ({ detail: "Server error" }),
     });
 
     renderPage();
 
     fireEvent.change(screen.getByLabelText(/^message$/i), {
-      target: { value: "Something broke." },
+      target: { value: "Something broke badly" },
     });
 
-    fireEvent.click(
-      screen.getByRole("button", { name: /send feedback/i })
-    );
+    const submit = screen.getByRole("button", { name: /send feedback/i });
+    await waitFor(() => expect(submit).not.toBeDisabled());
 
-    expect(
-      await screen.findByText(/server error/i)
-    ).toBeInTheDocument();
+    fireEvent.click(submit);
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText(/server error/i)).toBeInTheDocument();
   });
 
   it("allows typing into inputs (smoke test)", () => {
@@ -116,11 +126,11 @@ describe("FeedbackPage", () => {
     });
 
     fireEvent.change(screen.getByLabelText(/^message$/i), {
-      target: { value: "Feature idea: alerts!" },
+      target: { value: "Feature idea: alerts now" },
     });
 
     expect(screen.getByLabelText(/^name$/i)).toHaveValue("Ericka");
     expect(screen.getByLabelText(/contact email/i)).toHaveValue("test@example.com");
-    expect(screen.getByLabelText(/^message$/i)).toHaveValue("Feature idea: alerts!");
+    expect(screen.getByLabelText(/^message$/i)).toHaveValue("Feature idea: alerts now");
   });
 });

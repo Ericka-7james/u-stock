@@ -4,7 +4,7 @@
 .about-hero-card {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: stretch; /* lets columns match height */
   gap: 24px;
   padding: 20px 22px;
   margin-bottom: 24px;
@@ -14,15 +14,44 @@
   border: 1px solid var(--ustock-border-card);
   border-top: 4px solid var(--ustock-green-main);
   color: var(--ustock-text-main);
+  min-width: 0;
 }
 
-.about-hero-text .page-title {
+.about-hero-left {
+  min-width: 0;
+  flex: 1 1 560px;
+}
+
+.about-hero-left .page-title {
   color: var(--ustock-green-main);
-  margin-bottom: 8px;
+  margin: 0 0 8px;
 }
 
-.about-hero-text .muted {
+.about-hero-left .muted {
   max-width: 560px;
+}
+
+/* ✅ Right side: centered in all views */
+.about-hero-right {
+  flex: 0 0 420px;
+  max-width: 420px;
+  min-width: 0;
+  display: flex;
+  align-items: center;     /* ✅ vertical center */
+  justify-content: center; /* ✅ horizontal center */
+}
+
+/* ✅ Logo (no box panel). Scales nicely and stays centered */
+.about-hero-logo {
+  width: 100%;
+  height: auto;
+  max-width: 300px;
+  max-height: 300px;
+  object-fit: contain;
+  display: block;
+
+  /* ✅ optical centering (tweak -4px to -10px if needed) */
+  transform: translateY(-6px);
 }
 
 /* back to dashboard pill link */
@@ -46,46 +75,12 @@
   color: #f9fafb;
 }
 
-/* HERO ASIDE (headshot + meta) */
-.about-hero-aside {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 12px;
-}
-
-/* Headshot image */
-.about-avatar-image {
-  width: 80px;
-  height: 80px;
-  border-radius: 999px;
-  object-fit: cover;
-  border: 2px solid var(--ustock-green-main);
-  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.12);
-  background: var(--ustock-bg-card-soft);
-}
-
-/* Meta info next to headshot */
-.about-meta {
-  font-size: 12px;
-  color: var(--ustock-text-muted);
-}
-
-.about-meta-row {
-  display: flex;
-  gap: 6px;
-}
-
-.about-meta-row .label {
-  font-weight: 600;
-  color: var(--ustock-text-strong);
-}
-
 /* GRID SECTIONS */
 .about-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 16px;
+  min-width: 0;
 }
 
 .about-card {
@@ -95,6 +90,7 @@
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
   border: 1px solid var(--ustock-border-card);
   color: var(--ustock-text-main);
+  min-width: 0;
 }
 
 .about-card h2 {
@@ -134,25 +130,94 @@
   border: 1px solid rgba(22, 101, 52, 0.18);
 }
 
-/* Links section */
-.about-links {
+/* ✅ Defaults KV block (clean alignment) */
+.about-kv {
+  display: grid;
+  gap: 10px;
+}
+
+.about-kv-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding: 6px 0;
+}
+
+.about-kv-row + .about-kv-row {
+  border-top: 1px solid rgba(148, 163, 184, 0.18);
+  padding-top: 10px;
+}
+
+.about-kv .k {
+  font-weight: 700;
+  color: var(--ustock-text-strong);
+}
+
+.about-kv .v {
+  font-weight: 700;
+  color: var(--ustock-text-main);
+  text-align: right;
+}
+
+/* Builder card spans 2 columns on desktop */
+.about-span2 {
+  grid-column: span 2;
+}
+
+/* ✅ Builder header spans full width like other cards */
+.about-builderHead {
+  width: 100%;
+}
+
+.about-builderRow {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  min-width: 0;
+}
+
+.about-builderText {
+  min-width: 0;
+}
+
+/* Avatar (builder card) */
+.about-avatarWrap {
+  width: 80px;
+  height: 80px;
+  border-radius: 999px;
+  overflow: hidden;
+  border: 2px solid var(--ustock-green-main);
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.12);
+  background: var(--ustock-bg-card-soft);
+  flex: 0 0 auto;
+}
+
+.about-avatar-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Builder inline links */
+.about-links-inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding-left: 0;
   list-style: none;
-  padding: 0;
   margin: 10px 0 0;
 }
 
-.about-links li {
-  margin-bottom: 6px;
-}
-
-.about-links a {
+.about-links-inline a {
   font-size: 14px;
   color: var(--ustock-green-main);
   text-decoration: none;
   font-weight: 500;
 }
 
-.about-links a:hover {
+.about-links-inline a:hover {
   text-decoration: underline;
 }
 
@@ -163,18 +228,94 @@
     align-items: flex-start;
   }
 
-  .about-hero-aside {
-    align-items: flex-start;
+  .about-hero-right {
+    flex: 1 1 auto;
+    max-width: none;
+    width: 100%;
+    justify-content: center;
+    padding-top: 3px;
+  }
+
+  .about-hero-logo {
+    max-width: 260px;
+    max-height: 260px;
+    transform: translateY(-4px);
   }
 
   .about-grid {
-    grid-template-columns: 1fr; /* stack cards */
+    grid-template-columns: 1fr;
+  }
+
+  .about-span2 {
+    grid-column: span 1;
   }
 }
 
-/* Tablets – 2 cards per row */
+/* TODO – About Page Hero (425px–1025px) */
+
+/* MID SCREENS: 425px–1025px (stacked but tight, no weird empty space) */
+@media (min-width: 425px) and (max-width: 1025px) {
+  .about-hero-card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 14px;            /* ✅ tighter gap */
+  }
+
+  .about-hero-right {
+    width: 100%;
+    max-width: none;
+    flex: 0 0 auto;       /* ✅ stop “big column” behavior */
+    padding-top: 6px;     /* ✅ small breathing room */
+    justify-content: center;
+    align-items: center;
+  }
+
+  .about-hero-logo {
+    max-width: 300px;     /* ✅ readable size */
+    max-height: 300px;
+    transform: translateY(0); /* ✅ avoid extra optical push in stacked mode */
+  }
+}
+
 @media (min-width: 769px) and (max-width: 1024px) {
+  .about-hero-card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 14px;
+  }
+
+  .about-hero-right {
+    width: 100%;
+    max-width: none;
+    flex: 0 0 auto;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .about-hero-logo {
+    max-width: 320px;
+    max-height: 320px;
+    transform: translateY(0);
+  }
+
   .about-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .about-span2 {
+    grid-column: span 2;
+  }
+}
+
+/* LARGE DESKTOPS (optional polish) */
+@media (min-width: 1280px) {
+  .about-hero-right {
+    flex: 0 0 440px;
+    max-width: 440px;
+  }
+
+  .about-hero-logo {
+    max-width: 320px;
+    max-height: 320px;
   }
 }

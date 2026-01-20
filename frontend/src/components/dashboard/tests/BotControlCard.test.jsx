@@ -1,0 +1,271 @@
+// frontend/src/components/dashboard/tests/BotControlCard.test.jsx
+import React from "react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { render, screen, cleanup, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import BotControlCard from "../cards/BotControlCard.jsx";
+
+/* -------------------------
+   UI stubs
+-------------------------- */
+vi.mock("../../common/HelpTooltip.jsx", () => ({
+  default: ({ text }) => <span data-testid="help-tooltip">{text}</span>,
+}));
+
+vi.mock("../../common/Modal.jsx", () => ({
+  default: ({ open, title, children, footer, onClose }) =>
+    open ? (
+      <div data-testid="modal">
+        <div data-testid="modal-title">{title}</div>
+        <button data-testid="modal-close" onClick={onClose}>
+          close
+        </button>
+        <div data-testid="modal-body">{children}</div>
+        <div data-testid="modal-footer">{footer}</div>
+      </div>
+    ) : null,
+}));
+
+/* -------------------------
+   Fetch mock helper
+-------------------------- */
+function jsonResponse(obj, ok = true, status = 200) {
+  return Promise.resolve({
+    ok,
+    status,
+    json: () => Promise.resolve(obj),
+  });
+}
+
+describe("BotControlCard", () => {
+  let user;
+
+  beforeEach(() => {
+    user = userEvent.setup();
+
+    vi.spyOn(console, "error").mockImplementation(() => {}); // keep output clean
+
+    // Default fetch behavior (can be overridden per test)
+    global.fetch = vi.fn((url, opts = {}) => {
+      const method = (opts.method || "GET").toUpperCase();
+
+      // available bots
+      if (method === "GET" && url === "/api/bots/available") {
+        return jsonResponse({
+          bots: [
+            { id: "ema_trend", name: "EMA Trend Bot", description: "Trend follower" },
+            { id: "orb", name: "ORB Bot", description: "Opening range breakout" },
+          ],
+        });
+      }
+
+      // market session
+      if (method === "GET" && url === "/api/market/us/session") {
+        return jsonResponse({ ok: true, is_open: true, next_open: 1730000000 });
+      }
+
+      // status
+      if (method === "GET" && String(url).startsWith("/api/bots/status?bot_id=")) {
+        const botId = String(url).split("bot_id=")[1];
+        // default: stopped
+        return jsonResponse({
+          bot_id: decodeURIComponent(botId),
+          state: "stopped",
+          mode: "paper",
+          lastRun: null,
+          lastIntents: 0,
+        });
+      }
+
+      // config
+      if (method === "GET" && String(url).startsWith("/api/bots/config?bot_id=")) {
+        return jsonResponse({
+          config: { mode: "paper", risk_per_trade: 0.005, max_trades_per_day: 3, min_confidence: 0.62 },
+        });
+      }
+
+      // start
+      if (method === "POST" && url === "/api/bots/start") {
+        return jsonResponse({ ok: true });
+      }
+
+      // stop
+      if (method === "POST" && String(url).startsWith("/api/bots/stop?bot_id=")) {
+        return jsonResponse({ ok: true });
+      }
+
+      // save config
+      if (method === "POST" && url === "/api/bots/config") {
+        return jsonResponse({ ok: true });
+      }
+
+      // log
+      if (method === "GET" && String(url).startsWith("/api/bots/log?bot_id=")) {
+        return jsonResponse({
+          items: [
+            { ts: 1730000100, level: "info", message: "hello", meta: { a: 1 } },
+            { ts: 1730000200, level: "warn", message: "world", meta: null },
+          ],
+        });
+      }
+
+      return jsonResponse({ detail: "Unhandled route in test", url }, false, 500);
+    });
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
+  it("renders and loads available bots into the select", async () => {
+    render(<BotControlCard activeBotId="ema_trend" />);
+
+    // select exists
+    const select = await screen.findByRole("combobox");
+    expect(select).toBeInTheDocument();
+
+    // options loaded
+    expect(within(select).getByRole("option", { name: /ema trend bot/i })).toBeInTheDocument();
+    expect(within(select).getByRole("option", { name: /orb bot/i })).toBeInTheDocument();
+
+    // initial pill should be OFF because status default is stopped
+    expect(screen.getByText("OFF")).toBeInTheDocument();
+  });
+
+  it("changing bot calls onActiveBotChange", async () => {
+    const onActiveBotChange = vi.fn();
+    render(<BotControlCard activeBotId="ema_trend" onActiveBotChange={onActiveBotChange} />);
+
+    const select = await screen.findByRole("combobox");
+    await user.selectOptions(select, "orb");
+
+    expect(onActiveBotChange).toHaveBeenCalledWith("orb");
+  });
+
+  it("Start calls /api/bots/start and then refreshes status", async () => {
+    // make status become running after start
+    global.fetch.mockImplementation((url, opts = {}) => {
+      const method = (opts.method || "GET").toUpperCase();
+
+      if (method === "GET" && url === "/api/bots/available") {
+        return jsonResponse({ bots: [{ id: "ema_trend", name: "EMA Trend Bot" }] });
+      }
+      if (method === "GET" && url === "/api/market/us/session") {
+        return jsonResponse({ ok: true, is_open: true });
+      }
+      if (method === "GET" && String(url).startsWith("/api/bots/config?bot_id=")) {
+        return jsonResponse({ config: { mode: "paper", risk_per_trade: 0.005, max_trades_per_day: 3, min_confidence: 0.62 } });
+      }
+
+      // status: stopped first, then running
+      if (method === "GET" && String(url).startsWith("/api/bots/status?bot_id=")) {
+        const calls = global.fetch.mock.calls.filter((c) => String(c[0]).startsWith("/api/bots/status?bot_id=")).length;
+        return calls <= 1
+          ? jsonResponse({ state: "stopped", mode: "paper" })
+          : jsonResponse({ state: "running", mode: "paper" });
+      }
+
+      if (method === "POST" && url === "/api/bots/start") return jsonResponse({ ok: true });
+
+      return jsonResponse({ detail: "Unhandled", url }, false, 500);
+    });
+
+    render(<BotControlCard activeBotId="ema_trend" />);
+
+    const startBtn = await screen.findByRole("button", { name: /start/i });
+    await user.click(startBtn);
+
+    // becomes LIVE after refresh
+    await waitFor(() => {
+      expect(screen.getByText("LIVE")).toBeInTheDocument();
+    });
+
+    // ensure the start endpoint was hit
+    expect(global.fetch).toHaveBeenCalledWith(
+      "/api/bots/start",
+      expect.objectContaining({ method: "POST" })
+    );
+  });
+
+  it("Stop calls /api/bots/stop and then refreshes status", async () => {
+    // status: running first so Stop button exists; after stop -> stopped
+    global.fetch.mockImplementation((url, opts = {}) => {
+      const method = (opts.method || "GET").toUpperCase();
+
+      if (method === "GET" && url === "/api/bots/available") {
+        return jsonResponse({ bots: [{ id: "ema_trend", name: "EMA Trend Bot" }] });
+      }
+      if (method === "GET" && url === "/api/market/us/session") return jsonResponse({ ok: true, is_open: true });
+      if (method === "GET" && String(url).startsWith("/api/bots/config?bot_id=")) return jsonResponse({ config: { mode: "paper" } });
+
+      if (method === "GET" && String(url).startsWith("/api/bots/status?bot_id=")) {
+        const stopCalls = global.fetch.mock.calls.filter((c) => String(c[0]).startsWith("/api/bots/stop?bot_id=")).length;
+        return stopCalls === 0
+          ? jsonResponse({ state: "running", mode: "paper" })
+          : jsonResponse({ state: "stopped", mode: "paper" });
+      }
+
+      if (method === "POST" && String(url).startsWith("/api/bots/stop?bot_id=")) return jsonResponse({ ok: true });
+
+      return jsonResponse({ detail: "Unhandled", url }, false, 500);
+    });
+
+    render(<BotControlCard activeBotId="ema_trend" />);
+
+    // should show Stop (because running)
+    const stopBtn = await screen.findByRole("button", { name: /stop/i });
+    await user.click(stopBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText("OFF")).toBeInTheDocument();
+    });
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringMatching(/^\/api\/bots\/stop\?bot_id=/),
+      expect.objectContaining({ method: "POST" })
+    );
+  });
+
+  it("View log opens modal and renders log entries", async () => {
+    render(<BotControlCard activeBotId="ema_trend" />);
+
+    const btn = await screen.findByRole("button", { name: /view log/i });
+    await user.click(btn);
+
+    // modal should appear
+    const modal = await screen.findByTestId("modal");
+    expect(modal).toBeInTheDocument();
+
+    // entries appear
+    await waitFor(() => {
+      expect(screen.getByText(/hello/i)).toBeInTheDocument();
+      expect(screen.getByText(/world/i)).toBeInTheDocument();
+    });
+  });
+
+  it("Risk Controls -> Save posts config and closes modal", async () => {
+    render(<BotControlCard activeBotId="ema_trend" />);
+
+    const openBtn = await screen.findByRole("button", { name: /risk controls/i });
+    await user.click(openBtn);
+
+    const modal = await screen.findByTestId("modal");
+    expect(within(modal).getByTestId("modal-title").textContent).toMatch(/mode \+ risk controls/i);
+
+    // click Save
+    const saveBtn = within(modal).getByRole("button", { name: /save/i });
+    await user.click(saveBtn);
+
+    // config endpoint should be called
+    expect(global.fetch).toHaveBeenCalledWith(
+      "/api/bots/config",
+      expect.objectContaining({ method: "POST" })
+    );
+
+    // modal should close
+    await waitFor(() => {
+      expect(screen.queryByTestId("modal")).toBeNull();
+    });
+  });
+});

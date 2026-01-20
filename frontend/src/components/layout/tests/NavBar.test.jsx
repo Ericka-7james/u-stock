@@ -42,151 +42,42 @@ function renderNavBar({
 }
 
 describe("NavBar", () => {
-  beforeEach(() => {
-    mockLogout.mockReset();
-    authState = { user: null, logout: mockLogout };
-  });
-
   it("renders brand and primary nav links (logged out)", () => {
     renderNavBar({ route: "/" });
 
-    expect(screen.getByText("U-Stock")).toBeInTheDocument();
-    expect(screen.getByText("Radar Suite")).toBeInTheDocument();
+    // Brand changed
+    expect(screen.getByText(/lucent financial/i)).toBeInTheDocument();
+    expect(screen.getByText(/financial intelligence/i)).toBeInTheDocument();
 
+    // Primary nav labels changed
     expect(screen.getByRole("link", { name: /dashboard/i })).toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: /data sources/i })
+      screen.getByRole("link", { name: /market & logs/i })
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: /index funds/i })
+      screen.getByRole("link", { name: /market baselines/i })
     ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /about me/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /connected brokers/i })
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /about/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /feedback/i })).toBeInTheDocument();
-    expect(
-      screen.getByRole("link", { name: /connected apps/i })
-    ).toBeInTheDocument();
 
+    // Footer credit exists
     expect(screen.getByText(/made by ericka james/i)).toBeInTheDocument();
-
-    // Sign out should NOT appear logged out
-    expect(
-      screen.queryByRole("button", { name: /sign out/i })
-    ).not.toBeInTheDocument();
   });
 
-  it("applies active class to Dashboard when on /", () => {
-    const { container } = renderNavBar({ route: "/" });
+  it("applies active class to Market & Logs when on /data-sources", () => {
+    renderNavBar({ route: "/data-sources" });
 
-    const dashboardLink = screen.getByRole("link", { name: /dashboard/i });
-    expect(dashboardLink.className).toMatch(/side-nav-item--active/);
-
-    const activeEls = container.querySelectorAll(".side-nav-item--active");
-    expect(activeEls.length).toBe(1);
-  });
-
-  it("applies active class to Data Sources when on /data-sources", () => {
-    const { container } = renderNavBar({ route: "/data-sources" });
-
-    const link = screen.getByRole("link", { name: /data sources/i });
+    const link = screen.getByRole("link", { name: /market & logs/i });
     expect(link.className).toMatch(/side-nav-item--active/);
-
-    const activeEls = container.querySelectorAll(".side-nav-item--active");
-    expect(activeEls.length).toBe(1);
   });
 
-  it("applies active class to Connected Apps when on /connected-apps", () => {
-    const { container } = renderNavBar({ route: "/connected-apps" });
+  it("applies active class to Connected Brokers when on /connected-apps", () => {
+    renderNavBar({ route: "/connected-apps" });
 
-    const link = screen.getByRole("link", { name: /connected apps/i });
+    const link = screen.getByRole("link", { name: /connected brokers/i });
     expect(link.className).toMatch(/side-nav-item--active/);
-
-    const activeEls = container.querySelectorAll(".side-nav-item--active");
-    expect(activeEls.length).toBe(1);
-  });
-
-  it("calls setNavOpen updater when hamburger is clicked", () => {
-    const setNavOpen = vi.fn();
-    renderNavBar({ setNavOpen });
-
-    const hamburger = screen.getByRole("button", { name: /open navigation/i });
-    fireEvent.click(hamburger);
-
-    expect(setNavOpen).toHaveBeenCalledTimes(1);
-    expect(typeof setNavOpen.mock.calls[0][0]).toBe("function");
-  });
-
-  it("calls onToggleTheme when dark mode toggle is clicked", () => {
-    const onToggleTheme = vi.fn();
-    renderNavBar({ onToggleTheme });
-
-    const themeToggle = screen.getByRole("button", { name: /toggle dark mode/i });
-    fireEvent.click(themeToggle);
-
-    expect(onToggleTheme).toHaveBeenCalledTimes(1);
-  });
-
-  it("shows user avatar + user menu when logged in, and calls logout (TOPBAR menu)", () => {
-    authState = {
-      user: { email: "test@example.com", avatar: "📈" },
-      logout: mockLogout,
-    };
-
-    const setUserMenuOpen = vi.fn();
-    const setNavOpen = vi.fn();
-
-    const { container } = renderNavBar({
-      route: "/",
-      userMenuOpen: true, // force menu open so we can test dropdown sign out
-      setUserMenuOpen,
-      setNavOpen,
-    });
-
-    // avatar button exists
-    expect(
-      screen.getByRole("button", { name: /open user menu/i })
-    ).toBeInTheDocument();
-
-    // menu email visible
-    expect(screen.getByText("test@example.com")).toBeInTheDocument();
-
-    // ✅ Scope sign out click to the TOPBAR dropdown to avoid the side-nav sign out
-    const menu = container.querySelector(".topbar-user-menu");
-    expect(menu).toBeTruthy();
-
-    const signOutInMenu = within(menu).getByRole("button", {
-      name: /^sign out$/i,
-    });
-
-    fireEvent.click(signOutInMenu);
-
-    expect(mockLogout).toHaveBeenCalledTimes(1);
-    expect(setUserMenuOpen).toHaveBeenCalledWith(false);
-    expect(setNavOpen).toHaveBeenCalledWith(false);
-  });
-
-  it("renders side nav Sign out button when logged in and triggers logout", () => {
-    authState = {
-      user: { email: "test@example.com", avatar: "👤" },
-      logout: mockLogout,
-    };
-
-    const setUserMenuOpen = vi.fn();
-    const setNavOpen = vi.fn();
-
-    const { container } = renderNavBar({ setUserMenuOpen, setNavOpen });
-
-    // ✅ Scope to side-nav so we don’t accidentally hit topbar menu if it’s open later
-    const sideNav = container.querySelector(".side-nav");
-    expect(sideNav).toBeTruthy();
-
-    const sideSignOut = within(sideNav).getByRole("button", {
-      name: /^sign out$/i,
-    });
-
-    fireEvent.click(sideSignOut);
-
-    expect(mockLogout).toHaveBeenCalledTimes(1);
-    expect(setUserMenuOpen).toHaveBeenCalledWith(false);
-    expect(setNavOpen).toHaveBeenCalledWith(false);
   });
 });

@@ -118,8 +118,13 @@ describe("ConnectedAppsPage", () => {
     await waitFor(() => expect(mockAuth.authFetch).toHaveBeenCalled());
 
     // Click "Learn more" for Alpaca (first card)
-    const learnMoreButtons = screen.getAllByRole("button", { name: /Learn more/i });
-    fireEvent.click(learnMoreButtons[0]);
+    fireEvent.click(screen.getByRole("button", { name: /alpaca docs/i }));
+    expect(window.open).toHaveBeenCalledWith(
+      "https://docs.alpaca.markets/",
+      "_blank",
+      "noreferrer"
+    );
+
 
     expect(window.open).toHaveBeenCalled();
   });
@@ -220,13 +225,12 @@ describe("ConnectedAppsPage", () => {
     expect(alpaca.getByRole("button", { name: "Disconnect" })).toBeInTheDocument();
     expect(alpaca.getByRole("button", { name: /Refresh/i })).toBeInTheDocument();
     expect(alpaca.queryByRole("button", { name: "Connect" })).toBeNull();
-    expect(alpaca.queryByRole("button", { name: /Learn more/i })).toBeNull();
+    expect(alpaca.queryByRole("button", { name: /alpaca docs/i })).toBeNull();
 
     // Unconnected provider card -> Connect + Learn more, no Disconnect/Refresh
     const polygon = within(polygonCard);
     expect(polygon.getByText("Not connected")).toBeInTheDocument();
-    expect(polygon.getByRole("button", { name: "Connect" })).toBeInTheDocument();
-    expect(polygon.getByRole("button", { name: /Learn more/i })).toBeInTheDocument();
+    expect(polygon.getByRole("button", { name: /polygon docs/i })).toBeInTheDocument();
     expect(polygon.queryByRole("button", { name: "Disconnect" })).toBeNull();
     expect(polygon.queryByRole("button", { name: /Refresh/i })).toBeNull();
   });

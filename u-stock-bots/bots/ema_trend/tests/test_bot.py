@@ -44,16 +44,25 @@ def _entry_bars_ok(n=80, start=100.0, step=0.02):
     o = c[:]
     h = [x + 0.15 for x in c]
     l = [x - 0.15 for x in c]
+    # make last bar slightly "realistic"
     o[-1] = c[-2]
     l[-1] = c[-1] - 0.25
     return _bars(o=o, h=h, l=l, c=c)
 
 
 @pytest.fixture(autouse=True)
-def _reset_globals():
+def _reset_globals(monkeypatch):
+    # reset globals
     bot_mod._LAST_LOG_TS.clear()
     bot_mod._MARKET_CLOSED_UNTIL = 0.0
+
+    # ✅ IMPORTANT:
+    # New bot.py will call _maybe_market_closed() early.
+    # Default it to "open" so tests don't get gated by missing /api/market/us/session.
+    monkeypatch.setattr(bot_mod, "_maybe_market_closed", lambda _api: (False, None, "open"))
+
     yield
+
     bot_mod._LAST_LOG_TS.clear()
     bot_mod._MARKET_CLOSED_UNTIL = 0.0
 
@@ -98,6 +107,7 @@ def test_run_skips_when_bias_cannot_be_computed(monkeypatch):
 
     monkeypatch.setattr(bot_mod, "is_trade_window_local", lambda: True)
 
+    # insufficient bias data (not enough points)
     api.set("/api/market/us/bars|AAPL|15Min", {"bars": {"c": [100.0] * 10}})
 
     cfg = EMATrendConfig()
@@ -111,8 +121,10 @@ def test_run_chop_filter_blocks(monkeypatch):
 
     monkeypatch.setattr(bot_mod, "is_trade_window_local", lambda: True)
 
+    # bias valid
     api.set("/api/market/us/bars|AAPL|15Min", {"bars": {"c": _bias_closes_up()}})
 
+    # entry is ultra-flat (fails chop filters)
     n = 80
     c = [100.0] * n
     o = c[:]
@@ -131,9 +143,7 @@ def test_run_selects_top_n_by_confidence(monkeypatch):
 
     monkeypatch.setattr(bot_mod, "is_trade_window_local", lambda: True)
 
-    # ✅ Prevent market-session gate from short-circuiting this test.
-    monkeypatch.setattr(bot_mod, "_maybe_market_closed", lambda _api: (False, None, "open"))
-
+    # Bars so compute_signal will be called for each symbol
     for sym in ["AAA", "BBB", "CCC", "DDD"]:
         api.set(f"/api/market/us/bars|{sym}|15Min", {"bars": {"c": _bias_closes_up()}})
         api.set(f"/api/market/us/bars|{sym}|1Min", _entry_bars_ok())
@@ -143,6 +153,7 @@ def test_run_selects_top_n_by_confidence(monkeypatch):
     conf_map = {"AAA": 0.10, "BBB": 0.90, "CCC": 0.50, "DDD": 0.80}
 
     def fake_compute_signal(bars_entry, cfg_obj, bias):
+        # last bars call should include symbol in params
         last_path, last_params = api.calls[-1]
         sym = last_params.get("symbol")
         return (100.0, 99.5, 101.0), ["X_REASON"], conf_map.get(sym, 0.0)
@@ -162,11 +173,19 @@ def test_market_gate_is_set_when_no_symbol_has_bias_data(monkeypatch):
 
     monkeypatch.setattr(bot_mod, "is_trade_window_local", lambda: True)
 
+    # no bias closes -> any_symbol_had_data stays False
     api.set("/api/market/us/bars|AAPL|15Min", {"bars": {"c": []}})
     api.set("/api/market/us/bars|MSFT|15Min", {"bars": {"c": []}})
 
+    # override default autouse "open" behavior to closed
     monkeypatch.setattr(bot_mod, "_maybe_market_closed", lambda _api: (True, 9999999999.0, "test"))
-    monkeypatch.setattr(bot_mod, "_write_market_gate_hint", lambda until, bot_id="ema_trend": None)
+
+    # signature matches new bot.py call style
+    monkeypatch.setattr(
+        bot_mod,
+        "_write_market_gate_hint",
+        lambda *, until_epoch, reason, bot_id="ema_trend", market="us_stocks": None,
+    )
 
     out = bot_mod.run(api=api, cfg=EMATrendConfig())
     assert out == []
@@ -179,6 +198,7 @@ def test_market_gate_skips_immediately_when_active(monkeypatch):
 
     monkeypatch.setattr(bot_mod, "is_trade_window_local", lambda: True)
 
+    # active gate should cause early return before any API calls
     bot_mod._MARKET_CLOSED_UNTIL = 9999999999.0
 
     out = bot_mod.run(api=api, cfg=EMATrendConfig())

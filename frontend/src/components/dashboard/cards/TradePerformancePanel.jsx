@@ -1,5 +1,6 @@
 // frontend/src/components/dashboard/cards/TradePerformancePanel.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import BotControlCard from "./BotControlCard.jsx";
 import "../../../css/dashboard/cards/TradePerformancePanel.css";
 
@@ -36,6 +37,15 @@ function computePrevFallback(last, pct) {
   const prev = L / denom;
   if (!Number.isFinite(prev) || prev <= 0) return null;
   return prev;
+}
+
+function ConnectedBrokersMiniCard() {
+  return (
+    <Link to="/connected-apps" className="connected-mini-card" aria-label="Go to Connected Brokers">
+      <div className="connected-mini-title">Connected brokers</div>
+      <div className="connected-mini-sub">Manage Alpaca/Polygon keys and integrations →</div>
+    </Link>
+  );
 }
 
 function CardShell({ title, children, className = "" }) {
@@ -547,6 +557,12 @@ export default function TradePerformancePanel({ data, onChangeRange, opportuniti
 
             <div className="tpOppFootnote">Hover any pill to see full details. Prices are USD/share.</div>
           </CardShell>
+
+          {/* ✅ Tiny "Connected brokers" card */}
+          <div className="tpSpan2" style={{ marginTop: 12 }}>
+            <ConnectedBrokersMiniCard />
+          </div>
+
         </div>
       </div>
     </section>

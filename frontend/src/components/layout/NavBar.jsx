@@ -17,11 +17,10 @@ export default function NavBar({
   const isDashboard = location.pathname === "/";
   const isDatasources = location.pathname.startsWith("/data-sources");
   const isIndexFunds = location.pathname.startsWith("/index-funds");
-  const isAboutMe = location.pathname.startsWith("/about");
+  const isAbout = location.pathname.startsWith("/about");
   const isFeedback = location.pathname.startsWith("/feedback");
-  // const isResume = location.pathname.startsWith("/resume"); // ✅ you already had this
   const isConnectedApps = location.pathname.startsWith("/connected-apps");
-  const isCandles = location.pathname.startsWith("/candles");
+  // Candles intentionally removed (page paused)
 
   const closeNav = () => setNavOpen(false);
 
@@ -48,29 +47,16 @@ export default function NavBar({
         <div className="side-nav-brand">
           <div className="side-nav-logo-circle">U</div>
           <div className="side-nav-brand-text">
-            <span className="side-nav-name">U-Stock</span>
-            <span className="side-nav-tagline">Radar Suite</span>
+            {/* ✅ New branding */}
+            <span className="side-nav-name">Lucent Financial</span>
+            <span className="side-nav-tagline">Financial Intelligence</span>
           </div>
         </div>
 
         <nav className="side-nav-menu">
-          {/* 🔹 NEW: Resume link (public) */}
-          {/* <Link
-            to="/resume"
-            className={
-              "side-nav-item " + (isResume ? "side-nav-item--active" : "")
-            }
-            onClick={closeNav}
-          >
-            <span className="side-nav-item-dot" />
-            Resume
-          </Link> */}
-
           <Link
             to="/"
-            className={
-              "side-nav-item " + (isDashboard ? "side-nav-item--active" : "")
-            }
+            className={"side-nav-item " + (isDashboard ? "side-nav-item--active" : "")}
             onClick={closeNav}
           >
             <span className="side-nav-item-dot" />
@@ -79,81 +65,52 @@ export default function NavBar({
 
           <Link
             to="/data-sources"
-            className={
-              "side-nav-item " +
-              (isDatasources ? "side-nav-item--active" : "")
-            }
+            className={"side-nav-item " + (isDatasources ? "side-nav-item--active" : "")}
             onClick={closeNav}
           >
             <span className="side-nav-item-dot" />
-            Data Sources
+            Market & Logs
           </Link>
 
           <Link
             to="/index-funds"
-            className={
-              "side-nav-item " + (isIndexFunds ? "side-nav-item--active" : "")
-            }
+            className={"side-nav-item " + (isIndexFunds ? "side-nav-item--active" : "")}
             onClick={closeNav}
           >
             <span className="side-nav-item-dot" />
-            Index Funds
+            Market Baselines
+          </Link>
+
+          <Link
+            to="/connected-apps"
+            className={"side-nav-item " + (isConnectedApps ? "side-nav-item--active" : "")}
+            onClick={closeNav}
+          >
+            <span className="side-nav-item-dot" />
+            Connected Brokers
           </Link>
 
           <Link
             to="/about"
-            className={
-              "side-nav-item " + (isAboutMe ? "side-nav-item--active" : "")
-            }
+            className={"side-nav-item " + (isAbout ? "side-nav-item--active" : "")}
             onClick={closeNav}
           >
             <span className="side-nav-item-dot" />
-            About me
+            About
           </Link>
 
           <Link
             to="/feedback"
-            className={
-              "side-nav-item " + (isFeedback ? "side-nav-item--active" : "")
-            }
+            className={"side-nav-item " + (isFeedback ? "side-nav-item--active" : "")}
             onClick={closeNav}
           >
             <span className="side-nav-item-dot" />
             Feedback
           </Link>
 
-          <Link
-            to="/connected-apps"
-            className={
-              "side-nav-item " + (isConnectedApps ? "side-nav-item--active" : "")
-            }
-            onClick={closeNav}
-          >
-            <span className="side-nav-item-dot" />
-            Connected Apps
-          </Link>
-
-          <Link
-            to="/candles"
-            className={
-              "side-nav-item " + (isCandles ? "side-nav-item--active" : "")
-            }
-            onClick={closeNav}
-          >
-            <span className="side-nav-item-dot" />
-            Candles
-          </Link>
-
-          {/* Sign Out stays the same */}
+          {/* Sign Out */}
           {user && (
-            <button
-              type="button"
-              className="side-nav-item side-nav-signout"
-              onClick={() => {
-                handleLogout();
-                closeNav();
-              }}
-            >
+            <button type="button" className="side-nav-item side-nav-signout" onClick={handleLogout}>
               <span className="side-nav-item-dot" />
               Sign out
             </button>
@@ -166,7 +123,7 @@ export default function NavBar({
         </div>
       </aside>
 
-      {/* Top bar stays exactly as you had it */}
+      {/* Top bar */}
       <header className="topbar">
         <div className="topbar-left">
           <button
@@ -225,9 +182,7 @@ export default function NavBar({
                 onClick={handleAvatarClick}
                 aria-label="Open user menu"
               >
-                <span className="topbar-user-avatar">
-                  {user.avatar || "👤"}
-                </span>
+                <span className="topbar-user-avatar">{user.avatar || "👤"}</span>
               </button>
 
               {userMenuOpen && (
@@ -235,11 +190,7 @@ export default function NavBar({
                   <div className="topbar-user-menu-item topbar-user-menu-meta">
                     <div className="topbar-user-menu-email">{user.email}</div>
                   </div>
-                  <button
-                    type="button"
-                    className="topbar-user-menu-item"
-                    onClick={handleLogout}
-                  >
+                  <button type="button" className="topbar-user-menu-item" onClick={handleLogout}>
                     Sign out
                   </button>
                 </div>

@@ -36,13 +36,19 @@ def test_extract_mode_cfg_prefers_status_mode_then_config_mode():
 def test_main_pauses_when_market_closed(monkeypatch):
     api = FakeAPI()
 
-    # status running
-    api.set("/api/bots/status", {"state": "running", "mode": "paper", "config": {}})
+    # ✅ NEW contract: intent must be running
+    api.set(
+        "/api/bots/status",
+        {
+            "intent": "running",
+            "effective_state": "running",
+            "mode": "paper",
+            "config": {},
+        },
+    )
 
     # market closed
     api.set("/api/market/us/session", {"ok": True, "is_open": False, "reason": "closed", "next_open": 123})
-
-    monkeypatch.setattr(br, "UStockAPI", lambda *a, **k: api)  # used in context manager below
 
     # patch context manager behavior
     class _Ctx:
@@ -50,27 +56,57 @@ def test_main_pauses_when_market_closed(monkeypatch):
         def __exit__(self, exc_type, exc, tb): return False
 
     monkeypatch.setattr(br, "UStockAPI", lambda *a, **k: _Ctx())
-
-    # avoid sleeping
     monkeypatch.setattr(br, "LOOP_SECONDS", 0)
 
     br.main(max_loops=1, sleep_fn=lambda s: None)
 
-    # heartbeat paused should be posted
-    assert any(path == "/api/bots/heartbeat" and body.get("state") == "paused" for path, body in api.post_calls)
+    # ✅ heartbeat waiting_for_market should be posted
+    assert any(
+        path == "/api/bots/heartbeat" and body.get("effective_state") == "waiting_for_market"
+        for path, body in api.post_calls
+    )
+    # and it should carry the reason_code
+    assert any(
+        path == "/api/bots/heartbeat" and body.get("reason_code") == "market_closed"
+        for path, body in api.post_calls
+    )
 
 
 def test_main_running_submits_intents_uploads_and_heartbeats(monkeypatch):
     api = FakeAPI()
 
-    api.set("/api/bots/status", {"state": "running", "mode": "paper", "config": {}})
+    # ✅ NEW contract: intent must be running
+    api.set(
+        "/api/bots/status",
+        {
+            "intent": "running",
+            "effective_state": "running",
+            "mode": "paper",
+            "config": {},
+        },
+    )
     api.set("/api/market/us/session", {"ok": True, "is_open": True})
 
     # strategy returns intents
     monkeypatch.setattr(
         br,
         "_compute_intents_for_ema_trend",
-        lambda _api, _cfg: {"intents": [{"symbol": "AAPL", "side": "buy", "entry": 1.0, "stop": 0.5, "take_profit": 2.0, "confidence": 0.5, "bot_id": "ema_trend", "timeframe": "1Min", "reason_codes": []}], "events": []},
+        lambda _api, _cfg: {
+            "intents": [
+                {
+                    "symbol": "AAPL",
+                    "side": "buy",
+                    "entry": 1.0,
+                    "stop": 0.5,
+                    "take_profit": 2.0,
+                    "confidence": 0.5,
+                    "bot_id": "ema_trend",
+                    "timeframe": "1Min",
+                    "reason_codes": [],
+                }
+            ],
+            "events": [],
+        },
     )
 
     # engine returns tx events
@@ -106,5 +142,12 @@ def test_main_running_submits_intents_uploads_and_heartbeats(monkeypatch):
     assert uploaded["mode"] == "paper"
     assert any(e.get("event_type") == "order_submitted" for e in uploaded["events"])
 
-    # heartbeat running posted
-    assert any(path == "/api/bots/heartbeat" and body.get("state") == "running" for path, body in api.post_calls)
+    # ✅ heartbeat running posted (effective_state)
+    assert any(
+        path == "/api/bots/heartbeat" and body.get("effective_state") == "running"
+        for path, body in api.post_calls
+    )
+    assert any(
+        path == "/api/bots/heartbeat" and body.get("reason_code") == "loop_ok"
+        for path, body in api.post_calls
+    )

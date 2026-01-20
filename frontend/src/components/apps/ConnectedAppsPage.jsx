@@ -1,3 +1,4 @@
+// src/components/pages/ConnectedAppsPage.jsx
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import AppShell from "../layout/AppShell";
 import "../../css/apps/ConnectedAppsPage.css";
@@ -6,32 +7,49 @@ import ConnectProviderModal from "./ConnectProviderModal";
 import { useNavigate } from "react-router-dom";
 import { explainResponseError } from "../common/errorMessages";
 
+import lucentLogo from "../../assets/images/companyLogo-logoOnly.png";
+import TermsModal from "../common/TermsModal";
+
 const PROVIDERS = [
   {
     key: "alpaca",
     name: "Alpaca",
-    desc: "Paper trading + live market data (great for prototyping).",
-    tags: ["Paper trading", "Market data"],
+    desc: "Broker integration for paper trading and market data.",
+    tags: ["Paper trading", "Broker API", "Market data"],
     docsUrl: "https://docs.alpaca.markets/",
+    learnMoreLabel: "Alpaca docs",
   },
   {
     key: "polygon",
     name: "Polygon.io",
-    desc: "Professional-grade market data + aggregates.",
-    tags: ["Intraday candles", "Real-time"],
+    desc: "Market data provider for aggregates and intraday pricing.",
+    tags: ["Intraday candles", "Aggregates", "Real-time"],
     docsUrl: "https://polygon.io/docs",
+    learnMoreLabel: "Polygon docs",
   },
   {
     key: "tradingview",
     name: "TradingView",
-    desc: "Charts + alerts (usually via webhooks).",
-    tags: ["Alerts", "Webhooks"],
+    desc: "Charting + alerts. Often used via webhooks and notifications.",
+    tags: ["Charts", "Alerts", "Webhooks"],
     docsUrl: "https://www.tradingview.com/rest-api-spec/",
+    learnMoreLabel: "TradingView API",
   },
 ];
 
+function fmtTime(ts) {
+  try {
+    if (!ts) return "";
+    const d = new Date(ts);
+    if (Number.isNaN(d.getTime())) return "";
+    return d.toLocaleString();
+  } catch {
+    return "";
+  }
+}
+
 export default function ConnectedAppsPage() {
-  const { isAuthed, authFetch, logout } = useAuth();
+  const { isAuthed, authFetch } = useAuth();
   const navigate = useNavigate();
 
   const [loading, setLoading] = useState(false);
@@ -48,7 +66,9 @@ export default function ConnectedAppsPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [activeProviderKey, setActiveProviderKey] = useState(null);
 
-  // Guard against setting state after unmount + avoid racey responses
+  const [termsOpen, setTermsOpen] = useState(false);
+  const [lastRefreshedAt, setLastRefreshedAt] = useState(null);
+
   const mountedRef = useRef(false);
   const reqIdRef = useRef(0);
 
@@ -82,6 +102,7 @@ export default function ConnectedAppsPage() {
         setApps([]);
         setNotice("");
         setLoading(false);
+        setLastRefreshedAt(null);
       });
       return;
     }
@@ -91,7 +112,6 @@ export default function ConnectedAppsPage() {
     try {
       const res = await authFetch("/integrations", { method: "GET" });
 
-      // If a newer request started, ignore this response
       if (myReqId !== reqIdRef.current) return;
 
       if (res.status === 401) {
@@ -108,7 +128,6 @@ export default function ConnectedAppsPage() {
 
       const data = await res.json().catch(() => ({}));
 
-      // backend returns { items: [...] } (support legacy { apps: [...] })
       const list =
         (Array.isArray(data?.items) && data.items) ||
         (Array.isArray(data?.apps) && data.apps) ||
@@ -118,6 +137,7 @@ export default function ConnectedAppsPage() {
         setNotice(data?.message || "");
         setDismissed((d) => ({ ...d, notConnected: false }));
         setApps(list);
+        setLastRefreshedAt(Date.now());
       });
     } catch (e) {
       const ui = e?._ui;
@@ -127,7 +147,6 @@ export default function ConnectedAppsPage() {
         setError(ui ? `${ui.title}\n\n${ui.body}` : (e?.message || "Could not load connected apps."));
       });
     } finally {
-      // If a newer request started, don't stomp its loading state
       if (myReqId !== reqIdRef.current) return;
       safeSet(() => setLoading(false));
     }
@@ -159,7 +178,7 @@ export default function ConnectedAppsPage() {
   const notSignedInCopy =
     providerCount === 1
       ? `You’re not signed in. Sign in to connect ${PROVIDERS[0].name}.`
-      : "You’re not signed in. Sign in to connect and manage apps.";
+      : "You’re not signed in. Sign in to connect and manage your integrations.";
 
   const openConnectModal = (providerKey) => {
     setActiveProviderKey(providerKey);
@@ -186,53 +205,76 @@ export default function ConnectedAppsPage() {
     else openConnectModal(providerKey);
   };
 
-  const handleLogout = async () => {
-    try {
-      await logout?.();
-    } finally {
-      // clear local UI regardless
-      setApps([]);
-      setNotice("");
-    }
+  const handleDisconnect = async (providerKey) => {
+    const p = PROVIDERS.find((x) => x.key === providerKey);
+    const ok = window.confirm(
+      `Disconnect ${p?.name || providerKey}?\n\nThis removes the connection from Lucent. You can reconnect anytime.`
+    );
+    if (!ok) return;
+
+    alert("Disconnect flow will be wired next (backend endpoint). For now, reconnecting is available via Connect.");
   };
 
   return (
-    <AppShell title="Connected Apps">
-      <div className="connected-page">
-        <header className="connected-header">
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-            <div>
-              <h2 className="connected-title">Connected Apps</h2>
-              <p className="connected-subtitle">
-                Manage integrations for market data and trading. Your credentials stay
-                on the server — never in the browser.
-              </p>
-            </div>
+    <AppShell>
+      {/* HERO CARD (copy About layout) */}
+      <section className="connected-hero-card">
+        <div className="connected-hero-left">
+          <h1 className="page-title">Connected Apps</h1>
+          <p className="muted connected-tagline">
+            Connect brokers and market data providers to power charts and strategies.
+          </p>
 
-            {isAuthed && (
-              <button
-                className="connected-btn connected-btn--secondary"
-                onClick={handleLogout}
-                title="Clears the HttpOnly cookie session"
-                style={{ height: 40, alignSelf: "flex-start" }}
-                disabled={loading}
-              >
-                Log out
-              </button>
+          <p className="muted">
+            Add integrations like Alpaca or Polygon so Lucent can fetch pricing data and (optionally)
+            run strategies you choose to enable.
+          </p>
+
+          <p className="muted small">
+            Your API keys stay on the server and are never stored in the browser. You remain in control:
+            nothing trades unless you explicitly turn a strategy on.
+          </p>
+
+          {/* About-style pill link */}
+          <button type="button" className="connected-link-pill" onClick={() => setTermsOpen(true)}>
+            Terms & usage
+          </button>
+
+          <div className="connected-hero-meta">
+            {isAuthed && lastRefreshedAt ? (
+              <>Last refreshed: {fmtTime(lastRefreshedAt)}</>
+            ) : (
+              <>Tip: Connect at least one provider to unlock market data features.</>
             )}
           </div>
 
           {!isAuthed && !dismissed.notSignedIn && (
-            <CloseableBanner onClose={() => dismissBanner("notSignedIn")}>
-              {notSignedInCopy}
-            </CloseableBanner>
+            <div style={{ marginTop: 12 }}>
+              <CloseableBanner onClose={() => dismissBanner("notSignedIn")}>
+                {notSignedInCopy}
+                <div style={{ marginTop: 10 }}>
+                  <button
+                    className="connected-btn connected-btn--primary"
+                    onClick={() => navigate("/auth")}
+                  >
+                    Sign in
+                  </button>
+                </div>
+              </CloseableBanner>
+            </div>
           )}
-        </header>
+        </div>
 
+        <div className="connected-hero-right" aria-label="Lucent Financial logo">
+          <div className="connected-hero-logoPanel">
+            <img src={lucentLogo} alt="Lucent Financial logo" className="connected-hero-logo" />
+          </div>
+        </div>
+      </section>
+
+      <div className="connected-page">
         {!!error && !dismissed.genericError && (
-          <CloseableBanner onClose={() => dismissBanner("genericError")}>
-            {error}
-          </CloseableBanner>
+          <CloseableBanner onClose={() => dismissBanner("genericError")}>{error}</CloseableBanner>
         )}
 
         {import.meta.env.DEV && !!error && !dismissed.genericError && (
@@ -248,9 +290,7 @@ export default function ConnectedAppsPage() {
         )}
 
         {isAuthed && !!notice && !dismissed.notConnected && !hasAnyConnected && (
-          <CloseableBanner onClose={() => dismissBanner("notConnected")}>
-            {notice}
-          </CloseableBanner>
+          <CloseableBanner onClose={() => dismissBanner("notConnected")}>{notice}</CloseableBanner>
         )}
 
         <div className="connected-grid">
@@ -271,7 +311,7 @@ export default function ConnectedAppsPage() {
                       "connected-status " +
                       (isConnected ? "connected-status--on" : "connected-status--off")
                     }
-                    title={`backend status: ${status}`}
+                    title={`Status: ${status}`}
                   >
                     {isConnected ? "Connected" : "Not connected"}
                   </span>
@@ -290,7 +330,7 @@ export default function ConnectedAppsPage() {
                     <>
                       <button
                         className="connected-btn connected-btn--secondary"
-                        onClick={() => alert("Disconnect flow will be wired next.")}
+                        onClick={() => handleDisconnect(p.key)}
                         disabled={!isAuthed || loading}
                         title={!isAuthed ? "Sign in to manage connections" : ""}
                       >
@@ -320,7 +360,7 @@ export default function ConnectedAppsPage() {
                         onClick={() => openDocs(p.key)}
                         disabled={loading}
                       >
-                        Learn more
+                        {p.learnMoreLabel || "Learn more"}
                       </button>
                     </>
                   )}
@@ -330,41 +370,37 @@ export default function ConnectedAppsPage() {
           })}
         </div>
 
-        {/* ✅ Small navigation helper (production polish) */}
+        {!loading && isAuthed && !hasAnyConnected && (
+          <div className="connected-emptyHint">
+            No providers connected yet. Start with <strong>Alpaca</strong> for paper trading,
+            or <strong>Polygon</strong> for dedicated market data.
+          </div>
+        )}
+
         <section className="connected-note">
-          <h4 className="connected-note-title">Next steps</h4>
+          <h4 className="connected-note-title">How connections are used</h4>
           <ul className="connected-note-list">
+            <li>Data providers power charts, price history, and intraday moves.</li>
+            <li>Broker connections allow strategies to simulate or place trades when you enable them.</li>
+            <li>You stay in control — nothing trades unless you explicitly turn a strategy on.</li>
+          </ul>
+        </section>
+
+        <section className="connected-note connected-note--tight">
+          <h4 className="connected-note-title">Next steps</h4>
+          <ul className="connected-note-list connected-note-list--spaced">
             <li>
               Start/pause strategies in{" "}
-              <button
-                type="button"
-                className="connected-btn connected-btn--secondary"
-                style={{ padding: "4px 10px", marginLeft: 6 }}
-                onClick={() => navigate("/bots")}
-              >
+              <button type="button" className="connected-pill" onClick={() => navigate("/bots")}>
                 Bot Runner
               </button>
             </li>
             <li>
-              Review activity in{" "}
-              <button
-                type="button"
-                className="connected-btn connected-btn--secondary"
-                style={{ padding: "4px 10px", marginLeft: 6 }}
-                onClick={() => navigate("/datasources")}
-              >
+              View recent activity in{" "}
+              <button type="button" className="connected-pill" onClick={() => navigate("/datasources")}>
                 Bot Logs
               </button>
             </li>
-          </ul>
-        </section>
-
-        <section className="connected-note">
-          <h4 className="connected-note-title">What this unlocks</h4>
-          <ul className="connected-note-list">
-            <li>Real-time / intraday candles for your “Real Data Layer” (#50)</li>
-            <li>Provider switching + normalized candles across sources</li>
-            <li>Per-user trading connections later for the Trading Engine (#51)</li>
           </ul>
         </section>
 
@@ -377,6 +413,8 @@ export default function ConnectedAppsPage() {
           onGoSignIn={goSignIn}
           onConnected={loadConnections}
         />
+
+        <TermsModal open={termsOpen} onClose={() => setTermsOpen(false)} />
       </div>
     </AppShell>
   );

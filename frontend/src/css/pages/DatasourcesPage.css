@@ -1,62 +1,77 @@
-/* ========= DATA SOURCES PAGE ====================================== */
+/* ========= DATA SOURCES PAGE ===================================== */
 
-.data-sources-page {
-  padding-bottom: 40px;
-}
-
-/* HERO – like a big card */
-.data-hero {
+/* HERO CARD (About-style) */
+.ds-hero-card {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  gap: 16px;
+  align-items: stretch;
+  gap: 24px;
   padding: 20px 22px;
   margin-bottom: 24px;
   border-radius: 18px;
-  background: radial-gradient(
-    circle at top left,
-    rgba(187, 247, 208, 0.18) 0%,
-    rgba(187, 247, 208, 0.08) 35%,
-    var(--ustock-bg-card) 100%
-  );
+  background: var(--ustock-bg-card);
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
   border: 1px solid var(--ustock-border-card);
   border-top: 4px solid var(--ustock-green-main);
   color: var(--ustock-text-main);
+  min-width: 0;
 }
 
-.data-hero-text h1.page-title {
+.ds-hero-left {
+  min-width: 0;
+  flex: 1 1 560px;
+}
+
+.ds-hero-left .page-title {
   color: var(--ustock-green-main);
-  margin-bottom: 4px;
+  margin: 0 0 8px;
 }
 
-/* Back button pill */
-.back-link-pill {
-  display: inline-flex;
-  align-items: center;
-  padding: 8px 14px;
-  border-radius: 999px;
+.ds-hero-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+
+.ds-hero-right {
+  flex: 0 0 360px;
+  max-width: 360px;
+  min-width: 0;
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+}
+
+.ds-hero-logoPanel {
+width: 100%;
+  height: 100%;
+  min-height: 260px;
+  border-radius: 18px;
+  overflow: hidden;
   border: 1px solid var(--ustock-border-card);
   background: var(--ustock-bg-card-soft);
-  color: var(--ustock-green-main);
-  font-size: 13px;
-  font-weight: 600;
-  text-decoration: none;
-  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
-  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.back-link-pill:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.16);
-  background: var(--ustock-bg-card);
+.ds-hero-logo {
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  display: block;
 }
 
-/* ✅ Layout: stacked on small, side-by-side on large */
+/* DASHBOARD-LIKE GRID */
 .ds-main {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 18px; /* space between when stacked */
+  gap: 20px;
   align-items: flex-start;
   width: 100%;
   min-width: 0;
@@ -64,271 +79,209 @@
 
 .ds-left,
 .ds-right {
-  display: grid;
-  gap: 14px;
-  align-content: start;
   min-width: 0;
 }
 
-.ds-left > *,
-.ds-right > * {
-  min-width: 0;
-}
-
-/* Large screens */
+/* Desktop: leaders left, logs right */
 @media (min-width: 1024px) {
   .ds-main {
-    grid-template-columns: minmax(0, 440px) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 520px) minmax(0, 1fr);
     gap: 1.5rem;
     align-items: start;
   }
 }
 
-/* Mobile tweaks */
-@media (max-width: 768px) {
-  .data-hero {
-    flex-direction: column;
-    align-items: flex-start;
-  }
+/* ✅ Clamp wrapper to stop MarketLeadersCard overflow */
+.ds-cardClamp {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  border-radius: 18px; /* match card rounding */
 }
 
-/* ========= Bot Logs styling (U-Stock friendly) ==================== */
+/* make sure everything inside can shrink */
+.ds-cardClamp > *,
+.ds-cardClamp .panel,
+.ds-cardClamp .card {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
 
-.ds-panel {
-  padding: 18px 18px 20px;
+/* hard box-sizing safety */
+.ds-cardClamp * {
+  box-sizing: border-box;
+}
+
+/* BOT LOG CARD */
+.ds-botlogs {
   min-width: 0;
 }
 
-/* Header feels like dashboard */
-.ds-card-header {
-  background: radial-gradient(
-    circle at top left,
-    var(--ustock-green-soft) 0%,
-    var(--ustock-bg-card-soft) 35%,
-    var(--ustock-bg-card) 100%
-  );
-  padding: 12px 14px;
-  border-radius: 12px;
+/* reuse dashboard card header look */
+.ds-cardHeader {
   margin-bottom: 12px;
+}
+
+.ds-headerActions {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 12px;
-  border: 1px solid var(--ustock-border-card);
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
   min-width: 0;
 }
 
-.ds-card-header-left {
+.ds-inlineMeta {
+  font-size: 12px;
+  font-weight: 800;
+  opacity: 0.85;
+  white-space: nowrap;
+}
+
+/* Controls layout */
+.ds-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 10px;
+  min-width: 0;
+}
+
+.ds-field {
   display: flex;
   flex-direction: column;
   gap: 6px;
   min-width: 0;
 }
 
-.ds-title-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.ds-card-title {
-  margin: 0;
-  font-size: 18px;
-  color: var(--ustock-text-main);
-}
-
-.ds-card-subtitle {
-  margin: 0;
-  font-size: 12px;
-  color: var(--ustock-text-strong);
-  opacity: 0.92;
-}
-
-.ds-card-header-actions {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-/* little bot id pill */
-.ds-pill {
-  padding: 3px 10px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 800;
-  background: rgba(5, 150, 105, 0.12);
-  border: 1px solid rgba(5, 150, 105, 0.22);
-  color: var(--ustock-green-main);
-}
-
-/* Controls row */
-.ds-controls {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin-top: 10px;
-  align-items: flex-end;
-}
-
-.ds-field {
-  display: grid;
-  gap: 4px;
-}
-
-.ds-field-day {
-  min-width: 170px;
-}
-
 .ds-field-search {
-  flex: 1 1 260px;
-  min-width: 220px;
+  grid-column: span 2;
 }
 
 .ds-label {
   font-size: 12px;
-  opacity: 0.78;
-  font-weight: 700;
+  font-weight: 900;
+  color: var(--ustock-text-muted);
 }
 
-/* Inputs (U-Stock style) */
 .ds-input {
-  padding: 9px 10px;
-  border-radius: 12px;
-  border: 1px solid var(--ustock-border-card);
-  background: var(--ustock-bg-card-soft);
-  color: var(--ustock-text-main);
-  outline: none;
-  min-width: 0;
-  transition: box-shadow 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
-}
-
-.ds-input:focus {
-  border-color: rgba(5, 150, 105, 0.45);
-  box-shadow: 0 0 0 4px rgba(5, 150, 105, 0.12);
-}
-
-/* Buttons: override “botBtn” look for this page */
-.ds-btn {
-  height: 40px;
-  padding: 0 14px;
-  border-radius: 999px;
-  font-weight: 800;
-  cursor: pointer;
-  border: 1px solid transparent;
-  transition: transform 0.12s ease, box-shadow 0.15s ease, opacity 0.15s ease;
-  white-space: nowrap;
-}
-
-.ds-btn:disabled {
-  opacity: 0.65;
-  cursor: not-allowed;
-}
-
-.ds-btn-primary {
-  background: var(--ustock-green-main);
-  color: #ffffff;
-  border-color: rgba(5, 150, 105, 0.35);
-  box-shadow: 0 10px 28px rgba(5, 150, 105, 0.18);
-}
-
-.ds-btn-primary:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 14px 36px rgba(5, 150, 105, 0.24);
-}
-
-.ds-btn-secondary {
-  background: var(--ustock-bg-card-soft);
-  color: var(--ustock-green-main);
-  border-color: var(--ustock-border-card);
-  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.10);
-}
-
-.ds-btn-secondary:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.14);
+  height: 42px;
+  border-radius: 14px;
+  padding: 0 12px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
   background: var(--ustock-bg-card);
+  color: var(--ustock-text-main);
+  font-weight: 800;
+  min-width: 0;
 }
 
-/* Log rows */
+.ds-controlActions {
+  grid-column: span 2;
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+/* Log list */
 .ds-log-list {
-  margin-top: 12px;
+  margin-top: 14px;
   display: grid;
   gap: 12px;
+  min-width: 0;
 }
 
 .ds-log-row {
   border: 1px solid rgba(148, 163, 184, 0.22);
-  border-radius: 14px;
-  padding: 12px 12px;
-  background: rgba(248, 250, 252, 0.65);
+  background: rgba(15, 23, 42, 0.02);
+  border-radius: 16px;
+  padding: 12px 14px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .ds-log-row--fail {
-  border-color: rgba(239, 68, 68, 0.28);
-  background: rgba(254, 242, 242, 0.70);
+  border-color: rgba(239, 68, 68, 0.22);
+  background: rgba(239, 68, 68, 0.06);
 }
 
 .ds-log-meta {
-  font-weight: 900;
   font-size: 12px;
+  opacity: 0.85;
+  margin-bottom: 8px;
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
-  opacity: 0.9;
+  min-width: 0;
 }
 
 .ds-log-msg {
-  margin-top: 6px;
-  font-weight: 850;
-  color: var(--ustock-text-main);
+  font-weight: 900;
+  margin-bottom: 10px;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .ds-log-pre {
-  margin-top: 10px;
+  margin: 0;
   font-size: 12px;
-  opacity: 0.88;
   white-space: pre-wrap;
-  max-height: 160px;
-  overflow: auto;
   background: rgba(15, 23, 42, 0.04);
-  border: 1px solid rgba(148, 163, 184, 0.20);
+  border: 1px solid rgba(148, 163, 184, 0.22);
   border-radius: 12px;
   padding: 10px;
+  overflow: auto;
+  max-width: 100%;
 }
 
-/* ========= Market Leaders padding fix (Datasources only) ============ */
-/* Fix slight left/right padding mismatch inside leader “pill” rows on this page only.
-   These selectors are intentionally broad to match whichever classnames exist in MarketLeadersCard. */
-
-.ds-left .ml-row,
-.ds-left .leader-row,
-.ds-left .leaders-row,
-.ds-left .market-leader-row,
-.ds-left .leaderItem,
-.ds-left .leader-item {
-  padding-left: 14px !important;
-  padding-right: 14px !important;
-  box-sizing: border-box;
+.ds-empty {
+  opacity: 0.75;
+  font-weight: 800;
 }
 
-.ds-left .ml-move,
-.ds-left .leader-move,
-.ds-left .leaders-move,
-.ds-left .moveCol,
-.ds-left .move-col,
-.ds-left .ml-right,
-.ds-left .leader-right {
-  margin-right: 0 !important;
-  padding-right: 0 !important;
+/* Mobile hero */
+@media (max-width: 768px) {
+  .ds-hero-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .ds-hero-right {
+    flex: 1 1 auto;
+    max-width: none;
+    width: 100%;
+  }
+
+  .ds-hero-logoPanel {
+    min-height: 220px;
+  }
+
+  .ds-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .ds-field-search {
+    grid-column: span 1;
+  }
+
+  .ds-controlActions {
+    grid-column: span 1;
+    justify-content: stretch;
+  }
+
+  .ds-controlActions .mBtn {
+    width: 100%;
+  }
 }
 
-.ds-left .ml-row,
-.ds-left .leader-row,
-.ds-left .leaders-row,
-.ds-left .market-leader-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
+/* Tablet sizing */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .ds-main {
+    grid-template-columns: 1fr;
+  }
+
+  .ds-hero-right {
+    flex: 0 0 360px;
+    max-width: 360px;
+  }
 }
