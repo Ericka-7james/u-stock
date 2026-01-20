@@ -1,13 +1,12 @@
 // frontend/src/components/dashboard/DashboardPage.jsx
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import AppShell from "../layout/AppShell.jsx";
 
 import PriceChartPanel from "./cards/PriceChartPanel.jsx";
 import SentimentCard from "./cards/SentimentCard.jsx";
 import MacroCard from "./cards/MacroCard.jsx";
 import TradePerformancePanel from "./cards/TradePerformancePanel.jsx";
-import MarketLeadersCard from "./cards/MarketLeadersCard.jsx";
 
 import { useAlpacaDailyBars } from "../../hooks/useAlpacaDailyBars.js";
 import { useAlpacaTradeSummary } from "../../hooks/useAlpacaTradeSummary.js";
@@ -21,12 +20,6 @@ const LAST_TICKER_KEY = "ustock:last_ticker";
 
 // -------- Small in-memory caches (stale-while-revalidate) --------
 const CACHE_TTL_MS = 60_000;
-
-const leadersCache = {
-  ts: 0,
-  items: [],
-  meta: { source: "alpaca_movers" },
-};
 
 const oppCache = {
   ts: 0,
@@ -88,7 +81,6 @@ async function apiGetWithRetry(path, { signal } = {}) {
     return await apiGet(path, { signal });
   } catch (e) {
     if (signal?.aborted) throw e;
-    // one quick retry
     return await apiGet(path, { signal });
   }
 }
@@ -211,72 +203,11 @@ function ErrorBanner({ title, body, debug, action, onAction }) {
   );
 }
 
-/** Market Leaders */
-function useMarketLeaders() {
-  const [items, setItems] = useState(() => (isFresh(leadersCache.ts) ? leadersCache.items : []));
-  const [meta, setMeta] = useState(() => (isFresh(leadersCache.ts) ? leadersCache.meta : { source: "alpaca_movers" }));
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null); // Error | null
-
-  useEffect(() => {
-    const ac = new AbortController();
-    let alive = true;
-
-    async function run() {
-      // show loading only if we don't already have fresh data
-      const hasFresh = isFresh(leadersCache.ts) && Array.isArray(leadersCache.items);
-      if (!hasFresh) setLoading(true);
-      setError(null);
-
-      try {
-        const json = await apiGetWithRetry(
-          "/api/market/leaders?market=stocks&direction=up&limit=8",
-          { signal: ac.signal }
-        );
-        if (!alive) return;
-
-        const nextItems = Array.isArray(json?.items) ? json.items : [];
-        const nextMeta = {
-          source: json?.source || { code: "alpaca_movers", label: "Alpaca market movers (today)" },
-          asOf: json?.asOf || null,
-        };
-
-        setItems(nextItems);
-        setMeta(nextMeta);
-
-        leadersCache.ts = Date.now();
-        leadersCache.items = nextItems;
-        leadersCache.meta = nextMeta;
-      } catch (e) {
-        if (!alive) return;
-        if (ac.signal.aborted) return;
-
-        const err = toError(e);
-        setError(err);
-
-        // keep cached/previous items if we have them; do not hard wipe unless none
-        if (!Array.isArray(items) || items.length === 0) setItems([]);
-        setMeta((m) => m || { source: "alpaca_movers" });
-      } finally {
-        if (!alive) return;
-        setLoading(false);
-      }
-    }
-
-    run();
-    return () => {
-      alive = false;
-      ac.abort();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  return { items, meta, loading, error };
-}
-
 /** Bot Opportunities (internal) */
 function useBotOpportunities() {
-  const [data, setData] = useState(() => (isFresh(oppCache.ts) ? oppCache.data : { crypto: [], stocks: [], funds: [] }));
+  const [data, setData] = useState(() =>
+    isFresh(oppCache.ts) ? oppCache.data : { crypto: [], stocks: [], funds: [] }
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null); // Error | null
 
@@ -305,7 +236,6 @@ function useBotOpportunities() {
         const err = toError(e);
         setError(err);
 
-        // keep cached/previous data if present
         if (!data) setData({ crypto: [], stocks: [], funds: [] });
       } finally {
         if (!alive) return;
@@ -339,14 +269,16 @@ function normalizeBotState(raw, message = "") {
   const v = String(raw || "").trim().toLowerCase();
   const msg = String(message || "").toLowerCase();
 
-  if (v === "waiting_for_market" || v === "waiting" || v === "market_closed" || v === "gated") return UI_STATE.WAITING_FOR_MARKET;
+  if (v === "waiting_for_market" || v === "waiting" || v === "market_closed" || v === "gated")
+    return UI_STATE.WAITING_FOR_MARKET;
   if (v === "running" || v === "on" || v === "active") return UI_STATE.RUNNING;
   if (v === "paused") return UI_STATE.PAUSED;
   if (v === "stopped" || v === "off" || v === "idle") return UI_STATE.STOPPED;
   if (v === "error" || v === "failed" || v === "crashed") return UI_STATE.ERROR;
   if (v === "offline") return UI_STATE.OFFLINE;
 
-  if (msg.includes("market closed") || msg.includes("market gated") || msg.includes("gating until")) return UI_STATE.WAITING_FOR_MARKET;
+  if (msg.includes("market closed") || msg.includes("market gated") || msg.includes("gating until"))
+    return UI_STATE.WAITING_FOR_MARKET;
 
   return UI_STATE.UNKNOWN;
 }
@@ -410,8 +342,6 @@ function useRunnerSummary(pollMs = 7000) {
     const anyWaiting = mapped.some((m) => m.ui === UI_STATE.WAITING_FOR_MARKET);
     const anyPaused = mapped.some((m) => m.ui === UI_STATE.PAUSED);
 
-    // Pick a “primary” for display:
-    // running > waiting > paused > error > other
     const pick =
       mapped.find((m) => m.ui === UI_STATE.RUNNING) ||
       mapped.find((m) => m.ui === UI_STATE.WAITING_FOR_MARKET) ||
@@ -489,11 +419,7 @@ export default function DashboardPage() {
       if (msg.name !== "quoteUpdate") return;
 
       const raw =
-        msg?.data?.short_name ||
-        msg?.data?.original_name ||
-        msg?.data?.ticker ||
-        msg?.data?.symbol ||
-        "";
+        msg?.data?.short_name || msg?.data?.original_name || msg?.data?.ticker || msg?.data?.symbol || "";
 
       const next = normalizeSymbol(raw);
       if (!next) return;
@@ -508,28 +434,22 @@ export default function DashboardPage() {
   const { bars: alpacaBars, loading: alpacaLoading, error: alpacaError, meta: alpacaMeta } =
     useAlpacaDailyBars(currentTicker, 220);
 
-  const alpacaHistoryBySymbol = useMemo(
-    () => ({ [currentTicker]: alpacaBars || [] }),
-    [currentTicker, alpacaBars]
-  );
+  const alpacaHistoryBySymbol = useMemo(() => ({ [currentTicker]: alpacaBars || [] }), [currentTicker, alpacaBars]);
 
   const [tradePreset, setTradePreset] = useState("Week");
-  const { data: tradePerfData, loading: tradePerfLoading, error: tradePerfError } =
-    useAlpacaTradeSummary(tradePreset, { slippageBps: 0, feeBps: 0 });
+  const { data: tradePerfData, loading: tradePerfLoading, error: tradePerfError } = useAlpacaTradeSummary(tradePreset, {
+    slippageBps: 0,
+    feeBps: 0,
+  });
 
   const tradeErrUI = tradePerfError ? explainAnyError(tradePerfError, { feature: "trade_summary" }) : null;
   const barsErrUI = alpacaError ? explainAnyError(alpacaError, { feature: "daily_bars" }) : null;
 
-  const { items: leaders, meta: leadersMeta, loading: leadersLoading, error: leadersError } = useMarketLeaders();
-  const leadersErrUI = leadersError ? explainAnyError(leadersError, { feature: "market_leaders" }) : null;
-
   const { data: oppData, loading: oppLoading, error: oppError } = useBotOpportunities();
   const oppErrUI = oppError ? explainAnyError(oppError, { feature: "bot_opportunities" }) : null;
 
-  // ✅ real runner summary (production-ready states)
   const runner = useRunnerSummary(7000);
 
-  // Backward-compatible shape for existing cards, plus richer fields for future use
   const activeBot = useMemo(() => {
     const p = runner.primary || {};
     return {
@@ -565,7 +485,7 @@ export default function DashboardPage() {
             data={tradePerfData || { start: "—", end: "—", trades: [] }}
             onChangeRange={(preset) => setTradePreset(preset)}
             opportunities={oppData}
-            leaders={leaders}
+            leaders={[]} /* ✅ page exists now */
             activeBot={activeBot}
             onPickSymbol={(sym) => {
               const clean = normalizeSymbol(sym);
@@ -577,7 +497,6 @@ export default function DashboardPage() {
 
           {tradePerfLoading ? <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>Loading…</div> : null}
           {oppLoading ? <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>Loading…</div> : null}
-          {leadersLoading ? <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>Loading…</div> : null}
 
           {oppErrUI ? (
             <ErrorBanner
@@ -591,33 +510,6 @@ export default function DashboardPage() {
               }}
             />
           ) : null}
-
-          {leadersErrUI ? (
-            <ErrorBanner
-              title={leadersErrUI.title}
-              body={leadersErrUI.body}
-              debug={leadersErrUI.debug}
-              action={leadersErrUI.action}
-              onAction={() => {
-                const href = leadersErrUI?.action?.href;
-                if (href) navigate(href);
-              }}
-            />
-          ) : null}
-
-          <MarketLeadersCard
-            title="Market leaders"
-            subtitle="Top movers from Alpaca (today). Click one to load the chart."
-            items={leaders}
-            meta={leadersMeta}
-            loading={leadersLoading}
-            onSelectSymbol={(sym) => {
-              const clean = normalizeSymbol(sym);
-              if (!clean) return;
-              if (!isTvSafe(clean)) return; // blocks VLN.WS, BRK.B, etc.
-              setCurrentTicker(clean);
-            }}
-          />
         </div>
 
         <div className="dashboard-right">
@@ -651,16 +543,16 @@ export default function DashboardPage() {
               backendSnapshot={null}
             />
 
-            <div style={{ marginTop: 12 }}>
-              <MacroCard />
-            </div>
-
             {alpacaMeta?.fetchedAt ? (
               <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>
                 Alpaca fetched: {new Date(alpacaMeta.fetchedAt).toLocaleString()}
               </div>
             ) : null}
           </section>
+
+          <div style={{ marginTop: 12 }}>
+              <MacroCard />
+          </div>
         </div>
       </main>
     </AppShell>

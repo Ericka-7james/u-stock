@@ -286,6 +286,14 @@
   color: var(--ustock-text-muted);
 }
 
+/* Connected brokers mini card should span full width like other cards */
+.connected-mini-card {
+  display: flex;          /* or display:block; both work */
+  flex-direction: column;
+  width: 100%;
+  box-sizing: border-box;
+}
+
 /* Responsive */
 @media (max-width: 900px) {
   .tpLeftGrid {
