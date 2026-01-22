@@ -1,5 +1,6 @@
 // src/App.jsx
 import { Routes, Route, Navigate } from "react-router-dom";
+import AuthRedirector from "./context/AuthRedirector";
 
 import DashboardPage from "./components/dashboard/DashboardPage";
 import DatasourcesPage from "./components/pages/DatasourcesPage";
@@ -75,63 +76,67 @@ function SignupGate() {
 
 function App() {
   return (
-    <Routes>
-      <Route path="/" element={<HomeChooser />} />
+    <>
+      <AuthRedirector />
 
-      <Route path="/auth" element={<AuthGate />} />
-      <Route path="/auth/signup" element={<SignupGate />} />
+      <Routes>
+        <Route path="/" element={<HomeChooser />} />
 
-      <Route
-        path="/data-sources"
-        element={
-          <RequireAuth>
-            <DatasourcesPage />
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/index-funds"
-        element={
-          <RequireAuth>
-            <IndexFundsPage />
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/about"
-        element={
-          <RequireAuth>
-            <AboutPage />
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/feedback"
-        element={
-          <RequireAuth>
-            <FeebackPage />
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/connected-apps"
-        element={
-          <RequireAuth>
-            <ConnectedAppsPage />
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/candles"
-        element={
-          <RequireAuth>
-            <CandlesPage />
-          </RequireAuth>
-        }
-      />
+        <Route path="/auth" element={<AuthGate />} />
+        <Route path="/auth/signup" element={<SignupGate />} />
 
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+        <Route
+          path="/data-sources"
+          element={
+            <RequireAuth>
+              <DatasourcesPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/index-funds"
+          element={
+            <RequireAuth>
+              <IndexFundsPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/about"
+          element={
+            <RequireAuth>
+              <AboutPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/feedback"
+          element={
+            <RequireAuth>
+              <FeebackPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/connected-apps"
+          element={
+            <RequireAuth>
+              <ConnectedAppsPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/candles"
+          element={
+            <RequireAuth>
+              <CandlesPage />
+            </RequireAuth>
+          }
+        />
+
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </>
   );
 }
 
