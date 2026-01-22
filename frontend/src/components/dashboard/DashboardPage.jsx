@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AppShell from "../layout/AppShell.jsx";
+import { useAuth } from "../../context/AuthContext";
 
 import PriceChartPanel from "./cards/PriceChartPanel.jsx";
 import SentimentCard from "./cards/SentimentCard.jsx";
@@ -313,9 +314,13 @@ function useMarketLeaders({ direction = "up", limit = 10 } = {}) {
 }
 
 export default function DashboardPage() {
+  const { isAuthed, loading: authLoading } = useAuth();
   const navigate = useNavigate();
 
   const [currentTicker, setCurrentTicker] = useState(() => loadLastTicker());
+
+  if (authLoading) return null;
+if (!isAuthed) return null;
 
   useEffect(() => {
     try {
