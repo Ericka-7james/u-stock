@@ -1,5 +1,5 @@
 // src/context/AuthContext.jsx
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState, useCallback } from "react";
 import { API_BASE, API_PREFIX } from "../config/config";
 
 const AuthContext = createContext(null);
@@ -42,7 +42,7 @@ export function AuthProvider({ children }) {
     };
   }, []);
 
-  const refreshSession = async () => {
+  const refreshSession = useCallback(async () => {
     const attempt = async () => {
       const res = await authFetch("auth/me", { method: "GET" });
       const data = await safeJson(res);
@@ -64,14 +64,12 @@ export function AuthProvider({ children }) {
         return false;
       }
 
-      // New shape: { user: { id, email, ... } }
       if (data?.user?.id) {
         setUser(data.user);
         setIsAuthed(true);
         return true;
       }
 
-      // Old shape: { user_id: "...", email: "..." }
       if (data?.user_id) {
         setUser((prev) => ({
           ...(prev || {}),
@@ -82,16 +80,16 @@ export function AuthProvider({ children }) {
         return true;
       }
 
-      // Unexpected shape
       setIsAuthed(false);
       setUser(null);
       return false;
-    } catch {
+    } catch { 
       setIsAuthed(false);
       setUser(null);
       return false;
     }
-  };
+}, [authFetch]);
+
 
   useEffect(() => {
     (async () => {
@@ -99,8 +97,16 @@ export function AuthProvider({ children }) {
       await refreshSession();
       setLoading(false);
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [refreshSession]);
+
+  useEffect(() => {
+    const t = window.setInterval(() => {
+      refreshSession();
+    }, 60_000);
+
+    return () => window.clearInterval(t);
+  }, [refreshSession]);
+
 
   const login = async (email, password) => {
     const res = await authFetch("auth/login", {

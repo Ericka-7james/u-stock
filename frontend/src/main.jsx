@@ -9,9 +9,7 @@ import "./index.css";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    {/* ✅ Router at the very top */}
     <BrowserRouter>
-      {/* ✅ AuthProvider is now INSIDE the Router */}
       <AuthProvider>
         <App />
       </AuthProvider>

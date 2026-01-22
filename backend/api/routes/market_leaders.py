@@ -370,7 +370,10 @@ def market_leaders(
             }
         )
 
-    items.sort(key=lambda r: _num(r.get("score")) or -10_000, reverse=True)
+    # For "up" we want highest positive first (desc).
+    # For "down" we want most negative first (asc).
+    reverse = direction == "up"
+    items.sort(key=lambda r: _num(r.get("score")) if _num(r.get("score")) is not None else (10_000 if not reverse else -10_000), reverse=reverse)
 
     base_source = "ALPACA"
     source_label = "ALPACA+Computed" if computed_prevclose_count > 0 else base_source

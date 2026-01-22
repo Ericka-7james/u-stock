@@ -232,3 +232,59 @@
 .botLinkBtn:hover {
   text-decoration: underline;
 }
+
+/* -----------------------------
+   Step 2: Arming pill (intentional)
+   ----------------------------- */
+
+/* wrapper for the two pills in the header */
+.botPillRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* the ARMED/DISARMED pill gets this class in JSX:
+   it already renders as botCardStatePill + warn/neg
+   so we “upgrade” its feel with a dedicated class name.
+*/
+.botCardStatePill.arm {
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  font-weight: 950;
+
+  padding: 7px 12px;
+  border-width: 1px;
+
+  /* reads like a deliberate toggle */
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.08);
+}
+
+/* ARMED (warn) = strong, intentional */
+.botCardStatePill.arm.warn {
+  background: rgba(245, 158, 11, 0.18);
+  border-color: rgba(245, 158, 11, 0.78);
+  color: #7c2d12;
+
+  /* subtle ring = “armed” */
+  box-shadow:
+    0 10px 24px rgba(245, 158, 11, 0.12),
+    0 0 0 3px rgba(245, 158, 11, 0.14);
+}
+
+/* DISARMED (neg) = “locked” */
+.botCardStatePill.arm.neg {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.72);
+  color: #7f1d1d;
+
+  box-shadow:
+    0 10px 24px rgba(239, 68, 68, 0.08),
+    0 0 0 3px rgba(239, 68, 68, 0.10);
+}
+
+/* the LIVE/OFF/PAUSED pill stays more “status-like” */
+.botCardStatePill.status {
+  letter-spacing: 0.35px;
+  text-transform: uppercase;
+}

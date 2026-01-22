@@ -11,7 +11,6 @@
     "test:frontend:dashboard": "npm --prefix frontend run test -- src/components/dashboard",
     "test:frontend:landing": "npm --prefix frontend run test -- src/components/landing",
     "test:frontend:context": "npm --prefix frontend run test -- src/context",
-    "test:frontend:hooks": "npm --prefix frontend run test -- src/hooks",
 
     "test:frontend:file": "npm --prefix frontend run test --",
 
