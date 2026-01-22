@@ -1,12 +1,13 @@
 // frontend/src/components/dashboard/DashboardPage.jsx
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import AppShell from "../layout/AppShell.jsx";
 
 import PriceChartPanel from "./cards/PriceChartPanel.jsx";
 import SentimentCard from "./cards/SentimentCard.jsx";
 import MacroCard from "./cards/MacroCard.jsx";
 import TradePerformancePanel from "./cards/TradePerformancePanel.jsx";
+import MarketLeadersCard from "./cards/MarketLeadersCard.jsx";
 
 import { useAlpacaDailyBars } from "../../hooks/useAlpacaDailyBars.js";
 import { useAlpacaTradeSummary } from "../../hooks/useAlpacaTradeSummary.js";
@@ -24,6 +25,11 @@ const CACHE_TTL_MS = 60_000;
 const oppCache = {
   ts: 0,
   data: { crypto: [], stocks: [], funds: [] },
+};
+
+const leadersCache = {
+  ts: 0,
+  data: null, // { ok, items, meta, asOf, ... }
 };
 
 function isFresh(ts) {
@@ -68,7 +74,6 @@ async function apiGet(path, { signal } = {}) {
     err.code = code || null;
     err.detail = detail || null;
     err.payload = typeof json === "object" ? json : { raw: json };
-
     throw err;
   }
 
@@ -209,7 +214,7 @@ function useBotOpportunities() {
     isFresh(oppCache.ts) ? oppCache.data : { crypto: [], stocks: [], funds: [] }
   );
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null); // Error | null
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     const ac = new AbortController();
@@ -254,123 +259,57 @@ function useBotOpportunities() {
   return { data, loading, error };
 }
 
-// ✅ Runner/Bot status mapping (dashboard-level)
-const UI_STATE = {
-  RUNNING: "running",
-  PAUSED: "paused",
-  STOPPED: "stopped",
-  WAITING_FOR_MARKET: "waiting_for_market",
-  ERROR: "error",
-  OFFLINE: "offline",
-  UNKNOWN: "unknown",
-};
-
-function normalizeBotState(raw, message = "") {
-  const v = String(raw || "").trim().toLowerCase();
-  const msg = String(message || "").toLowerCase();
-
-  if (v === "waiting_for_market" || v === "waiting" || v === "market_closed" || v === "gated")
-    return UI_STATE.WAITING_FOR_MARKET;
-  if (v === "running" || v === "on" || v === "active") return UI_STATE.RUNNING;
-  if (v === "paused") return UI_STATE.PAUSED;
-  if (v === "stopped" || v === "off" || v === "idle") return UI_STATE.STOPPED;
-  if (v === "error" || v === "failed" || v === "crashed") return UI_STATE.ERROR;
-  if (v === "offline") return UI_STATE.OFFLINE;
-
-  if (msg.includes("market closed") || msg.includes("market gated") || msg.includes("gating until"))
-    return UI_STATE.WAITING_FOR_MARKET;
-
-  return UI_STATE.UNKNOWN;
-}
-
-function useRunnerSummary(pollMs = 7000) {
-  const [statuses, setStatuses] = useState({});
+/** Market leaders (Alpaca movers) */
+function useMarketLeaders({ direction = "up", limit = 10 } = {}) {
+  const [data, setData] = useState(() => (isFresh(leadersCache.ts) ? leadersCache.data : null));
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
   useEffect(() => {
     const ac = new AbortController();
     let alive = true;
 
-    async function load() {
+    async function run() {
+      const hasFresh = isFresh(leadersCache.ts) && leadersCache.data;
+      if (!hasFresh) setLoading(true);
+      setError(null);
+
+      const qs = new URLSearchParams({
+        market: "stocks",
+        direction,
+        limit: String(limit),
+      });
+
       try {
-        const res = await fetch("/bots/status", { credentials: "include", signal: ac.signal });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data?.detail || `Request failed (${res.status})`);
-        const s = data?.statuses && typeof data.statuses === "object" ? data.statuses : data;
+        const json = await apiGetWithRetry(`/api/market/leaders?${qs.toString()}`, { signal: ac.signal });
         if (!alive) return;
-        setStatuses(s || {});
-        setError(null);
+
+        setData(json || null);
+        leadersCache.ts = Date.now();
+        leadersCache.data = json || null;
       } catch (e) {
         if (!alive) return;
         if (ac.signal.aborted) return;
-        setError(e);
+        setError(toError(e));
+      } finally {
+        if (!alive) return;
+        setLoading(false);
       }
     }
 
-    load();
-    const t = window.setInterval(load, pollMs);
+    run();
+
+    // lightweight refresh so “today” stays fresh; won’t spam due to backend cache_ttl
+    const t = window.setInterval(run, 20_000);
 
     return () => {
       alive = false;
       ac.abort();
       window.clearInterval(t);
     };
-  }, [pollMs]);
+  }, [direction, limit]);
 
-  const summary = useMemo(() => {
-    const ids = Object.keys(statuses || {});
-    if (!ids.length) {
-      return {
-        anyRunning: false,
-        anyWaiting: false,
-        anyPaused: false,
-        primary: { state: UI_STATE.UNKNOWN, botId: "", label: "Unknown" },
-        statuses,
-        error,
-      };
-    }
-
-    const mapped = ids.map((id) => {
-      const s = statuses[id] || {};
-      const raw = s.effective_state || s.effectiveState || s.state || "";
-      const msg = s.message || "";
-      const ui = normalizeBotState(raw, msg);
-      return { id, ui, msg, updatedAt: s.updated_at || s.updatedAt || "" };
-    });
-
-    const anyRunning = mapped.some((m) => m.ui === UI_STATE.RUNNING);
-    const anyWaiting = mapped.some((m) => m.ui === UI_STATE.WAITING_FOR_MARKET);
-    const anyPaused = mapped.some((m) => m.ui === UI_STATE.PAUSED);
-
-    const pick =
-      mapped.find((m) => m.ui === UI_STATE.RUNNING) ||
-      mapped.find((m) => m.ui === UI_STATE.WAITING_FOR_MARKET) ||
-      mapped.find((m) => m.ui === UI_STATE.PAUSED) ||
-      mapped.find((m) => m.ui === UI_STATE.ERROR) ||
-      mapped[0];
-
-    const label =
-      pick.ui === UI_STATE.RUNNING
-        ? "Running"
-        : pick.ui === UI_STATE.WAITING_FOR_MARKET
-        ? "Waiting for market"
-        : pick.ui === UI_STATE.PAUSED
-        ? "Paused"
-        : pick.ui === UI_STATE.ERROR
-        ? "Error"
-        : "Unknown";
-
-    return {
-      anyRunning,
-      anyWaiting,
-      anyPaused,
-      primary: { state: pick.ui, botId: pick.id, label, message: pick.msg, updatedAt: pick.updatedAt },
-      statuses,
-      error,
-    };
-  }, [statuses, error]);
-
-  return summary;
+  return { data, loading, error };
 }
 
 export default function DashboardPage() {
@@ -434,13 +373,16 @@ export default function DashboardPage() {
   const { bars: alpacaBars, loading: alpacaLoading, error: alpacaError, meta: alpacaMeta } =
     useAlpacaDailyBars(currentTicker, 220);
 
-  const alpacaHistoryBySymbol = useMemo(() => ({ [currentTicker]: alpacaBars || [] }), [currentTicker, alpacaBars]);
+  const alpacaHistoryBySymbol = useMemo(
+    () => ({ [currentTicker]: alpacaBars || [] }),
+    [currentTicker, alpacaBars]
+  );
 
   const [tradePreset, setTradePreset] = useState("Week");
-  const { data: tradePerfData, loading: tradePerfLoading, error: tradePerfError } = useAlpacaTradeSummary(tradePreset, {
-    slippageBps: 0,
-    feeBps: 0,
-  });
+  const { data: tradePerfData, loading: tradePerfLoading, error: tradePerfError } = useAlpacaTradeSummary(
+    tradePreset,
+    { slippageBps: 0, feeBps: 0 }
+  );
 
   const tradeErrUI = tradePerfError ? explainAnyError(tradePerfError, { feature: "trade_summary" }) : null;
   const barsErrUI = alpacaError ? explainAnyError(alpacaError, { feature: "daily_bars" }) : null;
@@ -448,21 +390,33 @@ export default function DashboardPage() {
   const { data: oppData, loading: oppLoading, error: oppError } = useBotOpportunities();
   const oppErrUI = oppError ? explainAnyError(oppError, { feature: "bot_opportunities" }) : null;
 
-  const runner = useRunnerSummary(7000);
+  const { data: leadersResp, loading: leadersLoading, error: leadersError } = useMarketLeaders({
+    direction: "up",
+    limit: 10,
+  });
+  const leadersErrUI = leadersError ? explainAnyError(leadersError, { feature: "market_leaders" }) : null;
 
-  const activeBot = useMemo(() => {
-    const p = runner.primary || {};
+  const leadersItems = useMemo(() => {
+    const arr = Array.isArray(leadersResp?.items) ? leadersResp.items : [];
+    return arr;
+  }, [leadersResp]);
+
+  const leadersMeta = useMemo(() => {
+    const meta = leadersResp?.meta && typeof leadersResp.meta === "object" ? leadersResp.meta : {};
     return {
-      running: Boolean(runner.anyRunning),
-      name: p.botId || "",
-      state: p.state || UI_STATE.UNKNOWN,
-      label: p.label || "Unknown",
-      message: p.message || "",
-      updatedAt: p.updatedAt || "",
-      anyWaiting: Boolean(runner.anyWaiting),
-      anyPaused: Boolean(runner.anyPaused),
+      ...meta,
+      source_label: meta?.source_label || leadersResp?.meta?.source_label,
+      source: leadersResp?.source || meta?.source || "ALPACA",
+      asOf: leadersResp?.asOf || meta?.asOf || null,
     };
-  }, [runner]);
+  }, [leadersResp]);
+
+  const onPickSymbol = (sym) => {
+    const clean = normalizeSymbol(sym);
+    if (!clean) return;
+    if (!isTvSafe(clean)) return;
+    setCurrentTicker(clean);
+  };
 
   return (
     <AppShell>
@@ -485,18 +439,13 @@ export default function DashboardPage() {
             data={tradePerfData || { start: "—", end: "—", trades: [] }}
             onChangeRange={(preset) => setTradePreset(preset)}
             opportunities={oppData}
-            leaders={[]} /* ✅ page exists now */
-            activeBot={activeBot}
-            onPickSymbol={(sym) => {
-              const clean = normalizeSymbol(sym);
-              if (!clean) return;
-              if (!isTvSafe(clean)) return;
-              setCurrentTicker(clean);
-            }}
+            leaders={leadersItems}   // ✅ NOW REAL DATA
+            onPickSymbol={onPickSymbol}
           />
 
           {tradePerfLoading ? <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>Loading…</div> : null}
           {oppLoading ? <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>Loading…</div> : null}
+          {leadersLoading ? <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>Loading leaders…</div> : null}
 
           {oppErrUI ? (
             <ErrorBanner
@@ -510,17 +459,25 @@ export default function DashboardPage() {
               }}
             />
           ) : null}
+
+          {leadersErrUI ? (
+            <ErrorBanner
+              title={leadersErrUI.title}
+              body={leadersErrUI.body}
+              debug={leadersErrUI.debug}
+              action={leadersErrUI.action}
+              onAction={() => {
+                const href = leadersErrUI?.action?.href;
+                if (href) navigate(href);
+              }}
+            />
+          ) : null}
         </div>
 
         <div className="dashboard-right">
           <PriceChartPanel
             currentTicker={currentTicker}
-            onSelectTicker={(next) => {
-              const clean = normalizeSymbol(next);
-              if (!clean) return;
-              if (!isTvSafe(clean)) return;
-              setCurrentTicker(clean);
-            }}
+            onSelectTicker={onPickSymbol}
             isDarkMode={isDarkMode}
           />
 
@@ -552,8 +509,18 @@ export default function DashboardPage() {
             ) : null}
           </section>
 
+          {/* ✅ NEW: nicer leaders card (optional but recommended) */}
           <div style={{ marginTop: 12 }}>
-              <MacroCard />
+            <MarketLeadersCard
+              items={leadersItems}
+              meta={leadersMeta}
+              loading={leadersLoading}
+              onSelectSymbol={onPickSymbol}
+            />
+          </div>
+
+          <div style={{ marginTop: 12 }}>
+            <MacroCard />
           </div>
         </div>
       </main>

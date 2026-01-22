@@ -309,9 +309,9 @@ function BotIntentsCard({ botRunning, botId, onPickSymbol }) {
             const tp = nn(it?.take_profit ?? it?.takeProfit ?? it?.tp);
             const conf = it?.confidence;
 
-            const sub = `Entry ${entry === null ? "—" : fmtMoney(entry)} · Stop ${stop === null ? "—" : fmtMoney(
-              stop
-            )} · TP ${tp === null ? "—" : fmtMoney(tp)} · Conf ${fmtConf(conf)}`;
+            const sub = `Entry ${entry === null ? "—" : fmtMoney(entry)} · Stop ${
+              stop === null ? "—" : fmtMoney(stop)
+            } · TP ${tp === null ? "—" : fmtMoney(tp)} · Conf ${fmtConf(conf)}`;
 
             const score = Number.isFinite(Number(conf)) ? Number(conf) : null;
 
@@ -347,10 +347,18 @@ function BotIntentsCard({ botRunning, botId, onPickSymbol }) {
   );
 }
 
-export default function TradePerformancePanel({ data, onChangeRange, opportunities = null, leaders = [], onPickSymbol }) {
-  // NEW: let BotControlCard drive running state + name
-  const [activeBot, setActiveBot] = useState(null);
+export default function TradePerformancePanel({
+  data,
+  onChangeRange,
+  opportunities = null,
+  leaders = [],
+  onPickSymbol,
 
+  // ✅ new controlled props from DashboardPage
+  activeBot = null,
+  onStartBot,
+  onStopBot,
+}) {
   const oppStocks = useMemo(() => {
     const raw = Array.isArray(opportunities?.stocks) ? opportunities.stocks : [];
     return raw
@@ -429,14 +437,8 @@ export default function TradePerformancePanel({ data, onChangeRange, opportuniti
     return out.slice(0, 6);
   }, [leadersClean, oppStocks]);
 
-  // NOTE: BotControlCard should pass {running, bot_id, state/effective_state, pausedReason,...}
-  const botStateRaw = String(
-    activeBot?.effective_state ?? activeBot?.effectiveState ?? activeBot?.state ?? ""
-  )
-    .trim()
-    .toLowerCase();
-
-  // Treat "waiting_for_market" and "starting" as ARMED/ACTIVE (not OFF)
+  // NOTE: dashboard gives { running, name/state/message... }
+  const botStateRaw = String(activeBot?.state || "").trim().toLowerCase();
   const botRunning = Boolean(
     activeBot?.running ||
       botStateRaw === "running" ||
@@ -445,7 +447,7 @@ export default function TradePerformancePanel({ data, onChangeRange, opportuniti
       botStateRaw === "paused"
   );
 
-  const botName = String(activeBot?.bot_id || "").trim();
+  const botName = String(activeBot?.name || "").trim();
 
   const safe = data || { start: "", end: "", trades: [] };
   const trades = Array.isArray(safe.trades) ? safe.trades : [];
@@ -467,17 +469,21 @@ export default function TradePerformancePanel({ data, onChangeRange, opportuniti
 
   const botStatusSub =
     botStateRaw === "waiting_for_market"
-      ? activeBot?.pausedReason || "Market closed"
+      ? activeBot?.message || "Market closed"
       : botStateRaw === "starting"
       ? "Booting up…"
       : botStateRaw === "paused"
-      ? activeBot?.pausedReason || "Manually paused"
+      ? activeBot?.message || "Manually paused"
       : botRunning
       ? "Using bot alignment"
       : "Leaders-only (Phase 1)";
 
   const botStatusTone =
-    botStateRaw === "running" || botStateRaw === "waiting_for_market" || botStateRaw === "starting" ? "pos" : botRunning ? "pos" : "neg";
+    botStateRaw === "running" || botStateRaw === "waiting_for_market" || botStateRaw === "starting"
+      ? "pos"
+      : botRunning
+      ? "pos"
+      : "neg";
 
   return (
     <section className="tpPanel">
@@ -488,7 +494,9 @@ export default function TradePerformancePanel({ data, onChangeRange, opportuniti
           </div>
 
           <p className="tpSubtitle">
-            {botRunning ? `Bot active: ${botName || "Unknown bot"}` : "No bot running — start a bot to unlock bot-aligned picks."}
+            {botRunning
+              ? `Bot active: ${botName || "Unknown bot"}`
+              : "No bot running — start a bot to unlock bot-aligned picks."}
           </p>
         </div>
 
@@ -505,15 +513,15 @@ export default function TradePerformancePanel({ data, onChangeRange, opportuniti
         <div className="tpLeftGrid">
           {/* ✅ IMPORTANT: no CardShell wrapper here (prevents card-in-card) */}
           <div className="tpSpan2">
-            <BotControlCard onStateChange={setActiveBot} />
+            <BotControlCard
+              activeBotId={botName || undefined}
+              onActiveBotChange={() => {}}
+              onStartBot={onStartBot}
+              onStopBot={onStopBot}
+            />
           </div>
 
-          <BigStat
-            label="Bot Status"
-            value={botStatusValue}
-            sub={botStatusSub}
-            tone={botStatusTone}
-          />
+          <BigStat label="Bot Status" value={botStatusValue} sub={botStatusSub} tone={botStatusTone} />
 
           <BigStat label="Trades Context" value={`${trades.length}`} sub={`Win rate ${fmtPct(winRate)}`} />
 
@@ -562,7 +570,6 @@ export default function TradePerformancePanel({ data, onChangeRange, opportuniti
           <div className="tpSpan2" style={{ marginTop: 12 }}>
             <ConnectedBrokersMiniCard />
           </div>
-
         </div>
       </div>
     </section>

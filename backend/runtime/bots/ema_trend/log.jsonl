@@ -27,3 +27,5 @@
 {"ts": 1768860941, "level": "info", "message": "State changed", "meta": {"from_effective": "starting", "to_effective": "waiting_for_market", "from_intent": "running", "to_intent": "running", "reason": "After-hours", "reason_code": "market_closed"}}
 {"ts": 1768862130, "level": "info", "message": "Intent set: running", "meta": {"mode": "paper", "prev_effective_state": "waiting_for_market"}}
 {"ts": 1768862131, "level": "info", "message": "State changed", "meta": {"from_effective": "starting", "to_effective": "waiting_for_market", "from_intent": "running", "to_intent": "running", "reason": "After-hours", "reason_code": "market_closed"}}
+{"ts": 1769006659, "level": "info", "message": "Intent set: running", "meta": {"mode": "paper", "prev_effective_state": "waiting_for_market"}}
+{"ts": 1769006963, "level": "info", "message": "Intent set: running", "meta": {"mode": "paper", "prev_effective_state": "starting"}}
