@@ -1,39 +1,64 @@
+/* src/css/landing/LandingPage.css */
+
+/* =========================================================
+   BASE
+========================================================= */
+
 .landing-page {
-  background: var(--ustock-bg-page);
-  color: var(--ustock-text-main);
+  background: transparent;
+  color: var(--lucent-text);
   overflow: visible;
 }
 
-/* HERO */
+/* Keep your original spacing for sections */
+.landing-section {
+  padding: 64px 24px;
+}
+
+.landing-section-inner {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.landing-section-title {
+  font-size: 24px;
+  font-weight: 800;
+  margin: 0 0 8px;
+  color: var(--lucent-green);
+}
+
+.landing-section-text {
+  max-width: 720px;
+  font-size: 14px;
+  color: var(--lucent-muted);
+  margin: 0 0 24px;
+}
+
+/* =========================================================
+   HERO (KEEP ORIGINAL LOOK, but use yellow primary + clean ghost)
+========================================================= */
 
 .landing-hero {
   background: linear-gradient(
     135deg,
-    var(--ustock-green-main) 0%,
-    #0f766e 45%,
-    #2563eb 100%
+    rgba(42, 137, 114, 0.92) 0%,
+    rgba(15, 118, 110, 0.92) 45%,
+    rgba(31, 111, 224, 0.92) 100%
   );
   color: #ffffff;
   padding: 72px 24px 80px;
-
-  /* Floating panel feel */
   border-radius: 20px;
   margin-bottom: 26px;
-
-  /* Edge definition (helps the shadow read on gradients) */
-  border: 1px solid rgba(15, 23, 42, 0.08);
-
-  /* Shadow that shows on light backgrounds */
+  border: 1px solid rgba(15, 23, 42, 0.10);
   box-shadow:
-    0 2px 6px rgba(15, 23, 42, 0.08),
-    0 14px 28px rgba(15, 23, 42, 0.14),
-    0 40px 80px rgba(15, 23, 42, 0.18);
-
+    0 2px 6px rgba(15, 23, 42, 0.10),
+    0 14px 28px rgba(15, 23, 42, 0.16),
+    0 40px 80px rgba(15, 23, 42, 0.22),
+    var(--lucent-hero-glow);
   position: relative;
   z-index: 1;
 }
 
-/* Optional: extra soft “floor” shadow under the hero */
 .landing-hero::after {
   content: "";
   position: absolute;
@@ -57,48 +82,102 @@
   align-items: center;
 }
 
+.landing-hero-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  font-size: 12px;
+  font-weight: 650;
+  margin-bottom: 14px;
+  white-space: nowrap; /* keeps it from breaking weirdly */
+}
+
 .landing-hero-title {
   font-size: 40px;
   line-height: 1.1;
   margin: 0 0 16px;
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.22);
 }
 
 .landing-hero-subtitle {
   font-size: 15px;
-  max-width: 480px;
+  max-width: 560px;
   opacity: 0.95;
-  margin: 0 0 24px;
+  margin: 0 0 22px;
+  line-height: 1.65;
 }
 
 .landing-hero-ctas {
   display: flex;
   gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
 }
 
-.landing-cta-primary {
+/* --- HERO BUTTONS: yellow primary + “learn more” ghost --- */
+.landing-btn {
+  border-radius: 999px;
+  padding: 10px 22px;
+  font-size: 14px;
+  font-weight: 750;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.landing-btn--primary {
   border: none;
-  border-radius: 999px;
-  padding: 10px 22px;
-  background: #fbbf24;
-  color: #1f2933;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
+  background: #fbbf24; /* yellow */
+  color: #1f2a33;
+  box-shadow: 0 12px 26px rgba(251, 191, 36, 0.22);
 }
 
-.landing-cta-secondary {
-  border-radius: 999px;
-  padding: 10px 22px;
-  background: transparent;
-  border: 1px solid rgba(248, 250, 252, 0.7);
-  color: #e5e7eb;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
+.landing-btn--primary:hover {
+  filter: brightness(0.98);
+}
+
+.landing-btn--ghost {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+  border: 1px solid rgba(248, 250, 252, 0.70);
+}
+
+.landing-btn--ghost:hover {
+  border-color: rgba(248, 250, 252, 0.85);
+}
+
+/* Mini row */
+.landing-hero-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  max-width: 660px;
+}
+
+.landing-metric {
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 14px;
+  padding: 10px 12px;
+  backdrop-filter: blur(6px);
+}
+
+.landing-metric-top {
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: 0.2px;
+}
+
+.landing-metric-bottom {
+  font-size: 12px;
+  opacity: 0.92;
+  margin-top: 2px;
 }
 
 /* HERO IMAGE */
-
 .landing-hero-right {
   display: flex;
   justify-content: center;
@@ -111,191 +190,308 @@
   object-fit: contain;
   border-radius: 16px;
   box-shadow: 0 20px 55px rgba(15, 23, 42, 0.25);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
 }
 
-/* hero mock card (if you bring it back later) */
+/* =========================================================
+   WHY U-STOCK (MAKE IT LOOK LIKE THE OTHER “WHITE SURFACE” CARDS)
+   This is the main change you asked for.
+========================================================= */
 
-.landing-hero-card {
-  width: 100%;
-  max-width: 380px;
-  background: var(--ustock-bg-card);
-  border-radius: 20px;
-  padding: 16px 16px 18px;
-  box-shadow: 0 20px 45px rgba(15, 23, 42, 0.35);
+.landing-about-shell {
+  background: rgba(255, 255, 255, 0.92); /* match bigcard */
+  border: 1px solid rgba(32, 64, 80, 0.12); /* match bigcard */
+  border-radius: 24px;
+  padding: 30px 30px;
+  box-shadow:
+    0 18px 55px rgba(15, 23, 42, 0.10),
+    0 2px 8px rgba(15, 23, 42, 0.06);
 }
 
-.landing-hero-card.small {
-  max-width: 320px;
+.landing-about-head {
+  margin-bottom: 18px;
 }
 
-.landing-hero-card-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12px;
+.landing-about-title {
+  margin-bottom: 8px;
 }
 
-.landing-hero-label {
-  font-size: 12px;
-  color: var(--ustock-text-muted);
+.landing-about-text {
+  margin-bottom: 0;
+  max-width: 780px;
 }
 
-.landing-pill {
-  display: inline-flex;
-  align-items: center;
-  padding: 4px 10px;
-  border-radius: 999px;
-  background: var(--ustock-card-chip-bg);
-  font-size: 11px;
-}
-
-.landing-hero-card-body {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.landing-hero-mock-chart {
-  height: 120px;
-  border-radius: 16px;
-  background: radial-gradient(
-    circle at top left,
-    var(--ustock-green-soft) 0%,
-    var(--ustock-bg-card-soft) 40%,
-    var(--ustock-bg-card) 100%
-  );
-}
-
-.landing-hero-mock-row {
-  height: 26px;
-  border-radius: 999px;
-  background: var(--ustock-bg-card-soft);
-}
-
-.landing-hero-mock-row.thin {
-  height: 18px;
-  width: 70%;
-}
-
-/* SECTIONS */
-
-.landing-section {
-  padding: 64px 24px;
-}
-
-.landing-section-inner {
-  max-width: 1100px;
-  margin: 0 auto;
-}
-
-.landing-section-title {
-  font-size: 24px;
-  font-weight: 700;
-  margin: 0 0 8px;
-  color: var(--ustock-green-main);
-}
-
-.landing-section-text {
-  max-width: 620px;
-  font-size: 14px;
-  color: var(--ustock-text-muted);
-  margin: 0 0 24px;
-}
-
+/* 3-card grid */
 .landing-grid-3 {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 18px;
+  align-items: stretch;
 }
 
+.landing-grid-3--about {
+  margin-top: 14px;
+}
+
+/* ✅ Feature cards updated: now same “white surface” language as bigcard,
+   with only a subtle green highlight (not the full green wash). */
 .landing-feature-card {
-  background: var(--ustock-bg-card);
   border-radius: 18px;
   padding: 16px 18px;
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
-  border: 1px solid var(--ustock-border-card);
+  min-height: 148px;
+  display: flex;
+  flex-direction: column;
+
+  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid rgba(32, 64, 80, 0.12);
+  box-shadow: 0 16px 44px rgba(15, 23, 42, 0.08);
+
+  position: relative;
+  overflow: hidden;
+}
+
+.landing-feature-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    900px 260px at 12% 10%,
+    rgba(42, 137, 114, 0.12),
+    transparent 60%
+  );
+  pointer-events: none;
+}
+
+.landing-feature-tag {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 4px 10px;
+  border-radius: 999px;
+
+  /* match the Roadmap pill vibe */
+  background: rgba(42, 137, 114, 0.10);
+  border: 1px solid rgba(42, 137, 114, 0.22);
+  color: rgba(42, 137, 114, 0.98);
+
+  font-size: 11px;
+  font-weight: 850;
+  margin-bottom: 10px;
+
+  position: relative;
+  z-index: 1;
 }
 
 .landing-feature-card h3 {
   margin: 0 0 6px;
   font-size: 15px;
-  color: var(--ustock-text-strong);
+  color: rgba(17, 24, 39, 0.92);
+  position: relative;
+  z-index: 1;
 }
 
 .landing-feature-card p {
   margin: 0;
   font-size: 13px;
-  color: var(--ustock-text-muted);
+  color: rgba(17, 24, 39, 0.72);
+  line-height: 1.55;
+  position: relative;
+  z-index: 1;
 }
 
-/* ROADMAP */
+/* keep your className in JSX without needing special styling */
+.landing-feature-card--green {
+  /* intentionally empty: the base card is now the cohesive style */
+}
 
-.landing-roadmap-inner {
+/* optional micro-interaction (matches modern feel) */
+.landing-feature-card:hover {
+  transform: translateY(-1px);
+  transition: transform 120ms ease, box-shadow 120ms ease;
+  box-shadow: 0 18px 55px rgba(15, 23, 42, 0.10);
+}
+
+/* =========================================================
+   BIG MARKETING CARD (KEEP YOUR ORIGINAL)
+========================================================= */
+
+.landing-bigcard-shell {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
-  gap: 32px;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.95fr);
+  gap: 28px;
   align-items: center;
+
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(32, 64, 80, 0.12);
+  border-radius: 24px;
+
+  padding: 34px 34px;
+  box-shadow:
+    0 18px 55px rgba(15, 23, 42, 0.10),
+    0 2px 8px rgba(15, 23, 42, 0.06);
 }
 
+.landing-bigcard-eyebrow {
+  color: var(--lucent-green);
+  font-weight: 900;
+  font-size: 22px;
+  margin-bottom: 10px;
+}
+
+.landing-bigcard-title {
+  margin: 0 0 14px;
+  font-size: 42px;
+  line-height: 1.1;
+  letter-spacing: -0.4px;
+  color: rgba(17, 24, 39, 0.88);
+}
+
+.landing-bigcard-titleAccent {
+  color: var(--lucent-green);
+}
+
+.landing-bigcard-subtitle {
+  margin: 0 0 18px;
+  max-width: 560px;
+  font-size: 15px;
+  line-height: 1.65;
+  color: rgba(17, 24, 39, 0.72);
+}
+
+/* Roadmap list */
 .landing-roadmap-list {
   list-style: none;
   padding: 0;
   margin: 0 0 18px;
   font-size: 13px;
-  color: var(--ustock-text-main);
+  color: var(--lucent-text);
 }
 
 .landing-roadmap-list li + li {
-  margin-top: 4px;
+  margin-top: 6px;
 }
 
-.landing-cta-outline {
+.landing-roadmap-list--card strong {
+  color: rgba(17, 24, 39, 0.92);
+}
+
+/* CTAs */
+.landing-roadmap-ctas {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.landing-bigcard-cta {
+  border: none;
+  border-radius: 10px;
+  padding: 12px 18px;
+  background: var(--lucent-green);
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 10px 22px rgba(42, 137, 114, 0.22);
+}
+
+.landing-bigcard-cta:hover {
+  filter: brightness(0.98);
+}
+
+.landing-cta-pill {
   border-radius: 999px;
-  padding: 8px 20px;
-  border: 1px solid var(--ustock-green-main);
-  background: #ffffff;
-  color: var(--ustock-green-main);
-  font-size: 13px;
-  font-weight: 600;
+  padding: 10px 14px;
+  border: 1px solid rgba(42, 137, 114, 0.25);
+  background: rgba(42, 137, 114, 0.10);
+  color: rgba(42, 137, 114, 0.98);
+  font-size: 14px;
+  font-weight: 800;
   cursor: pointer;
 }
 
-.landing-roadmap-right {
-  display: flex;
-  justify-content: center;
+/* Right image */
+.landing-bigcard-media {
+  width: 100%;
+  border-radius: 18px;
+  overflow: hidden;
+  border: 1px solid rgba(32, 64, 80, 0.10);
+  box-shadow: 0 16px 44px rgba(15, 23, 42, 0.10);
+  background: #ffffff;
 }
 
-.landing-roadmap-steps {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  font-size: 13px;
-  color: var(--ustock-text-main);
+.landing-bigcard-img {
+  width: 100%;
+  height: auto;
+  display: block;
 }
 
-.landing-roadmap-step {
-  display: flex;
+/* =========================================================
+   MODAL (KEEP YOURS)
+========================================================= */
+
+.landing-modal-block + .landing-modal-block {
+  margin-top: 12px;
+}
+
+.landing-modal-pill {
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-}
-
-.landing-step-dot {
-  width: 8px;
-  height: 8px;
+  padding: 4px 10px;
   border-radius: 999px;
-  background: var(--ustock-green-main);
+  background: rgba(42, 137, 114, 0.12);
+  border: 1px solid rgba(42, 137, 114, 0.22);
+  color: rgba(42, 137, 114, 0.98);
+  font-size: 11px;
+  font-weight: 800;
+  margin-bottom: 8px;
 }
 
-/* FOOTER */
+.landing-modal-text {
+  color: rgba(31, 42, 51, 0.84);
+  font-size: 13px;
+  line-height: 1.6;
+}
 
-.landing-footer {
-  padding: 20px 24px 28px;
-  text-align: center;
+.landing-modal-note {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(32, 64, 80, 0.10);
+  color: rgba(31, 42, 51, 0.72);
   font-size: 12px;
-  color: var(--ustock-text-muted);
 }
 
-/* RESPONSIVE */
+.landing-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.landing-modal-btn {
+  border-radius: 12px;
+  padding: 9px 12px;
+  font-size: 13px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.landing-modal-btn--ghost {
+  border: 1px solid rgba(32, 64, 80, 0.18);
+  background: rgba(255, 255, 255, 0.75);
+  color: rgba(31, 42, 51, 0.85);
+}
+
+.landing-modal-btn--primary {
+  border: 1px solid rgba(42, 137, 114, 0.35);
+  background: rgba(42, 137, 114, 0.12);
+  color: rgba(42, 137, 114, 0.98);
+}
+
+/* =========================================================
+   RESPONSIVE
+========================================================= */
 
 @media (max-width: 900px) {
   .landing-hero-inner {
@@ -311,67 +507,30 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .landing-roadmap-inner {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
   .landing-hero-right {
     justify-content: flex-start;
   }
+
+  .landing-hero-metrics {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .landing-bigcard-shell {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 26px 22px;
+  }
+
+  .landing-about-shell {
+    padding: 24px 22px;
+  }
+
+  .landing-bigcard-title {
+    font-size: 34px;
+  }
 }
 
-/* Hide hero image on mobile */
 @media (max-width: 768px) {
   .landing-hero-right {
     display: none;
   }
-}
-
-/* ========== DARK MODE OVERRIDES FOR LANDING ================ */
-
-body.ustock-dark .landing-hero {
-  background: linear-gradient(
-    135deg,
-    #022c22 0%,
-    #0f766e 45%,
-    #1d4ed8 100%
-  );
-
-  /* slightly stronger in dark so it reads */
-  border-color: rgba(148, 163, 184, 0.22);
-  box-shadow:
-    0 2px 8px rgba(0, 0, 0, 0.35),
-    0 18px 40px rgba(0, 0, 0, 0.55),
-    0 50px 100px rgba(0, 0, 0, 0.55);
-}
-
-body.ustock-dark .landing-section-title {
-  color: var(--ustock-green-soft);
-}
-
-body.ustock-dark .landing-section-text,
-body.ustock-dark .landing-feature-card p,
-body.ustock-dark .landing-roadmap-list,
-body.ustock-dark .landing-roadmap-steps {
-  color: var(--ustock-text-muted);
-}
-
-/* feature + roadmap cards pick up dark tokens */
-body.ustock-dark .landing-feature-card,
-body.ustock-dark .landing-roadmap-card {
-  background: var(--ustock-bg-card);
-  border-color: var(--ustock-border-card);
-  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.75);
-}
-
-/* CTA outline button shouldn’t be bright white in dark mode */
-body.ustock-dark .landing-cta-outline {
-  background: transparent;
-  color: var(--ustock-green-soft);
-  border-color: var(--ustock-green-soft);
-}
-
-/* hero mock card already uses tokens; just deepen the chip bg */
-body.ustock-dark .landing-hero-card {
-  background: var(--ustock-bg-card);
 }

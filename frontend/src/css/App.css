@@ -1,40 +1,39 @@
-:root {
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  color: #2f2b26;
-  background-color: #f6ddba;
-}
+/* src/css/App.css */
 
-/* Make sure the app fills the viewport cleanly */
-html,
-body {
-  margin: 0;
-  padding: 0;
+/* Route wrapper keeps layout stable across all pages */
+.app-shell {
+  min-height: 100vh;
   width: 100%;
-  height: 100%;
-  background: #f6ddba;
 }
 
+/* Keep root sizing stable */
 #root {
+  min-height: 100vh;
   width: 100%;
-  height: 100%;
 }
 
 /* Shared page wrapper used by all main pages */
 .dashboard {
   position: relative;
   width: 100%;
-
-  /* 💡 THIS is what keeps everything centered and wide, without being huge */
   max-width: 1440px;
-  margin: 0 auto;          /* centers horizontally */
+  margin: 0 auto;
+  padding: 32px 40px;
+  box-sizing: border-box;
+}
 
-  padding: 32px 40px;      /* fixed, predictable padding – no clamp, no vw */
+/* Optional: smaller centered wrapper (useful for /about, /auth if needed) */
+.page {
+  width: 100%;
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 28px 24px;
   box-sizing: border-box;
 }
 
 /* Global muted text */
 .muted {
-  color: #766f65;
+  color: var(--lucent-muted);
   font-size: 14px;
 }
 
@@ -42,10 +41,12 @@ body {
 .back-link {
   font-size: 14px;
   text-decoration: none;
-  color: #444;
+  color: var(--lucent-text);
   white-space: nowrap;
+  opacity: 0.85;
 }
 
 .back-link:hover {
   text-decoration: underline;
+  opacity: 1;
 }

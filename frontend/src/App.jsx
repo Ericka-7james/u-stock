@@ -33,13 +33,8 @@ import f3 from "./assets/loading/LoadingScreen3.png";
 function RequireAuth({ children }) {
   const { user, loading } = useAuth();
 
-  if (loading) {
-    return <FullPageLoader label="Loading…" />;
-  }
-
-  if (!user) {
-    return <Navigate to="/" replace />;
-  }
+  if (loading) return <FullPageLoader label="Loading…" />;
+  if (!user) return <Navigate to="/" replace />;
 
   return children;
 }
@@ -47,44 +42,39 @@ function RequireAuth({ children }) {
 function HomeChooser() {
   const { user, loading } = useAuth();
 
-  if (loading) {
-    return <FullPageLoader label="Loading…" />;
-  }
-
+  if (loading) return <FullPageLoader label="Loading…" />;
   return user ? <DashboardPage /> : <LandingPage />;
 }
 
 function AuthGate() {
   const { user, loading } = useAuth();
 
-  if (loading) {
-    return <FullPageLoader label="Loading…" />;
-  }
-
+  if (loading) return <FullPageLoader label="Loading…" />;
   return user ? <Navigate to="/" replace /> : <AuthPage />;
 }
 
 function SignupGate() {
   const { user, loading } = useAuth();
 
-  if (loading) {
-    return <FullPageLoader label="Loading…" />;
-  }
-
+  if (loading) return <FullPageLoader label="Loading…" />;
   return user ? <Navigate to="/" replace /> : <SignupPage />;
 }
 
 function App() {
   return (
-    <>
+    <div className="app-shell">
       <AuthRedirector />
 
       <Routes>
         <Route path="/" element={<HomeChooser />} />
 
+        {/* Public pages */}
+        <Route path="/about" element={<AboutPage />} />
+
         <Route path="/auth" element={<AuthGate />} />
         <Route path="/auth/signup" element={<SignupGate />} />
 
+        {/* Protected pages */}
         <Route
           path="/data-sources"
           element={
@@ -98,14 +88,6 @@ function App() {
           element={
             <RequireAuth>
               <IndexFundsPage />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="/about"
-          element={
-            <RequireAuth>
-              <AboutPage />
             </RequireAuth>
           }
         />
@@ -136,7 +118,7 @@ function App() {
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-    </>
+    </div>
   );
 }
 
