@@ -1,9 +1,25 @@
-// src/components/dashboard/tests/DashboardPage.test.jsx
+// frontend/src/components/dashboard/tests/DashboardPage.test.jsx
 import React from "react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup, waitFor, act } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import DashboardPage from "../DashboardPage.jsx";
+
+/* -------------------------
+   Auth (mocked)
+-------------------------- */
+vi.mock("../../../context/AuthContext", () => ({
+  useAuth: () => ({
+    user: { id: "test-user", email: "t@t.com" },
+    loading: false,
+    isAuthed: true,
+    refreshSession: vi.fn(),
+    authFetch: vi.fn(),
+    login: vi.fn(),
+    signup: vi.fn(),
+    logout: vi.fn(),
+  }),
+}));
 
 /* -------------------------
    Layout
@@ -35,7 +51,6 @@ vi.mock("../cards/TradePerformancePanel.jsx", () => ({
   ),
 }));
 
-// ✅ IMPORTANT: DashboardPage passes onSelectTicker (not onSelectSymbol)
 vi.mock("../cards/PriceChartPanel.jsx", () => ({
   default: ({ currentTicker, isDarkMode, onSelectTicker }) => (
     <div data-testid="price-chart-panel">
@@ -62,6 +77,15 @@ vi.mock("../cards/SentimentCard.jsx", () => ({
 
 vi.mock("../cards/MacroCard.jsx", () => ({
   default: () => <div data-testid="macro-card">Macro</div>,
+}));
+
+// new card used by DashboardPage
+vi.mock("../cards/MarketLeadersCard.jsx", () => ({
+  default: ({ items, meta, loading }) => (
+    <div data-testid="market-leaders-card">
+      <pre data-testid="leaders-props">{JSON.stringify({ items, meta, loading })}</pre>
+    </div>
+  ),
 }));
 
 /* -------------------------
@@ -91,9 +115,6 @@ function renderPage() {
   );
 }
 
-/* -------------------------
-   Tests
--------------------------- */
 describe("DashboardPage", () => {
   let fetchSpy;
 
@@ -114,9 +135,9 @@ describe("DashboardPage", () => {
       error: null,
     });
 
-    // ✅ Stabilize internal fetches used by DashboardPage:
+    // Stabilize internal fetches used by DashboardPage:
     // - /api/opportunities/bot/top?limit=8  (useBotOpportunities)
-    // - /bots/status                        (useRunnerSummary)
+    // - /api/market/leaders?...            (useMarketLeaders)
     fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
       const u = String(url);
 
@@ -124,18 +145,18 @@ describe("DashboardPage", () => {
         return {
           ok: true,
           status: 200,
-          headers: new Map([["content-type", "application/json"]]),
+          headers: { get: () => "application/json" },
           json: async () => ({ crypto: [], stocks: [], funds: [] }),
           text: async () => "",
         };
       }
 
-      if (u.includes("/bots/status")) {
+      if (u.includes("/api/market/leaders")) {
         return {
           ok: true,
           status: 200,
-          headers: new Map([["content-type", "application/json"]]),
-          json: async () => ({ statuses: {} }),
+          headers: { get: () => "application/json" },
+          json: async () => ({ items: [], meta: { source: "ALPACA", source_label: "ALPACA" }, asOf: null }),
           text: async () => "",
         };
       }
@@ -144,7 +165,7 @@ describe("DashboardPage", () => {
       return {
         ok: true,
         status: 200,
-        headers: new Map([["content-type", "application/json"]]),
+        headers: { get: () => "application/json" },
         json: async () => ({}),
         text: async () => "",
       };
@@ -164,6 +185,7 @@ describe("DashboardPage", () => {
     expect(screen.getByTestId("price-chart-panel")).toBeInTheDocument();
     expect(screen.getByTestId("sentiment-card")).toBeInTheDocument();
     expect(screen.getByTestId("macro-card")).toBeInTheDocument();
+    expect(screen.getByTestId("market-leaders-card")).toBeInTheDocument();
   });
 
   it("loads ticker from localStorage and normalizes", () => {
@@ -198,12 +220,12 @@ describe("DashboardPage", () => {
     });
   });
 
-  it("fetches bot opportunities + runner status on mount", async () => {
+  it("fetches bot opportunities + leaders on mount", async () => {
     renderPage();
 
     await waitFor(() => {
       expect(fetchSpy.mock.calls.some(([u]) => String(u).includes("/api/opportunities/bot/top"))).toBe(true);
-      expect(fetchSpy.mock.calls.some(([u]) => String(u).includes("/bots/status"))).toBe(true);
+      expect(fetchSpy.mock.calls.some(([u]) => String(u).includes("/api/market/leaders"))).toBe(true);
     });
   });
 
