@@ -259,3 +259,41 @@
   font-size: 12px;
   color: #94a3b8;
 }
+
+/* Mobile / small screens: prevent spill */
+@media (max-width: 520px) {
+  .mlCard {
+    padding: 14px;
+  }
+
+  /* subtitle can be long */
+  .mlSubtitle {
+    word-break: break-word;
+    overflow-wrap: anywhere;
+  }
+
+  /* allow second line to wrap instead of forcing one long line */
+  .mlRowSub {
+    white-space: normal;          /* was nowrap */
+    overflow: hidden;
+    text-overflow: clip;          /* ellipsis doesn't apply to multi-line */
+    flex-wrap: wrap;
+    row-gap: 4px;
+  }
+
+  /* dot separator becomes awkward when wrapping */
+  .mlRowSub .dot {
+    display: none;
+  }
+
+  /* tighten top row spacing a bit */
+  .mlRowTop {
+    gap: 8px;
+  }
+
+  .mlSymbol,
+  .mlScore {
+    font-size: 1rem;
+  }
+}
+
