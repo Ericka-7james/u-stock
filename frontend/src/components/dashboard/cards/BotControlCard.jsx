@@ -1,5 +1,5 @@
 // frontend/src/components/dashboard/cards/BotControlCard.jsx
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import HelpTooltip from "../../common/HelpTooltip.jsx";
 import Modal from "../../common/Modal.jsx";
 import "../../../css/dashboard/cards/BotControlCard.css";
@@ -110,9 +110,10 @@ export default function BotControlCard({ activeBotId, onActiveBotChange }) {
     log: null,
   });
 
+  // timers: use timeout for status (self-scheduling poll), interval for market, interval for arm tick
   const timersRef = useRef({
     market: null,
-    status: null,
+    status: null, // timeout id
     armTick: null,
   });
 
@@ -122,13 +123,22 @@ export default function BotControlCard({ activeBotId, onActiveBotChange }) {
     inflightRef.current[key] = null;
   }
 
+  // robust cleanup for both interval + timeout
+  function clearTimer(t) {
+    if (!t) return;
+    clearInterval(t);
+    clearTimeout(t);
+  }
+
   useEffect(() => {
     aliveRef.current = true;
     return () => {
       aliveRef.current = false;
+
       Object.keys(inflightRef.current || {}).forEach((k) => abortInflight(k));
-      Object.values(timersRef.current || {}).forEach((t) => t && clearInterval(t));
+      Object.values(timersRef.current || {}).forEach((t) => clearTimer(t));
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Keep selected in sync with parent
@@ -172,7 +182,8 @@ export default function BotControlCard({ activeBotId, onActiveBotChange }) {
   }, [activeBotId]);
 
   // -------- market session ----------
-  async function refreshMarketSession() {
+  const refreshMarketSession = useCallback(async () => {
+    // market requests can be safely aborted because they are slow + infrequent
     abortInflight("market");
     const ac = new AbortController();
     inflightRef.current.market = ac;
@@ -186,10 +197,10 @@ export default function BotControlCard({ activeBotId, onActiveBotChange }) {
     } finally {
       if (inflightRef.current.market === ac) inflightRef.current.market = null;
     }
-  }
+  }, []);
 
   // -------- config ----------
-  async function refreshConfig(botId = selected) {
+  const refreshConfig = useCallback(async (botId = selected) => {
     const id = safeStr(botId);
     if (!id) return;
 
@@ -219,14 +230,16 @@ export default function BotControlCard({ activeBotId, onActiveBotChange }) {
     } finally {
       if (inflightRef.current.config === ac) inflightRef.current.config = null;
     }
-  }
+  }, [selected]);
 
-  // -------- status polling ----------
-  async function refreshStatus(botId = selected) {
+  // -------- status polling (NO abort spam) ----------
+  const refreshStatus = useCallback(async (botId = selected) => {
     const id = safeStr(botId);
     if (!id) return;
 
-    abortInflight("status");
+    // ✅ never overlap status requests
+    if (inflightRef.current.status) return;
+
     const ac = new AbortController();
     inflightRef.current.status = ac;
 
@@ -239,32 +252,48 @@ export default function BotControlCard({ activeBotId, onActiveBotChange }) {
     } catch {
       // ignore
     } finally {
+      // IMPORTANT: only clear if it is still the same controller
       if (inflightRef.current.status === ac) inflightRef.current.status = null;
     }
-  }
+  }, [selected]);
 
   // Start timers on selected change
   useEffect(() => {
     if (!selected) return;
 
     setUiError("");
+
+    // initial loads
     refreshMarketSession();
     refreshConfig(selected);
     refreshStatus(selected);
 
-    // refresh loops (cheap)
-    if (timersRef.current.market) clearInterval(timersRef.current.market);
-    timersRef.current.market = setInterval(() => refreshMarketSession(), 30_000);
+    // market interval (cheap)
+    if (timersRef.current.market) clearTimer(timersRef.current.market);
+    timersRef.current.market = setInterval(() => {
+      refreshMarketSession();
+    }, 30_000);
 
-    if (timersRef.current.status) clearInterval(timersRef.current.status);
-    timersRef.current.status = setInterval(() => refreshStatus(selected), 1_500);
+    // ✅ status self-scheduling poll (prevents overlap + avoids canceled spam)
+    let stopped = false;
+
+    const poll = async () => {
+      if (stopped) return;
+      await refreshStatus(selected);
+      if (stopped) return;
+      timersRef.current.status = setTimeout(poll, 1500);
+    };
+
+    if (timersRef.current.status) clearTimer(timersRef.current.status);
+    poll();
 
     return () => {
-      if (timersRef.current.market) clearInterval(timersRef.current.market);
-      if (timersRef.current.status) clearInterval(timersRef.current.status);
+      stopped = true;
+      if (timersRef.current.market) clearTimer(timersRef.current.market);
+      if (timersRef.current.status) clearTimer(timersRef.current.status);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected]);
+  }, [selected, refreshMarketSession, refreshConfig, refreshStatus]);
 
   // Arm countdown tick (renders countdown)
   useEffect(() => {
@@ -325,7 +354,7 @@ export default function BotControlCard({ activeBotId, onActiveBotChange }) {
   // -------- derive UI state from bots.py shape (production-ready) ----------
   const intent = safeStr(status?.intent, "paused").toLowerCase(); // running | paused
   const effective = safeStr(status?.effective_state, "stopped").toLowerCase(); // starting|running|paused|offline|...
-  const reasonCode = safeStr(status?.reason_code, "").toLowerCase();
+  const reasonCode = safeStr(status?.reason_code, "").toLowerCase(); // kept for future use
   const backendMsg = safeStr(status?.message, "");
   const pausedReason = safeStr(status?.pausedReason, "");
   const lastError = safeStr(status?.lastError, "");
@@ -346,7 +375,7 @@ export default function BotControlCard({ activeBotId, onActiveBotChange }) {
 
   // heartbeat age (only meaningful when intent is running)
   const hbAge = Number.isFinite(Number(status?.heartbeatAgeSec)) ? Number(status.heartbeatAgeSec) : null;
-  const hbAt = Number.isFinite(Number(status?.heartbeatAt)) ? Number(status.heartbeatAt) : 0;
+  const hbAt = Number.isFinite(Number(status?.heartbeatAt)) ? Number(status.heartbeatAt) : 0; // kept for future use
 
   // classify effective state
   const isError = effective === "error" || Boolean(lastError);
@@ -400,7 +429,6 @@ export default function BotControlCard({ activeBotId, onActiveBotChange }) {
   }
 
   // gating
-  // You can arm/start when NOT live; you can pause only when live
   const canArm = !busy && !isRunningUi;
   const canStart = !busy && !isRunningUi && isArmed;
   const canPause = !busy && isRunningUi;
