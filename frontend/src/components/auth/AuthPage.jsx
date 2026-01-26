@@ -1,5 +1,5 @@
 // src/components/auth/AuthPage.jsx
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import "../../css/auth/AuthPage.css";
@@ -16,11 +16,14 @@ export default function AuthPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  // --- LOGIN STATE ---
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [loginError, setLoginError] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
+
+  const canSubmit = useMemo(() => {
+    return !!loginEmail.trim() && !!loginPassword && !loginLoading;
+  }, [loginEmail, loginPassword, loginLoading]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -30,7 +33,7 @@ export default function AuthPage() {
     setLoginLoading(true);
     try {
       await login(loginEmail.trim(), loginPassword);
-      // If login succeeds, AuthGate / routes will take user to dashboard
+      // AuthGate / routes will take user to dashboard
     } catch (err) {
       setLoginError(getErrorMessage(err));
     } finally {
@@ -42,10 +45,11 @@ export default function AuthPage() {
     navigate("/auth/signup");
   };
 
+  const errId = "auth-login-error";
+
   return (
     <AppShell>
       <div className="auth-page">
-        {/* ✅ Landing-style centered lane (like .landing-section-inner) */}
         <div className="auth-lane">
           <div className="auth-page-inner">
             {/* LEFT: Sign in */}
@@ -53,9 +57,11 @@ export default function AuthPage() {
               <div className="auth-left-inner">
                 <h1 className="auth-title">Welcome back</h1>
 
-                <form className="auth-form" onSubmit={handleLogin}>
+                <form className="auth-form" onSubmit={handleLogin} noValidate>
                   <label className="auth-field">
-                    <span className="auth-input-icon">📧</span>
+                    <span className="auth-input-icon" aria-hidden="true">
+                      📧
+                    </span>
                     <input
                       type="email"
                       name="email"
@@ -65,11 +71,15 @@ export default function AuthPage() {
                       required
                       autoComplete="username"
                       disabled={loginLoading}
+                      aria-invalid={!!loginError}
+                      aria-describedby={loginError ? errId : undefined}
                     />
                   </label>
 
                   <label className="auth-field">
-                    <span className="auth-input-icon">🔒</span>
+                    <span className="auth-input-icon" aria-hidden="true">
+                      🔒
+                    </span>
                     <input
                       type="password"
                       name="password"
@@ -79,40 +89,29 @@ export default function AuthPage() {
                       onChange={(e) => setLoginPassword(e.target.value)}
                       required
                       disabled={loginLoading}
+                      aria-invalid={!!loginError}
+                      aria-describedby={loginError ? errId : undefined}
                     />
                   </label>
 
                   {loginError && (
-                    <p className="auth-error" role="alert" aria-live="polite">
+                    <p className="auth-error" id={errId} role="alert" aria-live="polite">
                       {loginError}
                     </p>
                   )}
 
-                  <button type="submit" className="auth-primary-btn" disabled={loginLoading}>
+                  <button type="submit" className="auth-primary-btn" disabled={!canSubmit}>
                     {loginLoading ? "Signing in…" : "Sign In →"}
                   </button>
                 </form>
 
-                <div
-                  style={{
-                    marginTop: 16,
-                    textAlign: "center",
-                    fontSize: 13,
-                  }}
-                >
+                <div className="auth-alt">
                   <span>New here? </span>
                   <button
                     type="button"
                     onClick={goToSignup}
                     disabled={loginLoading}
-                    style={{
-                      border: "none",
-                      background: "transparent",
-                      color: "var(--ustock-green-main)",
-                      cursor: loginLoading ? "not-allowed" : "pointer",
-                      fontWeight: 600,
-                      opacity: loginLoading ? 0.7 : 1,
-                    }}
+                    className="auth-link-btn"
                   >
                     Create an account →
                   </button>
@@ -128,12 +127,7 @@ export default function AuthPage() {
                   Log in to see your market dashboard, signals, and sentiment in one place.
                 </p>
 
-                <button
-                  type="button"
-                  className="auth-secondary-btn"
-                  onClick={goToSignup}
-                  disabled={loginLoading}
-                >
+                <button type="button" className="auth-secondary-btn" onClick={goToSignup} disabled={loginLoading}>
                   Sign Up
                 </button>
               </div>

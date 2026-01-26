@@ -289,6 +289,26 @@
     margin-bottom: 4px;
     text-align: center;
   }
+
+  /* AuthPage.jsx small helpers (replaces inline styles) */
+  .auth-alt {
+    margin-top: 16px;
+    text-align: center;
+    font-size: 13px;
+  }
+
+  .auth-link-btn {
+    border: none;
+    background: transparent;
+    color: var(--ustock-green-main);
+    cursor: pointer;
+    font-weight: 600;
+  }
+
+  .auth-link-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.7;
+  }
 }
 
 /* ========== DARK MODE OVERRIDES FOR AUTH ==================== */

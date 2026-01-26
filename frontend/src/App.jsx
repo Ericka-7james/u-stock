@@ -49,7 +49,7 @@ function HomeChooser() {
 function AuthGate() {
   const { user, loading } = useAuth();
 
-  if (loading) return <FNavullPageLoader label="Loading…" />;
+  if (loading) return <FullPageLoader label="Loading…" />;
   return user ? <Navigate to="/" replace /> : <AuthPage />;
 }
 

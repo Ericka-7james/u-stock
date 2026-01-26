@@ -1,24 +1,24 @@
+// src/components/auth/AuthGate.jsx
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "../lib/supabaseClient"; // adjust path to your supabase client
+import { supabase } from "../lib/supabaseClient"; // adjust path if needed
 
 export default function AuthGate({ children }) {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
-      // Fired for auto sign-outs too (token refresh failure, expiry, etc.)
-      if (event === "SIGNED_OUT") {
-        // Optional: clear any app-level cached state here
-        // e.g., localStorage.removeItem("activeBot");
+    // If supabase isn't configured for some reason, just render children.
+    if (!supabase?.auth?.onAuthStateChange) return;
 
-        // Hard reset to landing (prevents stale dashboard rendering)
+    const { data } = supabase.auth.onAuthStateChange((event) => {
+      // Covers auto sign-outs: refresh failure / expiry / manual signout
+      if (event === "SIGNED_OUT" || event === "TOKEN_REFRESH_FAILED") {
         navigate("/", { replace: true });
       }
     });
 
     return () => {
-      sub?.subscription?.unsubscribe?.();
+      data?.subscription?.unsubscribe?.();
     };
   }, [navigate]);
 
