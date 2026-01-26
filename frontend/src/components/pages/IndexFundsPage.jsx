@@ -3,22 +3,17 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 import AppShell from "../layout/AppShell";
+import PageHeaderCard from "../common/PageHeaderCard";
 import "../../css/pages/IndexFundsPage.css";
 
 import lucentLogo from "../../assets/images/companyLogo-logoOnly.png";
 
 /**
  * Market Baselines (Lucent Financial)
- * -----------------------------------
- * This page is intentionally docs-first.
- * It explains how Lucent uses broad-market ETFs as context inputs for:
+ * Docs-first page that explains how broad-market ETFs provide context:
  * - regime detection (trend vs range)
  * - risk-on vs risk-off behavior
  * - volatility awareness and safer automation defaults
- *
- * Later upgrade path:
- * - Add /api/market/baselines endpoint returning latest bars + simple computed stats
- * - Render compact baseline tiles + “today’s regime” summary
  */
 
 const BASELINES = [
@@ -60,39 +55,37 @@ export default function IndexFundsPage() {
 
   return (
     <AppShell>
-      <div className="index-funds-page">
-        {/* HERO (match AboutPage mechanics) */}
-        <section className="index-hero-card">
-          <div className="index-hero-left">
-            <h1 className="page-title">Market Baselines</h1>
+      <div className="app-page index-funds-page">
+        <PageHeaderCard
+          title="Market Baselines"
+          subtitle={
+            <span className="index-tagline">
+              Baseline ETFs give Lucent context: risk-on vs risk-off, trend vs range, and volatility.
+            </span>
+          }
+          right={<img src={lucentLogo} alt="Lucent Financial logo" className="index-hero-logo" />}
+        >
+          <p className="muted">
+            These ETFs act as Lucent’s “system context.” They don’t pick trades by themselves — they help interpret the
+            environment so bots can behave more safely.
+          </p>
 
-            <p className="muted">
-              These ETFs act as Lucent’s “system context.” They don’t pick trades by themselves — they help interpret
-              the environment: risk-on vs risk-off, trend vs range, and volatility.
-            </p>
-
-            <div className="index-hero-meta">
-              Status: <span>docs-first</span> (live baseline tiles can be added after the API endpoint is finalized)
-            </div>
-
-            <Link to="/" className="back-link-pill">
-              ← Back to dashboard
-            </Link>
+          <div className="index-hero-meta">
+            Status: <span>docs-first</span> (live baseline tiles can be added after the API endpoint is finalized)
           </div>
 
-          {/* LOGO takes the entire right side of the hero (same as About) */}
-          <div className="index-hero-right" aria-label="Lucent Financial logo">
-            <div className="index-hero-logoPanel">
-              <img src={lucentLogo} alt="Lucent Financial logo" className="index-hero-logo" />
-            </div>
-          </div>
-        </section>
+          <Link to="/" className="back-link-pill">
+            ← Back to dashboard
+          </Link>
+        </PageHeaderCard>
 
         {/* Tabs */}
         <div className="index-tabs-row">
-          <div className="tabs">
+          <div className="tabs" role="tablist" aria-label="Market baselines tabs">
             <button
               type="button"
+              role="tab"
+              aria-selected={activeTab === "baselines"}
               className={"tab-btn " + (activeTab === "baselines" ? "tab-btn--active" : "")}
               onClick={() => setActiveTab("baselines")}
             >
@@ -101,6 +94,8 @@ export default function IndexFundsPage() {
 
             <button
               type="button"
+              role="tab"
+              aria-selected={activeTab === "universe"}
               className={"tab-btn " + (activeTab === "universe" ? "tab-btn--active" : "")}
               onClick={() => setActiveTab("universe")}
             >
@@ -137,6 +132,7 @@ export default function IndexFundsPage() {
 
             <section className="panel index-about-panel">
               <h3 className="fundamentals-title">How this connects to bots + runner states</h3>
+
               <div className="fundamentals-explain">
                 <p className="muted">
                   Lucent’s direction is “transparent automation.” Strategies can generate <strong>intents</strong>, but
@@ -154,7 +150,7 @@ export default function IndexFundsPage() {
                     <strong>Execution layer:</strong> routes paper vs live and records transaction events end-to-end.
                   </li>
                   <li>
-                    <strong>Baseline layer:</strong> provides environment context to inform gating (ex: “chop day → reduce activity”).
+                    <strong>Baseline layer:</strong> provides context to inform gating (ex: “chop day → reduce activity”).
                   </li>
                 </ul>
 

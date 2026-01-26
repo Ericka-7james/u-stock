@@ -9,6 +9,8 @@ import { explainResponseError } from "../common/errorMessages";
 
 import lucentLogo from "../../assets/images/companyLogo-logoOnly.png";
 import TermsModal from "../common/TermsModal";
+import PageHeaderCard from "../common/PageHeaderCard";
+import LoadingOverlay from "../common/LoadingOverlay";
 
 const PROVIDERS = [
   {
@@ -201,7 +203,7 @@ export default function ConnectedAppsPage() {
 
   const openDocs = (providerKey) => {
     const p = PROVIDERS.find((x) => x.key === providerKey);
-    if (p?.docsUrl) window.open(p.docsUrl, "_blank", "noreferrer");
+    if (p?.docsUrl) window.open(p.docsUrl, "_blank", "noopener,noreferrer");
     else openConnectModal(providerKey);
   };
 
@@ -217,28 +219,29 @@ export default function ConnectedAppsPage() {
 
   return (
     <AppShell>
-      {/* HERO CARD (copy About layout) */}
-      <section className="connected-hero-card">
-        <div className="connected-hero-left">
-          <h1 className="page-title">Connected Apps</h1>
-          <p className="muted connected-tagline">
-            Connect brokers and market data providers to power charts and strategies.
-          </p>
+      <LoadingOverlay open={loading} label="Loading connections…" subtitle="Please wait…" />
 
+      <div className="app-page connected-page" aria-busy={loading}>
+        <PageHeaderCard
+          title="Connected Apps"
+          subtitle="Connect brokers and market data providers to power charts and strategies."
+          right={<img src={lucentLogo} alt="Lucent Financial logo" className="connected-hero-logo" />}
+        >
           <p className="muted">
-            Add integrations like Alpaca or Polygon so Lucent can fetch pricing data and (optionally)
-            run strategies you choose to enable.
+            Add integrations like Alpaca or Polygon so Lucent can fetch pricing data and (optionally) run strategies you
+            choose to enable.
           </p>
 
           <p className="muted small">
-            Your API keys stay on the server and are never stored in the browser. You remain in control:
-            nothing trades unless you explicitly turn a strategy on.
+            Your API keys stay on the server and are never stored in the browser. You remain in control: nothing trades
+            unless you explicitly turn a strategy on.
           </p>
 
-          {/* About-style pill link */}
-          <button type="button" className="connected-link-pill" onClick={() => setTermsOpen(true)}>
-            Terms & usage
-          </button>
+          <div className="connected-header-actions">
+            <button type="button" className="connected-link-pill" onClick={() => setTermsOpen(true)}>
+              Terms & usage
+            </button>
+          </div>
 
           <div className="connected-hero-meta">
             {isAuthed && lastRefreshedAt ? (
@@ -254,6 +257,7 @@ export default function ConnectedAppsPage() {
                 {notSignedInCopy}
                 <div style={{ marginTop: 10 }}>
                   <button
+                    type="button"
                     className="connected-btn connected-btn--primary"
                     onClick={() => navigate("/auth")}
                   >
@@ -263,158 +267,154 @@ export default function ConnectedAppsPage() {
               </CloseableBanner>
             </div>
           )}
-        </div>
+        </PageHeaderCard>
 
-        <div className="connected-hero-right" aria-label="Lucent Financial logo">
-          <div className="connected-hero-logoPanel">
-            <img src={lucentLogo} alt="Lucent Financial logo" className="connected-hero-logo" />
-          </div>
-        </div>
-      </section>
+        {/* Content lane aligned with header width */}
+        <div className="connected-page-wrap">
+          {!!error && !dismissed.genericError && (
+            <CloseableBanner onClose={() => dismissBanner("genericError")}>{error}</CloseableBanner>
+          )}
 
-      <div className="connected-page">
-        {!!error && !dismissed.genericError && (
-          <CloseableBanner onClose={() => dismissBanner("genericError")}>{error}</CloseableBanner>
-        )}
+          {import.meta.env.DEV && !!error && !dismissed.genericError && (
+            <details className="connected-debug">
+              <summary>Debug tips</summary>
+              <div style={{ whiteSpace: "pre-wrap" }}>
+                If this is local dev:
+                {"\n"}- confirm backend is running on :8000
+                {"\n"}- confirm cookies are being set (Network tab → auth/login)
+                {"\n"}- confirm proxy is active (vite.config.js)
+              </div>
+            </details>
+          )}
 
-        {import.meta.env.DEV && !!error && !dismissed.genericError && (
-          <details style={{ marginTop: 10, fontSize: 12, opacity: 0.75 }}>
-            <summary>Debug tips</summary>
-            <div style={{ whiteSpace: "pre-wrap" }}>
-              If this is local dev:
-              {"\n"}- confirm backend is running on :8000
-              {"\n"}- confirm cookies are being set (Network tab → auth/login)
-              {"\n"}- confirm proxy is active (vite.config.js)
-            </div>
-          </details>
-        )}
+          {isAuthed && !!notice && !dismissed.notConnected && !hasAnyConnected && (
+            <CloseableBanner onClose={() => dismissBanner("notConnected")}>{notice}</CloseableBanner>
+          )}
 
-        {isAuthed && !!notice && !dismissed.notConnected && !hasAnyConnected && (
-          <CloseableBanner onClose={() => dismissBanner("notConnected")}>{notice}</CloseableBanner>
-        )}
+          <div className="connected-grid">
+            {PROVIDERS.map((p) => {
+              const status = statusByProvider.get(p.key) || "not_connected";
+              const isConnected = status === "connected";
 
-        <div className="connected-grid">
-          {PROVIDERS.map((p) => {
-            const status = statusByProvider.get(p.key) || "not_connected";
-            const isConnected = status === "connected";
+              return (
+                <div className="connected-card" key={p.key}>
+                  <div className="connected-card-top">
+                    <div>
+                      <h3 className="connected-card-title">{p.name}</h3>
+                      <p className="connected-card-desc">{p.desc}</p>
+                    </div>
 
-            return (
-              <div className="connected-card" key={p.key}>
-                <div className="connected-card-top">
-                  <div>
-                    <h3 className="connected-card-title">{p.name}</h3>
-                    <p className="connected-card-desc">{p.desc}</p>
+                    <span
+                      className={
+                        "connected-status " + (isConnected ? "connected-status--on" : "connected-status--off")
+                      }
+                      title={`Status: ${status}`}
+                    >
+                      {isConnected ? "Connected" : "Not connected"}
+                    </span>
                   </div>
 
-                  <span
-                    className={
-                      "connected-status " +
-                      (isConnected ? "connected-status--on" : "connected-status--off")
-                    }
-                    title={`Status: ${status}`}
-                  >
-                    {isConnected ? "Connected" : "Not connected"}
-                  </span>
+                  <div className="connected-tags">
+                    {p.tags.map((t) => (
+                      <span className="connected-tag" key={t}>
+                        {t}
+                      </span>
+                    ))}
+                  </div>
+
+                  <div className="connected-actions">
+                    {isConnected ? (
+                      <>
+                        <button
+                          type="button"
+                          className="connected-btn connected-btn--secondary"
+                          onClick={() => handleDisconnect(p.key)}
+                          disabled={!isAuthed || loading}
+                          title={!isAuthed ? "Sign in to manage connections" : ""}
+                        >
+                          Disconnect
+                        </button>
+                        <button
+                          type="button"
+                          className="connected-btn connected-btn--primary"
+                          onClick={loadConnections}
+                          disabled={!isAuthed || loading}
+                          title={!isAuthed ? "Sign in first" : ""}
+                        >
+                          Refresh
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          className="connected-btn connected-btn--primary"
+                          onClick={() => openConnectModal(p.key)}
+                          disabled={loading}
+                        >
+                          Connect
+                        </button>
+
+                        <button
+                          type="button"
+                          className="connected-btn connected-btn--secondary"
+                          onClick={() => openDocs(p.key)}
+                          disabled={loading}
+                        >
+                          {p.learnMoreLabel || "Learn more"}
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
-
-                <div className="connected-tags">
-                  {p.tags.map((t) => (
-                    <span className="connected-tag" key={t}>
-                      {t}
-                    </span>
-                  ))}
-                </div>
-
-                <div className="connected-actions">
-                  {isConnected ? (
-                    <>
-                      <button
-                        className="connected-btn connected-btn--secondary"
-                        onClick={() => handleDisconnect(p.key)}
-                        disabled={!isAuthed || loading}
-                        title={!isAuthed ? "Sign in to manage connections" : ""}
-                      >
-                        Disconnect
-                      </button>
-                      <button
-                        className="connected-btn connected-btn--primary"
-                        onClick={loadConnections}
-                        disabled={!isAuthed || loading}
-                        title={!isAuthed ? "Sign in first" : ""}
-                      >
-                        Refresh
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <button
-                        className="connected-btn connected-btn--primary"
-                        onClick={() => openConnectModal(p.key)}
-                        disabled={loading}
-                      >
-                        Connect
-                      </button>
-
-                      <button
-                        className="connected-btn connected-btn--secondary"
-                        onClick={() => openDocs(p.key)}
-                        disabled={loading}
-                      >
-                        {p.learnMoreLabel || "Learn more"}
-                      </button>
-                    </>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {!loading && isAuthed && !hasAnyConnected && (
-          <div className="connected-emptyHint">
-            No providers connected yet. Start with <strong>Alpaca</strong> for paper trading,
-            or <strong>Polygon</strong> for dedicated market data.
+              );
+            })}
           </div>
-        )}
 
-        <section className="connected-note">
-          <h4 className="connected-note-title">How connections are used</h4>
-          <ul className="connected-note-list">
-            <li>Data providers power charts, price history, and intraday moves.</li>
-            <li>Broker connections allow strategies to simulate or place trades when you enable them.</li>
-            <li>You stay in control — nothing trades unless you explicitly turn a strategy on.</li>
-          </ul>
-        </section>
+          {!loading && isAuthed && !hasAnyConnected && (
+            <div className="connected-emptyHint">
+              No providers connected yet. Start with <strong>Alpaca</strong> for paper trading, or{" "}
+              <strong>Polygon</strong> for dedicated market data.
+            </div>
+          )}
 
-        <section className="connected-note connected-note--tight">
-          <h4 className="connected-note-title">Next steps</h4>
-          <ul className="connected-note-list connected-note-list--spaced">
-            <li>
-              Start/pause strategies in{" "}
-              <button type="button" className="connected-pill" onClick={() => navigate("/bots")}>
-                Bot Runner
-              </button>
-            </li>
-            <li>
-              View recent activity in{" "}
-              <button type="button" className="connected-pill" onClick={() => navigate("/datasources")}>
-                Bot Logs
-              </button>
-            </li>
-          </ul>
-        </section>
+          <section className="connected-note">
+            <h4 className="connected-note-title">How connections are used</h4>
+            <ul className="connected-note-list">
+              <li>Data providers power charts, price history, and intraday moves.</li>
+              <li>Broker connections allow strategies to simulate or place trades when you enable them.</li>
+              <li>You stay in control — nothing trades unless you explicitly turn a strategy on.</li>
+            </ul>
+          </section>
 
-        {loading && <div className="connected-loading">Loading…</div>}
+          <section className="connected-note connected-note--tight">
+            <h4 className="connected-note-title">Next steps</h4>
+            <ul className="connected-note-list connected-note-list--spaced">
+              <li>
+                Start/pause strategies in{" "}
+                <button type="button" className="connected-pill" onClick={() => navigate("/bots")}>
+                  Bot Runner
+                </button>
+              </li>
+              <li>
+                View recent activity in{" "}
+                <button type="button" className="connected-pill" onClick={() => navigate("/datasources")}>
+                  Bot Logs
+                </button>
+              </li>
+            </ul>
+          </section>
 
-        <ConnectProviderModal
-          open={modalOpen}
-          provider={activeProvider}
-          onClose={closeModal}
-          onGoSignIn={goSignIn}
-          onConnected={loadConnections}
-        />
+          <ConnectProviderModal
+            open={modalOpen}
+            provider={activeProvider}
+            onClose={closeModal}
+            onGoSignIn={goSignIn}
+            onConnected={loadConnections}
+          />
 
-        <TermsModal open={termsOpen} onClose={() => setTermsOpen(false)} />
+          <TermsModal open={termsOpen} onClose={() => setTermsOpen(false)} />
+        </div>
       </div>
     </AppShell>
   );
@@ -426,6 +426,7 @@ function CloseableBanner({ children, onClose }) {
       <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
         <div style={{ flex: 1 }}>{children}</div>
         <button
+          type="button"
           onClick={onClose}
           aria-label="Dismiss"
           style={{

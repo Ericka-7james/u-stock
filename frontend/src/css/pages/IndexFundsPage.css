@@ -1,52 +1,45 @@
 /* ========= MARKET BASELINES PAGE ======================================= */
 
 .index-funds-page {
+  padding-top: 18px;
   padding-bottom: 40px;
+
+  /* one source of truth for vertical rhythm on this page */
+  --index-gap: 16px;
 }
 
-/* HERO CARD (match AboutPage exactly) */
-.index-hero-card {
-  display: flex;
-  justify-content: space-between;
-  align-items: stretch;
-  gap: 24px;
-
-  padding: 20px 22px;
-  margin-bottom: 20px;
-  border-radius: 18px;
-
-  background: var(--ustock-bg-card);
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
-  border: 1px solid var(--ustock-border-card);
-  border-top: 4px solid var(--ustock-green-main);
-  color: var(--ustock-text-main);
-
-  min-width: 0;
+/* Tighten header -> tabs spacing ONLY on this page */
+.index-funds-page .page-header-wrap {
+  margin-bottom: var(--index-gap); /* consistent */
 }
 
-.index-hero-left {
-  min-width: 0;
-  flex: 1 1 560px;
+/* Tabs should sit closer to the header */
+.index-tabs-row {
+  margin: 0 auto var(--index-gap);
 }
 
-/* ✅ FIX the broken word wrapping (Marke / t / Baseli / nes) */
-.index-hero-left .page-title {
-  color: var(--ustock-green-main);
-  margin: 0 0 8px;
-
-  font-size: 32px;
-  line-height: 1.1;
-
-  /* key: do NOT break inside words */
-  word-break: normal;
-  overflow-wrap: normal;
-  hyphens: none;
+/* Give the first panel a consistent top rhythm under tabs */
+.index-funds-page .panel:first-of-type {
+  margin-top: 0;
 }
 
-.index-hero-left .muted {
-  max-width: 560px;
+/* Header logo (right media). Hidden on <=768px by PageHeaderCard.css */
+.index-hero-logo {
+  width: 100%;
+  height: auto;
+  max-width: 320px;
+  max-height: 320px;
+  object-fit: contain;
+  display: block;
+  transform: translateY(-6px);
 }
 
+/* Optional: tagline inline */
+.index-tagline {
+  display: inline-block;
+}
+
+/* Meta line */
 .index-hero-meta {
   margin-top: 10px;
   font-size: 12px;
@@ -58,67 +51,14 @@
   color: var(--ustock-green-main);
 }
 
-/* Use the AboutPage back-link-pill styling */
-.back-link-pill {
-  display: inline-flex;
-  align-items: center;
-  margin-top: 14px;
-  padding: 6px 12px;
-  border-radius: 999px;
-  border: 1px solid var(--ustock-green-main);
-  font-size: 13px;
-  text-decoration: none;
-  color: var(--ustock-green-main);
-  background: transparent;
-  cursor: pointer;
-  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
-}
-
-.back-link-pill:hover {
-  background: var(--ustock-green-main);
-  color: #f9fafb;
-}
-
-/* ✅ Right side fixed column like About */
-.index-hero-right {
-  flex: 0 0 420px;
-  max-width: 420px;
-  min-width: 0;
-  display: flex;
-  align-items: stretch;
-  justify-content: stretch;
-}
-
-/* ✅ Hard cap panel like About */
-.index-hero-logoPanel {
-  width: 100%;
-  height: 100%;
-  min-height: 260px;
-  border-radius: 18px;
-  overflow: hidden;
-  border: 1px solid var(--ustock-border-card);
-  background: var(--ustock-bg-card-soft);
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
-
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-/* ✅ Image can never exceed panel */
-.index-hero-logo {
-  width: 100%;
-  height: 100%;
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
-  display: block;
-}
-
 /* TABS ------------------------------------------------------------- */
 
 .index-tabs-row {
-  margin-bottom: 16px;
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto 16px;
+  padding: 0 24px;
+  box-sizing: border-box;
 }
 
 .tabs {
@@ -151,67 +91,75 @@
   font-weight: 700;
 }
 
+/* PANEL lane (match About grid lane width) */
+.panel {
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 16px 18px;          /* inner padding */
+  box-sizing: border-box;
+
+  background: var(--ustock-bg-card);
+  border: 1px solid var(--ustock-border-card);
+  border-radius: 18px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+}
+
+/* ABOUT PANELS ----------------------------------------------------- */
+.index-funds-page .panel {
+  margin-top: 0; /* baseline */
+}
+
+.index-funds-page .panel + .panel {
+  margin-top: var(--index-gap); /* space between cards */
+}
+
+.index-about-panel h3 {
+  margin-top: 0;
+  margin-bottom: 10px;
+  font-size: 20px;
+  color: var(--ustock-text-strong);
+}
+
+.index-about-panel p {
+  margin-bottom: 14px;
+  font-size: 14px;
+  color: var(--ustock-text-main);
+}
+
+.index-about-panel .about-list {
+  padding-left: 20px;
+  margin: 12px 0 16px;
+}
+
+.index-about-panel .about-list li {
+  margin-bottom: 8px;
+  font-size: 14px;
+  color: var(--ustock-text-main);
+}
+
+.index-about-panel strong {
+  color: var(--ustock-green-main);
+}
+
 /* FUNDS GRID ------------------------------------------------------- */
 
 .fund-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 14px;
-  margin-top: 12px;
+  margin-top: 0;
 }
 
-/* Responsive grid + hero */
-@media (max-width: 768px) {
-  .index-hero-card {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .index-hero-right {
-    flex: 1 1 auto;
-    max-width: none;
-    width: 100%;
-  }
-
-  .index-hero-logoPanel {
-    min-height: 220px;
-  }
-
-  .fund-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .index-hero-left .page-title {
-    font-size: 24px;
-    line-height: 1.15;
-  }
-}
-
-@media (min-width: 769px) and (max-width: 1024px) {
-  .fund-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .index-hero-right {
-    flex: 0 0 360px;
-    max-width: 360px;
-  }
-
-  .index-hero-left .page-title {
-    font-size: 28px;
-  }
-}
-
-/* Individual baseline card */
 .fund-card {
   background: var(--ustock-bg-card);
   border-radius: 16px;
   padding: 12px 14px;
-  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
   border: 1px solid var(--ustock-border-card);
   border-top: 4px solid var(--ustock-green-main);
   transition: box-shadow 0.18s ease, transform 0.18s ease, border-color 0.18s ease;
   color: var(--ustock-text-main);
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
 }
 
 .fund-card:hover {
@@ -242,40 +190,6 @@
   font-size: 13px;
   color: var(--ustock-text-muted);
   margin: 6px 0 10px;
-}
-
-/* ABOUT PANELS ----------------------------------------------------- */
-
-.index-about-panel {
-  margin-top: 16px;
-}
-
-.index-about-panel h3 {
-  margin-top: 0;
-  margin-bottom: 10px;
-  font-size: 20px;
-  color: var(--ustock-text-strong);
-}
-
-.index-about-panel p {
-  margin-bottom: 14px;
-  font-size: 14px;
-  color: var(--ustock-text-main);
-}
-
-.index-about-panel .about-list {
-  padding-left: 20px;
-  margin: 12px 0 16px;
-}
-
-.index-about-panel .about-list li {
-  margin-bottom: 8px;
-  font-size: 14px;
-  color: var(--ustock-text-main);
-}
-
-.index-about-panel strong {
-  color: var(--ustock-green-main);
 }
 
 /* Metrics styling inside cards -------------------------------- */
@@ -332,4 +246,23 @@
 
 .metrics-list strong {
   color: var(--ustock-green-main);
+}
+
+/* Responsive */
+
+/* ✅ match the same horizontal lane as PageHeaderCard/tabs */
+@media (min-width: 0px) {
+  .index-funds-page .panel {
+    width: calc(100% - 48px);   /* 24px left + 24px right */
+  }
+}
+
+@media (max-width: 768px) {
+  .index-funds-page .panel {
+    width: calc(100% - 32px);   /* 16px left + 16px right */
+  }
+
+  .index-tabs-row {
+    padding: 0 16px;
+  }
 }
