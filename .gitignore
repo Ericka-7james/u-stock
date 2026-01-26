@@ -40,3 +40,8 @@ runtime/
 
 # Temp file
 _my_commits_tmp.txt
+
+# runtime state (local only)
+backend/runtime/
+backend/**/runtime/
+*.jsonl

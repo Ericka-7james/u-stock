@@ -408,7 +408,7 @@ export default function BotRunnerCard() {
         {/* Left: selected controls */}
         <div className="botrun-box">
           <div className="botrun-boxHeader">
-            <div className="botrun-boxTitle">Bot controls</div>
+            <div className="botrun-boxTitle">controls</div>
             <span className={statusPill.cls} title="Selected bot status">
               {statusPill.label}
             </span>
