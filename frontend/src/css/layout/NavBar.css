@@ -158,7 +158,7 @@
   color: rgba(255, 255, 255, 0.95);
 }
 
-/* ====== MOBILE OVERLAY (click outside closes nav) =================== */
+/* ====== OVERLAY (click outside closes nav) =================== */
 
 .nav-overlay {
   position: fixed;
@@ -166,14 +166,6 @@
   background: rgba(2, 6, 23, 0.45);
   backdrop-filter: blur(2px);
   z-index: 35; /* below side-nav(40), above app content */
-}
-
-/* You can keep overlay on desktop too if you want click-outside close everywhere.
-   If you *only* want overlay on mobile, keep this. */
-@media (min-width: 769px) {
-  .nav-overlay {
-    display: none;
-  }
 }
 
 /* ====== TOP BAR ==================================================== */
@@ -195,6 +187,10 @@
 
   z-index: 30;
   backdrop-filter: blur(8px);
+
+  /* ✅ prevent wrapping/stacking when viewport shrinks */
+  flex-wrap: nowrap;
+  gap: 12px;
 }
 
 body.ustock-dark .topbar {
@@ -211,6 +207,10 @@ body.ustock-dark .topbar {
   display: flex;
   align-items: center;
   gap: 14px;
+
+  /* ✅ allow flex children to shrink without wrapping */
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .hamburger-btn {
@@ -251,6 +251,10 @@ body.ustock-dark .topbar {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+
+  /* ✅ keep logo+text on one line */
+  min-width: 0;
+  white-space: nowrap;
 }
 
 .topbar-squirrel {
@@ -265,6 +269,9 @@ body.ustock-dark .topbar {
   font-size: 20px;
   font-weight: 650;
   color: var(--ustock-green-main);
+
+  /* ✅ never wrap to 2nd line */
+  white-space: nowrap;
 }
 
 .topbar-right {
@@ -273,14 +280,84 @@ body.ustock-dark .topbar {
   gap: 16px;
 }
 
+/* Shared icon button styling (works for <button> and <a>/<Link>) */
 .icon-btn {
   background: none;
   border: none;
   padding: 0;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  text-decoration: none; /* for Link */
 }
 
-/* SEARCH ICON */
+.icon-btn:hover {
+  background: rgba(15, 118, 110, 0.06);
+}
+
+/* ========= TOPBAR ICONS ============================================ */
+
+/* INFO (About) */
+.icon-info {
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--ustock-green-main);
+  border-radius: 999px;
+  position: relative;
+  display: inline-block;
+}
+
+.icon-info::before {
+  content: "";
+  position: absolute;
+  top: 5px;
+  left: 50%;
+  width: 4px;
+  height: 4px;
+  background: var(--ustock-green-main);
+  transform: translateX(-50%);
+  border-radius: 999px;
+}
+
+.icon-info::after {
+  content: "";
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  width: 4px;
+  height: 9px;
+  background: var(--ustock-green-main);
+  transform: translateX(-50%);
+  border-radius: 999px;
+}
+
+/* FEEDBACK (chat bubble) */
+.icon-feedback {
+  width: 22px;
+  height: 18px;
+  border: 2px solid var(--ustock-green-main);
+  border-radius: 8px;
+  position: relative;
+  display: inline-block;
+}
+
+.icon-feedback::after {
+  content: "";
+  position: absolute;
+  bottom: -6px;
+  left: 6px;
+  width: 0;
+  height: 0;
+  border: 6px solid transparent;
+  border-top-color: var(--ustock-green-main);
+  transform: rotate(180deg);
+}
+
+/* (Optional) if you still use these elsewhere, keep them */
 .icon-search {
   position: relative;
   width: 18px;
@@ -302,7 +379,6 @@ body.ustock-dark .topbar {
   border-radius: 1px;
 }
 
-/* BELL ICON */
 .icon-bell {
   width: 18px;
   height: 18px;
@@ -421,14 +497,22 @@ body.ustock-dark .topbar {
 
 /* ====== SUPER-SMALL NAV (≤ 480px) ================================ */
 
+@media (max-width: 560px) {
+  /* ✅ hide logo instead of letting it wrap/stack */
+  .topbar-squirrel {
+    display: none;
+  }
+}
+
 @media (max-width: 480px) {
   .topbar { padding: 0 12px; }
   .topbar-left { gap: 8px; }
   .topbar-home-label { font-size: 16px; }
   .topbar-right { gap: 8px; }
+
   .theme-toggle { padding: 2px 8px; }
   .theme-toggle-thumb { width: 14px; height: 14px; }
   .theme-toggle--on .theme-toggle-thumb { transform: translateX(10px); }
+
   .icon-search, .icon-bell { width: 16px; height: 16px; }
-  .topbar-squirrel { width: 18px; height: 18px; }
 }

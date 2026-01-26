@@ -489,48 +489,146 @@
   color: rgba(42, 137, 114, 0.98);
 }
 
+/* Dark mode: make the hero card darker but keep the same gradient vibe */
+body.ustock-dark .landing-hero {
+  background: linear-gradient(
+    135deg,
+    rgba(2, 44, 34, 0.92) 0%,
+    rgba(15, 23, 42, 0.92) 55%,
+    rgba(2, 6, 23, 0.96) 100%
+  );
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  box-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.25),
+    0 14px 28px rgba(0, 0, 0, 0.35),
+    0 40px 80px rgba(0, 0, 0, 0.45);
+}
+
+/* (optional) slightly stronger kicker surface in dark */
+body.ustock-dark .landing-hero-kicker {
+  background: rgba(255, 255, 255, 0.10);
+  border-color: rgba(255, 255, 255, 0.16);
+}
 /* =========================================================
    RESPONSIVE
 ========================================================= */
 
 @media (max-width: 900px) {
+  /* ✅ keep 2 columns so the illustration never drops below */
   .landing-hero-inner {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 32px;
+    grid-template-columns: minmax(0, 1.35fr) minmax(0, 0.65fr);
+    gap: 24px;
+    align-items: center;
   }
 
-  .landing-hero-title {
-    font-size: 32px;
-  }
+  /* ✅ allow the right column/image to shrink properly */
+  .landing-hero-right { min-width: 0; }
+  .landing-hero-img { max-width: 420px; width: 100%; }
 
-  .landing-grid-3 {
-    grid-template-columns: minmax(0, 1fr);
-  }
+  .landing-hero-title { font-size: 32px; }
 
-  .landing-hero-right {
-    justify-content: flex-start;
-  }
+  .landing-grid-3 { grid-template-columns: minmax(0, 1fr); }
 
-  .landing-hero-metrics {
-    grid-template-columns: minmax(0, 1fr);
-  }
+  .landing-hero-metrics { grid-template-columns: minmax(0, 1fr); }
 
   .landing-bigcard-shell {
     grid-template-columns: minmax(0, 1fr);
     padding: 26px 22px;
   }
 
-  .landing-about-shell {
-    padding: 24px 22px;
-  }
+  .landing-about-shell { padding: 24px 22px; }
 
-  .landing-bigcard-title {
-    font-size: 34px;
-  }
+  .landing-bigcard-title { font-size: 34px; }
 }
 
+/* ✅ only hide it on true mobile */
+/* =========================================================
+   RESPONSIVE
+========================================================= */
+
+@media (max-width: 900px) {
+  /* ✅ keep 2 columns so the illustration never drops below */
+  .landing-hero-inner {
+    grid-template-columns: minmax(0, 1.35fr) minmax(0, 0.65fr);
+    gap: 24px;
+    align-items: center;
+  }
+
+  /* ✅ allow the right column/image to shrink properly */
+  .landing-hero-right { min-width: 0; }
+  .landing-hero-img { max-width: 420px; width: 100%; }
+
+  .landing-hero-title { font-size: 32px; }
+
+  .landing-grid-3 { grid-template-columns: minmax(0, 1fr); }
+
+  .landing-hero-metrics { grid-template-columns: minmax(0, 1fr); }
+
+  .landing-bigcard-shell {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 26px 22px;
+  }
+
+  .landing-about-shell { padding: 24px 22px; }
+
+  .landing-bigcard-title { font-size: 34px; }
+}
+
+/* ✅ only hide it on true mobile */
 @media (max-width: 768px) {
+  /* ✅ match other cards: centered inner lane like landing-section-inner */
+  .landing-hero-inner {
+    max-width: 1100px;             /* was 1200px */
+    margin: 0 auto;
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  /* ✅ remove the artificial max width so content fills the centered lane */
+  .landing-hero-left {
+    max-width: none;
+    width: 100%;
+  }
+
+  /* ✅ give the hero card the same “centered card padding” vibe as the rest */
+  .landing-hero {
+    padding: 72px 24px 84px;       /* keep consistent with your app spacing */
+  }
+
+  /* ✅ ensure the metrics stretch and feel roomy */
+  .landing-hero-metrics {
+    max-width: 100%;
+  }
+
+  /* ✅ hide the illustration */
   .landing-hero-right {
     display: none;
   }
 }
+
+/* ✅ very small phones (fix hero looking tighter than other cards) */
+@media (max-width: 480px) {
+  /* Let AppShell/page padding control the lane — avoid double padding */
+  .landing-hero {
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  /* Keep the content centered with normal app padding */
+  .landing-hero-inner {
+    padding-left: 24px;
+    padding-right: 24px;
+  }
+
+  /* Optional: slightly smaller title so it doesn’t feel cramped */
+  .landing-hero-title {
+    font-size: 30px;
+  }
+
+  /* Optional: kicker can wrap instead of forcing tight layout */
+  .landing-hero-kicker {
+    white-space: normal;
+  }
+}
+
+

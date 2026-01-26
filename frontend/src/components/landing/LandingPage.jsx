@@ -54,12 +54,12 @@ export default function LandingPage() {
 
             <div className="landing-hero-ctas">
               <button className="landing-btn landing-btn--primary" type="button" onClick={goAuth}>
-                Sign in / Sign up
-              </button>
+                  Sign in / Sign up
+                </button>
 
-              <button className="landing-btn landing-btn--ghost" type="button" onClick={() => navigate("/about")}>
-                Learn more
-              </button>
+                <button className="landing-btn landing-btn--ghost" type="button" onClick={() => navigate("/about")}>
+                  Learn more
+                </button>
             </div>
 
             <div className="landing-hero-metrics">

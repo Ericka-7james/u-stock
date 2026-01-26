@@ -7,6 +7,7 @@ import { useAuth } from "./AuthContext";
 const PUBLIC_PATHS = new Set([
   "/",
   "/about",
+  "/feedback",
   "/auth",
   "/auth/signup",
 ]);

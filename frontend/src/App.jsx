@@ -6,7 +6,7 @@ import DashboardPage from "./components/dashboard/DashboardPage";
 import DatasourcesPage from "./components/pages/DatasourcesPage";
 import IndexFundsPage from "./components/pages/IndexFundsPage";
 import AboutPage from "./components/pages/AboutPage";
-import FeebackPage from "./components/pages/FeedbackPage";
+import FeedbackPage from "./components/pages/FeedbackPage";
 // import ResumePage from "./components/pages/ResumePage";
 import CandlesPage from "./components/pages/CandlesPage";
 
@@ -49,7 +49,7 @@ function HomeChooser() {
 function AuthGate() {
   const { user, loading } = useAuth();
 
-  if (loading) return <FullPageLoader label="Loading…" />;
+  if (loading) return <FNavullPageLoader label="Loading…" />;
   return user ? <Navigate to="/" replace /> : <AuthPage />;
 }
 
@@ -70,6 +70,7 @@ function App() {
 
         {/* Public pages */}
         <Route path="/about" element={<AboutPage />} />
+        <Route path="/feedback" element={<FeedbackPage />}/>
 
         <Route path="/auth" element={<AuthGate />} />
         <Route path="/auth/signup" element={<SignupGate />} />
@@ -88,14 +89,6 @@ function App() {
           element={
             <RequireAuth>
               <IndexFundsPage />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="/feedback"
-          element={
-            <RequireAuth>
-              <FeebackPage />
             </RequireAuth>
           }
         />
