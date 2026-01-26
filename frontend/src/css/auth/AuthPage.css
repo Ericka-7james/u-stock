@@ -1,29 +1,34 @@
 /* AUTH PAGE – U-Stock theme */
 
-/* Full container (inside .app-page) */
+/* Full container (inside AppShell) */
 .auth-page {
+  width: 100%;
+  min-height: calc(100vh - 64px); /* leave room for fixed topbar */
   display: flex;
   justify-content: center;
-  min-height: calc(100vh - 64px); /* leave room for fixed topbar */
+  padding: 18px 24px 24px; /* breathing room like landing sections */
+  box-sizing: border-box;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Inter", sans-serif;
+}
+
+/* ✅ Landing-style centered lane (like .landing-section-inner) */
+.auth-lane {
+  width: 100%;
+  max-width: 1100px; /* matches landing-section-inner spirit */
   margin: 0 auto;
+  display: flex;
+  justify-content: center; /* centers panel container inside lane */
 }
 
 /* Wrapper that holds left + right panels */
 .auth-page-inner {
   display: flex;
   width: 100%;
-  max-width: 1200px;
-  margin: 18px auto 24px;
-  min-height: calc(100vh - 64px);
-
-  /* ✅ THIS makes it round like signup-card */
+  max-width: 1200px; /* keep your original cap */
+  min-height: calc(100vh - 64px - 42px); /* subtract page padding */
   border-radius: 26px;
-
-  /* ✅ THIS makes the children respect the rounding */
   overflow: hidden;
 
-  /* wrapper border + shadow */
   border: 1px solid rgba(15, 23, 42, 0.08);
   box-shadow:
     0 12px 28px rgba(15, 23, 42, 0.10),
@@ -161,7 +166,6 @@
   align-items: center;
   justify-content: center;
 
-  /* subtle divider where panels meet */
   border-left: 1px solid rgba(255, 255, 255, 0.18);
 }
 
@@ -201,6 +205,11 @@
   transform: translateY(-1px);
 }
 
+.auth-error {
+  color: #b91c1c;
+  font-size: 12px;
+}
+
 /* ================= DESKTOP TWEAKS (≥ 769px) ======================= */
 
 @media (min-width: 769px) {
@@ -219,15 +228,17 @@
 
 @media (max-width: 768px) {
   .auth-page {
-    min-height: calc(100vh - 64px);
     padding: 16px; /* gives shadow + rounding room */
-    box-sizing: border-box;
+  }
+
+  .auth-lane {
+    max-width: 100%;
   }
 
   .auth-page-inner {
     flex-direction: column;
     min-height: calc(100vh - 64px - 32px);
-    border-radius: 22px; /* slightly smaller on mobile like signup */
+    border-radius: 22px;
   }
 
   .auth-left {
@@ -278,32 +289,6 @@
     margin-bottom: 4px;
     text-align: center;
   }
-}
-
-/* Top back button (if used on signup page) */
-.auth-top-bar {
-  position: absolute;
-  top: 16px;
-  left: 0;
-  right: 0;
-  display: flex;
-  justify-content: flex-start;
-  padding: 0 24px;
-}
-
-.auth-top-back-btn {
-  border: none;
-  border-radius: 999px;
-  padding: 6px 14px;
-  font-size: 12px;
-  background: rgba(15, 23, 42, 0.06);
-  color: var(--ustock-text-muted);
-  cursor: pointer;
-}
-
-.auth-error {
-  color: #b91c1c;
-  font-size: 12px;
 }
 
 /* ========== DARK MODE OVERRIDES FOR AUTH ==================== */
