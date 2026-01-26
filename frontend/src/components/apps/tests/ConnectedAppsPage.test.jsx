@@ -122,7 +122,7 @@ describe("ConnectedAppsPage", () => {
     expect(window.open).toHaveBeenCalledWith(
       "https://docs.alpaca.markets/",
       "_blank",
-      "noreferrer"
+      "noopener,noreferrer"
     );
 
 

@@ -65,7 +65,7 @@ describe("BotControlCard", () => {
         return jsonResponse({ ok: true, is_open: true, next_open: 1730000000 });
       }
 
-      // status (note: BotControlCard uses effective_state now)
+      // status
       if (method === "GET" && String(url).startsWith("/api/bots/status?bot_id=")) {
         const botId = String(url).split("bot_id=")[1];
         return jsonResponse({
@@ -89,7 +89,7 @@ describe("BotControlCard", () => {
         return jsonResponse({ ok: true });
       }
 
-      // stop (BotControlCard posts JSON to /api/bots/stop)
+      // pause (backend endpoint is /stop)
       if (method === "POST" && url === "/api/bots/stop") {
         return jsonResponse({ ok: true });
       }
@@ -127,8 +127,18 @@ describe("BotControlCard", () => {
     expect(within(select).getByRole("option", { name: /ema trend bot/i })).toBeInTheDocument();
     expect(within(select).getByRole("option", { name: /orb bot/i })).toBeInTheDocument();
 
-    // default status: stopped -> OFF
-    expect(screen.getByText("OFF")).toBeInTheDocument();
+    // status pill should show IDLE by default (effective_state: stopped)
+    expect(screen.getAllByText(/^IDLE$/i).length).toBeGreaterThan(0);
+
+    // armed pill should show DISARMED by default
+    expect(screen.getByText(/disarmed/i)).toBeInTheDocument();
+
+    // Arm button should be present when not LIVE
+    expect(screen.getByRole("button", { name: /^arm$/i })).toBeInTheDocument();
+
+    // Start exists but disabled until armed
+    const startBtn = screen.getByRole("button", { name: /^start$/i });
+    expect(startBtn).toBeDisabled();
   });
 
   it("changing bot calls onActiveBotChange", async () => {
@@ -142,7 +152,6 @@ describe("BotControlCard", () => {
   });
 
   it("Start requires Arm, then Confirm start, and then refreshes status to LIVE", async () => {
-    // status: stopped first, then running after start + refresh
     global.fetch.mockImplementation((url, opts = {}) => {
       const method = (opts.method || "GET").toUpperCase();
 
@@ -158,13 +167,12 @@ describe("BotControlCard", () => {
         });
       }
 
-      // IMPORTANT: BotControlCard reads `effective_state`
       if (method === "GET" && String(url).startsWith("/api/bots/status?bot_id=")) {
         const statusCalls = global.fetch.mock.calls.filter((c) =>
           String(c[0]).startsWith("/api/bots/status?bot_id=")
         ).length;
 
-        // First status call(s): stopped, after start refresh: running
+        // first call: stopped, after start+refresh: running
         return statusCalls <= 1
           ? jsonResponse({ effective_state: "stopped", mode: "paper" })
           : jsonResponse({ effective_state: "running", mode: "paper" });
@@ -179,75 +187,84 @@ describe("BotControlCard", () => {
 
     render(<BotControlCard activeBotId="ema_trend" />);
 
-    // Start is disabled until armed
-    const startBtn = await screen.findByRole("button", { name: /start/i });
+    // Start disabled until armed
+    const startBtn = await screen.findByRole("button", { name: /^start$/i });
     expect(startBtn).toBeDisabled();
 
     // Arm first
     const armBtn = await screen.findByRole("button", { name: /^arm$/i });
     await user.click(armBtn);
 
-    // Now start enabled
+    // Start enabled
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /start/i })).not.toBeDisabled();
+      expect(screen.getByRole("button", { name: /^start$/i })).not.toBeDisabled();
     });
 
-    // Click Start => opens confirmation modal
-    await user.click(screen.getByRole("button", { name: /start/i }));
+    // Click Start => confirmation modal
+    await user.click(screen.getByRole("button", { name: /^start$/i }));
 
     const modal = await screen.findByTestId("modal");
-    expect(modal).toBeInTheDocument();
     expect(within(modal).getByTestId("modal-title").textContent).toMatch(/start this bot/i);
 
     // Confirm start
-    const confirmBtn = within(modal).getByRole("button", { name: /confirm start/i });
-    await user.click(confirmBtn);
+    await user.click(within(modal).getByRole("button", { name: /confirm start/i }));
 
-    // becomes LIVE after refreshStatus
+    // status pill becomes LIVE
     await waitFor(() => {
-      expect(screen.getByText("LIVE")).toBeInTheDocument();
+      expect(screen.getByText(/live/i)).toBeInTheDocument();
     });
 
-    // ensure the start endpoint was hit
+    // Once LIVE, primary action becomes Pause (no Stop button exists)
+    expect(screen.getByRole("button", { name: /^pause$/i })).toBeInTheDocument();
+
     expect(global.fetch).toHaveBeenCalledWith(
       "/api/bots/start",
       expect.objectContaining({ method: "POST" })
     );
   });
 
-  it("Stop calls /api/bots/stop and then refreshes status to OFF", async () => {
-    // running first so Stop button exists; after stop -> stopped
+  it("Pause calls /api/bots/stop and then shows PAUSED", async () => {
+    // running first so Pause button exists; after pause -> paused
     global.fetch.mockImplementation((url, opts = {}) => {
       const method = (opts.method || "GET").toUpperCase();
 
       if (method === "GET" && url === "/api/bots/available") {
         return jsonResponse({ bots: [{ id: "ema_trend", name: "EMA Trend Bot" }] });
       }
-      if (method === "GET" && url === "/api/market/us/session") return jsonResponse({ ok: true, is_open: true });
-      if (method === "GET" && String(url).startsWith("/api/bots/config?bot_id=")) return jsonResponse({ config: { mode: "paper" } });
-
-      if (method === "GET" && String(url).startsWith("/api/bots/status?bot_id=")) {
-        const stopCalls = global.fetch.mock.calls.filter((c) => String(c[0]) === "/api/bots/stop").length;
-
-        return stopCalls === 0
-          ? jsonResponse({ effective_state: "running", mode: "paper" })
-          : jsonResponse({ effective_state: "stopped", mode: "paper" });
+      if (method === "GET" && url === "/api/market/us/session") {
+        return jsonResponse({ ok: true, is_open: true });
+      }
+      if (method === "GET" && String(url).startsWith("/api/bots/config?bot_id=")) {
+        return jsonResponse({ config: { mode: "paper" } });
       }
 
-      // IMPORTANT: BotControlCard posts JSON to /api/bots/stop (not querystring)
-      if (method === "POST" && url === "/api/bots/stop") return jsonResponse({ ok: true });
+      if (method === "GET" && String(url).startsWith("/api/bots/status?bot_id=")) {
+        const pauseCalls = global.fetch.mock.calls.filter(
+          (c) => c[0] === "/api/bots/stop" && (c[1]?.method || "GET").toUpperCase() === "POST"
+        ).length;
+
+        return pauseCalls === 0
+          ? jsonResponse({ effective_state: "running", mode: "paper", message: "Running" })
+          : jsonResponse({ effective_state: "paused", mode: "paper", pausedReason: "manual_pause" });
+      }
+
+      // BotControlCard posts JSON to /api/bots/stop
+      if (method === "POST" && url === "/api/bots/stop") {
+        return jsonResponse({ ok: true });
+      }
 
       return jsonResponse({ detail: "Unhandled", url }, false, 500);
     });
 
     render(<BotControlCard activeBotId="ema_trend" />);
 
-    // should show Stop (because running)
-    const stopBtn = await screen.findByRole("button", { name: /stop/i });
-    await user.click(stopBtn);
+    // should show Pause (because running)
+    const pauseBtn = await screen.findByRole("button", { name: /pause/i });
+    await user.click(pauseBtn);
 
+    // UI pill should become PAUSED (your component renders pill text)
     await waitFor(() => {
-      expect(screen.getByText("OFF")).toBeInTheDocument();
+      expect(screen.getByText("PAUSED")).toBeInTheDocument();
     });
 
     expect(global.fetch).toHaveBeenCalledWith(

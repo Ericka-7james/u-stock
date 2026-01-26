@@ -6,7 +6,7 @@ import AppShell from "../layout/AppShell";
 import PageHeaderCard from "../common/PageHeaderCard.jsx";
 
 import MarketLeadersCard from "../dashboard/cards/MarketLeadersCard.jsx";
-import BotLogsCard from "../dashboard/cards/BotLogsCard..jsx";
+import BotLogsCard from "../dashboard/cards/BotLogsCard.jsx";
 
 import DatasourcesSquirrel from "../../assets/images/DatasourcesSquirrel.png";
 

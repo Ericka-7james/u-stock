@@ -123,9 +123,11 @@ export default function SignupPage() {
           )}
 
           <form className="signup-auth-form" onSubmit={handleSubmit} noValidate>
-            {/* Username */}
+            {/* Name / Username */}
             <label className="signup-auth-field" htmlFor="signup-name">
-              <span className="signup-auth-icon" aria-hidden="true">👤</span>
+              <span className="signup-auth-icon" aria-hidden="true">
+                👤
+              </span>
               <input
                 id="signup-name"
                 name="name"
@@ -136,13 +138,20 @@ export default function SignupPage() {
                 onChange={(e) => setName(e.target.value)}
                 autoComplete="username"
                 disabled={loading}
+                aria-label="Name"
               />
             </label>
-            {errors.name && <p className="signup-error" role="alert">{errors.name}</p>}
+            {errors.name && (
+              <p className="signup-error" role="alert">
+                {errors.name}
+              </p>
+            )}
 
             {/* Email */}
             <label className="signup-auth-field" htmlFor="signup-email">
-              <span className="signup-auth-icon" aria-hidden="true">✉️</span>
+              <span className="signup-auth-icon" aria-hidden="true">
+                ✉️
+              </span>
               <input
                 id="signup-email"
                 name="email"
@@ -153,29 +162,43 @@ export default function SignupPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 autoComplete="email"
                 disabled={loading}
+                aria-label="Email"
               />
             </label>
-            {errors.email && <p className="signup-error" role="alert">{errors.email}</p>}
+            {errors.email && (
+              <p className="signup-error" role="alert">
+                {errors.email}
+              </p>
+            )}
 
             {/* Phone (optional) */}
             <label className="signup-auth-field" htmlFor="signup-phone">
-              <span className="signup-auth-icon" aria-hidden="true">📞</span>
+              <span className="signup-auth-icon" aria-hidden="true">
+                📞
+              </span>
               <input
                 id="signup-phone"
                 name="phone"
                 type="tel"
-                placeholder="Phone (optional)"
+                placeholder="(555) 555-5555"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 autoComplete="tel"
                 disabled={loading}
+                aria-label="Phone"
               />
             </label>
-            {errors.phone && <p className="signup-error" role="alert">{errors.phone}</p>}
+            {errors.phone && (
+              <p className="signup-error" role="alert">
+                {errors.phone}
+              </p>
+            )}
 
             {/* Password */}
             <label className="signup-auth-field" htmlFor="signup-password">
-              <span className="signup-auth-icon" aria-hidden="true">🔒</span>
+              <span className="signup-auth-icon" aria-hidden="true">
+                🔒
+              </span>
               <input
                 id="signup-password"
                 name="password"
@@ -186,9 +209,14 @@ export default function SignupPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={loading}
+                aria-label="Password"
               />
             </label>
-            {errors.password && <p className="signup-error" role="alert">{errors.password}</p>}
+            {errors.password && (
+              <p className="signup-error" role="alert">
+                {errors.password}
+              </p>
+            )}
 
             {/* Avatar row (compact) */}
             <div className="signup-avatar-strip">
@@ -198,9 +226,7 @@ export default function SignupPage() {
                   <button
                     key={icon}
                     type="button"
-                    className={
-                      "signup-avatar-pill" + (avatar === icon ? " signup-avatar-pill--active" : "")
-                    }
+                    className={"signup-avatar-pill" + (avatar === icon ? " signup-avatar-pill--active" : "")}
                     onClick={() => setAvatar(icon)}
                     aria-pressed={avatar === icon}
                     disabled={loading}
@@ -213,7 +239,7 @@ export default function SignupPage() {
             </div>
 
             <button type="submit" className="signup-auth-btn" disabled={loading}>
-              {loading ? "Creating…" : "Sign up"}
+              {loading ? "Creating account…" : "Sign up"}
             </button>
 
             {/* Divider + social row (visual only) */}

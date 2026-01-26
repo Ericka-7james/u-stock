@@ -36,6 +36,7 @@ runtime/
 # dotenv environment variables
 .env
 .env.local
+u-stock-bots/.env.local
 
 
 # Temp file

@@ -146,7 +146,7 @@ export default function ConnectedAppsPage() {
       safeSet(() => {
         setApps([]);
         setNotice("");
-        setError(ui ? `${ui.title}\n\n${ui.body}` : (e?.message || "Could not load connected apps."));
+        setError(ui ? `${ui.title}\n\n${ui.body}` : e?.message || "Could not load connected apps.");
       });
     } finally {
       if (myReqId !== reqIdRef.current) return;
@@ -201,6 +201,7 @@ export default function ConnectedAppsPage() {
     setDismissed((d) => ({ ...d, [key]: true }));
   };
 
+  // ✅ Keep "noopener,noreferrer" for security. Update the TEST to expect it.
   const openDocs = (providerKey) => {
     const p = PROVIDERS.find((x) => x.key === providerKey);
     if (p?.docsUrl) window.open(p.docsUrl, "_blank", "noopener,noreferrer");
@@ -214,7 +215,9 @@ export default function ConnectedAppsPage() {
     );
     if (!ok) return;
 
-    alert("Disconnect flow will be wired next (backend endpoint). For now, reconnecting is available via Connect.");
+    alert(
+      "Disconnect flow will be wired next (backend endpoint). For now, reconnecting is available via Connect."
+    );
   };
 
   return (
@@ -239,7 +242,7 @@ export default function ConnectedAppsPage() {
 
           <div className="connected-header-actions">
             <button type="button" className="connected-link-pill" onClick={() => setTermsOpen(true)}>
-              Terms & usage
+              Terms &amp; usage
             </button>
           </div>
 
@@ -305,9 +308,7 @@ export default function ConnectedAppsPage() {
                     </div>
 
                     <span
-                      className={
-                        "connected-status " + (isConnected ? "connected-status--on" : "connected-status--off")
-                      }
+                      className={"connected-status " + (isConnected ? "connected-status--on" : "connected-status--off")}
                       title={`Status: ${status}`}
                     >
                       {isConnected ? "Connected" : "Not connected"}
