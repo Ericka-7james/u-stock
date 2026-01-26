@@ -108,11 +108,6 @@
   background: rgba(248, 250, 252, 0.85);
 }
 
-/* (Optional tiny variations) */
-.side-nav-item-icon--market::after { inset: 6px; }
-.side-nav-item-icon--baseline::after { inset: 6px; }
-.side-nav-item-icon--broker::after { inset: 6px; }
-
 .side-nav-item--active {
   background: #22c55e;
   color: #022c22;
@@ -163,7 +158,7 @@
   inset: 0;
   background: rgba(2, 6, 23, 0.45);
   backdrop-filter: blur(2px);
-  z-index: 35; /* below side-nav(40), above app content */
+  z-index: 35;
 }
 
 /* ====== TOP BAR ==================================================== */
@@ -370,23 +365,40 @@ body.ustock-dark .topbar {
   transition: transform 0.2s ease;
 }
 
-.theme-toggle-moon { font-size: 12px; line-height: 1; color: #f9fafb; }
-
-.theme-toggle--on { background: #022c22; border-color: rgba(15, 23, 42, 0.45); }
-.theme-toggle--on .theme-toggle-thumb { transform: translateX(4px); }
-
+/* ✅ fixed-width slots so the toggle never shifts */
 .theme-toggle-icon {
+  width: 14px;              /* reserve space */
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
   font-size: 12px;
   line-height: 1;
   color: #f9fafb;
-  width: 6px;               /* keeps spacing consistent */
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
 }
 
-.theme-toggle-icon--left  { margin-right: 1px; }
-.theme-toggle-icon--right { margin-left: 1px; }
+/* fixed-width “slots” so the layout stays stable */
+.theme-toggle-sun,
+.theme-toggle-moon {
+  width: 8px;
+  display: inline-flex;
+  justify-content: center;
+  font-size: 12px;
+  line-height: 1;
+  color: #f9fafb;
+}
+
+/* optional: make sure empty icons still take space */
+.theme-toggle-icon:empty::before { content: ""; }
+
+/* ✅ Light mode: show moon on RIGHT, hide sun on LEFT */
+.theme-toggle-sun { opacity: 0; }
+.theme-toggle-moon { opacity: 1; }
+
+/* ✅ Dark mode: show sun on LEFT, hide moon on RIGHT */
+.theme-toggle--on { background: #022c22; border-color: rgba(15, 23, 42, 0.45); }
+.theme-toggle--on .theme-toggle-thumb { transform: translateX(4px); }
+.theme-toggle--on .theme-toggle-sun { opacity: 1; }
+.theme-toggle--on .theme-toggle-moon { opacity: 0; }
 
 /* ====== USER AVATAR DROPDOWN ====================================== */
 
