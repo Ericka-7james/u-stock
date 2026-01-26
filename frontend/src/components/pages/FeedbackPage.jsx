@@ -5,6 +5,7 @@ import AppShell from "../layout/AppShell";
 import "../../css/pages/FeedbackPage.css";
 import { API_BASE, API_PREFIX } from "../../config/config";
 import { useAuth } from "../../context/AuthContext";
+import PageHeaderCard from "../common/PageHeaderCard";
 
 const SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY;
 
@@ -140,161 +141,159 @@ export default function FeedbackPage() {
       if (timeoutId) clearTimeout(timeoutId);
       setSubmitting(false);
     }
-
   };
 
   return (
     <AppShell>
       <div className="app-page feedback-page">
-        <div className="feedback-lane">
-          <section className="feedback-auth-card">
-            <header className="feedback-auth-header">
-              <h1 className="feedback-auth-title">Feedback</h1>
-              <p className="feedback-auth-subtitle">
-                Share ideas, report issues, or ask questions about how U-Stock works. Messages here will be routed
-                straight to my inbox.
-              </p>
-            </header>
+        {/* ✅ Swapped to shared header card */}
+        <PageHeaderCard
+          title="Feedback"
+          subtitle="Share ideas, report issues, or ask questions about how U-Stock works. Messages here will be routed straight to my inbox."
+        >
+          <form className="feedback-auth-form" onSubmit={onSubmit}>
+            {/* Honeypot */}
+            <div className="feedback-honeypot" aria-hidden="true">
+              <label>
+                Do not fill this out:
+                <input
+                  value={honeypot}
+                  onChange={(e) => setHoneypot(e.target.value)}
+                  autoComplete="off"
+                  tabIndex={-1}
+                />
+              </label>
+            </div>
 
-            <form className="feedback-auth-form" onSubmit={onSubmit}>
-              {/* Honeypot */}
-              <div className="feedback-honeypot" aria-hidden="true">
-                <label>
-                  Do not fill this out:
-                  <input
-                    value={honeypot}
-                    onChange={(e) => setHoneypot(e.target.value)}
-                    autoComplete="off"
-                    tabIndex={-1}
+            {/* Name */}
+            <div className="feedback-field">
+              <label className="feedback-label" htmlFor="name">
+                Name
+              </label>
+              <input
+                id="name"
+                type="text"
+                className="feedback-input"
+                placeholder="Your name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                autoComplete="name"
+              />
+            </div>
+
+            {/* Email */}
+            <div className="feedback-field">
+              <label className="feedback-label" htmlFor="email">
+                Contact email
+              </label>
+              <input
+                id="email"
+                type="email"
+                className="feedback-input"
+                placeholder="you@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                autoComplete="email"
+              />
+              <p className="feedback-hint">I&apos;ll use this if I need to follow up about your feedback.</p>
+            </div>
+
+            {/* Type */}
+            <div className="feedback-field">
+              <label className="feedback-label" htmlFor="feedbackType">
+                Feedback type
+              </label>
+              <select
+                id="feedbackType"
+                className="feedback-select"
+                value={feedbackType}
+                onChange={(e) => setFeedbackType(e.target.value)}
+              >
+                <option value="feature">Feature idea</option>
+                <option value="bug">Bug report</option>
+                <option value="question">Question</option>
+                <option value="other">Something else</option>
+              </select>
+            </div>
+
+            {/* Message */}
+            <div className="feedback-field">
+              <div className="feedback-message-row">
+                <label className="feedback-label" htmlFor="message">
+                  Message
+                </label>
+                <div className={`feedback-counter ${overLimit ? "is-over" : ""}`}>
+                  {wordCount}/{WORD_LIMIT} words
+                </div>
+              </div>
+
+              <textarea
+                id="message"
+                className="feedback-textarea"
+                placeholder="Tell me what you’d like to learn, improve, or fix in U-Stock."
+                rows={6}
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+              />
+
+              {underMin ? (
+                <p className="feedback-hint feedback-hint--warn">Add a bit more detail (min {MIN_WORDS} words).</p>
+              ) : null}
+              {overLimit ? (
+                <p className="feedback-hint feedback-hint--warn">
+                  Please shorten your message (max {WORD_LIMIT} words).
+                </p>
+              ) : null}
+            </div>
+
+            <p className="feedback-footer-hint">
+              Think of this as your suggestion box. I use these notes to decide what to build next.
+            </p>
+
+            {/* Captcha (prod only) */}
+            {captchaRequired ? (
+              <div className="feedback-captcha">
+                {SITE_KEY ? (
+                  <Turnstile
+                    sitekey={SITE_KEY}
+                    onVerify={(t) => setToken(t)}
+                    onExpire={() => setToken(null)}
+                    onError={() => setToken(null)}
                   />
-                </label>
-              </div>
-
-              {/* Name */}
-              <div className="feedback-field">
-                <label className="feedback-label" htmlFor="name">
-                  Name
-                </label>
-                <input
-                  id="name"
-                  type="text"
-                  className="feedback-input"
-                  placeholder="Your name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  autoComplete="name"
-                />
-              </div>
-
-              {/* Email */}
-              <div className="feedback-field">
-                <label className="feedback-label" htmlFor="email">
-                  Contact email
-                </label>
-                <input
-                  id="email"
-                  type="email"
-                  className="feedback-input"
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  autoComplete="email"
-                />
-                <p className="feedback-hint">I&apos;ll use this if I need to follow up about your feedback.</p>
-              </div>
-
-              {/* Type */}
-              <div className="feedback-field">
-                <label className="feedback-label" htmlFor="feedbackType">
-                  Feedback type
-                </label>
-                <select
-                  id="feedbackType"
-                  className="feedback-select"
-                  value={feedbackType}
-                  onChange={(e) => setFeedbackType(e.target.value)}
-                >
-                  <option value="feature">Feature idea</option>
-                  <option value="bug">Bug report</option>
-                  <option value="question">Question</option>
-                  <option value="other">Something else</option>
-                </select>
-              </div>
-
-              {/* Message */}
-              <div className="feedback-field">
-                <div className="feedback-message-row">
-                  <label className="feedback-label" htmlFor="message">
-                    Message
-                  </label>
-                  <div className={`feedback-counter ${overLimit ? "is-over" : ""}`}>
-                    {wordCount}/{WORD_LIMIT} words
-                  </div>
-                </div>
-
-                <textarea
-                  id="message"
-                  className="feedback-textarea"
-                  placeholder="Tell me what you’d like to learn, improve, or fix in U-Stock."
-                  rows={6}
-                  value={message}
-                  onChange={(e) => setMessage(e.target.value)}
-                />
-
-                {underMin ? (
-                  <p className="feedback-hint feedback-hint--warn">Add a bit more detail (min {MIN_WORDS} words).</p>
-                ) : null}
-                {overLimit ? (
+                ) : (
                   <p className="feedback-hint feedback-hint--warn">
-                    Please shorten your message (max {WORD_LIMIT} words).
+                    Captcha is required in production but <code>VITE_TURNSTILE_SITE_KEY</code> is missing.
                   </p>
-                ) : null}
+                )}
               </div>
+            ) : null}
 
-              <p className="feedback-footer-hint">
-                Think of this as your suggestion box. I use these notes to decide what to build next.
-              </p>
-
-              {/* Captcha (prod only) */}
-              {captchaRequired ? (
-                <div className="feedback-captcha">
-                  {SITE_KEY ? (
-                    <Turnstile
-                      sitekey={SITE_KEY}
-                      onVerify={(t) => setToken(t)}
-                      onExpire={() => setToken(null)}
-                      onError={() => setToken(null)}
-                    />
-                  ) : (
-                    <p className="feedback-hint feedback-hint--warn">
-                      Captcha is required in production but <code>VITE_TURNSTILE_SITE_KEY</code> is missing.
-                    </p>
-                  )}
-                </div>
-              ) : null}
-
-              {status ? (
-                <div
-                  className={`feedback-status ${
-                    status.toLowerCase().includes("sent") ? "feedback-status--ok" : "feedback-status--err"
-                  }`}
-                >
-                  {status}
-                </div>
-              ) : null}
-
-              <div className="feedback-actions">
-                <button type="submit" className="feedback-btn feedback-btn--primary" disabled={!canSubmit}>
-                  {submitting ? "Sending..." : "Send feedback"}
-                </button>
-
-                <button type="button" className="feedback-btn feedback-btn--ghost" onClick={resetForm} disabled={submitting}>
-                  Clear
-                </button>
+            {status ? (
+              <div
+                className={`feedback-status ${
+                  status.toLowerCase().includes("sent") ? "feedback-status--ok" : "feedback-status--err"
+                }`}
+              >
+                {status}
               </div>
-            </form>
-          </section>
-        </div>
+            ) : null}
+
+            <div className="feedback-actions">
+              <button type="submit" className="feedback-btn feedback-btn--primary" disabled={!canSubmit}>
+                {submitting ? "Sending..." : "Send feedback"}
+              </button>
+
+              <button
+                type="button"
+                className="feedback-btn feedback-btn--ghost"
+                onClick={resetForm}
+                disabled={submitting}
+              >
+                Clear
+              </button>
+            </div>
+          </form>
+        </PageHeaderCard>
       </div>
     </AppShell>
   );
