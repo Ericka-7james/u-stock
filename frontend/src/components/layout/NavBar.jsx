@@ -21,9 +21,9 @@ export default function NavBar({
   const isDashboard = location.pathname === "/";
   const isDatasources = location.pathname.startsWith("/data-sources");
   const isIndexFunds = location.pathname.startsWith("/index-funds");
+  const isConnectedApps = location.pathname.startsWith("/connected-apps");
   const isAbout = location.pathname.startsWith("/about");
   const isFeedback = location.pathname.startsWith("/feedback");
-  const isConnectedApps = location.pathname.startsWith("/connected-apps");
 
   // ✅ ESC closes nav (and dropdown)
   useEffect(() => {
@@ -41,13 +41,13 @@ export default function NavBar({
 
   const handleHamburgerClick = (event) => {
     event.stopPropagation();
-    setUserMenuOpen(false); // nice UX: don't stack menus
+    setUserMenuOpen(false); // don't stack menus
     setNavOpen((open) => !open);
   };
 
   const handleAvatarClick = (event) => {
     event.stopPropagation();
-    setNavOpen(false); // nice UX: don't stack menus
+    setNavOpen(false); // don't stack menus
     setUserMenuOpen((open) => !open);
   };
 
@@ -175,38 +175,43 @@ export default function NavBar({
         </div>
 
         <div className="topbar-right">
-          {/* dark mode toggle */}
+          {/* theme toggle */}
           <button
             type="button"
             className={`theme-toggle ${isDark ? "theme-toggle--on" : ""}`}
             onClick={onToggleTheme}
-            aria-label="Toggle dark mode"
+            aria-label="Toggle theme"
           >
+            <span className="theme-toggle-icon theme-toggle-icon--left" aria-hidden="true">
+              {isDark ? "☀" : ""}
+            </span>
+
             <span className="theme-toggle-thumb" />
-            <span className="theme-toggle-moon">☾</span>
+
+            <span className="theme-toggle-icon theme-toggle-icon--right" aria-hidden="true">
+              {!isDark ? "☾" : ""}
+            </span>
           </button>
 
-          <button
+          {/* ABOUT -> /about */}
+          <Link
             className="icon-btn"
-            type="button"
-            onClick={() => {
-              setUserMenuOpen(false);
-              alert("Coming soon");
-            }}
+            to="/about"
+            onClick={() => setUserMenuOpen(false)}
+            aria-label="About"
           >
-            <span className="icon-search" />
-          </button>
+            <span className="icon-info" />
+          </Link>
 
-          <button
+          {/* FEEDBACK -> /feedback */}
+          <Link
             className="icon-btn"
-            type="button"
-            onClick={() => {
-              setUserMenuOpen(false);
-              alert("Coming soon");
-            }}
+            to="/feedback"
+            onClick={() => setUserMenuOpen(false)}
+            aria-label="Feedback"
           >
-            <span className="icon-bell" />
-          </button>
+            <span className="icon-question" />
+          </Link>
 
           {user && (
             <div className="topbar-user">

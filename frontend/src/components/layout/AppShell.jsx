@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import "../../css/layout/AppShell.css";
 import NavBar from "./NavBar";
+import Footer from "../common/Footer";
 
 export default function AppShell({ children }) {
   const [navOpen, setNavOpen] = useState(false);
@@ -46,9 +47,7 @@ export default function AppShell({ children }) {
           <main className="app-page">{children}</main>
         </div>
 
-        <footer className="site-footer global-footer">
-          © 2025 U-Stock. All rights reserved.
-        </footer>
+        <Footer />
       </div>
     </div>
   );
