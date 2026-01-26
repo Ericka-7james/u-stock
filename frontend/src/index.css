@@ -1,31 +1,72 @@
-html, body {
-  /* keep light page background; remove hard white so your app can breathe */
-  background: #f4f6f8;
+/* =========================================================
+   BASE DOCUMENT
+========================================================= */
+
+html,
+body {
   margin: 0;
   padding: 0;
   height: 100%;
 }
 
+#root {
+  min-height: 100vh;
+}
+
+/* =========================================================
+   TOKENS
+   - Lucent tokens stay as your brand source
+   - U-Stock tokens are the app/landing single source for UI styling
+========================================================= */
+
 :root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   line-height: 1.5;
   font-weight: 400;
 
-  /* IMPORTANT: keep light as default so colors render consistently */
+  /* Default theme is light */
   color-scheme: light;
-  color: #1f2a33;
 
-  /* ---- Lucent-aligned brand tokens (subtle, used by landing/app CSS) ---- */
-  --lucent-green: #257662; /* logo green */
-  --lucent-blue:  #1f6fe0; /* logo-ish blue (slightly deeper than cyan) */
-  --lucent-cyan:  #30c0e0; /* secondary logo tone */
+  /* ---- Lucent-aligned brand tokens ---- */
+  --lucent-green: #257662;
+  --lucent-blue:  #1f6fe0;
+  --lucent-cyan:  #30c0e0;
   --lucent-bg:    #f4f6f8;
   --lucent-text:  #1f2a33;
   --lucent-muted: #5b6b7a;
 
-  /* Header/hero light shadow (requested) */
-  --lucent-hero-glow: 0 10px 24px rgba(255, 255, 255, 0.18),
-                      0 22px 60px rgba(16, 176, 128, 0.18);
+  --lucent-hero-glow:
+    0 10px 24px rgba(255, 255, 255, 0.18),
+    0 22px 60px rgba(16, 176, 128, 0.18);
+
+  /* ---- U-STOCK APP TOKENS (use these everywhere in app + landing) ---- */
+  --ustock-green-main: var(--lucent-green);
+  --ustock-blue-main:  var(--lucent-blue);
+
+  --ustock-bg-page: var(--lucent-bg);
+
+  --ustock-bg-card: rgba(255, 255, 255, 0.92);
+  --ustock-bg-card-solid: #ffffff;
+  --ustock-bg-card-soft: rgba(255, 255, 255, 0.70);
+  --ustock-border-card: rgba(32, 64, 80, 0.12);
+
+  --ustock-text-main: var(--lucent-text);
+  --ustock-text-strong: #0b1120;
+  --ustock-text-muted: var(--lucent-muted);
+
+  --ustock-gold: #fbbf24;
+  --ustock-gold-ink: #1f2a33;
+
+  --ustock-card-chip-bg: rgba(37, 118, 98, 0.10);
+
+  --ustock-radius-xl: 24px;
+  --ustock-radius-lg: 18px;
+
+  --ustock-shadow-lg:
+    0 18px 55px rgba(15, 23, 42, 0.10),
+    0 2px 8px rgba(15, 23, 42, 0.06);
+
+  --ustock-shadow-md: 0 12px 32px rgba(15, 23, 42, 0.08);
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -33,39 +74,29 @@ html, body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Keep link behavior basically the same, just slightly more "brand" */
+/* =========================================================
+   GLOBAL ELEMENTS
+========================================================= */
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  background: var(--ustock-bg-page);
+  color: var(--ustock-text-main);
+  display: block;
+}
+
+/* Links */
 a {
   font-weight: 500;
-  color: var(--lucent-blue);
+  color: var(--ustock-blue-main);
   text-decoration: inherit;
 }
 a:hover {
   color: var(--lucent-cyan);
 }
 
-/* IMPORTANT: remove Vite starter centering that breaks full-page layouts */
-body {
-  margin: 0;
-  display: block;
-  min-width: 320px;
-  min-height: 100vh;
-  color: var(--lucent-text);
-
-  /* soft neutral background */
-  background: var(--lucent-bg);
-}
-
-#root {
-  min-height: 100vh;
-}
-
-/* keep h1 default for non-landing screens; landing can override */
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
-}
-
-/* leave buttons mostly app-controlled, but remove forced dark fill */
+/* Buttons (keep neutral base; components style themselves) */
 button {
   border-radius: 8px;
   border: 1px solid transparent;
@@ -73,34 +104,167 @@ button {
   font-size: 1em;
   font-weight: 500;
   font-family: inherit;
-
-  /* was #1a1a1a; that fights your landing CTA styling */
   background-color: transparent;
-
   cursor: pointer;
   transition: border-color 0.25s, background-color 0.25s, transform 0.12s ease;
 }
-
 button:hover {
   border-color: rgba(16, 176, 128, 0.35);
   transform: translateY(-1px);
 }
-
 button:focus,
 button:focus-visible {
   outline: 4px auto -webkit-focus-ring-color;
 }
 
-/* If you want to keep light-mode overrides, keep them—but align to brand */
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #1f2a33;
-    background-color: var(--lucent-bg);
+/* =========================================================
+   APP SHELL LAYOUT (you had this already — keep it centralized)
+========================================================= */
+
+.app-shell {
+  min-height: 100vh;
+  background: var(--ustock-bg-page);
+  display: flex;
+  position: relative;
+  overflow-x: clip;
+  overflow-y: visible;
+}
+
+/* when navOpen = true, margin-left is added to content (desktop only) */
+.app-shell--nav-open .app-main {
+  margin-left: 260px;
+}
+
+.app-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  transition: margin-left 0.23s ease-out;
+
+  /* make room for fixed topbar */
+  padding-top: 64px;
+}
+
+.app-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-page {
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 24px 48px 48px;
+  box-sizing: border-box;
+}
+
+@media (max-width: 1024px) {
+  .app-page {
+    padding: 20px 24px 40px;
   }
-  a:hover {
-    color: var(--lucent-cyan);
+}
+
+@media (max-width: 768px) {
+  .app-page {
+    padding: 16px 24px 32px;
   }
-  button {
-    background-color: transparent;
+
+  .app-shell--nav-open .app-main {
+    margin-left: 0;
   }
+
+  .app-main {
+    padding-top: 60px;
+  }
+}
+
+@media (max-width: 480px) {
+  .app-page {
+    max-width: none;
+    width: 100vw;
+    margin: 0;
+    padding: 16px 16px 32px;
+    box-sizing: border-box;
+  }
+}
+
+/* Footer */
+.site-footer {
+  margin-top: auto;
+  text-align: center;
+  font-size: 12px;
+  color: var(--ustock-text-muted);
+  padding: 14px 0 0;
+  opacity: 0.9;
+}
+
+/* Utilities */
+.page-title {
+  color: var(--ustock-green-main);
+  font-weight: 800;
+  margin: 0;
+}
+.muted {
+  color: var(--ustock-text-muted);
+}
+
+/* Base card/panel */
+.panel {
+  background: var(--ustock-bg-card);
+  border-radius: var(--ustock-radius-lg);
+  padding: 18px 20px;
+  box-shadow: var(--ustock-shadow-md);
+  border: 1px solid var(--ustock-border-card);
+  color: var(--ustock-text-main);
+}
+
+.panel-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ustock-text-strong);
+  margin: 0;
+}
+.panel-subtitle {
+  font-size: 12px;
+  color: var(--ustock-text-muted);
+  margin: 0;
+}
+
+/* =========================================================
+   DARK MODE (single source of truth)
+   Toggle this by adding/removing "ustock-dark" on <body>
+========================================================= */
+
+body.ustock-dark {
+  color-scheme: dark;
+
+  --ustock-bg-page: #020617;
+  --ustock-bg-card: rgba(15, 23, 42, 0.65);
+  --ustock-bg-card-soft: rgba(15, 23, 42, 0.45);
+  --ustock-border-card: rgba(148, 163, 184, 0.22);
+
+  --ustock-text-main: rgba(248, 250, 252, 0.92);
+  --ustock-text-strong: rgba(248, 250, 252, 0.98);
+  --ustock-text-muted: rgba(248, 250, 252, 0.72);
+
+  --ustock-card-chip-bg: rgba(15, 118, 110, 0.25);
+}
+
+body.ustock-dark .app-shell {
+  background: var(--ustock-bg-page);
+}
+
+body.ustock-dark .app-main {
+  background: radial-gradient(
+    circle at top left,
+    #022c22 0%,
+    #020617 40%,
+    #020617 100%
+  );
+}
+
+body.ustock-dark .panel {
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.6);
 }

@@ -21,7 +21,7 @@ export default function AppShell({ children }) {
     window.localStorage.setItem("ustock-theme", dark ? "dark" : "light");
   }, [isDark]);
 
-  // 👇 global click handler – closes nav + user dropdown
+  // ✅ Close nav + dropdown when clicking outside
   const handleGlobalClick = () => {
     if (navOpen) setNavOpen(false);
     if (userMenuOpen) setUserMenuOpen(false);
@@ -41,7 +41,6 @@ export default function AppShell({ children }) {
         onToggleTheme={() => setIsDark((prev) => !prev)}
       />
 
-      {/* main content no longer needs its own onClick */}
       <div className="app-main">
         <div className="app-content">
           <main className="app-page">{children}</main>

@@ -6,7 +6,7 @@
 
 .landing-page {
   background: transparent;
-  color: var(--lucent-text);
+  color: var(--ustock-text-main);
   overflow: visible;
 }
 
@@ -24,13 +24,13 @@
   font-size: 24px;
   font-weight: 800;
   margin: 0 0 8px;
-  color: var(--lucent-green);
+  color: var(--ustock-green-main);
 }
 
 .landing-section-text {
   max-width: 720px;
   font-size: 14px;
-  color: var(--lucent-muted);
+  color: var(--ustock-text-muted); 
   margin: 0 0 24px;
 }
 
@@ -200,8 +200,8 @@
 ========================================================= */
 
 .landing-about-shell {
-  background: rgba(255, 255, 255, 0.92); /* match bigcard */
-  border: 1px solid rgba(32, 64, 80, 0.12); /* match bigcard */
+  background: var(--ustock-bg-card);
+  border: 1px solid var(--ustock-border-card);
   border-radius: 24px;
   padding: 30px 30px;
   box-shadow:
@@ -243,9 +243,9 @@
   display: flex;
   flex-direction: column;
 
-  background: rgba(255, 255, 255, 0.86);
-  border: 1px solid rgba(32, 64, 80, 0.12);
-  box-shadow: 0 16px 44px rgba(15, 23, 42, 0.08);
+  background: var(--ustock-bg-card);
+  border: 1px solid var(--ustock-border-card);
+  box-shadow: 0 16px 44px rgba(15, 23, 42, 0.12);
 
   position: relative;
   overflow: hidden;
@@ -286,7 +286,7 @@
 .landing-feature-card h3 {
   margin: 0 0 6px;
   font-size: 15px;
-  color: rgba(17, 24, 39, 0.92);
+  color: var(--ustock-text-main); 
   position: relative;
   z-index: 1;
 }
@@ -294,7 +294,7 @@
 .landing-feature-card p {
   margin: 0;
   font-size: 13px;
-  color: rgba(17, 24, 39, 0.72);
+  color: var(--ustock-text-muted); 
   line-height: 1.55;
   position: relative;
   z-index: 1;
@@ -322,8 +322,8 @@
   gap: 28px;
   align-items: center;
 
-  background: rgba(255, 255, 255, 0.92);
-  border: 1px solid rgba(32, 64, 80, 0.12);
+  background: var(--ustock-bg-card);
+  border: 1px solid var(--ustock-border-card);
   border-radius: 24px;
 
   padding: 34px 34px;
@@ -333,7 +333,7 @@
 }
 
 .landing-bigcard-eyebrow {
-  color: var(--lucent-green);
+  color: var(--ustock-green-main); 
   font-weight: 900;
   font-size: 22px;
   margin-bottom: 10px;
@@ -344,11 +344,11 @@
   font-size: 42px;
   line-height: 1.1;
   letter-spacing: -0.4px;
-  color: rgba(17, 24, 39, 0.88);
+  color: var(--ustock-text-main);
 }
 
 .landing-bigcard-titleAccent {
-  color: var(--lucent-green);
+  color: var(--ustock-green-main);
 }
 
 .landing-bigcard-subtitle {
@@ -356,7 +356,7 @@
   max-width: 560px;
   font-size: 15px;
   line-height: 1.65;
-  color: rgba(17, 24, 39, 0.72);
+  color: var(--ustock-text-muted); 
 }
 
 /* Roadmap list */
@@ -365,7 +365,7 @@
   padding: 0;
   margin: 0 0 18px;
   font-size: 13px;
-  color: var(--lucent-text);
+  color: var(--ustock-text-main); 
 }
 
 .landing-roadmap-list li + li {
@@ -373,7 +373,7 @@
 }
 
 .landing-roadmap-list--card strong {
-  color: rgba(17, 24, 39, 0.92);
+  color: var(--ustock-text-strong);
 }
 
 /* CTAs */
@@ -388,7 +388,7 @@
   border: none;
   border-radius: 10px;
   padding: 12px 18px;
-  background: var(--lucent-green);
+  background: var(--ustock-green-main);
   color: #ffffff;
   font-size: 16px;
   font-weight: 800;
@@ -416,9 +416,9 @@
   width: 100%;
   border-radius: 18px;
   overflow: hidden;
-  border: 1px solid rgba(32, 64, 80, 0.10);
+  border: 1px solid var(--ustock-border-card);
   box-shadow: 0 16px 44px rgba(15, 23, 42, 0.10);
-  background: #ffffff;
+  background: var(--ustock-bg-card);
 }
 
 .landing-bigcard-img {

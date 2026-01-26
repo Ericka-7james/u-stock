@@ -1,7 +1,11 @@
 // src/components/layout/NavBar.jsx
+import { useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import "../../css/layout/NavBar.css";
+
+import dapperSquirrel from "../../assets/images/DapperSquirrel.png";
+import navBarLogo from "../../assets/images/NavBarLogo.png";
 
 export default function NavBar({
   navOpen,
@@ -20,17 +24,30 @@ export default function NavBar({
   const isAbout = location.pathname.startsWith("/about");
   const isFeedback = location.pathname.startsWith("/feedback");
   const isConnectedApps = location.pathname.startsWith("/connected-apps");
-  // Candles intentionally removed (page paused)
+
+  // ✅ ESC closes nav (and dropdown)
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") {
+        setNavOpen(false);
+        setUserMenuOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [setNavOpen, setUserMenuOpen]);
 
   const closeNav = () => setNavOpen(false);
 
   const handleHamburgerClick = (event) => {
     event.stopPropagation();
+    setUserMenuOpen(false); // nice UX: don't stack menus
     setNavOpen((open) => !open);
   };
 
   const handleAvatarClick = (event) => {
     event.stopPropagation();
+    setNavOpen(false); // nice UX: don't stack menus
     setUserMenuOpen((open) => !open);
   };
 
@@ -42,12 +59,22 @@ export default function NavBar({
 
   return (
     <>
+      {/* ✅ Mobile overlay: click to close */}
+      {navOpen && <div className="nav-overlay" onClick={() => setNavOpen(false)} />}
+
       {/* Side nav */}
-      <aside className="side-nav">
+      <aside className="side-nav" onClick={(e) => e.stopPropagation()}>
         <div className="side-nav-brand">
-          <div className="side-nav-logo-circle">U</div>
+          <div className="side-nav-logo">
+            <img
+              src={dapperSquirrel}
+              alt="Lucent squirrel"
+              className="side-nav-logo-img"
+              draggable="false"
+            />
+          </div>
+
           <div className="side-nav-brand-text">
-            {/* ✅ New branding */}
             <span className="side-nav-name">Lucent Financial</span>
             <span className="side-nav-tagline">Financial Intelligence</span>
           </div>
@@ -59,7 +86,7 @@ export default function NavBar({
             className={"side-nav-item " + (isDashboard ? "side-nav-item--active" : "")}
             onClick={closeNav}
           >
-            <span className="side-nav-item-dot" />
+            <span className="side-nav-item-icon side-nav-item-icon--dashboard" aria-hidden="true" />
             Dashboard
           </Link>
 
@@ -68,7 +95,7 @@ export default function NavBar({
             className={"side-nav-item " + (isDatasources ? "side-nav-item--active" : "")}
             onClick={closeNav}
           >
-            <span className="side-nav-item-dot" />
+            <span className="side-nav-item-icon side-nav-item-icon--market" aria-hidden="true" />
             Market & Logs
           </Link>
 
@@ -77,7 +104,7 @@ export default function NavBar({
             className={"side-nav-item " + (isIndexFunds ? "side-nav-item--active" : "")}
             onClick={closeNav}
           >
-            <span className="side-nav-item-dot" />
+            <span className="side-nav-item-icon side-nav-item-icon--baseline" aria-hidden="true" />
             Market Baselines
           </Link>
 
@@ -86,7 +113,7 @@ export default function NavBar({
             className={"side-nav-item " + (isConnectedApps ? "side-nav-item--active" : "")}
             onClick={closeNav}
           >
-            <span className="side-nav-item-dot" />
+            <span className="side-nav-item-icon side-nav-item-icon--broker" aria-hidden="true" />
             Connected Brokers
           </Link>
 
@@ -95,7 +122,7 @@ export default function NavBar({
             className={"side-nav-item " + (isAbout ? "side-nav-item--active" : "")}
             onClick={closeNav}
           >
-            <span className="side-nav-item-dot" />
+            <span className="side-nav-item-icon side-nav-item-icon--about" aria-hidden="true" />
             About
           </Link>
 
@@ -104,14 +131,14 @@ export default function NavBar({
             className={"side-nav-item " + (isFeedback ? "side-nav-item--active" : "")}
             onClick={closeNav}
           >
-            <span className="side-nav-item-dot" />
+            <span className="side-nav-item-icon side-nav-item-icon--feedback" aria-hidden="true" />
             Feedback
           </Link>
 
           {/* Sign Out */}
           {user && (
             <button type="button" className="side-nav-item side-nav-signout" onClick={handleLogout}>
-              <span className="side-nav-item-dot" />
+              <span className="side-nav-item-icon side-nav-item-icon--logout" aria-hidden="true" />
               Sign out
             </button>
           )}
@@ -124,7 +151,7 @@ export default function NavBar({
       </aside>
 
       {/* Top bar */}
-      <header className="topbar">
+      <header className="topbar" onClick={(e) => e.stopPropagation()}>
         <div className="topbar-left">
           <button
             className="hamburger-btn"
@@ -136,7 +163,14 @@ export default function NavBar({
           </button>
 
           <Link to="/" className="topbar-home-link" onClick={closeNav}>
-            <span className="topbar-home-label">Home</span>
+            <img
+              src={navBarLogo}
+              alt=""
+              className="topbar-squirrel"
+              aria-hidden="true"
+              draggable="false"
+            />
+            <span className="topbar-home-label">U-Stock</span>
           </Link>
         </div>
 
@@ -186,7 +220,7 @@ export default function NavBar({
               </button>
 
               {userMenuOpen && (
-                <div className="topbar-user-menu">
+                <div className="topbar-user-menu" onClick={(e) => e.stopPropagation()}>
                   <div className="topbar-user-menu-item topbar-user-menu-meta">
                     <div className="topbar-user-menu-email">{user.email}</div>
                   </div>
