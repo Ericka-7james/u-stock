@@ -4,7 +4,7 @@ from __future__ import annotations
 import os
 import time
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Tuple, Optional
+from typing import Any, Dict, List, Tuple
 
 import requests
 from fastapi import APIRouter, HTTPException, Query, Request, Response
@@ -12,9 +12,11 @@ from fastapi import APIRouter, HTTPException, Query, Request, Response
 from api.core.security import require_user, decrypt_secret, get_supabase_service
 
 try:
-    from zoneinfo import ZoneInfo
+    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 except Exception:
     ZoneInfo = None  # type: ignore
+    ZoneInfoNotFoundError = Exception  # type: ignore
+
 
 router = APIRouter(prefix="/api/market", tags=["market"])
 
@@ -28,7 +30,9 @@ _CACHE_VERSION = "v1-market_us-leaders-userkey"
 
 _SESSION = requests.Session()
 
-
+# --------------------------------------------------------------------
+# small helpers
+# --------------------------------------------------------------------
 def _now_epoch() -> int:
     return int(time.time())
 
@@ -173,13 +177,27 @@ def _unwrap_payload(payload: Any) -> Dict[str, Any]:
 
 
 # --------------------------------------------------------------------
-# ✅ NEW: market session endpoint used by bots + UI
+# ✅ market session endpoint used by bots + UI
 # --------------------------------------------------------------------
+# IMPORTANT:
+# - This endpoint must be FAST and must NOT touch Supabase/Alpaca/etc.
+# - If zoneinfo isn't available, fallback should still behave like ET
+#   (not UTC pretending to be ET).
+_ET_FALLBACK = timezone(timedelta(hours=-5))  # EST-style fallback
+
+
 def _et_now() -> datetime:
     if ZoneInfo is not None:
-        return datetime.now(ZoneInfo("America/New_York"))
-    # fallback (should be rare)
-    return datetime.now(timezone.utc)
+        try:
+            return datetime.now(ZoneInfo("America/New_York"))
+        except ZoneInfoNotFoundError:
+            # Windows / slim env may not have tz database available
+            pass
+        except Exception:
+            # never let timezone resolution break the endpoint
+            pass
+    # fallback: approximate ET instead of UTC
+    return datetime.now(_ET_FALLBACK)
 
 
 def _next_weekday(d: datetime) -> datetime:
@@ -192,7 +210,7 @@ def _next_weekday(d: datetime) -> datetime:
 
 def _session_dict() -> Dict[str, Any]:
     """
-    Minimal, scalable session logic:
+    Minimal session logic:
     - Stocks open Mon-Fri
     - Regular session 9:30am–4:00pm ET
     - (Holidays/half-days can be added later via a calendar provider)
@@ -251,9 +269,19 @@ def _session_dict() -> Dict[str, Any]:
 
 @router.get("/us/session")
 def market_us_session():
-    return _session_dict()
+    # ultra-defensive: this endpoint should never hang
+    try:
+        return _session_dict()
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "MARKET_SESSION_FAILED", "message": "Server error", "error": repr(e)},
+        )
 
 
+# --------------------------------------------------------------------
+# market leaders (unchanged behavior)
+# --------------------------------------------------------------------
 @router.get("/leaders")
 def market_leaders(
     request: Request,

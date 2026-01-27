@@ -1,10 +1,15 @@
-# api/routes/calendar.py
+# backend/api/routes/calendar.py
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from zoneinfo import ZoneInfo
+
+try:
+    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+except Exception:  # pragma: no cover
+    ZoneInfo = None  # type: ignore
+    ZoneInfoNotFoundError = Exception  # type: ignore
 
 from fastapi import APIRouter, HTTPException
 
@@ -21,13 +26,28 @@ router = APIRouter(prefix="/api/calendar", tags=["calendar"])
 _NO_TRADE_JSON_PATH = Path(__file__).resolve().parents[1] / "data" / "no_trade_events.json"
 
 
+def _safe_tz(name: str):
+    """
+    Return a tzinfo. Prefer IANA zoneinfo; fall back to UTC if unavailable.
+    This prevents Windows envs (missing tz database) from crashing endpoints.
+    """
+    if ZoneInfo is not None:
+        try:
+            return ZoneInfo(name)
+        except ZoneInfoNotFoundError:
+            pass
+        except Exception:
+            pass
+    return timezone.utc
+
+
 @router.get("/no-trade-windows")
 def no_trade_windows():
     try:
         with _NO_TRADE_JSON_PATH.open("r", encoding="utf-8") as f:
             cfg = json.load(f)
 
-        tz = ZoneInfo(cfg.get("timezone", "America/New_York"))
+        tz = _safe_tz(str(cfg.get("timezone", "America/New_York")))
         windows = []
 
         for e in cfg.get("events", []):
@@ -43,6 +63,7 @@ def no_trade_windows():
             )
 
         return {"ok": True, "source": "local_json", "windows": windows}
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"calendar_failed: {repr(e)}")
 
@@ -56,7 +77,7 @@ def no_trade_windows_fmp(from_date: str, to_date: str, buffer_min: int = 30):
         if fmp_economic_calendar is None:
             raise RuntimeError("fmp_economic_calendar is not configured/importable")
 
-        raw = fmp_economic_calendar(from_date, to_date)["data"]
+        raw = fmp_economic_calendar(from_date, to_date).get("data") or []
         windows = []
 
         for e in raw:
@@ -68,7 +89,7 @@ def no_trade_windows_fmp(from_date: str, to_date: str, buffer_min: int = 30):
             # Normalize common formats:
             # - "YYYY-MM-DD HH:MM:SS"
             # - ISO with "Z"
-            dt = datetime.fromisoformat(dt_str.replace("Z", "").replace(" ", "T"))
+            dt = datetime.fromisoformat(str(dt_str).replace("Z", "").replace(" ", "T"))
 
             windows.append(
                 {
@@ -81,5 +102,6 @@ def no_trade_windows_fmp(from_date: str, to_date: str, buffer_min: int = 30):
             )
 
         return {"ok": True, "source": "fmp", "windows": windows}
+
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"calendar_fmp_failed: {repr(e)}")
