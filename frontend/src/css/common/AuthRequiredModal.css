@@ -1,0 +1,108 @@
+/* src/css/common/AuthRequiredModal.css */
+
+.auth-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  background: rgba(2, 6, 23, 0.55);
+  backdrop-filter: blur(2px);
+  display: grid;
+  place-items: center;
+  padding: 18px;
+}
+
+.auth-modal-card {
+  width: min(420px, 92vw);
+  border-radius: 18px;
+  background: var(--ustock-bg-card);
+  border: 1px solid var(--ustock-border-card);
+  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+  position: relative;
+}
+
+.auth-modal-x {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: none;
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 20px;
+  cursor: pointer;
+}
+
+.auth-modal-head {
+  height: 150px;
+  background: linear-gradient(180deg, rgba(15, 118, 110, 0.35) 0%, rgba(2, 6, 23, 0.08) 100%);
+  display: grid;
+  place-items: center;
+}
+
+.auth-modal-img {
+  width: 96px;
+  height: 96px;
+  object-fit: contain;
+  filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.25));
+  user-select: none;
+}
+
+.auth-modal-body {
+  padding: 18px 18px 10px;
+  text-align: center;
+}
+
+.auth-modal-title {
+  font-weight: 900;
+  font-size: 18px;
+  color: var(--ustock-text-main);
+}
+
+.auth-modal-msg {
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ustock-text-muted);
+}
+
+.auth-modal-actions {
+  padding: 12px 18px 18px;
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.auth-modal-btn {
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.auth-modal-btn--primary {
+  background: var(--ustock-green-main);
+  color: #ffffff;
+  box-shadow: 0 12px 26px rgba(42, 137, 114, 0.25);
+}
+
+.auth-modal-btn--ghost {
+  background: rgba(42, 137, 114, 0.10);
+  border: 1px solid rgba(42, 137, 114, 0.28);
+  color: rgba(42, 137, 114, 0.98);
+}
+
+/* Dark mode polish */
+body.ustock-dark .auth-modal-head {
+  background: linear-gradient(180deg, rgba(2, 44, 34, 0.55) 0%, rgba(2, 6, 23, 0.25) 100%);
+}
+
+body.ustock-dark .auth-modal-x {
+  background: rgba(148, 163, 184, 0.16);
+  color: rgba(248, 250, 252, 0.92);
+}

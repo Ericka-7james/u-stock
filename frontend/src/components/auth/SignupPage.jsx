@@ -33,33 +33,21 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false);
 
   const avatars = ["📈", "📊", "🤖", "💡"];
-
   const emailRegex = useMemo(() => /^[^\s@]+@[^\s@]+\.[^\s@]+$/, []);
 
   const validate = () => {
-    const nextErrors = {
-      name: "",
-      email: "",
-      phone: "",
-      password: "",
-      backend: "",
-    };
+    const nextErrors = { name: "", email: "", phone: "", password: "", backend: "" };
 
     const trimmedName = name.trim();
     const trimmedEmail = email.trim();
     const trimmedPhone = phone.trim();
 
-    // --- Name (username): required ---
-    if (!trimmedName) {
-      nextErrors.name = "Please enter your name.";
-    }
+    if (!trimmedName) nextErrors.name = "Please enter your name.";
 
-    // --- Email: required + basic pattern ---
     if (!trimmedEmail || !emailRegex.test(trimmedEmail)) {
       nextErrors.email = "Please enter a valid email address.";
     }
 
-    // --- Phone: OPTIONAL (if provided, validate digits length) ---
     if (trimmedPhone) {
       const phoneDigits = trimmedPhone.replace(/\D/g, "");
       if (phoneDigits.length < 10 || phoneDigits.length > 15) {
@@ -67,10 +55,7 @@ export default function SignupPage() {
       }
     }
 
-    // --- Password: must match backend rules ---
-    const emailLocal = trimmedEmail.includes("@")
-      ? trimmedEmail.split("@")[0].toLowerCase()
-      : "";
+    const emailLocal = trimmedEmail.includes("@") ? trimmedEmail.split("@")[0].toLowerCase() : "";
 
     if (!password || password.length < 12) {
       nextErrors.password = "Password must be at least 12 characters long.";
@@ -107,7 +92,6 @@ export default function SignupPage() {
 
     setLoading(true);
     try {
-      // IMPORTANT: backend expects `username`, not `name`
       await signup({
         username: name.trim(),
         email: email.trim(),
@@ -115,7 +99,6 @@ export default function SignupPage() {
         avatar,
       });
 
-      // v1 UX: go back to sign-in page after successful signup
       navigate("/auth");
     } catch (err) {
       setErrors((prev) => ({ ...prev, backend: getErrorMessage(err) }));
@@ -127,63 +110,72 @@ export default function SignupPage() {
   return (
     <AppShell>
       <div className="app-page signup-page">
-        <div className="signup-card">
-          <h1 className="signup-title">Create your account</h1>
-          <p className="signup-subtitle">
-            Tell us a bit about yourself — pick an icon and get started!
-          </p>
+        <div className="signup-auth-card">
+          <div className="signup-auth-header">
+            <h1 className="signup-auth-title">Create account</h1>
+            <p className="signup-auth-subtitle">Sign up to start using U-Stock.</p>
+          </div>
 
-          {/* backend errors */}
           {errors.backend && (
-            <p className="form-error" role="alert" aria-live="polite">
+            <div className="signup-banner-error" role="alert" aria-live="polite">
               {errors.backend}
-            </p>
+            </div>
           )}
 
-          <form className="signup-form" onSubmit={handleSubmit} noValidate>
-            {/* Name */}
-            <label className="signup-field" htmlFor="signup-name">
-              <span>Name</span>
+          <form className="signup-auth-form" onSubmit={handleSubmit} noValidate>
+            {/* Name / Username */}
+            <label className="signup-auth-field" htmlFor="signup-name">
+              <span className="signup-auth-icon" aria-hidden="true">
+                👤
+              </span>
               <input
                 id="signup-name"
                 name="name"
                 type="text"
+                placeholder="Enter your username"
                 required
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                autoComplete="name"
+                autoComplete="username"
                 disabled={loading}
+                aria-label="Name"
               />
-              {errors.name && (
-                <p className="signup-error" role="alert" aria-live="polite">
-                  {errors.name}
-                </p>
-              )}
             </label>
+            {errors.name && (
+              <p className="signup-error" role="alert">
+                {errors.name}
+              </p>
+            )}
 
             {/* Email */}
-            <label className="signup-field" htmlFor="signup-email">
-              <span>Email</span>
+            <label className="signup-auth-field" htmlFor="signup-email">
+              <span className="signup-auth-icon" aria-hidden="true">
+                ✉️
+              </span>
               <input
                 id="signup-email"
                 name="email"
                 type="email"
+                placeholder="Enter your email"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 autoComplete="email"
                 disabled={loading}
+                aria-label="Email"
               />
-              {errors.email && (
-                <p className="signup-error" role="alert" aria-live="polite">
-                  {errors.email}
-                </p>
-              )}
             </label>
+            {errors.email && (
+              <p className="signup-error" role="alert">
+                {errors.email}
+              </p>
+            )}
 
             {/* Phone (optional) */}
-            <label className="signup-field" htmlFor="signup-phone">
-              <span>Phone number (optional)</span>
+            <label className="signup-auth-field" htmlFor="signup-phone">
+              <span className="signup-auth-icon" aria-hidden="true">
+                📞
+              </span>
               <input
                 id="signup-phone"
                 name="phone"
@@ -193,49 +185,52 @@ export default function SignupPage() {
                 onChange={(e) => setPhone(e.target.value)}
                 autoComplete="tel"
                 disabled={loading}
+                aria-label="Phone"
               />
-              {errors.phone && (
-                <p className="signup-error" role="alert" aria-live="polite">
-                  {errors.phone}
-                </p>
-              )}
             </label>
+            {errors.phone && (
+              <p className="signup-error" role="alert">
+                {errors.phone}
+              </p>
+            )}
 
             {/* Password */}
-            <label className="signup-field" htmlFor="signup-password">
-              <span>Password</span>
+            <label className="signup-auth-field" htmlFor="signup-password">
+              <span className="signup-auth-icon" aria-hidden="true">
+                🔒
+              </span>
               <input
                 id="signup-password"
                 name="password"
                 type="password"
+                placeholder="Create password"
                 autoComplete="new-password"
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={loading}
+                aria-label="Password"
               />
-              {errors.password && (
-                <p className="signup-error" role="alert" aria-live="polite">
-                  {errors.password}
-                </p>
-              )}
             </label>
+            {errors.password && (
+              <p className="signup-error" role="alert">
+                {errors.password}
+              </p>
+            )}
 
-            {/* Avatar selection */}
-            <div className="signup-avatar-section">
-              <span>Choose your icon</span>
-              <div className="signup-avatar-grid">
+            {/* Avatar row (compact) */}
+            <div className="signup-avatar-strip">
+              <span className="signup-avatar-strip-label">Avatar</span>
+              <div className="signup-avatar-strip-grid" role="group" aria-label="Choose your avatar">
                 {avatars.map((icon) => (
                   <button
                     key={icon}
                     type="button"
-                    className={
-                      "signup-avatar-chip" +
-                      (avatar === icon ? " signup-avatar-chip--active" : "")
-                    }
+                    className={"signup-avatar-pill" + (avatar === icon ? " signup-avatar-pill--active" : "")}
                     onClick={() => setAvatar(icon)}
                     aria-pressed={avatar === icon}
                     disabled={loading}
+                    title={`Choose ${icon}`}
                   >
                     {icon}
                   </button>
@@ -243,13 +238,28 @@ export default function SignupPage() {
               </div>
             </div>
 
-            {/* Submit */}
-            <button type="submit" className="signup-btn" disabled={loading}>
-              {loading ? "Creating account…" : "Sign Up"}
+            <button type="submit" className="signup-auth-btn" disabled={loading}>
+              {loading ? "Creating account…" : "Sign up"}
             </button>
 
-            <div className="signup-alt">
-              Already registered? <Link to="/auth">Sign in here →</Link>
+            {/* Divider + social row (visual only) */}
+            <div className="signup-divider">
+              <span>or sign up with</span>
+            </div>
+
+            <div className="signup-social">
+              <button type="button" className="signup-social-btn" disabled>
+                <span aria-hidden="true">G</span>
+                Google
+              </button>
+              <button type="button" className="signup-social-btn" disabled>
+                <span aria-hidden="true">f</span>
+                Facebook
+              </button>
+            </div>
+
+            <div className="signup-footer">
+              Already have an account? <Link to="/auth">Sign in</Link>
             </div>
           </form>
         </div>

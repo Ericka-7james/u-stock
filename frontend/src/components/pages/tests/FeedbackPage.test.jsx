@@ -1,6 +1,6 @@
 // frontend/src/components/pages/tests/FeedbackPage.test.jsx
 import React from "react";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
@@ -9,7 +9,7 @@ vi.mock("react-turnstile", () => ({
   default: () => null,
 }));
 
-// Mock AuthContext
+// Mock AuthContext (Feedback is public)
 vi.mock("../../../context/AuthContext", () => ({
   useAuth: () => ({
     user: null,
@@ -21,11 +21,18 @@ vi.mock("../../../context/AuthContext", () => ({
   }),
 }));
 
+// 🔑 Force DEV mode so captcha is not required
+vi.stubEnv("DEV", "true");
+
 import FeedbackPage from "../FeedbackPage";
 
 describe("FeedbackPage", () => {
   beforeEach(() => {
     global.fetch = vi.fn();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   function renderPage() {
@@ -44,7 +51,6 @@ describe("FeedbackPage", () => {
     expect(screen.getByLabelText(/contact email/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/feedback type/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/^message$/i)).toBeInTheDocument();
-
     expect(screen.getByRole("button", { name: /send feedback/i })).toBeInTheDocument();
   });
 
@@ -126,11 +132,11 @@ describe("FeedbackPage", () => {
     });
 
     fireEvent.change(screen.getByLabelText(/^message$/i), {
-      target: { value: "Feature idea: alerts now" },
+      target: { value: "Feature idea alerts now" },
     });
 
     expect(screen.getByLabelText(/^name$/i)).toHaveValue("Ericka");
     expect(screen.getByLabelText(/contact email/i)).toHaveValue("test@example.com");
-    expect(screen.getByLabelText(/^message$/i)).toHaveValue("Feature idea: alerts now");
+    expect(screen.getByLabelText(/^message$/i)).toHaveValue("Feature idea alerts now");
   });
 });

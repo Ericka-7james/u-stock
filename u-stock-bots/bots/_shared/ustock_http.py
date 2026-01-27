@@ -164,6 +164,14 @@ class UStockAPI:
             headers["X-Runner-User-Id"] = self.runner_user_id
         return headers
 
+    def _normalize_path(path: str) -> str:
+        p = "/" + str(path or "").lstrip("/")
+        # If it's already /api/..., leave it.
+        if p.startswith("/api/"):
+            return p
+        # Otherwise prefix with /api
+        return "/api" + p
+
     def _sleep_backoff(self, attempt: int) -> None:
         """
         Extra backoff for exceptions that urllib3 doesn't always retry well
@@ -186,7 +194,9 @@ class UStockAPI:
     ) -> Any:
         self.cb.allow()
 
-        url = urljoin(self.base_url, path.lstrip("/"))
+        norm = _normalize_path(path)
+        url = urljoin(self.base_url, norm.lstrip("/"))
+
         h = self._default_headers()
         if headers:
             h.update(headers)

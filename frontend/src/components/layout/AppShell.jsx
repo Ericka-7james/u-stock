@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import "../../css/layout/AppShell.css";
 import NavBar from "./NavBar";
+import Footer from "../common/Footer";
 
 export default function AppShell({ children }) {
   const [navOpen, setNavOpen] = useState(false);
@@ -21,7 +22,7 @@ export default function AppShell({ children }) {
     window.localStorage.setItem("ustock-theme", dark ? "dark" : "light");
   }, [isDark]);
 
-  // 👇 global click handler – closes nav + user dropdown
+  // ✅ Close nav + dropdown when clicking outside
   const handleGlobalClick = () => {
     if (navOpen) setNavOpen(false);
     if (userMenuOpen) setUserMenuOpen(false);
@@ -41,15 +42,12 @@ export default function AppShell({ children }) {
         onToggleTheme={() => setIsDark((prev) => !prev)}
       />
 
-      {/* main content no longer needs its own onClick */}
       <div className="app-main">
         <div className="app-content">
           <main className="app-page">{children}</main>
         </div>
 
-        <footer className="site-footer global-footer">
-          © 2025 U-Stock. All rights reserved.
-        </footer>
+        <Footer />
       </div>
     </div>
   );

@@ -1,45 +1,67 @@
-/* ========= FEEDBACK PAGE LAYOUT ==================================== */
+/* ========= FEEDBACK PAGE (match SignupPage sizing + centered lane) ========= */
 
-/* Single card modeled after .data-summary-card */
-.feedback-card {
+.feedback-page {
+  width: 100%;
+  min-height: calc(100vh - 64px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 32px 24px;
+}
+
+.feedback-lane {
+  width: 100%;
+  max-width: 1100px; /* like landing-section-inner / signup-lane vibe */
+  margin: 0 auto;
+  display: flex;
+  justify-content: center;
+}
+
+/* Card (signup-sized) */
+.feedback-auth-card {
+  width: 100%;
+  max-width: 520px;          /* a lil wider than signup (feels “ice”) */
+  min-height: 620px;         /* taller like you want */
   background: var(--ustock-bg-card);
-  border-radius: 18px;
-  padding: 18px 20px;
-  margin-bottom: 20px;
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
   border: 1px solid var(--ustock-border-card);
+  border-radius: 18px;
+  padding: 28px 28px 26px;
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.12);
+
+  /* ✅ keep your green banner */
   border-top: 4px solid var(--ustock-green-main);
-  color: var(--ustock-text-main);
 }
 
-/* ========= HEADER =================================================== */
-
-.feedback-header {
-  margin-bottom: 8px;
+/* Header */
+.feedback-auth-header {
+  text-align: center;
+  margin-bottom: 12px;
 }
 
-.feedback-title {
-  font-size: 20px;
-  font-weight: 600;
+.feedback-auth-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 900;
   color: var(--ustock-green-main);
-  margin-bottom: 6px;
 }
 
-.feedback-subtitle {
-  font-size: 14px;
-  color: var(--ustock-text-muted);
-  margin-bottom: 16px;
-  max-width: 560px;
+.feedback-auth-subtitle {
+  margin: 8px auto 0;
+  font-size: 12.5px;
+  color: var(--ustock-text-main);
+  opacity: 0.85;
+  max-width: 520px;
+  line-height: 1.5;
 }
 
-/* ========= FORM FIELDS ============================================= */
-
-.feedback-form {
+/* Form */
+.feedback-auth-form {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 14px;
 }
 
+/* Field blocks */
 .feedback-field {
   display: flex;
   flex-direction: column;
@@ -47,12 +69,12 @@
 }
 
 .feedback-label {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--ustock-text-main);
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--ustock-text-strong);
 }
 
-/* Inputs follow theme tokens so dark mode works */
+/* Inputs */
 .feedback-input,
 .feedback-select,
 .feedback-textarea {
@@ -61,11 +83,8 @@
   border: 1px solid var(--ustock-border-card);
   border-radius: 10px;
   padding: 10px 12px;
-  font-size: 14px;
-  transition:
-    border-color 0.15s ease,
-    box-shadow 0.15s ease,
-    background-color 0.15s ease;
+  font-size: 13px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
 }
 
 .feedback-input::placeholder,
@@ -73,57 +92,84 @@
   color: var(--ustock-text-muted);
 }
 
-/* Focus state using your green */
 .feedback-input:focus,
 .feedback-select:focus,
 .feedback-textarea:focus {
   outline: none;
-  border-color: var(--ustock-green-main);
-  box-shadow: 0 0 0 1px rgba(15, 118, 110, 0.18);
+  border-color: rgba(15, 118, 110, 0.65);
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.18);
   background: var(--ustock-bg-card);
 }
 
 .feedback-textarea {
   resize: vertical;
-  min-height: 140px;
+  min-height: 150px;
 }
 
-/* Hint text */
+/* Small helper text */
 .feedback-hint,
 .feedback-footer-hint {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--ustock-text-muted);
+  line-height: 1.45;
 }
 
-/* ========= BUTTONS ================================================= */
-
-.feedback-actions {
+.feedback-hint--warn {
   margin-top: 4px;
+  font-size: 12px;
+  opacity: 0.95;
+}
+
+/* Word counter row */
+.feedback-message-row {
   display: flex;
-  gap: 14px;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.feedback-counter {
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+.feedback-counter.is-over {
+  opacity: 1;
+  font-weight: 800;
+}
+
+/* Buttons */
+.feedback-actions {
+  margin-top: 6px;
+  display: flex;
+  gap: 12px;
   flex-wrap: wrap;
 }
 
 .feedback-btn {
-  border-radius: 999px;
-  padding: 9px 20px;
-  font-size: 14px;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 900;
   cursor: pointer;
   border: 1px solid transparent;
-  transition: 0.15s ease;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+  flex: 1;
+  min-width: 140px;
 }
 
-/* Green primary button */
 .feedback-btn--primary {
+  border: 1px solid rgba(15, 118, 110, 0.45);
   background: var(--ustock-green-main);
   color: #ffffff;
+  box-shadow: 0 12px 26px rgba(15, 118, 110, 0.22);
 }
 
 .feedback-btn--primary:hover {
-  background: #0d5f58;
+  transform: translateY(-1px);
+  box-shadow: 0 16px 32px rgba(15, 118, 110, 0.28);
 }
 
-/* Ghost button */
 .feedback-btn--ghost {
   background: transparent;
   color: var(--ustock-text-main);
@@ -131,40 +177,32 @@
 }
 
 .feedback-btn--ghost:hover {
+  transform: translateY(-1px);
   background: rgba(148, 163, 184, 0.08);
 }
 
-/* ========= MOBILE ================================================== */
-
-@media (max-width: 768px) {
-  .feedback-card {
-    padding: 18px 18px 22px;
-    margin-bottom: 20px;
-  }
+.feedback-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
-/* ---- Anti-bot honeypot ---- */
-.feedback-honeypot {
-  position: absolute;
-  left: -9999px;
-  height: 0;
-  overflow: hidden;
-}
-
-/* ---- Turnstile wrapper so it aligns nicely ---- */
+/* Captcha centered like signup vibe */
 .feedback-captcha {
-  margin-top: 12px;
   display: flex;
-  justify-content: flex-start;
+  justify-content: center;
+  align-items: center;
+  margin-top: 6px;
 }
 
-/* ---- Status message ---- */
+/* Status */
 .feedback-status {
-  margin-top: 12px;
+  margin-top: 4px;
   padding: 10px 12px;
   border-radius: 12px;
-  font-size: 0.95rem;
-  line-height: 1.3;
+  font-size: 12.5px;
+  line-height: 1.35;
 }
 
 .feedback-status--ok {
@@ -177,40 +215,23 @@
   background: rgba(231, 76, 60, 0.12);
 }
 
-/* Make disabled button feel intentional */
-.feedback-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+/* Honeypot */
+.feedback-honeypot {
+  position: absolute;
+  left: -9999px;
+  height: 0;
+  overflow: hidden;
 }
 
-.feedback-message-row {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
+/* Mobile */
+@media (max-width: 768px) {
+  .feedback-page {
+    padding: 20px 16px;
+    align-items: flex-start; /* avoids cramped vertical center on short screens */
+  }
+
+  .feedback-auth-card {
+    max-width: 520px;
+    min-height: auto;
+  }
 }
-
-.feedback-counter {
-  font-size: 0.85rem;
-  opacity: 0.8;
-}
-
-.feedback-counter.is-over {
-  opacity: 1;
-  font-weight: 600;
-}
-
-.feedback-hint--warn {
-  margin-top: 6px;
-  font-size: 0.9rem;
-  opacity: 0.9;
-}
-
-.feedback-captcha {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  margin-top: 12px;
-}
-
-

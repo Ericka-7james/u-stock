@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+// frontend/src/components/dashboard/cards/BotControlCard.jsx
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import HelpTooltip from "../../common/HelpTooltip.jsx";
 import Modal from "../../common/Modal.jsx";
 import "../../../css/dashboard/cards/BotControlCard.css";
@@ -34,6 +35,19 @@ function safeStr(x, fallback = "") {
 function n(x, fallback = 0) {
   const v = Number(x);
   return Number.isFinite(v) ? v : fallback;
+}
+
+function fmtAge(sec) {
+  const s = Number(sec);
+  if (!Number.isFinite(s) || s < 0) return "—";
+  if (s < 60) return `${Math.floor(s)}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h`;
+  const d = Math.floor(h / 24);
+  const remH = h % 24;
+  return remH ? `${d}d ${remH}h` : `${d}d`;
 }
 
 function fmtTime(epoch) {
@@ -96,9 +110,10 @@ export default function BotControlCard({ activeBotId, onActiveBotChange }) {
     log: null,
   });
 
+  // timers: use timeout for status (self-scheduling poll), interval for market, interval for arm tick
   const timersRef = useRef({
     market: null,
-    status: null,
+    status: null, // timeout id
     armTick: null,
   });
 
@@ -108,13 +123,22 @@ export default function BotControlCard({ activeBotId, onActiveBotChange }) {
     inflightRef.current[key] = null;
   }
 
+  // robust cleanup for both interval + timeout
+  function clearTimer(t) {
+    if (!t) return;
+    clearInterval(t);
+    clearTimeout(t);
+  }
+
   useEffect(() => {
     aliveRef.current = true;
     return () => {
       aliveRef.current = false;
+
       Object.keys(inflightRef.current || {}).forEach((k) => abortInflight(k));
-      Object.values(timersRef.current || {}).forEach((t) => t && clearInterval(t));
+      Object.values(timersRef.current || {}).forEach((t) => clearTimer(t));
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Keep selected in sync with parent
@@ -158,7 +182,8 @@ export default function BotControlCard({ activeBotId, onActiveBotChange }) {
   }, [activeBotId]);
 
   // -------- market session ----------
-  async function refreshMarketSession() {
+  const refreshMarketSession = useCallback(async () => {
+    // market requests can be safely aborted because they are slow + infrequent
     abortInflight("market");
     const ac = new AbortController();
     inflightRef.current.market = ac;
@@ -172,10 +197,10 @@ export default function BotControlCard({ activeBotId, onActiveBotChange }) {
     } finally {
       if (inflightRef.current.market === ac) inflightRef.current.market = null;
     }
-  }
+  }, []);
 
   // -------- config ----------
-  async function refreshConfig(botId = selected) {
+  const refreshConfig = useCallback(async (botId = selected) => {
     const id = safeStr(botId);
     if (!id) return;
 
@@ -205,14 +230,16 @@ export default function BotControlCard({ activeBotId, onActiveBotChange }) {
     } finally {
       if (inflightRef.current.config === ac) inflightRef.current.config = null;
     }
-  }
+  }, [selected]);
 
-  // -------- status polling ----------
-  async function refreshStatus(botId = selected) {
+  // -------- status polling (NO abort spam) ----------
+  const refreshStatus = useCallback(async (botId = selected) => {
     const id = safeStr(botId);
     if (!id) return;
 
-    abortInflight("status");
+    // ✅ never overlap status requests
+    if (inflightRef.current.status) return;
+
     const ac = new AbortController();
     inflightRef.current.status = ac;
 
@@ -225,32 +252,48 @@ export default function BotControlCard({ activeBotId, onActiveBotChange }) {
     } catch {
       // ignore
     } finally {
+      // IMPORTANT: only clear if it is still the same controller
       if (inflightRef.current.status === ac) inflightRef.current.status = null;
     }
-  }
+  }, [selected]);
 
   // Start timers on selected change
   useEffect(() => {
     if (!selected) return;
 
     setUiError("");
+
+    // initial loads
     refreshMarketSession();
     refreshConfig(selected);
     refreshStatus(selected);
 
-    // refresh loops (cheap)
-    if (timersRef.current.market) clearInterval(timersRef.current.market);
-    timersRef.current.market = setInterval(() => refreshMarketSession(), 30_000);
+    // market interval (cheap)
+    if (timersRef.current.market) clearTimer(timersRef.current.market);
+    timersRef.current.market = setInterval(() => {
+      refreshMarketSession();
+    }, 30_000);
 
-    if (timersRef.current.status) clearInterval(timersRef.current.status);
-    timersRef.current.status = setInterval(() => refreshStatus(selected), 1_500);
+    // ✅ status self-scheduling poll (prevents overlap + avoids canceled spam)
+    let stopped = false;
+
+    const poll = async () => {
+      if (stopped) return;
+      await refreshStatus(selected);
+      if (stopped) return;
+      timersRef.current.status = setTimeout(poll, 1500);
+    };
+
+    if (timersRef.current.status) clearTimer(timersRef.current.status);
+    poll();
 
     return () => {
-      if (timersRef.current.market) clearInterval(timersRef.current.market);
-      if (timersRef.current.status) clearInterval(timersRef.current.status);
+      stopped = true;
+      if (timersRef.current.market) clearTimer(timersRef.current.market);
+      if (timersRef.current.status) clearTimer(timersRef.current.status);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected]);
+  }, [selected, refreshMarketSession, refreshConfig, refreshStatus]);
 
   // Arm countdown tick (renders countdown)
   useEffect(() => {
@@ -280,13 +323,12 @@ export default function BotControlCard({ activeBotId, onActiveBotChange }) {
     setStartConfirmOpen(false);
   }
 
-  // -------- start/stop actions ----------
+  // -------- start/pause actions ----------
   async function doStart() {
     setUiError("");
     setBusy(true);
     try {
       await apiPost("/api/bots/start", { bot_id: selected, mode: safeStr(cfgDraft.mode, "paper") });
-      // snap refresh so UI updates immediately
       await refreshStatus(selected);
     } catch (e) {
       setUiError(String(e?.message || e));
@@ -295,7 +337,8 @@ export default function BotControlCard({ activeBotId, onActiveBotChange }) {
     }
   }
 
-  async function doStop() {
+  // NOTE: backend endpoint is /stop but it represents "pause intent" in your system
+  async function doPause() {
     setUiError("");
     setBusy(true);
     try {
@@ -308,42 +351,87 @@ export default function BotControlCard({ activeBotId, onActiveBotChange }) {
     }
   }
 
-  // -------- derive UI state from bots.py shape ----------
-  const effective = safeStr(status?.effective_state, "stopped").toLowerCase();
+  // -------- derive UI state from bots.py shape (production-ready) ----------
+  const intent = safeStr(status?.intent, "paused").toLowerCase(); // running | paused
+  const effective = safeStr(status?.effective_state, "stopped").toLowerCase(); // starting|running|paused|offline|...
+  const reasonCode = safeStr(status?.reason_code, "").toLowerCase(); // kept for future use
+  const backendMsg = safeStr(status?.message, "");
+  const pausedReason = safeStr(status?.pausedReason, "");
+  const lastError = safeStr(status?.lastError, "");
+
   const mode = safeStr(status?.mode, safeStr(config?.mode, "paper"));
 
-  // treat these as “live-ish” so the card doesn’t look off while booting/waiting
-  const isLiveish = ["starting", "running", "waiting_for_market", "degraded"].includes(effective);
-  const isPaused = ["paused", "offline", "error"].includes(effective) || effective === "waiting_for_market";
-  const uiState = isPaused ? "paused" : isLiveish ? "running" : "stopped";
-
+  // market
   const marketOk = market && typeof market === "object" && market.ok === true;
   const isOpen = marketOk ? Boolean(market.is_open) : null;
-  const nextOpenEpoch = Number.isFinite(Number(status?.nextOpenEpoch))
-    ? Number(status?.nextOpenEpoch)
-    : Number.isFinite(Number(market?.next_open))
-    ? Number(market?.next_open)
-    : null;
 
-  const statusDetail =
-    effective === "starting"
-      ? "Starting…"
-      : effective === "waiting_for_market"
-      ? "Waiting for market"
-      : effective === "running"
-      ? "Running"
-      : effective === "paused"
-      ? safeStr(status?.pausedReason, isOpen === false ? "Market closed" : "Paused")
-      : effective === "offline"
-      ? "Offline (runner not heartbeating)"
-      : effective === "error"
-      ? "Error"
-      : "Stopped";
+  // next open (prefer backend-calculated nextOpenEpoch, else market next_open)
+  const nextOpenEpochRaw =
+    Number.isFinite(Number(status?.nextOpenEpoch)) && Number(status?.nextOpenEpoch) > 0
+      ? Number(status?.nextOpenEpoch)
+      : Number.isFinite(Number(market?.next_open)) && Number(market?.next_open) > 0
+      ? Number(market?.next_open)
+      : null;
+
+  // heartbeat age (only meaningful when intent is running)
+  const hbAge = Number.isFinite(Number(status?.heartbeatAgeSec)) ? Number(status.heartbeatAgeSec) : null;
+  const hbAt = Number.isFinite(Number(status?.heartbeatAt)) ? Number(status.heartbeatAt) : 0; // kept for future use
+
+  // classify effective state
+  const isError = effective === "error" || Boolean(lastError);
+  const isOffline = effective === "offline";
+  const isPausedEff = effective === "paused";
+  const isWaiting = effective === "waiting_for_market";
+  const isStarting = effective === "starting";
+  const isRunningEff = effective === "running";
+  const isDegraded = effective === "degraded";
+
+  // "live-ish" includes starting/waiting/degraded
+  const liveish = isStarting || isRunningEff || isWaiting || isDegraded;
+
+  // UI State rules:
+  // - offline/error shows PAUSED (needs attention)
+  // - paused shows PAUSED
+  // - starting/running/degraded show LIVE
+  // - waiting_for_market shows PAUSED (not trading) but detail clarifies
+  let uiState = "stopped";
+  if (isError || isOffline || isPausedEff || isWaiting) uiState = "paused";
+  else if (liveish) uiState = "running";
+  else uiState = "stopped";
+
+  const isRunningUi = uiState === "running";
+
+  // Show "Next open" only when waiting/market-closed context makes sense
+  const showNextOpen =
+    (effective === "waiting_for_market" || (intent === "running" && isOpen === false) || effective === "paused") &&
+    Boolean(nextOpenEpochRaw);
+
+  // Build a status detail line
+  let statusDetail = "Idle";
+
+  if (isError) {
+    statusDetail = lastError ? `Error: ${lastError}` : "Error";
+  } else if (isOffline) {
+    statusDetail =
+      hbAge != null ? `Offline (no heartbeat · ${fmtAge(hbAge)} ago)` : "Offline (runner not heartbeating)";
+  } else if (isPausedEff) {
+    statusDetail = pausedReason || backendMsg || "Paused";
+  } else if (isWaiting) {
+    statusDetail = isOpen === false ? "Waiting for market open" : backendMsg || "Waiting for market";
+  } else if (isStarting) {
+    statusDetail = backendMsg || "Starting…";
+  } else if (isDegraded) {
+    statusDetail = backendMsg ? `Degraded: ${backendMsg}` : "Degraded (running)";
+  } else if (isRunningEff) {
+    statusDetail = isOpen === false ? "Running (market closed)" : backendMsg || "Running";
+  } else {
+    statusDetail = backendMsg || "Idle";
+  }
 
   // gating
-  const canArm = !busy && uiState === "stopped";
-  const canStart = !busy && uiState === "stopped" && isArmed;
-  const canStop = !busy && uiState !== "stopped"; // Stop works even in starting/waiting/paused
+  const canArm = !busy && !isRunningUi;
+  const canStart = !busy && !isRunningUi && isArmed;
+  const canPause = !busy && isRunningUi;
 
   function requestStart() {
     setUiError("");
@@ -433,7 +521,7 @@ export default function BotControlCard({ activeBotId, onActiveBotChange }) {
         <div className="botCardHead">
           <div className="botCardTitleRow">
             <div className="botCardTitle">Bot Control</div>
-            <HelpTooltip text="Arm, then Start with confirmation. Stop anytime. Risk Controls tune behavior. Logs show runner + bot messages." />
+            <HelpTooltip text="Arm, then Start with confirmation. Use Pause to halt trading. Risk Controls tune behavior. Logs show runner + bot messages." />
           </div>
 
           <div className="botPillRow">
@@ -445,7 +533,7 @@ export default function BotControlCard({ activeBotId, onActiveBotChange }) {
             </div>
 
             <div className={`botCardStatePill status ${pillTone(uiState)}`}>
-              {uiState === "paused" ? "PAUSED" : uiState === "running" ? "LIVE" : "OFF"}
+              {uiState === "paused" ? "PAUSED" : uiState === "running" ? "LIVE" : "IDLE"}
             </div>
           </div>
         </div>
@@ -475,7 +563,8 @@ export default function BotControlCard({ activeBotId, onActiveBotChange }) {
                 View log
               </button>
 
-              {uiState === "stopped" ? (
+              {/* Arm/Disarm only when not LIVE */}
+              {!isRunningUi ? (
                 <button
                   className="botBtn"
                   type="button"
@@ -487,9 +576,10 @@ export default function BotControlCard({ activeBotId, onActiveBotChange }) {
                 </button>
               ) : null}
 
-              {uiState !== "stopped" ? (
-                <button className="botBtn stop" type="button" onClick={doStop} disabled={!canStop}>
-                  Stop
+              {/* Primary action: Start (when not LIVE) or Pause (when LIVE). No Stop button. */}
+              {isRunningUi ? (
+                <button className="botBtn stop" type="button" onClick={doPause} disabled={!canPause}>
+                  Pause
                 </button>
               ) : (
                 <button
@@ -529,7 +619,9 @@ export default function BotControlCard({ activeBotId, onActiveBotChange }) {
                 {uiState === "paused" ? (
                   <>
                     <div className="botPausedLine">{statusDetail}</div>
-                    <div className="botPausedSub">Next open: {nextOpenEpoch ? fmtTime(nextOpenEpoch) : "—"}</div>
+                    <div className="botPausedSub">
+                      Next open: {showNextOpen && nextOpenEpochRaw ? fmtTime(nextOpenEpochRaw) : "—"}
+                    </div>
                   </>
                 ) : (
                   <span>{statusDetail}</span>
@@ -583,7 +675,7 @@ export default function BotControlCard({ activeBotId, onActiveBotChange }) {
           </div>
 
           <div style={{ fontSize: 12, opacity: 0.75, fontWeight: 800 }}>
-            Confirm to start. You can Stop anytime.
+            Confirm to start. Use Pause anytime to halt trading.
           </div>
         </div>
       </Modal>

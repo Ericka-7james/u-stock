@@ -36,7 +36,13 @@ runtime/
 # dotenv environment variables
 .env
 .env.local
+u-stock-bots/.env.local
 
 
 # Temp file
 _my_commits_tmp.txt
+
+# runtime state (local only)
+backend/runtime/
+backend/**/runtime/
+*.jsonl

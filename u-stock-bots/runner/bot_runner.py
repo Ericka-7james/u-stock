@@ -78,7 +78,8 @@ def _submit_intents(api: UStockAPI, bot_id: str, intents: List[Dict[str, Any]]) 
 
 
 def _get_status(api: UStockAPI, bot_id: str) -> Dict[str, Any]:
-    return api.get("/api/bots/status", params={"bot_id": bot_id})
+    # runner-authenticated endpoint (no cookies)
+    return api.get("/api/bots/status_runner", params={"bot_id": bot_id})
 
 
 def _market_session(api: UStockAPI) -> Dict[str, Any]:

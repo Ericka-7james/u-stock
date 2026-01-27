@@ -4,11 +4,25 @@ from __future__ import annotations
 import argparse
 import os
 import time
+from pathlib import Path
 from typing import Any, Dict, Optional, Callable
+
+from dotenv import load_dotenv
+
+# ------------------------------------------------------------
+# Load runner env (.env then .env.local) from u-stock-bots root.
+# Rule: OS env wins; .env.local overrides .env (but NOT OS env).
+# ------------------------------------------------------------
+_THIS_FILE = Path(__file__).resolve()          # .../u-stock-bots/runner/main.py
+_BOTS_ROOT = _THIS_FILE.parents[1]            # .../u-stock-bots
+
+# Load base first (no override)
+load_dotenv(_BOTS_ROOT / ".env", override=False)
+# Allow .env.local to override .env (but not OS env)
+load_dotenv(_BOTS_ROOT / ".env.local", override=True)
 
 # ✅ Use the same API client used elsewhere in u-stock-bots
 from bots._shared.ustock_http import UStockAPI
-
 from bots.ema_trend.bot import run as ema_trend_run
 
 DEFAULT_LOOP_SECONDS = int(os.getenv("RUNNER_LOOP_SECONDS", "15"))
@@ -104,13 +118,21 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
-def main(*, argv: Optional[list[str]] = None, max_loops: Optional[int] = None, sleep_fn: Callable[[float], None] = time.sleep) -> None:
+def main(
+    *,
+    argv: Optional[list[str]] = None,
+    max_loops: Optional[int] = None,
+    sleep_fn: Callable[[float], None] = time.sleep,
+) -> None:
     args = build_parser().parse_args(argv)
 
     respect_market_hours = not bool(args.no_respect_market_hours)
 
     api = UStockAPI()
-    print(f"[runner] API={api.base_url.rstrip('/')} loop={args.loop}s bot={args.bot} respect_market_hours={respect_market_hours}")
+    print(
+        f"[runner] API={api.base_url.rstrip('/')} loop={args.loop}s bot={args.bot} "
+        f"respect_market_hours={respect_market_hours}"
+    )
 
     backoff = 2.0
     max_backoff = 120.0

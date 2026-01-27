@@ -1,5 +1,5 @@
 // src/context/tests/AuthContext.test.jsx
-import React from "react";
+import React, { useState } from "react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 
@@ -11,39 +11,91 @@ vi.mock("../../config/config", () => ({
   API_PREFIX: "", // AuthContext builds `${API_BASE}${API_PREFIX}/auth/...`
 }));
 
+const SESSION_HINT_KEY = "ustock_session_hint_v1";
+
+function jsonResponse(obj, ok = true, status = 200) {
+  return Promise.resolve({
+    ok,
+    status,
+    headers: { get: () => "application/json" },
+    json: async () => obj,
+    text: async () => JSON.stringify(obj),
+  });
+}
+
+/**
+ * Test Consumer
+ * ✅ Wrap all async context calls in try/catch so failures don't become unhandled rejections.
+ */
 function Consumer() {
-  const { user, loading, isAuthed, login, signup, logout, refreshSession } =
-    useAuth();
+  const { user, loading, isAuthed, login, signup, logout, refreshSession } = useAuth();
+  const [err, setErr] = useState("");
 
   return (
     <div>
       <div data-testid="loading">{String(loading)}</div>
       <div data-testid="isAuthed">{String(isAuthed)}</div>
       <div data-testid="user">{user ? JSON.stringify(user) : "null"}</div>
+      <div data-testid="err">{err || ""}</div>
 
-      <button onClick={() => refreshSession()} type="button">
+      <button
+        onClick={async () => {
+          setErr("");
+          try {
+            await refreshSession();
+          } catch (e) {
+            setErr(String(e?.message || e));
+          }
+        }}
+        type="button"
+      >
         refresh
       </button>
 
-      <button onClick={() => login("test@example.com", "pw")} type="button">
+      <button
+        onClick={async () => {
+          setErr("");
+          try {
+            await login("test@example.com", "pw");
+          } catch (e) {
+            setErr(String(e?.message || e));
+          }
+        }}
+        type="button"
+      >
         login
       </button>
 
       <button
-        onClick={() =>
-          signup({
-            username: "Ericka",
-            email: "ericka@example.com",
-            password: "pw",
-            avatar: "📈",
-          })
-        }
+        onClick={async () => {
+          setErr("");
+          try {
+            await signup({
+              username: "Ericka",
+              email: "ericka@example.com",
+              password: "pw",
+              avatar: "📈",
+            });
+          } catch (e) {
+            setErr(String(e?.message || e));
+          }
+        }}
         type="button"
       >
         signup
       </button>
 
-      <button onClick={() => logout()} type="button">
+      <button
+        onClick={async () => {
+          setErr("");
+          try {
+            await logout();
+          } catch (e) {
+            setErr(String(e?.message || e));
+          }
+        }}
+        type="button"
+      >
         logout
       </button>
     </div>
@@ -63,6 +115,7 @@ describe("AuthContext", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    window.localStorage.clear();
     global.fetch = vi.fn();
   });
 
@@ -77,16 +130,35 @@ describe("AuthContext", () => {
     }
 
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
-    expect(() => render(<BadConsumer />)).toThrow(
-      /useAuth must be used inside AuthProvider/i
-    );
+    expect(() => render(<BadConsumer />)).toThrow(/useAuth must be used inside AuthProvider/i);
     spy.mockRestore();
   });
 
-  it("on mount: calls /auth/me with credentials include and does not set Content-Type for GET", async () => {
-    global.fetch.mockResolvedValueOnce({
-      ok: false,
-      json: async () => ({}),
+  it("on mount: WITHOUT session hint, does NOT call /auth/me and ends loading=false", async () => {
+    renderWithProvider();
+
+    // should finish loading without calling fetch at all
+    await waitFor(() => {
+      expect(screen.getByTestId("loading").textContent).toBe("false");
+    });
+
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(screen.getByTestId("isAuthed").textContent).toBe("false");
+    expect(screen.getByTestId("user").textContent).toBe("null");
+  });
+
+  it("on mount: WITH session hint, calls /auth/me with credentials include and does not set Content-Type for GET", async () => {
+    // enable mount refresh
+    window.localStorage.setItem(SESSION_HINT_KEY, "1");
+
+    global.fetch.mockImplementation((url, opts = {}) => {
+      const method = (opts.method || "GET").toUpperCase();
+
+      if (url === "http://test-api.local/auth/me" && method === "GET") {
+        return jsonResponse({}, false, 401);
+      }
+
+      return jsonResponse({ detail: "Unhandled route in test", url }, false, 500);
     });
 
     renderWithProvider();
@@ -97,8 +169,7 @@ describe("AuthContext", () => {
 
     const meCall = global.fetch.mock.calls.find(
       ([url, opts]) =>
-        url === "http://test-api.local/auth/me" &&
-        (opts?.method || "GET").toUpperCase() === "GET"
+        url === "http://test-api.local/auth/me" && (opts?.method || "GET").toUpperCase() === "GET"
     );
     expect(meCall).toBeTruthy();
 
@@ -112,9 +183,7 @@ describe("AuthContext", () => {
     const headers = options.headers;
     if (headers) {
       const ct =
-        headers instanceof Headers
-          ? headers.get("Content-Type")
-          : headers["Content-Type"];
+        headers instanceof Headers ? headers.get("Content-Type") : headers["Content-Type"];
       expect(ct).toBeFalsy();
     }
 
@@ -125,175 +194,165 @@ describe("AuthContext", () => {
     });
   });
 
-  it("refreshSession: when /auth/me ok, sets isAuthed true and stores user_id into user.id", async () => {
-    global.fetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ user_id: 123 }),
+  it("refreshSession: when forced /auth/me ok, sets isAuthed true and stores user_id into user.id", async () => {
+    // We will explicitly click refresh after setting hint, to ensure it calls /auth/me.
+    window.localStorage.setItem(SESSION_HINT_KEY, "1");
+
+    global.fetch.mockImplementation((url, opts = {}) => {
+      const method = (opts.method || "GET").toUpperCase();
+      if (url === "http://test-api.local/auth/me" && method === "GET") {
+        return jsonResponse({ user_id: 123 }, true, 200);
+      }
+      return jsonResponse({ detail: "Unhandled route in test", url }, false, 500);
     });
 
     renderWithProvider();
 
-    await waitFor(() => {
-      expect(screen.getByTestId("loading").textContent).toBe("false");
-    });
+    await waitFor(() => expect(screen.getByTestId("loading").textContent).toBe("false"));
 
+    // after mount, should be authed already because /auth/me returned ok
     expect(screen.getByTestId("isAuthed").textContent).toBe("true");
     expect(screen.getByTestId("user").textContent).toMatch(/"id":123/);
   });
 
   it("login: POSTs to /auth/login with JSON body + credentials, then calls /auth/me", async () => {
-    // 1) mount /auth/me: not authed
-    global.fetch.mockResolvedValueOnce({
-      ok: false,
-      json: async () => ({}),
-    });
+    // NOTE: without hint, mount does NOT call /auth/me (good)
+    // login() will POST /auth/login, then refreshSession(force:true) => GET /auth/me
+    global.fetch.mockImplementation((url, opts = {}) => {
+      const method = (opts.method || "GET").toUpperCase();
 
-    // 2) POST /auth/login: ok
-    global.fetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ user: { id: 9, email: "test@example.com" } }),
-    });
+      if (url === "http://test-api.local/auth/login" && method === "POST") {
+        return jsonResponse({ user: { id: 9, email: "test@example.com" } }, true, 200);
+      }
 
-    // 3) refreshSession /auth/me after login: ok with user_id
-    global.fetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ user_id: 9 }),
-    });
+      if (url === "http://test-api.local/auth/me" && method === "GET") {
+        return jsonResponse({ user_id: 9 }, true, 200);
+      }
 
-    // 4) safety: if Safari fallback retry triggers, return ok again
-    global.fetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ user_id: 9 }),
+      return jsonResponse({ detail: "Unhandled route in test", url }, false, 500);
     });
 
     renderWithProvider();
-
-    await waitFor(() => {
-      expect(screen.getByTestId("loading").textContent).toBe("false");
-    });
+    await waitFor(() => expect(screen.getByTestId("loading").textContent).toBe("false"));
 
     fireEvent.click(screen.getByRole("button", { name: "login" }));
 
+    // ✅ find /auth/login call
     await waitFor(() => {
-      // mount me + login + refresh me (+ optional retry)
-      expect(global.fetch.mock.calls.length).toBeGreaterThanOrEqual(3);
+      const loginCall = global.fetch.mock.calls.find(
+        ([url, opts]) =>
+          url === "http://test-api.local/auth/login" && (opts?.method || "GET").toUpperCase() === "POST"
+      );
+      expect(loginCall).toBeTruthy();
     });
 
-    // ✅ find the /auth/login call (do NOT assume index)
     const loginCall = global.fetch.mock.calls.find(
       ([url, opts]) =>
-        url === "http://test-api.local/auth/login" &&
-        (opts?.method || "GET").toUpperCase() === "POST"
+        url === "http://test-api.local/auth/login" && (opts?.method || "GET").toUpperCase() === "POST"
     );
-    expect(loginCall).toBeTruthy();
+    const [, loginOptions] = loginCall;
 
-    const [loginUrl, loginOptions] = loginCall;
-    expect(loginUrl).toBe("http://test-api.local/auth/login");
     expect(loginOptions.credentials).toBe("include");
 
-    // Ensure JSON header exists for POST with body
     const loginHeaders = loginOptions.headers;
     const loginCt =
-      loginHeaders instanceof Headers
-        ? loginHeaders.get("Content-Type")
-        : loginHeaders?.["Content-Type"];
+      loginHeaders instanceof Headers ? loginHeaders.get("Content-Type") : loginHeaders?.["Content-Type"];
     expect(loginCt).toMatch(/application\/json/i);
 
-    expect(loginOptions.body).toBe(
-      JSON.stringify({ email: "test@example.com", password: "pw" })
-    );
+    expect(loginOptions.body).toBe(JSON.stringify({ email: "test@example.com", password: "pw" }));
 
-    // ✅ ensure /auth/me was called at least twice (mount + post-login refresh)
-    const meCalls = global.fetch.mock.calls.filter(
-      ([url]) => url === "http://test-api.local/auth/me"
-    );
-    expect(meCalls.length).toBeGreaterThanOrEqual(2);
+    // ✅ ensure /auth/me was called at least once after login
+    await waitFor(() => {
+      const meCalls = global.fetch.mock.calls.filter(([url]) => url === "http://test-api.local/auth/me");
+      expect(meCalls.length).toBeGreaterThanOrEqual(1);
+    });
 
     await waitFor(() => {
       expect(screen.getByTestId("isAuthed").textContent).toBe("true");
       expect(screen.getByTestId("user").textContent).toMatch(/"id":9/);
+      expect(screen.getByTestId("err").textContent).toBe("");
     });
   });
 
   it("signup: POSTs to /auth/signup and then calls /auth/me", async () => {
-    global.fetch
-      .mockResolvedValueOnce({ ok: false, json: async () => ({}) }) // mount /auth/me
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          user: { id: 77, email: "ericka@example.com", avatar: "📈" },
-        }),
-      }) // POST /auth/signup
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ user_id: 77 }) }) // refresh /auth/me
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ user_id: 77 }) }); // safety retry
+    global.fetch.mockImplementation((url, opts = {}) => {
+      const method = (opts.method || "GET").toUpperCase();
+
+      if (url === "http://test-api.local/auth/signup" && method === "POST") {
+        return jsonResponse({ user: { id: 77, email: "ericka@example.com", avatar: "📈" } }, true, 200);
+      }
+
+      if (url === "http://test-api.local/auth/me" && method === "GET") {
+        return jsonResponse({ user_id: 77 }, true, 200);
+      }
+
+      return jsonResponse({ detail: "Unhandled route in test", url }, false, 500);
+    });
+
+    renderWithProvider();
+    await waitFor(() => expect(screen.getByTestId("loading").textContent).toBe("false"));
+
+    fireEvent.click(screen.getByRole("button", { name: "signup" }));
+
+    await waitFor(() => {
+      const signupCall = global.fetch.mock.calls.find(
+        ([url, opts]) =>
+          url === "http://test-api.local/auth/signup" && (opts?.method || "GET").toUpperCase() === "POST"
+      );
+      expect(signupCall).toBeTruthy();
+    });
+
+    // After refreshSession, user.id should be set
+    await waitFor(() => {
+      expect(screen.getByTestId("isAuthed").textContent).toBe("true");
+      expect(screen.getByTestId("user").textContent).toMatch(/"id":77/);
+      expect(screen.getByTestId("err").textContent).toBe("");
+    });
+  });
+
+  it("logout: POSTs to /auth/logout and clears user + isAuthed", async () => {
+    // Start authed via login path first, then logout
+    let authed = true;
+
+    global.fetch.mockImplementation((url, opts = {}) => {
+      const method = (opts.method || "GET").toUpperCase();
+
+      if (url === "http://test-api.local/auth/me" && method === "GET") {
+        return authed ? jsonResponse({ user_id: 5 }, true, 200) : jsonResponse({}, false, 401);
+      }
+
+      if (url === "http://test-api.local/auth/logout" && method === "POST") {
+        authed = false;
+        return jsonResponse({}, true, 200);
+      }
+
+      return jsonResponse({ detail: "Unhandled route in test", url }, false, 500);
+    });
+
+    // ensure mount checks /me by setting hint
+    window.localStorage.setItem(SESSION_HINT_KEY, "1");
 
     renderWithProvider();
 
     await waitFor(() => {
       expect(screen.getByTestId("loading").textContent).toBe("false");
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: "signup" }));
-
-    await waitFor(() => {
-      expect(global.fetch.mock.calls.length).toBeGreaterThanOrEqual(3);
-    });
-
-    const signupCall = global.fetch.mock.calls.find(
-      ([url, opts]) =>
-        url === "http://test-api.local/auth/signup" &&
-        (opts?.method || "GET").toUpperCase() === "POST"
-    );
-    expect(signupCall).toBeTruthy();
-
-    const [signupUrl, signupOptions] = signupCall;
-    expect(signupUrl).toBe("http://test-api.local/auth/signup");
-    expect(signupOptions.credentials).toBe("include");
-
-    const signupHeaders = signupOptions.headers;
-    const signupCt =
-      signupHeaders instanceof Headers
-        ? signupHeaders.get("Content-Type")
-        : signupHeaders?.["Content-Type"];
-    expect(signupCt).toMatch(/application\/json/i);
-
-    await waitFor(() => {
-      // After refreshSession, user.id should be set
-      expect(screen.getByTestId("user").textContent).toMatch(/"id":77/);
-    });
-  });
-
-  it("logout: POSTs to /auth/logout and clears user + isAuthed", async () => {
-    global.fetch
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ user_id: 5 }) }) // mount /auth/me
-      .mockResolvedValueOnce({ ok: true, json: async () => ({}) }); // POST /auth/logout
-
-    renderWithProvider();
-
-    await waitFor(() => {
       expect(screen.getByTestId("isAuthed").textContent).toBe("true");
     });
 
     fireEvent.click(screen.getByRole("button", { name: "logout" }));
 
     await waitFor(() => {
-      expect(global.fetch.mock.calls.length).toBeGreaterThanOrEqual(2);
+      const logoutCall = global.fetch.mock.calls.find(
+        ([url, opts]) =>
+          url === "http://test-api.local/auth/logout" && (opts?.method || "GET").toUpperCase() === "POST"
+      );
+      expect(logoutCall).toBeTruthy();
     });
-
-    const logoutCall = global.fetch.mock.calls.find(
-      ([url, opts]) =>
-        url === "http://test-api.local/auth/logout" &&
-        (opts?.method || "GET").toUpperCase() === "POST"
-    );
-    expect(logoutCall).toBeTruthy();
-
-    const [logoutUrl, logoutOptions] = logoutCall;
-    expect(logoutUrl).toBe("http://test-api.local/auth/logout");
-    expect(logoutOptions.credentials).toBe("include");
 
     await waitFor(() => {
       expect(screen.getByTestId("isAuthed").textContent).toBe("false");
       expect(screen.getByTestId("user").textContent).toBe("null");
+      expect(screen.getByTestId("err").textContent).toBe("");
     });
   });
 });

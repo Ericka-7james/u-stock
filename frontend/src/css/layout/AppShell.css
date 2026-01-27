@@ -1,19 +1,29 @@
 :root {
-  /* THEME TOKENS */
-  --ustock-green-main: #0f766e;
-  --ustock-green-soft: #bbf7d0;
+  /* Bridge Lucent -> App tokens (single source of truth: index.css) */
+  --ustock-green-main: var(--lucent-green);
+  --ustock-blue-main: var(--lucent-blue);
+  --ustock-bg-page: var(--lucent-bg);
 
-  /* light theme defaults */
-  --ustock-bg-page: #f5f7ff;
-  --ustock-bg-card: #ffffff;
-  --ustock-bg-card-soft: #f9fafb;
-  --ustock-border-card: rgba(148, 163, 184, 0.25);
+  --ustock-bg-card: rgba(255, 255, 255, 0.92);
+  --ustock-bg-card-solid: #ffffff;
+  --ustock-bg-card-soft: rgba(255, 255, 255, 0.70);
+  --ustock-border-card: rgba(32, 64, 80, 0.12);
 
-  --ustock-text-main: #0f172a;
+  --ustock-text-main: var(--lucent-text);
   --ustock-text-strong: #0b1120;
-  --ustock-text-muted: #6b7280;
+  --ustock-text-muted: var(--lucent-muted);
 
-  --ustock-card-chip-bg: #ecfdf5;
+  /* Gold accent used for primary CTA */
+  --ustock-gold: #fbbf24;
+  --ustock-gold-ink: #1f2a33;
+
+  --ustock-card-chip-bg: rgba(37, 118, 98, 0.10);
+
+  /* Shared radii + shadows (site-wide cohesion) */
+  --ustock-radius-xl: 24px;
+  --ustock-radius-lg: 18px;
+  --ustock-shadow-lg: 0 18px 55px rgba(15, 23, 42, 0.10), 0 2px 8px rgba(15, 23, 42, 0.06);
+  --ustock-shadow-md: 0 12px 32px rgba(15, 23, 42, 0.08);
 }
 
 /* Base document background */
@@ -130,9 +140,9 @@ body {
 /* Base “panel/card” style used across the app */
 .panel {
   background: var(--ustock-bg-card);
-  border-radius: 18px;
+  border-radius: var(--ustock-radius-lg);
   padding: 18px 20px;
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+  box-shadow: var(--ustock-shadow-md);
   border: 1px solid var(--ustock-border-card);
   color: var(--ustock-text-main);
 }
@@ -177,9 +187,9 @@ body.ustock-dark {
   color: #e5e7eb;
 
   --ustock-bg-page: #020617;
-  --ustock-bg-card: #020617;
-  --ustock-bg-card-soft: #020617;
-  --ustock-border-card: rgba(148, 163, 184, 0.4);
+  --ustock-bg-card: rgba(15, 23, 42, 0.65);
+  --ustock-bg-card-soft: rgba(15, 23, 42, 0.45);
+  --ustock-border-card: rgba(148, 163, 184, 0.22);
 
   --ustock-text-main: #e5e7eb;
   --ustock-text-strong: #f9fafb;

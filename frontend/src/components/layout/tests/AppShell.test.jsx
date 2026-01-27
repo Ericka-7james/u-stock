@@ -1,3 +1,4 @@
+// src/components/layout/tests/AppShell.test.jsx
 import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
@@ -30,10 +31,13 @@ vi.mock("../NavBar", () => ({
           toggle-user
         </button>
 
-        <button type="button" onClick={(e) => {
-          e.stopPropagation();
-          props.onToggleTheme();
-        }}>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            props.onToggleTheme();
+          }}
+        >
           toggle-theme
         </button>
       </div>
@@ -124,15 +128,18 @@ describe("AppShell", () => {
 
     // nav class removed
     expect(shell.className).not.toContain("app-shell--nav-open");
-
-    // user menu open state isn't directly visible here (NavBar is mocked),
-    // but this ensures the click handler ran without errors.
   });
 
   it("renders footer", () => {
     renderShell(<div>content</div>);
+
+    // ✅ Matches new footer:
+    // © 2025 –2026 Lucent Financial. All rights reserved.
+    // (React may insert whitespace/newlines, so allow flexible spacing.)
     expect(
-      screen.getByText(/© 2025 u-stock\. all rights reserved\./i)
+      screen.getByText(
+        /©\s*2025\s*–\s*2026\s*lucent financial\.\s*all rights reserved\./i
+      )
     ).toBeInTheDocument();
   });
 });

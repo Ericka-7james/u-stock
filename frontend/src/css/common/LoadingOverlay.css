@@ -1,0 +1,65 @@
+/* src/css/common/LoadingOverlay.css */
+
+.loading-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: grid;
+  place-items: center;
+  pointer-events: all;
+}
+
+.loading-overlay__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(2, 6, 23, 0.28);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.loading-overlay__panel {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+
+  padding: 14px 16px;
+  border-radius: 14px;
+
+  background: var(--ustock-bg-card);
+  border: 1px solid var(--ustock-border-card);
+  box-shadow: 0 18px 55px rgba(15, 23, 42, 0.22);
+
+  color: var(--ustock-text-main);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.loading-overlay__spinner {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 2px solid rgba(148, 163, 184, 0.55);
+  border-top-color: rgba(15, 118, 110, 0.95);
+  animation: loading-spin 700ms linear infinite;
+}
+
+.loading-overlay__copy {
+  display: grid;
+  gap: 2px;
+}
+
+.loading-overlay__subtext {
+  font-size: 12px;
+  font-weight: 650;
+  opacity: 0.75;
+}
+
+
+@keyframes loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
