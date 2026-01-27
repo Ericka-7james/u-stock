@@ -36,7 +36,7 @@ class _CircuitBreaker:
         self.state: str = "closed"  # closed | open | half_open
         self.consecutive_failures: int = 0
         self.opened_at: float = 0.0
-        self.half_open_calls_left: int = cfg.half_open_max_calls
+        self.half_open_calls_left: int = int(cfg.half_open_max_calls or 1)
 
     def allow(self) -> None:
         if not self.cfg.enabled:
@@ -164,12 +164,16 @@ class UStockAPI:
             headers["X-Runner-User-Id"] = self.runner_user_id
         return headers
 
+    @staticmethod
     def _normalize_path(path: str) -> str:
+        """
+        Ensure:
+          - leading slash
+          - routes are under /api unless already /api/...
+        """
         p = "/" + str(path or "").lstrip("/")
-        # If it's already /api/..., leave it.
         if p.startswith("/api/"):
             return p
-        # Otherwise prefix with /api
         return "/api" + p
 
     def _sleep_backoff(self, attempt: int) -> None:
@@ -178,9 +182,8 @@ class UStockAPI:
         (ex: connection reset mid-flight).
         """
         base = max(0.05, float(self.backoff))
-        # exponential (2^attempt) with jitter
         delay = base * (2 ** attempt)
-        delay = delay * (0.7 + random.random() * 0.6)
+        delay = delay * (0.7 + random.random() * 0.6)  # jitter
         time.sleep(min(delay, 3.5))
 
     def request(
@@ -194,7 +197,7 @@ class UStockAPI:
     ) -> Any:
         self.cb.allow()
 
-        norm = _normalize_path(path)
+        norm = self._normalize_path(path)
         url = urljoin(self.base_url, norm.lstrip("/"))
 
         h = self._default_headers()
@@ -203,8 +206,7 @@ class UStockAPI:
 
         last_exc: Optional[Exception] = None
 
-        # We do a thin manual retry loop for "hard" transient exceptions
-        # (urllib3 Retry already handles status_forcelist + some timeouts)
+        # Manual retry loop for "hard" transient exceptions
         for attempt in range(0, max(1, self.retries + 1)):
             try:
                 r = self.session.request(
@@ -253,24 +255,25 @@ class UStockAPI:
                     break
                 self._sleep_backoff(attempt)
                 continue
+
             except requests.HTTPError as e:
-                # 4xx generally shouldn't retry; 5xx handled above (502/503/504)
                 last_exc = e
-                # treat 5xx as breaker failures, 4xx as "real" failures
                 resp = getattr(e, "response", None)
                 code = int(resp.status_code) if resp is not None else 0
+
+                # treat 5xx as breaker failures, 4xx as "real" failures
                 if code >= 500:
                     self.cb.on_failure()
                     if attempt < self.retries:
                         self._sleep_backoff(attempt)
                         continue
                 raise
+
             except Exception as e:
                 last_exc = e
                 self.cb.on_failure()
                 raise
 
-        # If we reached here, we exhausted retries
         if last_exc is not None:
             raise last_exc
         raise RuntimeError("Request failed")
