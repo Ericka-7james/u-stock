@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Tuple, Optional
 import requests
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 
-from api.core.security import require_user, decrypt_secret, get_supabase_service
+from api.core.integrations.alpaca_creds import get_user_alpaca_creds
 
 router = APIRouter(prefix="/api/market/us", tags=["market-us"])
 
@@ -196,9 +196,9 @@ def top_tickers(
     Debug endpoint:
       GET /api/market/us/top-tickers?source=top_gainers&limit=12
     """
-    user_id, api_key, api_secret, mode = _get_user_alpaca_creds(request, response)
+    user_id, api_key, api_secret, mode = get_user_alpaca_creds(request, response)
 
-    cache_key = f"{_CACHE_VERSION}:{user_id}:{source}:{limit}:{cache_ttl}"
+    cache_key = f"{_CACHE_VERSION}:{user_id}:{source}:{limit}:{cache_ttl}:{cache_bust}"
     if not cache_bust:
         cached = _cache_get(cache_key)
         if cached:
