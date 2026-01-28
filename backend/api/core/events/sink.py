@@ -5,9 +5,8 @@ import os
 from pathlib import Path
 from typing import Optional
 
-from core.events.models import BotEvent
+from api.core.events.models import BotEvent
 
-# If you want the table configurable:
 DEFAULT_EVENTS_TABLE = os.getenv("SUPABASE_EVENTS_TABLE", "bot_events")
 
 
@@ -48,7 +47,6 @@ class BotEventSink:
             "data": event.data,
         }
 
-        # supabase-py: sb.table("...").insert(payload).execute()
         self.sb.table(self.events_table).insert(payload).execute()
 
     def _emit_local_jsonl(self, event: BotEvent) -> None:
@@ -57,15 +55,12 @@ class BotEventSink:
         base.mkdir(parents=True, exist_ok=True)
 
         line = event.model_dump()
-        # make datetime json-friendly
         line["ts"] = event.ts.isoformat()
 
         path = base / "log.jsonl"
         with path.open("a", encoding="utf-8") as f:
             f.write(json.dumps(line, ensure_ascii=False) + "\n")
 
-
-# ---- Convenience factory ----
 
 _sink_singleton: Optional[BotEventSink] = None
 
@@ -78,7 +73,6 @@ def get_event_sink() -> BotEventSink:
     if _sink_singleton is not None:
         return _sink_singleton
 
-    # Import inside to avoid circular imports at startup
     try:
         from api.db import get_supabase_service
         sb = get_supabase_service()
