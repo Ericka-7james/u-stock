@@ -1,0 +1,212 @@
+[33mcommit 0b70123491c8d0b8d6cbe9535b25d93bac9a6eea[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mrefactor/modular-architecture[m[33m)[m
+Author: Ericka-7james <james7.ericka@gmail.com>
+Date:   Wed Jan 28 06:33:18 2026 -0500
+
+    chore: freeze backend dependencies for refactor baseline
+
+[33mcommit 7a8d190a3d04d1a86870d435c5a453c3211ff9b3[m[33m ([m[1;31morigin/fix/prod-runner-heartbeat[m[33m, [m[1;32mfix/prod-runner-heartbeat[m[33m)[m
+Author: Ericka-7james <james7.ericka@gmail.com>
+Date:   Tue Jan 27 19:09:56 2026 -0500
+
+    feat(runner,backend,frontend): stabilize runner heartbeat, add trade fills ingestion, and sync bot control UI
+
+[33mcommit 18b534a01f16740d529ca7606f41e04a1b7b9c00[m
+Author: Ericka-7james <james7.ericka@gmail.com>
+Date:   Mon Jan 26 22:49:56 2026 -0500
+
+    fix(timezones): harden market + calendar endpoints and runner HTTP client
+
+[33mcommit 668910a9d1fbf3b31cb73657a054b0d4bf7a26e6[m
+Author: Ericka-7james <james7.ericka@gmail.com>
+Date:   Mon Jan 26 17:42:59 2026 -0500
+
+    fix(bot-control): prevent overlapping status polls
+
+[33mcommit ec02f978ba23cee7dcee8415f92c2875ab3aa28f[m
+Author: Ericka-7james <james7.ericka@gmail.com>
+Date:   Mon Jan 26 17:23:52 2026 -0500
+
+    fix: stabilize runner heartbeat + clean up integrations, bot logs, and tests
+
+[33mcommit 9329b887b5f1286a09b5d7bf9c587c0da5a6189a[m[33m ([m[1;31morigin/feat/v1-production[m[33m, [m[1;32mfeat/v1-production[m[33m)[m
+Author: Ericka-7james <james7.ericka@gmail.com>
+Date:   Mon Jan 26 11:44:40 2026 -0500
+
+    moving to diff branch
+
+[33mcommit e28d8da83ebbb80a780dc6f602adba0fb2793b3b[m
+Author: Ericka-7james <james7.ericka@gmail.com>
+Date:   Mon Jan 26 11:39:00 2026 -0500
+
+    fix(backend): make bot heartbeat storage production-safe
+
+[33mcommit 6c3ca630d9914766d40c57759f5145ae66b6de4b[m
+Author: Ericka-7james <james7.ericka@gmail.com>
+Date:   Mon Jan 26 08:51:01 2026 -0500
+
+    feat(ui): add shared loading overlay and standardize page headers/layout
+
+[33mcommit 949219f0aa58eecec148872dc10c48ee6a11d580[m
+Author: Ericka-7james <james7.ericka@gmail.com>
+Date:   Mon Jan 26 08:10:50 2026 -0500
+
+    feat(ui): introduce reusable PageHeaderCard and unify page headers
+
+[33mcommit d78efbc2130eba5ef40a54ab3c7d57c907ee6679[m
+Author: Ericka-7james <james7.ericka@gmail.com>
+Date:   Mon Jan 26 07:29:56 2026 -0500
+
+    feat(auth,feedback): harden auth flows and polish feedback submission
+
+[33mcommit c1d839e30dd95ae0b32608f543fd0e8ab7b429cc[m
+Author: Ericka-7james <james7.ericka@gmail.com>
+Date:   Sun Jan 25 23:57:21 2026 -0500
+
+    feat(auth): center AuthPage layout using Landing-style lane wrapper
+
+[33mcommit a570156659d380fb5f1a0b781e64b41d7a70f1f1[m
+Author: Ericka-7james <james7.ericka@gmail.com>
+Date:   Sun Jan 25 23:54:42 2026 -0500
+
+    feat(auth-ui): add auth-required modal with error state and wire protected nav access
+
+[33mcommit fcbcddaf78e95c66c9a8c36bd46edb37c2b73f36[m
+Author: Ericka-7james <james7.ericka@gmail.com>
+Date:   Sun Jan 25 23:12:29 2026 -0500
+
+    feat(layout): add shared footer and refine navbar theme toggle + icons
+
+[33mcommit 5067590bc9cc8030fdb85da74ebac3389c996027[m
+Author: Ericka-7james <james7.ericka@gmail.com>
+Date:   Sun Jan 25 22:21:46 2026 -0500
+
+    fix(landing,nav,auth): align mobile hero layout, public feedback route, and nav overlay behavior
+
+[33mcommit 0f8cf27728d4e00d4bb351510c3b0e03005c2fc6[m
+Author: Ericka-7james <james7.ericka@gmail.com>
+Date:   Sun Jan 25 21:31:00 2026 -0500
+
+    feat(nav): add topbar + sidenav polish, overlay/esc close, and new brand icons
+
+[33mcommit c987ef130eab3abcf9ee68de18b2dbcabbe7e6bb[m
+Author: Ericka-7james <james7.ericka@gmail.com>
+Date:   Sun Jan 25 18:43:06 2026 -0500
+
+    feat(ui): unify landing page + app shell styling (Lucent tokens, cohesive cards, yellow CTA)
+
+[33mcommit 1e35f9f56d48fc6d9231b43fc3afdc39c9037fa0[m[33m ([m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m, [m[1;32mmain[m[33m)[m
+Merge: 396ce44 7ab41e7
+Author: Ericka James <james7.ericka@gmail.com>
+Date:   Sun Jan 25 12:17:07 2026 -0500
+
+    Merge pull request #80 from Ericka-7james/fix/local-auth-runner
+    
+    Fix/local auth runner
+
+[33mcommit 7ab41e78731f5cf8c2d4035686de022f84096a9d[m[33m ([m[1;31morigin/fix/local-auth-runner[m[33m, [m[1;32mfix/local-auth-runner[m[33m)[m
+Author: Ericka-7james <james7.ericka@gmail.com>
+Date:   Sun Jan 25 12:16:19 2026 -0500
+
+    fix(ui): prevent Market Leaders card overflow on small screens
+
+[33mcommit 396ce44191fb862210ea5cbb53ccbace1439420b[m
+Merge: f0ad523 2784210
+Author: Ericka James <james7.ericka@gmail.com>
+Date:   Thu Jan 22 11:07:20 2026 -0500
+
+    Merge pull request #79 from Ericka-7james/fix/local-auth-runner
+    
+    Fix/local auth runner
+
+[33mcommit 8072f7270cfc86f68f9ab12e2705ec0a0e1e8025[m
+Author: Ericka-7james <james7.ericka@gmail.com>
+Date:   Thu Jan 22 10:56:29 2026 -0500
+
+    fix(auth-routing): move AuthRedirector out of <Routes> and stabilize session refresh
+
+[33mcommit 27842104e16d31dc2af6b4fe2aacbc00f11fb2b6[m
+Author: Ericka-7james <james7.ericka@gmail.com>
+Date:   Thu Jan 22 10:49:11 2026 -0500
+
+    fix:Fix auth redirect flow and harden session handling
+
+[33mcommit 456096d5d4aef84499adfbac09561cc06a5ae763[m
+Author: Ericka-7james <james7.ericka@gmail.com>
+Date:   Thu Jan 22 10:25:28 2026 -0500
+
+    Stabilize bot state handling and polish dashboard UX
+
+[33mcommit f0ad5232f1b9395102d31f4337e6959bb3163b5b[m
+Merge: 4b7cff2 19b8e3d
+Author: Ericka James <james7.ericka@gmail.com>
+Date:   Tue Jan 20 17:08:23 2026 -0500
+
+    Merge pull request #78 from Ericka-7james/fix/local-auth-runner
+    
+    This PR consolidates recent frontend refactors, UI polish, and backend runner hardening into a single, mergeable update. The focus is stability, test alignment, and production readiness across both the React frontend and the Python bot/runner stack.
+
+[33mcommit 19b8e3d7f54fb44bbe528c85826835179f55f4c8[m
+Author: Ericka-7james <james7.ericka@gmail.com>
+Date:   Tue Jan 20 17:05:55 2026 -0500
+
+    test(bots): align EMA trend and runner tests with intent/effective_state contract
+
+[33mcommit f38fa7675f2f76cb81bdc2e56d681d52bb13ab7a[m
+Author: Ericka-7james <james7.ericka@gmail.com>
+Date:   Tue Jan 20 16:53:08 2026 -0500
+
+    test(frontend): align page tests with latest files
+
+[33mcommit 1d090f12b48d39b37ad9b819d3eb9cae0ccbefb0[m
+Author: Ericka-7james <james7.ericka@gmail.com>
+Date:   Tue Jan 20 16:13:56 2026 -0500
+
+    feat(frontend): improve dashboard bot control, refresh landing copy, and expand tests
+
+[33mcommit 6bccfa10ef0942a3e327416dc2398b26963903a6[m
+Author: Ericka-7james <james7.ericka@gmail.com>
+Date:   Tue Jan 20 13:29:09 2026 -0500
+
+    fix:update tests
+
+[33mcommit 4351a89fab5821db6278bdbd496f3b818525a97d[m
+Author: Ericka-7james <james7.ericka@gmail.com>
+Date:   Tue Jan 20 12:23:27 2026 -0500
+
+    dashboard: remove market leaders card and add connected brokers mini card
+
+[33mcommit e60a9a4dc44ed2193dd7aaa0db7af0369aeb95fa[m
+Author: Ericka-7james <james7.ericka@gmail.com>
+Date:   Tue Jan 20 11:48:43 2026 -0500
+
+    feat(ui): refresh branding, hero layouts, and navigation
+
+[33mcommit ac3ba58ea9220b6a0b6ec7507c5e3882eee525c9[m
+Author: Ericka-7james <james7.ericka@gmail.com>
+Date:   Mon Jan 19 20:04:22 2026 -0500
+
+    refactor(frontend): rebuild About page layout, move CSS into pages/, add logo-only asset
+
+[33mcommit 081f12a96d1408c9e4a32ce6c31e1fa8de6df1e5[m
+Author: Ericka-7james <james7.ericka@gmail.com>
+Date:   Mon Jan 19 19:49:56 2026 -0500
+
+    refactor(frontend): rebuild About page layout, move CSS into pages/, add logo-only asset
+
+[33mcommit 4b7cff2a7cd78f8dad607de21434b46b57a234d4[m
+Merge: dc8cfbf 8a98a3d
+Author: Ericka James <james7.ericka@gmail.com>
+Date:   Mon Jan 19 17:59:58 2026 -0500
+
+    Merge pull request #77 from Ericka-7james/fix/local-auth-runner
+    
+    Fix/local auth runner
+
+[33mcommit 8a98a3df1ff09fe1561fc4adb5a35946d3b36206[m
+Author: Ericka-7james <james7.ericka@gmail.com>
+Date:   Mon Jan 19 17:55:22 2026 -0500
+
+    feat(market-leaders): add “View more” modal styling + tighten leaders card layout
+
+[33mcommit 871356ae77f1c1d0af251264b3752fcb36d23677[m
+Author: E
