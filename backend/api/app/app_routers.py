@@ -18,6 +18,9 @@ from api.routes.market_leaders import router as market_leaders_router
 from api.routes.market_us import router as market_us_router
 from api.routes.opportunities import router as opportunities_router
 
+from api.routes.trade_fills import router as trade_fills_router
+from api.routes.trade_fills_ingest import router as trade_fills_ingest_router
+
 # ✅ NEW: bot control routes
 from api.routes.bots import router as bots_router
 
@@ -49,5 +52,8 @@ def register_routers(app: FastAPI, api: APIRouter) -> None:
 
     # ✅ NEW: start/stop/status/report endpoints
     app.include_router(bots_router)
+
+    app.include_router(trade_fills_router)
+    app.include_router(trade_fills_ingest_router)
 
     _ = api

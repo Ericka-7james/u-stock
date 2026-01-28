@@ -213,10 +213,15 @@ export function AuthProvider({ children }) {
   };
 
   const logout = async () => {
-    await authFetch("auth/logout", { method: "POST" });
-    setUser(null);
-    setIsAuthed(false);
-    clearHint();
+    try {
+      await authFetch("auth/logout", { method: "POST" });
+    } catch {
+      // ignore network/logout errors; still clear local state
+    } finally {
+      setUser(null);
+      setIsAuthed(false);
+      clearHint();
+    }
   };
 
   return (

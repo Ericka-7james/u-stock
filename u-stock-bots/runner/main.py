@@ -28,6 +28,13 @@ from bots.ema_trend.bot import run as ema_trend_run
 DEFAULT_LOOP_SECONDS = int(os.getenv("RUNNER_LOOP_SECONDS", "15"))
 
 
+def _env_bool(name: str, default: bool) -> bool:
+    raw = (os.getenv(name) or "").strip().lower()
+    if raw == "":
+        return default
+    return raw in ("1", "true", "t", "yes", "y", "on")
+
+
 def _sleep(seconds: float, *, sleep_fn: Callable[[float], None] = time.sleep) -> None:
     sleep_fn(max(0.2, float(seconds)))
 
@@ -109,7 +116,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--loop", type=int, default=DEFAULT_LOOP_SECONDS, help="Loop interval in seconds when market open.")
     p.add_argument("--bot", type=str, default=os.getenv("RUNNER_BOT", "ema_trend"), help="Bot to run.")
 
-    # ✅ clearer toggle
+    # ✅ clearer CLI toggle
     p.add_argument(
         "--no-respect-market-hours",
         action="store_true",
@@ -126,7 +133,13 @@ def main(
 ) -> None:
     args = build_parser().parse_args(argv)
 
-    respect_market_hours = not bool(args.no_respect_market_hours)
+    # ✅ precedence:
+    # 1) CLI flag (--no-respect-market-hours) forces False
+    # 2) else env RUNNER_RESPECT_MARKET_HOURS controls it (default True)
+    if args.no_respect_market_hours:
+        respect_market_hours = False
+    else:
+        respect_market_hours = _env_bool("RUNNER_RESPECT_MARKET_HOURS", True)
 
     api = UStockAPI()
     print(

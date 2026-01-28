@@ -89,6 +89,10 @@ export default function BotControlCard({ activeBotId, onActiveBotChange }) {
   const [armedUntil, setArmedUntil] = useState(0);
   const isArmed = armedUntil > Date.now();
 
+  // Live toggle gating (paper-first)
+  const [liveConfirmOpen, setLiveConfirmOpen] = useState(false);
+  const [liveNotEnabledOpen, setLiveNotEnabledOpen] = useState(false);
+
   const [cfgDraft, setCfgDraft] = useState({
     mode: "paper",
     risk_per_trade: 0.005,
@@ -183,7 +187,6 @@ export default function BotControlCard({ activeBotId, onActiveBotChange }) {
 
   // -------- market session ----------
   const refreshMarketSession = useCallback(async () => {
-    // market requests can be safely aborted because they are slow + infrequent
     abortInflight("market");
     const ac = new AbortController();
     inflightRef.current.market = ac;
@@ -200,62 +203,71 @@ export default function BotControlCard({ activeBotId, onActiveBotChange }) {
   }, []);
 
   // -------- config ----------
-  const refreshConfig = useCallback(async (botId = selected) => {
-    const id = safeStr(botId);
-    if (!id) return;
+  const refreshConfig = useCallback(
+    async (botId = selected) => {
+      const id = safeStr(botId);
+      if (!id) return;
 
-    abortInflight("config");
-    const ac = new AbortController();
-    inflightRef.current.config = ac;
+      abortInflight("config");
+      const ac = new AbortController();
+      inflightRef.current.config = ac;
 
-    try {
-      const data = await apiGet(`/api/bots/config?bot_id=${encodeURIComponent(id)}`, {
-        signal: ac.signal,
-      });
-      if (!aliveRef.current || ac.signal.aborted) return;
-
-      const cfg = data?.config && typeof data.config === "object" ? data.config : null;
-      setConfig(cfg);
-
-      if (cfg) {
-        setCfgDraft({
-          mode: safeStr(cfg.mode, "paper"),
-          risk_per_trade: n(cfg.risk_per_trade, 0.005),
-          max_trades_per_day: Math.max(1, Math.floor(n(cfg.max_trades_per_day, 3))),
-          min_confidence: Math.min(0.99, Math.max(0.0, n(cfg.min_confidence, 0.62))),
+      try {
+        const data = await apiGet(`/api/bots/config?bot_id=${encodeURIComponent(id)}`, {
+          signal: ac.signal,
         });
+        if (!aliveRef.current || ac.signal.aborted) return;
+
+        const cfg = data?.config && typeof data.config === "object" ? data.config : null;
+        setConfig(cfg);
+
+        if (cfg) {
+          // IMPORTANT: if backend returns live but we don't support it yet, coerce to paper in UI draft
+          const backendMode = safeStr(cfg.mode, "paper");
+          const safeMode = backendMode === "live" ? "paper" : backendMode;
+
+          setCfgDraft({
+            mode: safeMode,
+            risk_per_trade: n(cfg.risk_per_trade, 0.005),
+            max_trades_per_day: Math.max(1, Math.floor(n(cfg.max_trades_per_day, 3))),
+            min_confidence: Math.min(0.99, Math.max(0.0, n(cfg.min_confidence, 0.62))),
+          });
+        }
+      } catch {
+        // ignore
+      } finally {
+        if (inflightRef.current.config === ac) inflightRef.current.config = null;
       }
-    } catch {
-      // ignore
-    } finally {
-      if (inflightRef.current.config === ac) inflightRef.current.config = null;
-    }
-  }, [selected]);
+    },
+    [selected]
+  );
 
   // -------- status polling (NO abort spam) ----------
-  const refreshStatus = useCallback(async (botId = selected) => {
-    const id = safeStr(botId);
-    if (!id) return;
+  const refreshStatus = useCallback(
+    async (botId = selected) => {
+      const id = safeStr(botId);
+      if (!id) return;
 
-    // ✅ never overlap status requests
-    if (inflightRef.current.status) return;
+      // never overlap status requests
+      if (inflightRef.current.status) return;
 
-    const ac = new AbortController();
-    inflightRef.current.status = ac;
+      const ac = new AbortController();
+      inflightRef.current.status = ac;
 
-    try {
-      const data = await apiGet(`/api/bots/status?bot_id=${encodeURIComponent(id)}`, {
-        signal: ac.signal,
-      });
-      if (!aliveRef.current || ac.signal.aborted) return;
-      setStatus(data);
-    } catch {
-      // ignore
-    } finally {
-      // IMPORTANT: only clear if it is still the same controller
-      if (inflightRef.current.status === ac) inflightRef.current.status = null;
-    }
-  }, [selected]);
+      try {
+        const data = await apiGet(`/api/bots/status?bot_id=${encodeURIComponent(id)}`, {
+          signal: ac.signal,
+        });
+        if (!aliveRef.current || ac.signal.aborted) return;
+        setStatus(data);
+      } catch {
+        // ignore
+      } finally {
+        if (inflightRef.current.status === ac) inflightRef.current.status = null;
+      }
+    },
+    [selected]
+  );
 
   // Start timers on selected change
   useEffect(() => {
@@ -274,7 +286,7 @@ export default function BotControlCard({ activeBotId, onActiveBotChange }) {
       refreshMarketSession();
     }, 30_000);
 
-    // ✅ status self-scheduling poll (prevents overlap + avoids canceled spam)
+    // status self-scheduling poll
     let stopped = false;
 
     const poll = async () => {
@@ -326,6 +338,14 @@ export default function BotControlCard({ activeBotId, onActiveBotChange }) {
   // -------- start/pause actions ----------
   async function doStart() {
     setUiError("");
+
+    // hard block live (future-ready UI, but no live keys yet)
+    if (safeStr(cfgDraft.mode, "paper") === "live") {
+      setLiveNotEnabledOpen(true);
+      setCfgDraft((s) => ({ ...s, mode: "paper" }));
+      return;
+    }
+
     setBusy(true);
     try {
       await apiPost("/api/bots/start", { bot_id: selected, mode: safeStr(cfgDraft.mode, "paper") });
@@ -337,7 +357,7 @@ export default function BotControlCard({ activeBotId, onActiveBotChange }) {
     }
   }
 
-  // NOTE: backend endpoint is /stop but it represents "pause intent" in your system
+  // NOTE: backend endpoint is /stop but it represents "pause intent"
   async function doPause() {
     setUiError("");
     setBusy(true);
@@ -351,21 +371,21 @@ export default function BotControlCard({ activeBotId, onActiveBotChange }) {
     }
   }
 
-  // -------- derive UI state from bots.py shape (production-ready) ----------
-  const intent = safeStr(status?.intent, "paused").toLowerCase(); // running | paused
-  const effective = safeStr(status?.effective_state, "stopped").toLowerCase(); // starting|running|paused|offline|...
-  const reasonCode = safeStr(status?.reason_code, "").toLowerCase(); // kept for future use
+  // -------- derive UI state ----------
+  const intent = safeStr(status?.intent, "paused").toLowerCase();
+  const effective = safeStr(status?.effective_state, "stopped").toLowerCase();
   const backendMsg = safeStr(status?.message, "");
   const pausedReason = safeStr(status?.pausedReason, "");
   const lastError = safeStr(status?.lastError, "");
 
-  const mode = safeStr(status?.mode, safeStr(config?.mode, "paper"));
+  // mode preference: status -> config -> draft -> paper
+  const mode = safeStr(status?.mode, safeStr(config?.mode, safeStr(cfgDraft.mode, "paper")));
+  const safeMode = mode === "live" ? "paper" : mode; // UI safety until live is supported
 
   // market
   const marketOk = market && typeof market === "object" && market.ok === true;
   const isOpen = marketOk ? Boolean(market.is_open) : null;
 
-  // next open (prefer backend-calculated nextOpenEpoch, else market next_open)
   const nextOpenEpochRaw =
     Number.isFinite(Number(status?.nextOpenEpoch)) && Number(status?.nextOpenEpoch) > 0
       ? Number(status?.nextOpenEpoch)
@@ -373,11 +393,8 @@ export default function BotControlCard({ activeBotId, onActiveBotChange }) {
       ? Number(market?.next_open)
       : null;
 
-  // heartbeat age (only meaningful when intent is running)
   const hbAge = Number.isFinite(Number(status?.heartbeatAgeSec)) ? Number(status.heartbeatAgeSec) : null;
-  const hbAt = Number.isFinite(Number(status?.heartbeatAt)) ? Number(status.heartbeatAt) : 0; // kept for future use
 
-  // classify effective state
   const isError = effective === "error" || Boolean(lastError);
   const isOffline = effective === "offline";
   const isPausedEff = effective === "paused";
@@ -386,14 +403,8 @@ export default function BotControlCard({ activeBotId, onActiveBotChange }) {
   const isRunningEff = effective === "running";
   const isDegraded = effective === "degraded";
 
-  // "live-ish" includes starting/waiting/degraded
   const liveish = isStarting || isRunningEff || isWaiting || isDegraded;
 
-  // UI State rules:
-  // - offline/error shows PAUSED (needs attention)
-  // - paused shows PAUSED
-  // - starting/running/degraded show LIVE
-  // - waiting_for_market shows PAUSED (not trading) but detail clarifies
   let uiState = "stopped";
   if (isError || isOffline || isPausedEff || isWaiting) uiState = "paused";
   else if (liveish) uiState = "running";
@@ -401,12 +412,10 @@ export default function BotControlCard({ activeBotId, onActiveBotChange }) {
 
   const isRunningUi = uiState === "running";
 
-  // Show "Next open" only when waiting/market-closed context makes sense
   const showNextOpen =
     (effective === "waiting_for_market" || (intent === "running" && isOpen === false) || effective === "paused") &&
     Boolean(nextOpenEpochRaw);
 
-  // Build a status detail line
   let statusDetail = "Idle";
 
   if (isError) {
@@ -473,8 +482,27 @@ export default function BotControlCard({ activeBotId, onActiveBotChange }) {
     }
   }
 
+  function requestLiveMode() {
+    setLiveConfirmOpen(true);
+  }
+
+  function confirmLiveMode() {
+    setLiveConfirmOpen(false);
+    // We don’t actually enable live yet
+    setLiveNotEnabledOpen(true);
+    setCfgDraft((s) => ({ ...s, mode: "paper" }));
+  }
+
   async function saveConfig() {
     setUiError("");
+
+    // hard block live save
+    if (safeStr(cfgDraft.mode, "paper") === "live") {
+      setLiveNotEnabledOpen(true);
+      setCfgDraft((s) => ({ ...s, mode: "paper" }));
+      return;
+    }
+
     setBusy(true);
 
     abortInflight("action");
@@ -525,6 +553,11 @@ export default function BotControlCard({ activeBotId, onActiveBotChange }) {
           </div>
 
           <div className="botPillRow">
+            {/* Mode pill (paper-first) */}
+            <div className="botCardStatePill mode" title="Paper trading is enabled. Live is coming soon.">
+              {safeMode === "paper" ? "PAPER" : "LIVE"}
+            </div>
+
             <div
               className={`botCardStatePill ${isArmed ? "warn" : "neg"}`}
               title={isArmed ? "Start is enabled briefly." : "Arm to enable Start."}
@@ -563,7 +596,6 @@ export default function BotControlCard({ activeBotId, onActiveBotChange }) {
                 View log
               </button>
 
-              {/* Arm/Disarm only when not LIVE */}
               {!isRunningUi ? (
                 <button
                   className="botBtn"
@@ -576,7 +608,6 @@ export default function BotControlCard({ activeBotId, onActiveBotChange }) {
                 </button>
               ) : null}
 
-              {/* Primary action: Start (when not LIVE) or Pause (when LIVE). No Stop button. */}
               {isRunningUi ? (
                 <button className="botBtn stop" type="button" onClick={doPause} disabled={!canPause}>
                   Pause
@@ -598,7 +629,7 @@ export default function BotControlCard({ activeBotId, onActiveBotChange }) {
           <div className="botGrid">
             <div className="botTile">
               <div className="botTileLabel">Mode</div>
-              <div className="botTileValue">{mode}</div>
+              <div className="botTileValue">{safeMode}</div>
             </div>
 
             <div className="botTile">
@@ -702,12 +733,23 @@ export default function BotControlCard({ activeBotId, onActiveBotChange }) {
             <select
               className="botSelect"
               value={cfgDraft.mode}
-              onChange={(e) => setCfgDraft((s) => ({ ...s, mode: e.target.value }))}
+              onChange={(e) => {
+                const next = e.target.value;
+                if (next === "live") {
+                  // Paper-first: confirm → show not enabled → keep paper
+                  requestLiveMode();
+                  return;
+                }
+                setCfgDraft((s) => ({ ...s, mode: next }));
+              }}
               disabled={busy}
             >
               <option value="paper">paper</option>
               <option value="live">live</option>
             </select>
+            <div style={{ fontSize: 12, opacity: 0.7 }}>
+              Live trading is coming soon. Paper-first while we harden stability + risk.
+            </div>
           </div>
 
           <div style={{ display: "grid", gap: 6 }}>
@@ -751,6 +793,50 @@ export default function BotControlCard({ activeBotId, onActiveBotChange }) {
               onChange={(e) => setCfgDraft((s) => ({ ...s, min_confidence: e.target.value }))}
               disabled={busy}
             />
+          </div>
+        </div>
+      </Modal>
+
+      {/* Live confirmation modal */}
+      <Modal
+        open={liveConfirmOpen}
+        title="Switch to LIVE?"
+        onClose={() => setLiveConfirmOpen(false)}
+        footer={
+          <>
+            <button className="mBtn" type="button" onClick={() => setLiveConfirmOpen(false)}>
+              Cancel
+            </button>
+            <button className="mBtn mBtnPrimary" type="button" onClick={confirmLiveMode}>
+              Yes, switch
+            </button>
+          </>
+        }
+      >
+        <div style={{ display: "grid", gap: 10 }}>
+          <div style={{ fontWeight: 900 }}>Live trading can place real orders.</div>
+          <div style={{ fontSize: 12, opacity: 0.8, fontWeight: 800 }}>
+            We’re paper-first until strategies are stable + efficient 24/7.
+          </div>
+        </div>
+      </Modal>
+
+      {/* Live not enabled modal (LandingPage-style simple message) */}
+      <Modal
+        open={liveNotEnabledOpen}
+        title="Not enabled yet"
+        onClose={() => setLiveNotEnabledOpen(false)}
+        footer={
+          <button className="mBtn mBtnPrimary" type="button" onClick={() => setLiveNotEnabledOpen(false)}>
+            Okay
+          </button>
+        }
+      >
+        <div style={{ display: "grid", gap: 10 }}>
+          <div style={{ fontWeight: 900 }}>Live trading isn’t available yet.</div>
+          <div style={{ fontSize: 12, opacity: 0.85, fontWeight: 800 }}>
+            U-Stock is currently paper trading only. Live keys + live execution will unlock after we validate
+            reliability and risk behavior.
           </div>
         </div>
       </Modal>

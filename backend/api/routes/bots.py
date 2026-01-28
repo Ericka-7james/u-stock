@@ -323,6 +323,11 @@ def start(request: Request, response: Response, payload: Dict[str, Any]):
         return JSONResponse(status_code=400, content={"detail": "bot_id required"})
 
     mode = _normalize_mode(payload.get("mode"))
+    cfg = _get_config(user_id, bid)
+    if not isinstance(cfg, dict):
+        cfg = _default_config()
+    cfg["mode"] = mode
+    _set_config(user_id, bid, cfg)
     _set_desired_state(user_id, bid, "running")
     _insert_log(user_id, bid, "info", "Intent set: running", {"mode": mode})
 
