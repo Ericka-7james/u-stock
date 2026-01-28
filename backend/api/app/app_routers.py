@@ -55,5 +55,3 @@ def register_routers(app: FastAPI, api: APIRouter) -> None:
 
     app.include_router(trade_fills_router)
     app.include_router(trade_fills_ingest_router)
-
-    _ = api
