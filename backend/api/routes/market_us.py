@@ -4,12 +4,12 @@ from __future__ import annotations
 import os
 import time
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List
 
 import requests
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 
-from api.core.security import require_user, decrypt_secret, get_supabase_service
+from api.core.integrations.alpaca_creds import get_user_alpaca_creds
 
 try:
     from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -26,9 +26,10 @@ REQUEST_TIMEOUT_SECONDS = int(os.getenv("ALPACA_HTTP_TIMEOUT", "12"))
 # Optional lightweight cache (per-process). For multi-instance scaling, use Redis.
 _CACHE: Dict[str, Dict[str, Any]] = {}
 CACHE_TTL_SECONDS = int(os.getenv("MARKET_LEADERS_TTL_SECONDS", "15"))
-_CACHE_VERSION = "v1-market_us-leaders-userkey"
+_CACHE_VERSION = "v2-market_us-leaders-userkey"
 
 _SESSION = requests.Session()
+
 
 # --------------------------------------------------------------------
 # small helpers
@@ -72,43 +73,6 @@ def _safe_get(url: str, headers: Dict[str, str]) -> requests.Response:
                 "error": repr(e),
             },
         )
-
-
-def _load_alpaca_keys(sb, user_id: str) -> Tuple[str, str, str]:
-    res = (
-        sb.table("integrations")
-        .select("api_key_enc,api_secret_enc,mode,status")
-        .eq("user_id", user_id)
-        .eq("provider", "alpaca")
-        .limit(1)
-        .execute()
-    )
-
-    rows = res.data or []
-    row = rows[0] if rows else None
-    if not row:
-        raise HTTPException(
-            status_code=400,
-            detail={"code": "ALPACA_NOT_CONNECTED", "message": "Alpaca not connected for this user"},
-        )
-
-    if str(row.get("status", "")).lower() != "connected":
-        raise HTTPException(
-            status_code=400,
-            detail={"code": "ALPACA_NOT_CONNECTED", "message": "Alpaca is not marked connected"},
-        )
-
-    api_key = decrypt_secret(row.get("api_key_enc"))
-    api_secret = decrypt_secret(row.get("api_secret_enc"))
-    mode = (row.get("mode") or "paper").lower()
-
-    if not api_key or not api_secret:
-        raise HTTPException(
-            status_code=400,
-            detail={"code": "ALPACA_INVALID_KEY", "message": "Alpaca keys missing or unreadable"},
-        )
-
-    return api_key, api_secret, mode
 
 
 def _safe_num(x: Any, default: float = 0.0) -> float:
@@ -163,6 +127,10 @@ def _pick_prev_close(it: Dict[str, Any]) -> float:
 
 
 def _unwrap_payload(payload: Any) -> Dict[str, Any]:
+    """
+    Alpaca sometimes wraps movers in {data:{movers:{...}}} or similar.
+    Normalize down to a dict that contains gainers/losers.
+    """
     if not isinstance(payload, dict):
         return {}
 
@@ -181,8 +149,6 @@ def _unwrap_payload(payload: Any) -> Dict[str, Any]:
 # --------------------------------------------------------------------
 # IMPORTANT:
 # - This endpoint must be FAST and must NOT touch Supabase/Alpaca/etc.
-# - If zoneinfo isn't available, fallback should still behave like ET
-#   (not UTC pretending to be ET).
 _ET_FALLBACK = timezone(timedelta(hours=-5))  # EST-style fallback
 
 
@@ -191,17 +157,13 @@ def _et_now() -> datetime:
         try:
             return datetime.now(ZoneInfo("America/New_York"))
         except ZoneInfoNotFoundError:
-            # Windows / slim env may not have tz database available
             pass
         except Exception:
-            # never let timezone resolution break the endpoint
             pass
-    # fallback: approximate ET instead of UTC
     return datetime.now(_ET_FALLBACK)
 
 
 def _next_weekday(d: datetime) -> datetime:
-    # Monday=0 .. Sunday=6
     out = d
     while out.weekday() >= 5:
         out = out + timedelta(days=1)
@@ -213,11 +175,10 @@ def _session_dict() -> Dict[str, Any]:
     Minimal session logic:
     - Stocks open Mon-Fri
     - Regular session 9:30am–4:00pm ET
-    - (Holidays/half-days can be added later via a calendar provider)
+    - Holidays/half-days can be added later.
     """
     now = _et_now()
 
-    # Weekend
     if now.weekday() >= 5:
         nxt = _next_weekday(now.replace(hour=9, minute=30, second=0, microsecond=0))
         return {
@@ -269,7 +230,6 @@ def _session_dict() -> Dict[str, Any]:
 
 @router.get("/us/session")
 def market_us_session():
-    # ultra-defensive: this endpoint should never hang
     try:
         return _session_dict()
     except Exception as e:
@@ -280,7 +240,7 @@ def market_us_session():
 
 
 # --------------------------------------------------------------------
-# market leaders (unchanged behavior)
+# market leaders
 # --------------------------------------------------------------------
 @router.get("/leaders")
 def market_leaders(
@@ -294,109 +254,95 @@ def market_leaders(
     """
     GET /api/market/leaders?market=stocks&direction=up&limit=8
     """
-    try:
-        user = require_user(request, response)
-        user_id = user["id"]
+    user_id, api_key, api_secret, mode = get_user_alpaca_creds(request, response)
 
-        cache_key = f"{_CACHE_VERSION}:{user_id}:{market}:{direction}:{limit}"
-        if not cache_bust:
-            cached = _cache_get(cache_key)
-            if cached is not None:
-                return cached
+    cache_key = f"{_CACHE_VERSION}:{user_id}:{market}:{direction}:{limit}:{cache_bust}"
+    if not cache_bust:
+        cached = _cache_get(cache_key)
+        if cached is not None:
+            return cached
 
-        sb = get_supabase_service()
-        api_key, api_secret, mode = _load_alpaca_keys(sb, user_id)
+    url = f"{ALPACA_DATA_BASE_URL}/v1beta1/screener/{market}/movers"
+    r = _safe_get(url, headers=_alpaca_headers(api_key, api_secret))
 
-        url = f"{ALPACA_DATA_BASE_URL}/v1beta1/screener/{market}/movers"
-        r = _safe_get(url, headers=_alpaca_headers(api_key, api_secret))
-
-        if r.status_code in (401, 403):
-            raise HTTPException(
-                status_code=401,
-                detail={
-                    "code": "ALPACA_INVALID_KEY",
-                    "message": "Alpaca rejected your API keys or you don’t have access.",
-                    "hint": "Reconnect Alpaca in Connected Apps and paste keys again.",
-                    "provider": "alpaca",
-                },
-            )
-
-        if r.status_code == 404:
-            raise HTTPException(
-                status_code=502,
-                detail={
-                    "code": "SOURCE_NOT_FOUND",
-                    "message": f"Alpaca movers endpoint returned 404 at {url}",
-                    "provider": "alpaca",
-                },
-            )
-
-        if r.status_code >= 400:
-            raise HTTPException(
-                status_code=502,
-                detail={
-                    "code": "ALPACA_SOURCE_ERROR",
-                    "message": f"Alpaca movers error {r.status_code}: {r.text}",
-                    "provider": "alpaca",
-                },
-            )
-
-        payload = r.json() or {}
-        base = _unwrap_payload(payload)
-
-        gainers = base.get("gainers") or []
-        losers = base.get("losers") or []
-
-        def normalize_rows(rows: List[Dict[str, Any]], dir_label: str) -> List[Dict[str, Any]]:
-            out: List[Dict[str, Any]] = []
-            for it in rows or []:
-                if not isinstance(it, dict):
-                    continue
-                sym = _pick_symbol(it)
-                if not sym:
-                    continue
-                out.append(
-                    {
-                        "symbol": sym,
-                        "changePct": _pick_change_pct(it),
-                        "last": _pick_last(it),
-                        "prevClose": _pick_prev_close(it),
-                        "direction": dir_label,
-                    }
-                )
-            return out
-
-        up_items = normalize_rows(gainers, "up")
-        down_items = normalize_rows(losers, "down")
-
-        if direction == "up":
-            items = up_items[:limit]
-        elif direction == "down":
-            items = down_items[:limit]
-        else:
-            items = (up_items + down_items)[:limit]
-
-        out = {
-            "ok": True,
-            "source": "ALPACA",
-            "market": market,
-            "direction": direction,
-            "mode": mode,
-            "items": items,
-            "asOf": _now_epoch(),
-            "meta": {
-                "cache_ttl": CACHE_TTL_SECONDS,
+    if r.status_code in (401, 403):
+        raise HTTPException(
+            status_code=401,
+            detail={
+                "code": "ALPACA_INVALID_KEY",
+                "message": "Alpaca rejected your API keys or you don’t have access.",
+                "hint": "Reconnect Alpaca in Connected Apps and paste keys again.",
                 "provider": "alpaca",
             },
-        }
+        )
 
-        _cache_set(cache_key, out, CACHE_TTL_SECONDS)
+    if r.status_code == 404:
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "code": "SOURCE_NOT_FOUND",
+                "message": f"Alpaca movers endpoint returned 404 at {url}",
+                "provider": "alpaca",
+            },
+        )
+
+    if r.status_code >= 400:
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "code": "ALPACA_SOURCE_ERROR",
+                "message": f"Alpaca movers error {r.status_code}: {r.text}",
+                "provider": "alpaca",
+            },
+        )
+
+    payload = r.json() or {}
+    base = _unwrap_payload(payload)
+    gainers = base.get("gainers") or []
+    losers = base.get("losers") or []
+
+    def normalize_rows(rows: List[Dict[str, Any]], dir_label: str) -> List[Dict[str, Any]]:
+        out: List[Dict[str, Any]] = []
+        for it in rows or []:
+            if not isinstance(it, dict):
+                continue
+            sym = _pick_symbol(it)
+            if not sym:
+                continue
+            out.append(
+                {
+                    "symbol": sym,
+                    "changePct": _pick_change_pct(it),
+                    "last": _pick_last(it),
+                    "prevClose": _pick_prev_close(it),
+                    "direction": dir_label,
+                }
+            )
         return out
 
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail={"code": "MARKET_LEADERS_FAILED", "message": "Server error", "error": repr(e)},
-        )
+    up_items = normalize_rows(gainers, "up")
+    down_items = normalize_rows(losers, "down")
+
+    if direction == "up":
+        items = up_items[:limit]
+    elif direction == "down":
+        items = down_items[:limit]
+    else:
+        items = (up_items + down_items)[:limit]
+
+    out = {
+        "ok": True,
+        "source": "ALPACA",
+        "market": market,
+        "direction": direction,
+        "mode": mode,
+        "items": items,
+        "asOf": _now_epoch(),
+        "meta": {
+            "cache_ttl": CACHE_TTL_SECONDS,
+            "provider": "alpaca",
+        },
+    }
+
+    _cache_set(cache_key, out, CACHE_TTL_SECONDS)
+    return out
