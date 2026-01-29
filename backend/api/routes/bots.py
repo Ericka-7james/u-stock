@@ -2,12 +2,13 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Header, HTTPException, Query, Request, Response, Depends
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import JSONResponse
 
 from api.deps import require_user
+from api.security.bot_runner_dep import require_bot_runner
 from api.core.bots.validators import clean_bot_id, normalize_mode
-from api.core.bots.service import BotService, require_runner
+from api.core.bots.service import BotService
 
 router = APIRouter(prefix="/api/bots", tags=["bots"])
 
@@ -23,7 +24,12 @@ def available(svc: BotService = Depends(get_bot_service)):
 
 
 @router.get("/status")
-def status(request: Request, response: Response, bot_id: str = Query(...), svc: BotService = Depends(get_bot_service)):
+def status(
+    request: Request,
+    response: Response,
+    bot_id: str = Query(...),
+    svc: BotService = Depends(get_bot_service),
+):
     u = require_user(request, response)
     user_id = u["id"]
 
@@ -89,29 +95,42 @@ def stop(
     return svc.stop(user_id, bid)
 
 
+# -------------------------
+# Runner-only endpoints (Bearer token)
+# -------------------------
+
 @router.post("/heartbeat")
 def heartbeat(
     payload: Dict[str, Any],
-    x_bot_runner_secret: Optional[str] = Header(default=None, convert_underscores=False, alias="X-Bot-Runner-Secret"),
-    x_runner_user_id: Optional[str] = Header(default=None, convert_underscores=False, alias="X-Runner-User-Id"),
+    runner_user_id: str = Depends(require_bot_runner),
     svc: BotService = Depends(get_bot_service),
 ):
-    try:
-        user_id = require_runner(x_bot_runner_secret=x_bot_runner_secret, x_runner_user_id=x_runner_user_id)
-    except PermissionError:
-        raise HTTPException(status_code=401, detail="Runner not authenticated")
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except RuntimeError as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
+    """
+    Runner-authenticated endpoint (Bearer token).
+    """
     bid = clean_bot_id(payload.get("bot_id"))
     if not bid:
         return JSONResponse(status_code=400, content={"detail": "bot_id required"})
 
     payload = dict(payload)
     payload["bot_id"] = bid
-    return svc.heartbeat(user_id, payload)
+    return svc.heartbeat(runner_user_id, payload)
+
+
+@router.get("/status_runner")
+def status_runner(
+    bot_id: str = Query(...),
+    runner_user_id: str = Depends(require_bot_runner),
+    svc: BotService = Depends(get_bot_service),
+):
+    """
+    Runner-authenticated endpoint (Bearer token).
+    """
+    bid = clean_bot_id(bot_id)
+    if not bid:
+        return JSONResponse(status_code=400, content={"detail": "bot_id required"})
+
+    return svc.status(runner_user_id, bid)
 
 
 @router.get("/config")
@@ -150,26 +169,3 @@ def set_config(
         return JSONResponse(status_code=400, content={"detail": "config must be an object"})
 
     return svc.set_config(user_id, bid, config)
-
-
-@router.get("/status_runner")
-def status_runner(
-    bot_id: str = Query(...),
-    x_bot_runner_secret: Optional[str] = Header(default=None, convert_underscores=False, alias="X-Bot-Runner-Secret"),
-    x_runner_user_id: Optional[str] = Header(default=None, convert_underscores=False, alias="X-Runner-User-Id"),
-    svc: BotService = Depends(get_bot_service),
-):
-    try:
-        user_id = require_runner(x_bot_runner_secret=x_bot_runner_secret, x_runner_user_id=x_runner_user_id)
-    except PermissionError:
-        raise HTTPException(status_code=401, detail="Runner not authenticated")
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except RuntimeError as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-    bid = clean_bot_id(bot_id)
-    if not bid:
-        return JSONResponse(status_code=400, content={"detail": "bot_id required"})
-
-    return svc.status(user_id, bid)
