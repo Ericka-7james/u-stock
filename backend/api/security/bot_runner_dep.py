@@ -1,4 +1,4 @@
-# api/security/bot_runner_dep.py
+# backend/api/security/bot_runner_dep.py
 from __future__ import annotations
 
 from fastapi import Header, HTTPException
@@ -33,7 +33,8 @@ def require_bot_runner(authorization: str = Header(default="")) -> str:
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Bot runner token expired")
     except jwt.InvalidTokenError as e:
-        raise HTTPException(status_code=401, detail=f"Invalid bot runner token")
+        # ✅ Match test expectation (and helpful for debugging)
+        raise HTTPException(status_code=401, detail=f"Invalid bot runner token: {str(e)}")
     except HTTPException:
         raise
     except Exception:

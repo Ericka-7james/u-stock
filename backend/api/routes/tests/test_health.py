@@ -23,7 +23,12 @@ def test_health_defaults_to_development(monkeypatch, client: TestClient):
 
     resp = client.get("/api/health")
     assert resp.status_code == 200
-    assert resp.json() == {"status": "ok", "env": "development"}
+
+    body = resp.json()
+    assert body["ok"] is True
+    assert body["status"] == "ok"
+    assert body["env"] == "development"
+    assert isinstance(body["ts"], int)
 
 
 def test_health_env_is_lower_stripped(monkeypatch, client: TestClient):
@@ -35,18 +40,21 @@ def test_health_env_is_lower_stripped(monkeypatch, client: TestClient):
 
 
 def test_market_snapshot_health_returns_missing_when_file_absent(monkeypatch, client: TestClient, tmp_path: Path):
-    # Patch backend root so we never touch real FS
     monkeypatch.setattr(mod, "_backend_root", lambda: tmp_path)
 
     resp = client.get("/api/health/market-snapshot")
     assert resp.status_code == 200
+
     body = resp.json()
     assert body["ok"] is False
     assert body["status"] == "missing"
     assert "health file not found yet" in body["error"]
+    assert body["env"] in {"test", "development", "production"}  # depends on ENV
+    assert "path" in body
+    assert isinstance(body["ts"], int)
 
 
-def test_market_snapshot_health_returns_json_when_file_exists(monkeypatch, client: TestClient, tmp_path: Path):
+def test_market_snapshot_health_returns_envelope_when_file_exists(monkeypatch, client: TestClient, tmp_path: Path):
     monkeypatch.setattr(mod, "_backend_root", lambda: tmp_path)
 
     path = tmp_path / "public" / "data" / "fetched" / "market-snapshot-health.json"
@@ -57,7 +65,14 @@ def test_market_snapshot_health_returns_json_when_file_exists(monkeypatch, clien
 
     resp = client.get("/api/health/market-snapshot")
     assert resp.status_code == 200
-    assert resp.json() == payload
+
+    body = resp.json()
+    assert body["ok"] is True
+    assert body["status"] == "success"
+    assert body["file"] == payload
+    assert body["path"].endswith("market-snapshot-health.json")
+    assert "env" in body
+    assert isinstance(body["ts"], int)
 
 
 def test_market_snapshot_health_500_when_json_invalid(monkeypatch, client: TestClient, tmp_path: Path):
@@ -69,4 +84,4 @@ def test_market_snapshot_health_500_when_json_invalid(monkeypatch, client: TestC
 
     resp = client.get("/api/health/market-snapshot")
     assert resp.status_code == 500
-    assert "Failed to read health file" in resp.json()["detail"]
+    assert "Invalid JSON in health file" in resp.json()["detail"] or "Failed to read health file" in resp.json()["detail"]

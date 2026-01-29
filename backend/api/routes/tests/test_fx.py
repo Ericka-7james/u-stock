@@ -8,13 +8,17 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from api.routes.fx import router
+import api.routes.fx as mod
 
 
 @pytest.fixture()
 def client():
     app = FastAPI()
-    app.include_router(router)
+    app.include_router(mod.router)
+
+    # ✅ runner-only endpoint: override dependency so tests don't need real JWTs
+    app.dependency_overrides[mod.require_bot_runner] = lambda: "test-user"
+
     return TestClient(app)
 
 
@@ -39,6 +43,10 @@ def test_fx_quote_returns_500_when_mt5_initialize_fails(client, monkeypatch):
     mt5.last_error = lambda: (1, "init failed")
     mt5.symbol_info_tick = lambda sym: None
     mt5.shutdown = lambda: None
+
+    # Optional functions referenced by your code
+    mt5.symbol_info = lambda sym: None
+    mt5.symbol_select = lambda sym, v: True
 
     real_import = builtins.__import__
 
@@ -68,6 +76,10 @@ def test_fx_quote_returns_400_when_symbol_not_available(client, monkeypatch):
 
     mt5.symbol_info_tick = symbol_info_tick
 
+    # Optional functions referenced by your code
+    mt5.symbol_info = lambda sym: types.SimpleNamespace(visible=True)
+    mt5.symbol_select = lambda sym, v: True
+
     real_import = builtins.__import__
 
     def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
@@ -95,6 +107,10 @@ def test_fx_quote_success_returns_quote_payload(client, monkeypatch):
     mt5.symbol_info_tick = lambda sym: Tick()
     mt5.shutdown = lambda: None
 
+    # Optional functions referenced by your code
+    mt5.symbol_info = lambda sym: types.SimpleNamespace(visible=True)
+    mt5.symbol_select = lambda sym, v: True
+
     real_import = builtins.__import__
 
     def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
@@ -114,3 +130,4 @@ def test_fx_quote_success_returns_quote_payload(client, monkeypatch):
     assert data["ask"] == pytest.approx(1.2349)
     assert data["spread"] == pytest.approx(1.2349 - 1.2345)
     assert data["time_msc"] == 1700000000123
+    assert data["source"] == "mt5"
