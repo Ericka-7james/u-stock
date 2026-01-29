@@ -6,7 +6,7 @@ from typing import Optional
 from fastapi import HTTPException
 from pydantic import BaseModel, EmailStr
 
-from api.core.config.settings import get_settings
+from api.core.config import get_settings
 
 
 class SignupBody(BaseModel):

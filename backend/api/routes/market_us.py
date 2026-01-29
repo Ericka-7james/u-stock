@@ -3,8 +3,9 @@ from __future__ import annotations
 
 import os
 import time
+import threading
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import requests
 from fastapi import APIRouter, HTTPException, Query, Request, Response
@@ -21,14 +22,38 @@ except Exception:
 router = APIRouter(prefix="/api/market", tags=["market"])
 
 ALPACA_DATA_BASE_URL = os.getenv("ALPACA_DATA_BASE_URL", "https://data.alpaca.markets").strip().rstrip("/")
-REQUEST_TIMEOUT_SECONDS = int(os.getenv("ALPACA_HTTP_TIMEOUT", "12"))
+REQUEST_TIMEOUT_SECONDS = float(os.getenv("ALPACA_HTTP_TIMEOUT", "12"))
+CACHE_TTL_SECONDS = int(os.getenv("MARKET_LEADERS_TTL_SECONDS", "15"))
 
 # Optional lightweight cache (per-process). For multi-instance scaling, use Redis.
 _CACHE: Dict[str, Dict[str, Any]] = {}
-CACHE_TTL_SECONDS = int(os.getenv("MARKET_LEADERS_TTL_SECONDS", "15"))
-_CACHE_VERSION = "v2-market_us-leaders-userkey"
+_CACHE_LOCK = threading.Lock()
+_CACHE_VERSION = "v3-market_us-leaders-userkey"
 
+# --------------------------------------------------------------------
+# HTTP session (pooled) with retries
+# --------------------------------------------------------------------
 _SESSION = requests.Session()
+try:
+    # urllib3 is a dependency of requests; this import is safe in most envs
+    from urllib3.util.retry import Retry
+    from requests.adapters import HTTPAdapter
+
+    retry = Retry(
+        total=3,
+        connect=2,
+        read=2,
+        backoff_factor=0.4,
+        status_forcelist=(429, 500, 502, 503, 504),
+        allowed_methods=frozenset(["GET"]),
+        raise_on_status=False,
+    )
+    adapter = HTTPAdapter(max_retries=retry, pool_connections=20, pool_maxsize=50)
+    _SESSION.mount("https://", adapter)
+    _SESSION.mount("http://", adapter)
+except Exception:
+    # If retry wiring fails, we still have a working Session.
+    pass
 
 
 # --------------------------------------------------------------------
@@ -38,18 +63,20 @@ def _now_epoch() -> int:
     return int(time.time())
 
 
-def _cache_get(key: str):
-    entry = _CACHE.get(key)
-    if not entry:
-        return None
-    if time.time() > entry["expires_at"]:
-        _CACHE.pop(key, None)
-        return None
-    return entry["value"]
+def _cache_get(key: str) -> Optional[Any]:
+    with _CACHE_LOCK:
+        entry = _CACHE.get(key)
+        if not entry:
+            return None
+        if time.time() > float(entry.get("expires_at", 0)):
+            _CACHE.pop(key, None)
+            return None
+        return entry.get("value")
 
 
-def _cache_set(key: str, value: Any, ttl: int):
-    _CACHE[key] = {"value": value, "expires_at": time.time() + ttl}
+def _cache_set(key: str, value: Any, ttl: int) -> None:
+    with _CACHE_LOCK:
+        _CACHE[key] = {"value": value, "expires_at": time.time() + float(ttl)}
 
 
 def _alpaca_headers(api_key: str, api_secret: str) -> Dict[str, str]:
@@ -57,22 +84,60 @@ def _alpaca_headers(api_key: str, api_secret: str) -> Dict[str, str]:
         "APCA-API-KEY-ID": api_key,
         "APCA-API-SECRET-KEY": api_secret,
         "Accept": "application/json",
+        "User-Agent": "u-stock/1.0 (+market leaders)",
     }
+
+
+def _read_json(resp: requests.Response) -> Any:
+    try:
+        return resp.json()
+    except Exception:
+        return None
+
+
+def _raise_upstream(
+    *,
+    status_code: int,
+    code: str,
+    message: str,
+    provider: str = "alpaca",
+    upstream_status: Optional[int] = None,
+    hint: Optional[str] = None,
+    extra: Optional[Dict[str, Any]] = None,
+) -> None:
+    detail: Dict[str, Any] = {
+        "code": code,
+        "message": message,
+        "provider": provider,
+    }
+    if upstream_status is not None:
+        detail["upstream_status"] = upstream_status
+    if hint:
+        detail["hint"] = hint
+    if extra:
+        detail.update(extra)
+    raise HTTPException(status_code=status_code, detail=detail)
 
 
 def _safe_get(url: str, headers: Dict[str, str]) -> requests.Response:
     try:
         return _SESSION.get(url, headers=headers, timeout=REQUEST_TIMEOUT_SECONDS)
-    except requests.RequestException as e:
-        raise HTTPException(
-            status_code=502,
-            detail={
-                "code": "ALPACA_NETWORK_ERROR",
-                "message": "Network error calling Alpaca data API",
-                "provider": "alpaca",
-                "error": repr(e),
-            },
+    except requests.Timeout as e:
+        _raise_upstream(
+            status_code=504,
+            code="ALPACA_TIMEOUT",
+            message="Timed out calling Alpaca data API",
+            extra={"error": repr(e)},
         )
+    except requests.RequestException as e:
+        _raise_upstream(
+            status_code=502,
+            code="ALPACA_NETWORK_ERROR",
+            message="Network error calling Alpaca data API",
+            extra={"error": repr(e)},
+        )
+    # unreachable, but keeps typing happy
+    raise HTTPException(status_code=502, detail={"code": "ALPACA_NETWORK_ERROR", "message": "Unknown network error"})
 
 
 def _safe_num(x: Any, default: float = 0.0) -> float:
@@ -92,7 +157,6 @@ def _norm_pct(raw: Any) -> float:
     """
     v = _safe_num(raw, 0.0)
     av = abs(v)
-
     if 0 < av <= 1.0:
         return v * 100.0
     if av > 200.0:
@@ -134,11 +198,10 @@ def _unwrap_payload(payload: Any) -> Dict[str, Any]:
     if not isinstance(payload, dict):
         return {}
 
-    base = payload
+    base: Any = payload
     if isinstance(base.get("data"), dict):
         base = base["data"]
-
-    if isinstance(base.get("movers"), dict):
+    if isinstance(base, dict) and isinstance(base.get("movers"), dict):
         base = base["movers"]
 
     return base if isinstance(base, dict) else {}
@@ -229,8 +292,10 @@ def _session_dict() -> Dict[str, Any]:
 
 
 @router.get("/us/session")
-def market_us_session():
+def market_us_session(response: Response):
     try:
+        # This can be cached safely since it is computed only from local time.
+        response.headers["Cache-Control"] = "public, max-age=5"
         return _session_dict()
     except Exception as e:
         raise HTTPException(
@@ -256,48 +321,56 @@ def market_leaders(
     """
     user_id, api_key, api_secret, mode = get_user_alpaca_creds(request, response)
 
-    cache_key = f"{_CACHE_VERSION}:{user_id}:{market}:{direction}:{limit}:{cache_bust}"
+    cache_key = f"{_CACHE_VERSION}:{user_id}:{market}:{direction}:{limit}"
     if not cache_bust:
         cached = _cache_get(cache_key)
         if cached is not None:
+            response.headers["X-Cache"] = "HIT"
+            response.headers["Cache-Control"] = f"private, max-age={CACHE_TTL_SECONDS}"
             return cached
 
     url = f"{ALPACA_DATA_BASE_URL}/v1beta1/screener/{market}/movers"
     r = _safe_get(url, headers=_alpaca_headers(api_key, api_secret))
 
+    # Map common upstream cases into stable API error shapes
     if r.status_code in (401, 403):
-        raise HTTPException(
+        _raise_upstream(
             status_code=401,
-            detail={
-                "code": "ALPACA_INVALID_KEY",
-                "message": "Alpaca rejected your API keys or you don’t have access.",
-                "hint": "Reconnect Alpaca in Connected Apps and paste keys again.",
-                "provider": "alpaca",
-            },
+            code="ALPACA_INVALID_KEY",
+            message="Alpaca rejected your API keys or you don’t have access.",
+            upstream_status=r.status_code,
+            hint="Reconnect Alpaca in Connected Apps and paste keys again.",
+        )
+
+    if r.status_code == 429:
+        _raise_upstream(
+            status_code=502,
+            code="ALPACA_RATE_LIMITED",
+            message="Alpaca rate-limited the request.",
+            upstream_status=429,
         )
 
     if r.status_code == 404:
-        raise HTTPException(
+        _raise_upstream(
             status_code=502,
-            detail={
-                "code": "SOURCE_NOT_FOUND",
-                "message": f"Alpaca movers endpoint returned 404 at {url}",
-                "provider": "alpaca",
-            },
+            code="SOURCE_NOT_FOUND",
+            message="Alpaca movers endpoint returned 404.",
+            upstream_status=404,
+            extra={"url": url},
         )
 
     if r.status_code >= 400:
-        raise HTTPException(
+        _raise_upstream(
             status_code=502,
-            detail={
-                "code": "ALPACA_SOURCE_ERROR",
-                "message": f"Alpaca movers error {r.status_code}: {r.text}",
-                "provider": "alpaca",
-            },
+            code="ALPACA_SOURCE_ERROR",
+            message="Alpaca movers request failed.",
+            upstream_status=r.status_code,
+            extra={"body": (r.text or "")[:1000]},
         )
 
-    payload = r.json() or {}
+    payload = _read_json(r) or {}
     base = _unwrap_payload(payload)
+
     gainers = base.get("gainers") or []
     losers = base.get("losers") or []
 
@@ -345,4 +418,6 @@ def market_leaders(
     }
 
     _cache_set(cache_key, out, CACHE_TTL_SECONDS)
+    response.headers["X-Cache"] = "MISS"
+    response.headers["Cache-Control"] = f"private, max-age={CACHE_TTL_SECONDS}"
     return out

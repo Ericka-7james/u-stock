@@ -1,7 +1,6 @@
 # u-stock-bots/bots/_shared/tests/test_http.py
 from __future__ import annotations
 
-import os
 from unittest.mock import MagicMock
 
 import pytest
@@ -55,9 +54,9 @@ def test_default_headers_include_runner_headers(monkeypatch):
     api.close()
 
 
-def test_request_calls_session_request_with_expected_args(monkeypatch):
-    # No env needed for this one
-    api = UStockAPI(base_url="http://example.com/api", timeout=12)
+def test_request_calls_session_request_with_expected_args():
+    # IMPORTANT: base_url should NOT include "/api" because UStockAPI adds "/api" itself.
+    api = UStockAPI(base_url="http://example.com", timeout=12)
 
     mocked = MagicMock()
     api.session.request = mocked

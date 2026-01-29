@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import Response
 
-from api.core.config.settings import get_settings
+from api.core.config import get_settings
 
 
 def set_auth_cookies(response: Response, access_token: str | None, refresh_token: str | None = None) -> None:

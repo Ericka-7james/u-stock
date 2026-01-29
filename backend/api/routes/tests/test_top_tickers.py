@@ -1,7 +1,7 @@
 # backend/api/routes/tests/test_top_tickers.py
 from __future__ import annotations
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 import pytest
 
@@ -75,24 +75,21 @@ def _clear_cache():
 
 def test_top_tickers_success_top_gainers_normalizes_and_limits(client, monkeypatch):
     sb = FakeSupabase()
-    sb.data = [
-        {"api_key_enc": "ENC_K", "api_secret_enc": "ENC_S", "mode": "paper", "status": "connected"},
-    ]
+    sb.data = [{"api_key_enc": "ENC_K", "api_secret_enc": "ENC_S", "mode": "paper", "status": "connected"}]
 
     monkeypatch.setattr(mod, "require_user", lambda req, resp: {"id": "user-1"})
     monkeypatch.setattr(mod, "get_supabase_service", lambda: sb)
     monkeypatch.setattr(mod, "decrypt_secret", lambda s: "DEC(" + str(s) + ")")
 
-    # Return a mix: valid dicts + invalid rows + missing symbol
     monkeypatch.setattr(
         mod,
         "_fetch_top_gainers",
         lambda api_key, api_secret, limit: [
             {"symbol": "aapl", "change_pct": 0.0123},
             {"symbol": "msft", "changePct": 1.5},
-            {"S": "nvda", "percent_change": 123},  # scaled -> 1.23
+            {"S": "nvda", "percent_change": 123},
             "bad",
-            {"symbol": ""},  # dropped
+            {"symbol": ""},
         ],
     )
 
@@ -103,7 +100,7 @@ def test_top_tickers_success_top_gainers_normalizes_and_limits(client, monkeypat
     assert body["ok"] is True
     assert body["mode"] == "paper"
     assert body["source"] == "alpaca_top_gainers"
-    assert body["count"] >= 3  # before slicing
+    assert body["count"] >= 3
     assert len(body["items"]) == 2
 
     assert body["items"][0]["symbol"] == "AAPL"
@@ -121,23 +118,19 @@ def test_top_tickers_most_active_path(client, monkeypatch):
     monkeypatch.setattr(mod, "get_supabase_service", lambda: sb)
     monkeypatch.setattr(mod, "decrypt_secret", lambda s: "DEC")
 
-    monkeypatch.setattr(
-        mod,
-        "_fetch_most_actives",
-        lambda api_key, api_secret, limit: [{"ticker": "TSLA", "pct_change": 0.01}],
-    )
+    monkeypatch.setattr(mod, "_fetch_most_actives", lambda api_key, api_secret, limit: [{"ticker": "TSLA", "pct_change": 0.01}])
 
     resp = client.get("/api/market/us/top-tickers", params={"source": "most_active", "limit": 10, "cache_bust": 1})
     assert resp.status_code == 200
     body = resp.json()
     assert body["source"] == "alpaca_most_active"
     assert body["items"][0]["symbol"] == "TSLA"
-    assert body["items"][0]["changePct"] == pytest.approx(1.0)  # 0.01 -> 1.0%
+    assert body["items"][0]["changePct"] == pytest.approx(1.0)
 
 
 def test_top_tickers_returns_400_when_not_connected(client, monkeypatch):
     sb = FakeSupabase()
-    sb.data = []  # no integration row
+    sb.data = []
 
     monkeypatch.setattr(mod, "require_user", lambda req, resp: {"id": "user-1"})
     monkeypatch.setattr(mod, "get_supabase_service", lambda: sb)
@@ -156,7 +149,9 @@ def test_top_tickers_returns_500_when_db_fails(client, monkeypatch):
 
     resp = client.get("/api/market/us/top-tickers", params={"cache_bust": 1})
     assert resp.status_code == 500
-    assert "Failed to load integrations" in resp.json()["detail"]
+    detail = resp.json()["detail"]
+    assert detail["code"] == "INTEGRATIONS_LOAD_FAILED"
+    assert "Failed to load integrations" in detail["message"]
 
 
 def test_top_tickers_caches_per_user(client, monkeypatch):
@@ -179,12 +174,10 @@ def test_top_tickers_caches_per_user(client, monkeypatch):
     assert r1.status_code == 200
     assert calls["fetch"] == 1
 
-    # second call should use cache
     r2 = client.get("/api/market/us/top-tickers", params={"source": "top_gainers", "limit": 1, "cache_ttl": 60})
     assert r2.status_code == 200
     assert calls["fetch"] == 1
 
-    # different user => different cache key
     monkeypatch.setattr(mod, "require_user", lambda req, resp: {"id": "user-2"})
     r3 = client.get("/api/market/us/top-tickers", params={"source": "top_gainers", "limit": 1, "cache_ttl": 60})
     assert r3.status_code == 200

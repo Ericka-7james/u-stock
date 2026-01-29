@@ -23,7 +23,7 @@ class FakeQuery:
         self._select_cols = None
         self._filters = []
         self._limit = None
-        self._is_maybe_single = False  # <-- ADD
+        self._is_maybe_single = False
 
     def select(self, cols):
         self._select_cols = cols
@@ -38,7 +38,7 @@ class FakeQuery:
         return self
 
     def maybe_single(self):
-        self._is_maybe_single = True  # <-- ADD
+        self._is_maybe_single = True
         self._sb.calls.append(("maybe_single", self._table, tuple(self._filters)))
         return self
 
@@ -63,15 +63,16 @@ class FakeQuery:
     def execute(self):
         self._sb.calls.append(("execute", self._table, tuple(self._filters), self._select_cols, self._limit))
 
-        # --- IMPORTANT: fallback existing check ---
+        # fallback existing check
         if self._is_maybe_single:
             return _ExecResult(data=self._sb.existing_data)
 
-        # --- creds route select result ---
+        # creds route select result
         if self._select_cols == "status,mode,api_key_enc,api_secret_enc":
             return _ExecResult(data=self._sb.select_data)
 
         return _ExecResult(data=None)
+
 
 class FakeSupabase:
     def __init__(self):
@@ -116,7 +117,6 @@ def test_save_keys_success_uses_upsert(client, monkeypatch):
     assert resp.status_code == 200
     assert resp.json() == {"ok": True, "provider": "alpaca", "status": "connected", "mode": "paper"}
 
-    # Ensure upsert happened with encrypted fields
     upserts = [c for c in sb.calls if c[0] == "upsert"]
     assert len(upserts) == 1
     _, table, payload, on_conflict = upserts[0]
@@ -150,7 +150,6 @@ def test_save_keys_blank_after_strip_returns_400(client, monkeypatch):
     monkeypatch.setattr(mod, "encrypt_secret", lambda s: f"enc({s})")
     monkeypatch.setattr(mod, "require_user", lambda request, response: {"id": "user-123"})
 
-    # length >= 5 so pydantic accepts, but route strips -> empty -> 400
     resp = client.post(
         "/integrations/alpaca/keys",
         json={"api_key": "     ", "api_secret": "     ", "mode": "paper"},
@@ -158,6 +157,7 @@ def test_save_keys_blank_after_strip_returns_400(client, monkeypatch):
     assert resp.status_code == 400
     detail = resp.json()["detail"]
     assert detail["code"] == "ALPACA_KEYS_MISSING"
+    assert detail["provider"] == "alpaca"
 
 
 def test_save_keys_upsert_fails_then_updates_when_existing(client, monkeypatch):
@@ -179,6 +179,7 @@ def test_save_keys_upsert_fails_then_updates_when_existing(client, monkeypatch):
     assert not any(c[0] == "insert" for c in sb.calls)
     assert any(c[0] == "maybe_single" for c in sb.calls)
 
+
 def test_save_keys_upsert_fails_then_inserts_when_missing(client, monkeypatch):
     sb = FakeSupabase()
     sb.fail_upsert = True
@@ -193,7 +194,6 @@ def test_save_keys_upsert_fails_then_inserts_when_missing(client, monkeypatch):
         json={"api_key": "AK12345", "api_secret": "SK12345", "mode": "paper"},
     )
     assert resp.status_code == 200
-
     assert any(c[0] == "insert" for c in sb.calls)
 
 
@@ -202,7 +202,7 @@ def test_save_keys_upsert_fails_then_inserts_when_missing(client, monkeypatch):
 # -------------------------
 def test_get_creds_returns_not_connected_when_no_row(app, monkeypatch):
     sb = FakeSupabase()
-    sb.select_data = []  # no integration row
+    sb.select_data = []
 
     monkeypatch.setattr(mod, "get_supabase_service", lambda: sb)
     monkeypatch.setattr(mod, "decrypt_secret", lambda s: f"dec({s})")
@@ -273,4 +273,6 @@ def test_get_creds_returns_500_when_supabase_select_errors(app, monkeypatch):
 
     resp = client.get("/integrations/alpaca/creds")
     assert resp.status_code == 500
-    assert "Failed to load Alpaca integration" in resp.json()["detail"]
+    detail = resp.json()["detail"]
+    assert detail["code"] == "INTEGRATION_LOAD_FAILED"
+    assert "Failed to load Alpaca integration" in detail["message"]

@@ -1,4 +1,7 @@
+# backend/api/app/app_factory.py
 from __future__ import annotations
+
+import os
 
 from fastapi import APIRouter, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,7 +11,19 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from api.app.app_auth import get_auth_router
 from api.app.app_bootstrap import bootstrap_paths, load_env
 from api.app.app_routers import register_routers
-from api.core.config.settings import get_settings
+from api.core.config import get_settings
+
+
+def _effective_env(settings_env: str) -> str:
+    """
+    Test runner sets ENV=test via cross-env.
+    We must not let a loaded .env override that.
+    """
+    raw = (os.getenv("ENV") or "").strip().lower()
+    if raw:
+        return raw
+    # fallback to settings if ENV missing
+    return (settings_env or "development").strip().lower()
 
 
 def create_app() -> FastAPI:
@@ -39,23 +54,28 @@ def create_app() -> FastAPI:
     # Catch-all for truly unexpected errors
     @app.exception_handler(Exception)
     async def _unhandled_exception_handler(request: Request, exc: Exception):
+        env = (os.getenv("ENV") or "development").strip().lower()
+
         payload = {"detail": "Server error"}
-        if settings.env in ("local", "test", "development"):
+        if env != "production":
             payload["error"] = repr(exc)
+
         return JSONResponse(status_code=500, content=payload)
 
     @app.get("/")
     async def root():
+        env = _effective_env(settings.env)
         return {
             "name": "u-stock-auth-backend",
             "status": "running",
-            "env": settings.env,
-            "strict_settings": bool(settings.strict),
+            "env": env,
+            "strict_settings": bool(getattr(settings, "strict", False)),
         }
 
     @app.get("/health")
     async def health_root():
-        return {"status": "ok", "env": settings.env}
+        env = _effective_env(settings.env)
+        return {"status": "ok", "env": env}
 
     api = APIRouter(prefix="/api")
     api.include_router(get_auth_router())
