@@ -1,5 +1,7 @@
+# backend/api/core/bots/service.py
 from __future__ import annotations
 
+import json
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -15,6 +17,18 @@ from api.core.bots.repo import BotRepo
 
 from api.core.events.sink import get_event_sink
 from api.core.events.models import BotEvent
+
+
+# -------------------------
+# Submit-intents hard limits (prod safety)
+# -------------------------
+_MAX_INTENTS_PER_SUBMIT = 50
+_MAX_INTENTS_PREVIEW = 10
+_MAX_REASON_CODES = 25
+_MAX_REASON_LEN = 48
+_MAX_SYMBOL_LEN = 16
+_MAX_TIMEFRAME_LEN = 24
+_MAX_BOT_ID_LEN = 64
 
 
 def now_epoch() -> int:
@@ -35,6 +49,8 @@ def compute_offline(desired_state: str, last_heartbeat_epoch: int) -> Tuple[bool
     return age > HEARTBEAT_STALE_SECONDS, age
 
 
+# NOTE: Legacy auth helper (secret + X-Runner-User-Id).
+# Your routes now use Bearer token via require_bot_runner, which is correct.
 def require_runner(*, x_bot_runner_secret: Optional[str], x_runner_user_id: Optional[str]) -> str:
     if not BOT_RUNNER_SECRET:
         raise RuntimeError("Server not configured for runner auth (BOT_RUNNER_SECRET missing)")
@@ -47,6 +63,89 @@ def require_runner(*, x_bot_runner_secret: Optional[str], x_runner_user_id: Opti
     if not uid:
         raise ValueError("Runner user_id missing (X-Runner-User-Id)")
     return uid
+
+
+def _as_dict(x: Any) -> Dict[str, Any]:
+    return x if isinstance(x, dict) else {}
+
+
+def _as_list(x: Any) -> List[Any]:
+    return x if isinstance(x, list) else []
+
+
+def _clean_symbol(x: Any) -> str:
+    s = str(x or "").strip().upper()
+    if not s or len(s) > _MAX_SYMBOL_LEN:
+        return ""
+    for ch in s:
+        if not (ch.isalnum() or ch in {".", "-"}):
+            return ""
+    return s
+
+
+def _coerce_float(x: Any) -> Optional[float]:
+    try:
+        return float(x)
+    except Exception:
+        return None
+
+
+def _trim_reason_codes(x: Any) -> List[str]:
+    raw = _as_list(x)
+    out: List[str] = []
+    for v in raw[:_MAX_REASON_CODES]:
+        s = str(v or "").strip()
+        if not s:
+            continue
+        if len(s) > _MAX_REASON_LEN:
+            s = s[:_MAX_REASON_LEN]
+        out.append(s)
+    return out
+
+
+def _normalize_intent_item(raw: Any, *, bot_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Defensive normalization for UI visibility (NOT execution).
+    Keep payload stable and small.
+    """
+    if not isinstance(raw, dict):
+        return None
+
+    symbol = _clean_symbol(raw.get("symbol"))
+    if not symbol:
+        return None
+
+    side = str(raw.get("side") or "").strip().lower()
+    if side not in ("buy", "sell"):
+        side = ""
+
+    timeframe = str(raw.get("timeframe") or "").strip()
+    if len(timeframe) > _MAX_TIMEFRAME_LEN:
+        timeframe = timeframe[:_MAX_TIMEFRAME_LEN]
+
+    out: Dict[str, Any] = {
+        "bot_id": bot_id,
+        "symbol": symbol,
+        "side": side or None,
+        "entry": _coerce_float(raw.get("entry")),
+        "stop": _coerce_float(raw.get("stop")),
+        "take_profit": _coerce_float(raw.get("take_profit")),
+        "confidence": _coerce_float(raw.get("confidence")),
+        "timeframe": timeframe or None,
+        "reason_codes": _trim_reason_codes(raw.get("reason_codes")),
+    }
+    return {k: v for k, v in out.items() if v is not None}
+
+
+def _stable_hash(obj: Any) -> str:
+    """
+    Cheap deterministic signature so we can avoid spamming logs
+    when intents haven't changed.
+    """
+    try:
+        return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    except Exception:
+        return str(obj)
 
 
 class BotService:
@@ -73,6 +172,17 @@ class BotService:
         if offline:
             effective = "offline"
 
+        # ✅ Intents visibility (runner -> submit-intents)
+        try:
+            last_intents_count = int(runtime.get("last_intents_count") or 0)
+        except Exception:
+            last_intents_count = 0
+
+        last_intents_at = parse_ts_to_epoch_seconds(runtime.get("last_intents_at"))
+        last_intents_preview = runtime.get("last_intents_preview")
+        if not isinstance(last_intents_preview, list):
+            last_intents_preview = []
+
         return {
             "bot_id": bot_id,
             "intent": "running" if desired == "running" else "paused",
@@ -87,7 +197,9 @@ class BotService:
             "nextOpenEpoch": None,
             "pausedReason": None if desired == "running" else "manual_pause",
             "lastError": runtime.get("last_error_message"),
-            "lastIntents": 0,
+            "lastIntents": last_intents_count,
+            "lastIntentsAt": last_intents_at,
+            "lastIntentsPreview": last_intents_preview[:_MAX_INTENTS_PREVIEW],
             "config": cfg if isinstance(cfg, dict) else default_config(),
         }
 
@@ -171,6 +283,69 @@ class BotService:
         cfg = self.repo.get_config(user_id, bot_id, default_config())
         return {"bot_id": bot_id, "config": cfg if isinstance(cfg, dict) else default_config()}
 
+    def submit_intents(self, user_id: str, bot_id: str, ts: int, intents: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Persist runner-submitted strategy intents for UI visibility.
+
+        Storage strategy (no new tables required):
+          - write to runtime_state as last_intents_* fields
+          - keep a small preview list for UI
+
+        This endpoint MUST NOT be able to take down runner loops.
+        """
+        bid = str(bot_id or "").strip()[:_MAX_BOT_ID_LEN]
+        if not bid:
+            return {"ok": False, "error": "bot_id required"}
+
+        raw_items = _as_list(intents)
+        trimmed = raw_items[:_MAX_INTENTS_PER_SUBMIT]
+
+        normalized: List[Dict[str, Any]] = []
+        for it in trimmed:
+            clean = _normalize_intent_item(it, bot_id=bid)
+            if clean:
+                normalized.append(clean)
+
+        # compare signature to avoid log spam
+        prev = self.repo.get_runtime_state(user_id, bid)
+        prev_sig = str(prev.get("last_intents_sig") or "")
+        sig = _stable_hash(normalized[:_MAX_INTENTS_PREVIEW])
+
+        patch: Dict[str, Any] = {
+            "last_intents_count": len(normalized),
+            "last_intents_at": iso_now(),  # iso string; your status parses it
+            "last_intents_preview": normalized[:_MAX_INTENTS_PREVIEW],
+            "last_intents_sig": sig,
+        }
+
+        # store (repo should tolerate extra keys; if it doesn't, we’ll adjust BotRepo next)
+        try:
+            self.repo.upsert_runtime_state(user_id, bid, patch)
+        except Exception as e:
+            # fail safe: don't break runner, but surface for debugging
+            return {"ok": False, "bot_id": bid, "error": f"persist_failed: {type(e).__name__}"}
+
+        # only log when preview changed
+        if sig and sig != prev_sig:
+            try:
+                self.repo.insert_log(user_id, bid, "info", "Strategy intents submitted", {"count": len(normalized)})
+            except Exception:
+                pass
+
+        try:
+            self.sink.emit(
+                BotEvent(
+                    bot_id=bid,
+                    event_type="intents_submitted",
+                    user_id=user_id,
+                    data={"count": len(normalized), "ts": int(ts or now_epoch()), "source": "runner"},
+                )
+            )
+        except Exception:
+            pass
+
+        return {"ok": True, "bot_id": bid, "stored": len(normalized), "ts": int(ts or now_epoch())}
+
     def heartbeat(self, user_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         bot_id = str(payload.get("bot_id") or "").strip()
         intent_in = normalize_intent(payload.get("intent"), default="running")
@@ -211,7 +386,6 @@ class BotService:
                 "State changed",
                 {"from": prev_state, "to": eff_in, "intent": intent_in, "mode": mode, "reason_code": reason_code, "message": message},
             )
-            # Map some state changes to events
             et = "heartbeat"
             if eff_in == "running":
                 et = "bot_resumed"

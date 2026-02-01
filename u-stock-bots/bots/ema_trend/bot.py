@@ -10,23 +10,23 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from bots._shared.types import TradeIntent
 from bots._shared.ustock_http import UStockAPI
+from bots._shared.opportunities_client import get_opportunity_symbols
 
 from bots._shared.data.bars import closes_from_bars, extract_ohlc
 from bots._shared.indicators.ema import ema
-from bots._shared.filters.chop import (
-    ema_separation_pct,
-    slope_pct,
-    passes_chop_filters,
-)
+from bots._shared.indicators.vwap import vwap_from_bars
+from bots._shared.filters.chop import ema_separation_pct, slope_pct, passes_chop_filters
 from bots._shared.filters.time_window import is_trade_window_local
 from bots._shared.telemetry import inc, one_line
+from bots._shared.symbol_scoring import LiquidityFilterConfig, liquidity_ok, score_candidate
 
 from bots.ema_trend.config import EMATrendConfig
 from bots.ema_trend.signal import compute_signal
-from bots.ema_trend.reason_codes import BIAS_UP, BIAS_DN
+from bots.ema_trend.reason_codes import BIAS_UP, BIAS_DN, EMA_STACK, PULLBACK_OK
 
 _LAST_LOG_TS: Dict[str, float] = {}
 _MARKET_CLOSED_UNTIL: float = 0.0
+_LAST_INTENT_TS_BY_SYMBOL: Dict[str, float] = {}
 
 
 def _log(msg: str) -> None:
@@ -47,15 +47,11 @@ def _safe_bot_id(bot_id: str) -> str:
 
 
 def _atomic_write_json(path: Path, payload: Dict[str, Any]) -> None:
-    """
-    Atomic-ish write to avoid partial/corrupted JSON (important on Pi + sudden restarts).
-    """
     try:
         tmp = path.with_suffix(path.suffix + ".tmp")
         tmp.write_text(json.dumps(payload, separators=(",", ":"), ensure_ascii=True), encoding="utf-8")
         tmp.replace(path)
     except Exception:
-        # never let hinting break trading logic
         pass
 
 
@@ -66,17 +62,6 @@ def _write_market_gate_hint(
     bot_id: str = "ema_trend",
     market: str = "us_stocks",
 ) -> None:
-    """
-    Writes a small file to OUTPUT_DIR so a runner/UI can show:
-      - market is closed
-      - when we plan to re-check
-
-    Production tweaks:
-      - per-bot filename to avoid collisions if multiple bots write hints
-      - JSON-safe (no string concat)
-      - atomic write to reduce corruption risk
-      - includes effective_state + reason for UI mapping
-    """
     out_dir = os.getenv("OUTPUT_DIR") or ""
     if not out_dir:
         return
@@ -102,10 +87,6 @@ def _write_market_gate_hint(
 
 
 def _get_us_market_session(api: UStockAPI) -> Optional[Dict[str, Any]]:
-    """
-    Expects backend to implement:
-      GET /api/market/us/session
-    """
     try:
         return api.get("/api/market/us/session")
     except Exception:
@@ -113,13 +94,9 @@ def _get_us_market_session(api: UStockAPI) -> Optional[Dict[str, Any]]:
 
 
 def _maybe_market_closed(api: UStockAPI) -> Tuple[bool, Optional[float], str]:
-    """
-    Returns (closed?, next_open_epoch?, reason)
-    """
     session = _get_us_market_session(api)
     if isinstance(session, dict) and session.get("ok") is True:
-        is_open = bool(session.get("is_open"))
-        if is_open:
+        if bool(session.get("is_open")):
             return (False, None, "open")
 
         nxt = session.get("next_open")
@@ -135,38 +112,24 @@ def _maybe_market_closed(api: UStockAPI) -> Tuple[bool, Optional[float], str]:
 
 def _compute_bias_15m(closes: List[float], cfg: EMATrendConfig) -> Optional[str]:
     """
-    Bias uses:
-      - slow EMA = EMA(cfg.ema_bias)
-      - fast EMA = EMA(cfg.ema_fast)
-      - slope of slow EMA over cfg.bias_slope_lookback
-
-    Up:
-      price > slow AND fast > slow AND slope > 0
-    Down:
-      price < slow AND fast < slow AND slope < 0
+    Bias:
+      - price > slow EMA AND fast > slow AND slope > 0 => up
+      - price < slow EMA AND fast < slow AND slope < 0 => down
     """
     slow_len = int(cfg.ema_bias)
     fast_len = int(cfg.ema_fast)
-    slope_lb = int(cfg.bias_slope_lookback)
+    slope_lb = max(1, int(cfg.bias_slope_lookback))
 
     if not closes:
         return None
-    if slow_len <= 1 or fast_len <= 1:
-        return None
-    if slope_lb < 1:
-        slope_lb = 1
 
-    # Need enough points for EMA(slow) and slope lookback
     need = max(slow_len, fast_len) + slope_lb + 2
     if len(closes) < need:
         return None
 
     ef = ema(closes, fast_len)
     es = ema(closes, slow_len)
-    if not ef or not es:
-        return None
-
-    if len(es) <= slope_lb:
+    if not ef or not es or len(es) <= slope_lb:
         return None
 
     price = float(closes[-1])
@@ -181,10 +144,124 @@ def _compute_bias_15m(closes: List[float], cfg: EMATrendConfig) -> Optional[str]
     return None
 
 
+def _cooldown_seconds() -> int:
+    try:
+        return max(30, int(os.getenv("EMA_TREND_SYMBOL_COOLDOWN_SECONDS", "180")))
+    except Exception:
+        return 180
+
+
+def _is_in_cooldown(symbol: str) -> bool:
+    cd = float(_cooldown_seconds())
+    now = time.time()
+    last = float(_LAST_INTENT_TS_BY_SYMBOL.get(symbol, 0.0))
+    return (now - last) < cd
+
+
+def _mark_intent(symbol: str) -> None:
+    _LAST_INTENT_TS_BY_SYMBOL[symbol] = time.time()
+
+
+def _liq_cfg_from_env() -> LiquidityFilterConfig:
+    def _f(name: str, default: float) -> float:
+        try:
+            return float(os.getenv(name, str(default)))
+        except Exception:
+            return default
+
+    def _i(name: str, default: int) -> int:
+        try:
+            return int(os.getenv(name, str(default)))
+        except Exception:
+            return default
+
+    max_atr = os.getenv("EMA_TREND_MAX_ATR_PCT", "").strip()
+    max_atr_pct: Optional[float] = None
+    if max_atr:
+        try:
+            max_atr_pct = float(max_atr)
+        except Exception:
+            max_atr_pct = None
+
+    return LiquidityFilterConfig(
+        min_last_price=_f("EMA_TREND_MIN_LAST_PRICE", 2.0),
+        min_bar_volume=_f("EMA_TREND_MIN_LAST_BAR_VOLUME", 25_000.0),
+        min_avg_bar_volume=_f("EMA_TREND_MIN_AVG_BAR_VOLUME", 15_000.0),
+        avg_volume_lookback=_i("EMA_TREND_AVG_VOL_LOOKBACK", 30),
+        max_atr_pct=max_atr_pct,
+    )
+
+
+def _min_rr_from_env(default: float = 1.0) -> float:
+    """
+    Strategy-quality upgrade:
+    reject brackets with weak reward:risk.
+    """
+    raw = (os.getenv("EMA_TREND_MIN_RR") or "").strip()
+    if not raw:
+        return float(default)
+    try:
+        return max(0.1, float(raw))
+    except Exception:
+        return float(default)
+
+
+def _rr_ok(entry: float, stop: float, tp: float, *, min_rr: float) -> bool:
+    risk = abs(float(entry) - float(stop))
+    reward = abs(float(tp) - float(entry))
+    if risk <= 0:
+        return False
+    rr = reward / risk
+    return rr >= float(min_rr)
+
+
+def _setup_confirmation_ok(
+    *,
+    bars_setup: Dict[str, Any],
+    bias: str,
+    cfg: EMATrendConfig,
+) -> Tuple[bool, List[str]]:
+    """
+    Setup timeframe confirmation (default 5m):
+      - EMA stack in direction (fast vs slow)
+      - pullback proximity to fast EMA (avoid chasing)
+    """
+    ohlc = extract_ohlc(bars_setup)
+    if ohlc is None:
+        return False, []
+
+    o, h, l, c = ohlc
+    if not c:
+        return False, []
+
+    ef = ema(c, int(cfg.setup_ema_fast))
+    es = ema(c, int(cfg.setup_ema_slow))
+    if not ef or not es:
+        return False, []
+
+    price = float(c[-1])
+    fast = float(ef[-1])
+    slow = float(es[-1])
+
+    # avoid chasing: must be near fast EMA
+    dist_pct = abs(price - fast) / max(1e-9, price) * 100.0
+    pullback_ok = dist_pct <= float(cfg.setup_pullback_max_dist_pct)
+
+    if bias == "up":
+        stack_ok = (fast > slow) and (price >= slow)
+    else:
+        stack_ok = (fast < slow) and (price <= slow)
+
+    reasons: List[str] = []
+    if stack_ok:
+        reasons.append(EMA_STACK)
+    if pullback_ok:
+        reasons.append(PULLBACK_OK)
+
+    return (stack_ok and pullback_ok), reasons
+
+
 def run(api: Optional[UStockAPI] = None, cfg: Optional[EMATrendConfig] = None) -> List[TradeIntent]:
-    """
-    Core bot loop. Returns TradeIntent list.
-    """
     global _MARKET_CLOSED_UNTIL
 
     created_api = api is None
@@ -195,6 +272,9 @@ def run(api: Optional[UStockAPI] = None, cfg: Optional[EMATrendConfig] = None) -
     intents: List[TradeIntent] = []
     counters: Dict[str, int] = {}
 
+    liq_cfg = _liq_cfg_from_env()
+    min_rr = _min_rr_from_env(default=1.0)
+
     try:
         # time window gate
         if not is_trade_window_local():
@@ -202,7 +282,7 @@ def run(api: Optional[UStockAPI] = None, cfg: Optional[EMATrendConfig] = None) -
             _log_throttled("outside_window", one_line("ema_trend", counters), every_seconds=300)
             return []
 
-        # ✅ market session gate (early)
+        # market session gate
         now = time.time()
         if now >= _MARKET_CLOSED_UNTIL:
             closed, until, reason = _maybe_market_closed(api)
@@ -210,50 +290,44 @@ def run(api: Optional[UStockAPI] = None, cfg: Optional[EMATrendConfig] = None) -
                 mins = int(os.getenv("MARKET_CLOSED_RECHECK_MINUTES", "120"))
                 _MARKET_CLOSED_UNTIL = float(until or (time.time() + mins * 60.0))
                 _write_market_gate_hint(until_epoch=_MARKET_CLOSED_UNTIL, reason=reason, bot_id=cfg.bot_id)
-                _log_throttled(
-                    "market_closed",
-                    f"US market closed. Gating until {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(_MARKET_CLOSED_UNTIL))} ({reason}).",
-                    every_seconds=60,
-                )
                 inc(counters, "market_gated")
                 return []
 
-        # market closed gate (cached)
-        now = time.time()
-        if now < _MARKET_CLOSED_UNTIL:
+        if time.time() < _MARKET_CLOSED_UNTIL:
             inc(counters, "market_gated")
-            _log_throttled(
-                "market_gated_cached",
-                f"US market gated until {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(_MARKET_CLOSED_UNTIL))}. Skipping.",
-                every_seconds=120,
-            )
             return []
 
-        # ---- symbols ----
-        try:
-            opp = api.get("/api/opportunities")
-        except Exception as e:
-            inc(counters, "opp_fail")
-            _log_throttled("opp_fail", f"/api/opportunities failed: {repr(e)}", every_seconds=120)
-            return []
+        # symbols (leaders + fallback handled by backend /api/opportunities)
+        opp_res = get_opportunity_symbols(
+            api,
+            bot_id=cfg.bot_id,
+            limit=12,
+            include_leaders=True,
+            leaders_direction="up",
+            leaders_show_more=False,
+            cache_bust=False,
+        )
 
-        symbols = (opp or {}).get("symbols") or []
-        if not isinstance(symbols, list) or not symbols:
+        if not opp_res.ok or not opp_res.symbols:
             inc(counters, "no_symbols")
-            _log_throttled("no_symbols", "No symbols from /api/opportunities.", every_seconds=300)
+            _log_throttled("no_symbols", "No symbols from opportunities.", every_seconds=180)
             return []
+
+        symbols = opp_res.symbols
 
         any_symbol_had_data = False
         candidates: List[Tuple[float, TradeIntent]] = []
 
         for sym in symbols:
-            inc(counters, "symbols_total")
             s = str(sym or "").strip().upper()
             if not s:
-                inc(counters, "symbol_blank")
                 continue
 
-            # ---- bias bars ----
+            if _is_in_cooldown(s):
+                inc(counters, "cooldown_skip")
+                continue
+
+            # ---- bias bars (15m) ----
             try:
                 resp_bias = api.get(
                     "/api/market/us/bars",
@@ -261,7 +335,7 @@ def run(api: Optional[UStockAPI] = None, cfg: Optional[EMATrendConfig] = None) -
                 )
             except Exception as e:
                 inc(counters, "bias_bars_err")
-                _log_throttled(f"bars_bias_err:{s}", f"{s} bias bars request failed: {repr(e)}", every_seconds=300)
+                _log_throttled(f"bias_bars_err:{s}", f"{s} bias bars request failed: {repr(e)}", every_seconds=300)
                 continue
 
             bars_bias = (resp_bias or {}).get("bars") or {}
@@ -277,7 +351,25 @@ def run(api: Optional[UStockAPI] = None, cfg: Optional[EMATrendConfig] = None) -
                 inc(counters, "bias_none")
                 continue
 
-            # ---- entry bars ----
+            # ---- setup confirmation (5m) ----
+            setup_reasons: List[str] = []
+            if bool(getattr(cfg, "require_setup_confirmation", True)):
+                try:
+                    resp_setup = api.get(
+                        "/api/market/us/bars",
+                        params={"symbol": s, "timeframe": cfg.tf_setup, "limit": 180, "feed": cfg.feed},
+                    )
+                    bars_setup = (resp_setup or {}).get("bars") or {}
+                    ok_setup, setup_reasons = _setup_confirmation_ok(bars_setup=bars_setup, bias=bias, cfg=cfg)
+                    if not ok_setup:
+                        inc(counters, "setup_fail")
+                        continue
+                except Exception as e:
+                    inc(counters, "setup_err")
+                    _log_throttled(f"setup_err:{s}", f"{s} setup bars request failed: {repr(e)}", every_seconds=300)
+                    continue
+
+            # ---- entry bars (1m) ----
             try:
                 resp_entry = api.get(
                     "/api/market/us/bars",
@@ -285,7 +377,7 @@ def run(api: Optional[UStockAPI] = None, cfg: Optional[EMATrendConfig] = None) -
                 )
             except Exception as e:
                 inc(counters, "entry_bars_err")
-                _log_throttled(f"bars_entry_err:{s}", f"{s} entry bars request failed: {repr(e)}", every_seconds=300)
+                _log_throttled(f"entry_bars_err:{s}", f"{s} entry bars request failed: {repr(e)}", every_seconds=300)
                 continue
 
             bars_entry = (resp_entry or {}).get("bars") or {}
@@ -293,9 +385,13 @@ def run(api: Optional[UStockAPI] = None, cfg: Optional[EMATrendConfig] = None) -
             if ohlc is None:
                 inc(counters, "entry_bars_bad")
                 continue
-            o, h, l, c = ohlc
 
-            # ---- chop filters (entry timeframe) ----
+            o, h, l, c = ohlc
+            if not c:
+                inc(counters, "entry_no_closes")
+                continue
+
+            # ---- chop filters (entry tf) ----
             ef = ema(c, int(cfg.ema_fast))
             es = ema(c, int(cfg.ema_slow))
             if not ef or not es:
@@ -304,16 +400,25 @@ def run(api: Optional[UStockAPI] = None, cfg: Optional[EMATrendConfig] = None) -
 
             price = float(c[-1])
             sep = ema_separation_pct(float(ef[-1]), float(es[-1]), price)
-            slope = slope_pct(es, lookback=6, price=price)
+            slp = slope_pct(es, lookback=6, price=price)
 
             if not passes_chop_filters(
                 sep_pct=sep,
-                slope=slope,
+                slope=slp,
                 min_sep_pct=cfg.min_sep_pct,
                 min_slope_pct=cfg.min_slope_pct,
             ):
                 inc(counters, "chop_fail")
                 continue
+
+            # ---- optional VWAP filter (entry tf) ----
+            if bool(getattr(cfg, "use_vwap_filter", False)):
+                vwap_val = vwap_from_bars(bars_entry)
+                if vwap_val is not None and float(vwap_val) > 0:
+                    dist_pct = abs(price - float(vwap_val)) / max(1e-9, price) * 100.0
+                    if dist_pct > float(getattr(cfg, "vwap_max_dist_pct", 1.0)):
+                        inc(counters, "vwap_fail")
+                        continue
 
             # ---- signal ----
             triple, reasons, conf = compute_signal(bars_entry, cfg, bias)
@@ -322,6 +427,31 @@ def run(api: Optional[UStockAPI] = None, cfg: Optional[EMATrendConfig] = None) -
                 continue
 
             entry, stop, tp = triple
+
+            # ✅ strategy-quality upgrade: minimum reward:risk
+            if not _rr_ok(float(entry), float(stop), float(tp), min_rr=min_rr):
+                inc(counters, "rr_fail")
+                continue
+
+            # ---- liquidity sanity ----
+            atr_pct_approx: Optional[float] = None
+            try:
+                atr_pct_approx = abs(float(entry) - float(stop)) / max(1e-9, float(entry)) * 100.0
+            except Exception:
+                atr_pct_approx = None
+
+            ok_liq, liq_reason = liquidity_ok(
+                symbol=s,
+                last_price=float(entry),
+                bars_entry=bars_entry,
+                atr_pct=atr_pct_approx,
+                cfg=liq_cfg,
+            )
+            if not ok_liq:
+                inc(counters, f"liq_fail:{liq_reason}")
+                continue
+
+            # ---- intent ----
             intent = TradeIntent(
                 symbol=s,
                 side="buy" if bias == "up" else "sell",
@@ -331,34 +461,36 @@ def run(api: Optional[UStockAPI] = None, cfg: Optional[EMATrendConfig] = None) -
                 confidence=float(conf),
                 bot_id=cfg.bot_id,
                 timeframe=cfg.tf_entry,
-                reason_codes=[BIAS_UP if bias == "up" else BIAS_DN] + (reasons or []),
+                reason_codes=[BIAS_UP if bias == "up" else BIAS_DN] + setup_reasons + (reasons or []),
             )
 
-            candidates.append((float(conf), intent))
+            # ---- shared scoring ----
+            score = score_candidate(
+                confidence=float(conf),
+                atr_pct=atr_pct_approx,
+                sep_pct=float(sep),
+                slope_pct=float(slp),
+            )
+
+            candidates.append((float(score), intent))
             inc(counters, "candidates")
 
-        # ---- market gate if everything empty ----
-        # Safety net if bars route is down / auth fails / etc.
+        # market safety net
         if not any_symbol_had_data:
             closed, until, reason = _maybe_market_closed(api)
             if closed and until:
                 _MARKET_CLOSED_UNTIL = float(until)
                 _write_market_gate_hint(until_epoch=_MARKET_CLOSED_UNTIL, reason=reason, bot_id=cfg.bot_id)
-                _log_throttled(
-                    "market_gate_set",
-                    f"No symbols returned bars. Setting market gate until {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(_MARKET_CLOSED_UNTIL))} ({reason}).",
-                    every_seconds=60,
-                )
             return []
 
-        # ---- select top N ----
+        # select top N
         candidates.sort(key=lambda x: x[0], reverse=True)
         for _, intent in candidates[: int(cfg.max_intents_per_run)]:
             intents.append(intent)
+            _mark_intent(intent.symbol)
 
         inc(counters, "intents", len(intents))
         _log_throttled("summary", one_line("ema_trend", counters), every_seconds=120)
-
         return intents
 
     finally:
@@ -370,23 +502,14 @@ def run(api: Optional[UStockAPI] = None, cfg: Optional[EMATrendConfig] = None) -
 
 
 # --------------------------------------------------------------------
-# ✅ Stable runner entrypoint (this is what your runner should call)
+# Stable runner entrypoints
 # --------------------------------------------------------------------
 def _generate_intents_internal(api: UStockAPI, config: Dict[str, Any]) -> List[TradeIntent]:
-    """
-    Internal adapter so runner-facing APIs cannot crash due to missing glue.
-    """
     cfg = EMATrendConfig(**(config or {}))
     return run(api=api, cfg=cfg)
 
 
 def generate_intents(api: UStockAPI, config: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """
-    Stable interface for runner:
-      intents = generate_intents(api, config_dict)
-
-    Returns list of JSON-ready dicts (TradeIntent).
-    """
     intents = _generate_intents_internal(api=api, config=config)
 
     out: List[Dict[str, Any]] = []
@@ -401,12 +524,4 @@ def generate_intents(api: UStockAPI, config: Dict[str, Any]) -> List[Dict[str, A
 
 
 def generate_output(api: UStockAPI, config: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Runner-facing adapter.
-    Strategy only — NO execution here.
-    """
-    intents = generate_intents(api, config)
-    return {
-        "intents": intents,
-        "events": [],  # execution happens in engine
-    }
+    return {"intents": generate_intents(api, config), "events": []}

@@ -10,7 +10,9 @@ from runner.engine import BotEngine
 from runner.supabase import upload_transaction_events
 
 from runner import api_client
+from runner.config_loader import build_bot_cfg
 from runner.events import attach_event_id, merge_events, new_event_id, now_iso
+from runner.heartbeat import HeartbeatState, MarketClosed, gate_market_hours, send_paused, safe_heartbeat, should_heartbeat, now_epoch
 from runner.risk import RiskState, filter_intents_with_gates, record_orders_placed
 from runner.scanner import attach_scanner_context
 from runner.strategy_loader import compute_bot_output
@@ -30,11 +32,6 @@ def _env_bool(name: str, default: bool) -> bool:
 
 
 RESPECT_MARKET_HOURS = _env_bool("RUNNER_RESPECT_MARKET_HOURS", True)
-HEARTBEAT_EVERY_SECONDS = int(os.getenv("RUNNER_HEARTBEAT_EVERY_SECONDS", "60"))
-
-# ---- Heartbeat anti-spam (module-scoped; drop-in behavior) ----
-_last_hb_ts: int = 0
-_last_hb_signature: str = ""
 
 
 def _sleep_smart(seconds: float, *, sleep_fn: Callable[[float], None] = time.sleep) -> None:
@@ -52,84 +49,7 @@ def _extract_mode_cfg(status: Dict[str, Any]) -> Tuple[str, Dict[str, Any]]:
     return mode, cfg
 
 
-def _should_heartbeat(signature: str, *, now: int) -> bool:
-    """
-    Proper heartbeat anti-spam:
-    - send immediately if signature changed (state/intent/reason changes)
-    - otherwise send at most every HEARTBEAT_EVERY_SECONDS
-    """
-    global _last_hb_ts, _last_hb_signature
-
-    if signature != _last_hb_signature:
-        _last_hb_signature = signature
-        _last_hb_ts = now
-        return True
-
-    if now - _last_hb_ts >= HEARTBEAT_EVERY_SECONDS:
-        _last_hb_ts = now
-        return True
-
-    return False
-
-
-def _safe_heartbeat(api: UStockAPI, **kwargs: Any) -> None:
-    try:
-        api_client.post_heartbeat(api, **kwargs)
-    except Exception:
-        return
-
-
-class MarketClosed(Exception):
-    pass
-
-
-def _handle_paused(api: UStockAPI, *, status_mode: str) -> None:
-    now = api_client.now_epoch()
-    sig = f"paused|{status_mode}|intent_paused"
-    if _should_heartbeat(sig, now=now):
-        _safe_heartbeat(
-            api,
-            bot_id=BOT_ID,
-            intent="paused",
-            effective_state="paused",
-            mode=status_mode,
-            reason_code="intent_paused",
-            message="Paused by user.",
-            last_error=None,
-            last_tick=now,
-        )
-
-
-def _handle_market_closed(api: UStockAPI, *, mode: str) -> None:
-    sess = api_client.market_session(api)
-    is_open = bool(sess.get("is_open")) if sess.get("ok") else True  # fail-open locally
-    if is_open:
-        return
-
-    paused_reason = str(sess.get("reason") or "Market closed")
-    next_open = sess.get("next_open")
-    next_open_epoch = int(next_open) if isinstance(next_open, (int, float)) else None
-
-    now = api_client.now_epoch()
-    sig = f"wait_market|{mode}|market_closed|{next_open_epoch}"
-    if _should_heartbeat(sig, now=now):
-        _safe_heartbeat(
-            api,
-            bot_id=BOT_ID,
-            intent="running",
-            effective_state="waiting_for_market",
-            mode=mode,
-            reason_code="market_closed",
-            message="Waiting for market open.",
-            paused_reason=paused_reason,
-            next_open_epoch=next_open_epoch,
-            last_error=None,
-            last_tick=now,
-        )
-    raise MarketClosed()
-
-
-def run_once(api: UStockAPI, *, risk_state: RiskState) -> None:
+def run_once(api: UStockAPI, *, risk_state: RiskState, hb_state: HeartbeatState) -> None:
     """
     Runs a single orchestrator loop:
       status -> market gate -> scanner -> bot strategy -> risk gate -> execution -> event sink -> heartbeat
@@ -141,19 +61,23 @@ def run_once(api: UStockAPI, *, risk_state: RiskState) -> None:
     status_mode = _normalize_mode(status.get("mode") or "paper")
 
     if intent != "running":
-        _handle_paused(api, status_mode=status_mode)
+        send_paused(api, hb_state, bot_id=BOT_ID, status_mode=status_mode)
         return
 
-    mode, cfg = _extract_mode_cfg(status)
+    mode, status_cfg = _extract_mode_cfg(status)
 
     if RESPECT_MARKET_HOURS:
-        _handle_market_closed(api, mode=mode)
+        gate_market_hours(api, hb_state, bot_id=BOT_ID, mode=mode)
 
     decision_event_id = new_event_id()
 
-    # ✅ Scanner hook moved into runner/scanner.py
-    cfg, scan_events = attach_scanner_context(api, cfg)
+    # scanner context (symbols + source meta)
+    status_cfg, scan_events = attach_scanner_context(api, status_cfg)
     attach_event_id(scan_events, decision_event_id)
+
+    # ✅ build final cfg (env baseline -> status overrides -> scanner injected)
+    scanner_ctx = status_cfg.get("scanner") if isinstance(status_cfg, dict) else None
+    cfg = build_bot_cfg(bot_id=BOT_ID, status_cfg=status_cfg, scanner_ctx=scanner_ctx if isinstance(scanner_ctx, dict) else None)
 
     # Strategy (generic)
     result = compute_bot_output(api, BOT_ID, cfg)
@@ -197,10 +121,10 @@ def run_once(api: UStockAPI, *, risk_state: RiskState) -> None:
         if user_id:
             upload_transaction_events(user_id, BOT_ID, mode, combined)
 
-        now = api_client.now_epoch()
+        now = now_epoch()
         sig = f"running|{mode}|gated|{gate_reason}"
-        if _should_heartbeat(sig, now=now):
-            _safe_heartbeat(
+        if should_heartbeat(hb_state, sig, now=now):
+            safe_heartbeat(
                 api,
                 bot_id=BOT_ID,
                 intent="running",
@@ -235,10 +159,10 @@ def run_once(api: UStockAPI, *, risk_state: RiskState) -> None:
         except Exception:
             pass
 
-    now = api_client.now_epoch()
+    now = now_epoch()
     sig = f"running|{mode}|loop_ok"
-    if _should_heartbeat(sig, now=now):
-        _safe_heartbeat(
+    if should_heartbeat(hb_state, sig, now=now):
+        safe_heartbeat(
             api,
             bot_id=BOT_ID,
             intent="running",
@@ -259,8 +183,8 @@ def main(*, max_loops: Optional[int] = None, sleep_fn: Callable[[float], None] =
     )
 
     loops = 0
-    mode = "paper"
     risk_state = RiskState()
+    hb_state = HeartbeatState()
 
     with UStockAPI(base_url=base_url, timeout=15) as api:
         while True:
@@ -271,17 +195,18 @@ def main(*, max_loops: Optional[int] = None, sleep_fn: Callable[[float], None] =
             t0 = time.time()
 
             try:
-                run_once(api, risk_state=risk_state)
+                run_once(api, risk_state=risk_state, hb_state=hb_state)
 
             except MarketClosed:
                 _sleep_smart(LOOP_SECONDS - (time.time() - t0), sleep_fn=sleep_fn)
                 continue
 
             except Exception as e:
-                now = api_client.now_epoch()
+                mode = "paper"
+                now = now_epoch()
                 sig = f"error|{mode}|runner_exception|{type(e).__name__}"
-                if _should_heartbeat(sig, now=now):
-                    _safe_heartbeat(
+                if should_heartbeat(hb_state, sig, now=now):
+                    safe_heartbeat(
                         api,
                         bot_id=BOT_ID,
                         intent="running",
