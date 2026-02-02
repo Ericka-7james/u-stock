@@ -6,7 +6,6 @@ import "../../../css/dashboard/cards/BotLogsCard.css";
 
 const CACHE_TTL_MS = 60_000;
 
-// lightweight SWR-ish cache (module scoped)
 const logsCache = {
   ts: 0,
   key: "",
@@ -24,7 +23,6 @@ async function apiGet(url, { signal } = {}) {
   return data;
 }
 
-// Retry once (never retry aborts)
 async function apiGetWithRetry(url, { signal } = {}) {
   try {
     return await apiGet(url, { signal });
@@ -113,10 +111,6 @@ function statusPill(effective) {
   return { label: "Unknown", cls: "blog-pill blog-pill--soft" };
 }
 
-/**
- * Make raw logs human friendly.
- * We keep the original message/meta (for debugging), but present a clearer "event" summary.
- */
 function classifyLog(row) {
   const levelRaw = String(row?.level || "info").toLowerCase();
   const isFail = isFailishLevel(levelRaw);
@@ -125,10 +119,8 @@ function classifyLog(row) {
   const msgL = msg.toLowerCase();
   const meta = row?.meta || null;
 
-  // simple helper
   const hasAny = (...needles) => needles.some((n) => msgL.includes(String(n).toLowerCase()));
 
-  // Category inference (best-effort; no backend changes)
   let category = "System";
   if (hasAny("market", "session", "open", "closed", "next open")) category = "Market";
   if (hasAny("alpaca", "broker", "order", "submit", "fill", "filled", "position")) category = "Orders";
@@ -136,12 +128,10 @@ function classifyLog(row) {
   if (hasAny("signal", "ema", "trend", "entry", "exit", "strategy", "setup")) category = "Strategy";
   if (hasAny("runner", "heartbeat", "loop", "engine", "orchestration")) category = "Runner";
 
-  // Action phrase (headline)
   let headline = msg;
   let detail = "";
   let action = "Update";
 
-  // nicer headlines for common patterns
   if (hasAny("waiting_for_market", "waiting for market")) {
     action = "Waiting";
     headline = "Market is closed — bot is waiting";
@@ -193,7 +183,6 @@ function classifyLog(row) {
     headline = msg || "Something needs attention";
     detail = meta ? safeJson(meta) : "";
   } else {
-    // if message is long, keep a short headline and move the rest to detail
     const max = 84;
     if (msg.length > max) {
       headline = msg.slice(0, max).trim() + "…";
@@ -220,59 +209,39 @@ function classifyLog(row) {
 
 function effectiveExplainer(eff, nextOpenEpoch) {
   if (eff === "running") {
-    return {
-      tone: "ok",
-      title: "Live: scanning for trades",
-      body: "The bot is online and evaluating signals. Orders may be placed if risk checks pass.",
-    };
+    return { tone: "ok", title: "Live: scanning for trades", body: "The bot is online and evaluating signals. Orders may be placed if risk checks pass." };
   }
   if (eff === "waiting_for_market") {
-    return {
-      tone: "warn",
-      title: "Waiting for market open",
-      body: `The market is closed, so the bot is idle. Next open: ${nextOpenEpoch ? fmtTime(nextOpenEpoch) : "—"}.`,
-    };
+    return { tone: "warn", title: "Waiting for market open", body: `The market is closed, so the bot is idle. Next open: ${nextOpenEpoch ? fmtTime(nextOpenEpoch) : "—"}.` };
   }
   if (eff === "paused") {
-    return {
-      tone: "neutral",
-      title: "Paused",
-      body: "The bot is not trading right now. Start it from the Dashboard when you’re ready.",
-    };
+    return { tone: "neutral", title: "Paused", body: "The bot is not trading right now. Start it from the Dashboard when you’re ready." };
   }
   if (eff === "starting") {
-    return {
-      tone: "neutral",
-      title: "Starting up",
-      body: "Loading configuration and checking connectivity.",
-    };
+    return { tone: "neutral", title: "Starting up", body: "Loading configuration and checking connectivity." };
   }
   if (eff === "offline") {
-    return {
-      tone: "bad",
-      title: "Runner offline",
-      body: "U-Stock isn’t receiving runner heartbeats. Check your runner host and API connectivity.",
-    };
+    return { tone: "bad", title: "Runner offline", body: "U-Stock isn’t receiving runner heartbeats. Check your runner host and API connectivity." };
   }
   if (eff === "error") {
-    return {
-      tone: "bad",
-      title: "Error state",
-      body: "The bot reported an error. Review recent issues below and the raw details in “View all”.",
-    };
+    return { tone: "bad", title: "Error state", body: "The bot reported an error. Review recent issues below and the raw details in “View all”." };
   }
   if (eff === "degraded") {
-    return {
-      tone: "warn",
-      title: "Degraded",
-      body: "The bot is running, but some dependencies may be failing (data/broker/session). Review recent issues.",
-    };
+    return { tone: "warn", title: "Degraded", body: "The bot is running, but some dependencies may be failing (data/broker/session). Review recent issues." };
   }
-  return {
-    tone: "neutral",
-    title: "Status unknown",
-    body: "The bot status couldn’t be determined. Refresh and verify the runner is online.",
-  };
+  return { tone: "neutral", title: "Status unknown", body: "The bot status couldn’t be determined. Refresh and verify the runner is online." };
+}
+
+// ✅ helper: YYYY-MM-DD -> epoch sec at local midnight (start) / end-of-day (end)
+function dateStrToEpochSec(dateStr, { endOfDay = false } = {}) {
+  const s = String(dateStr || "").trim();
+  if (!s) return 0;
+  const d = new Date(`${s}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return 0;
+  if (!endOfDay) return Math.floor(d.getTime() / 1000);
+  // end of day = 23:59:59 local
+  d.setHours(23, 59, 59, 999);
+  return Math.floor(d.getTime() / 1000);
 }
 
 export default function BotLogsCard({
@@ -281,6 +250,9 @@ export default function BotLogsCard({
   defaultBotId = "ema_trend",
   maxPreview = 4,
   showQuickLink = true,
+
+  // ✅ NEW: timeframe from TimeframeCard (optional)
+  timeframe = null,
 }) {
   const [botId, setBotId] = useState(defaultBotId);
   const [limit, setLimit] = useState(240);
@@ -292,12 +264,16 @@ export default function BotLogsCard({
   const [botStatus, setBotStatus] = useState(null);
 
   const [q, setQ] = useState("");
-  const [status, setStatus] = useState("all"); // all | good | issues
-  const [selectedDay, setSelectedDay] = useState(""); // YYYY-MM-DD
+  const [status, setStatus] = useState("all");
+  const [selectedDay, setSelectedDay] = useState("");
 
   const [open, setOpen] = useState(false);
 
-  const cacheKey = `${botId}|${limit}`;
+  // timeframe -> epoch bounds
+  const startTs = useMemo(() => dateStrToEpochSec(timeframe?.start || "", { endOfDay: false }), [timeframe]);
+  const endTs = useMemo(() => dateStrToEpochSec(timeframe?.end || "", { endOfDay: true }), [timeframe]);
+
+  const cacheKey = `${botId}|${limit}|${startTs}|${endTs}`;
 
   const aliveRef = useRef(true);
   const inflightRef = useRef({ log: null, status: null });
@@ -326,15 +302,17 @@ export default function BotLogsCard({
     inflightRef.current.log = ac;
 
     try {
-      const url = `/api/bots/log?bot_id=${encodeURIComponent(
-        safeStr(botId, "ema_trend")
-      )}&limit=${encodeURIComponent(String(limit || 120))}`;
+      const url =
+        `/api/bots/log?bot_id=${encodeURIComponent(safeStr(botId, "ema_trend"))}` +
+        `&limit=${encodeURIComponent(String(limit || 120))}` +
+        (startTs ? `&start_ts=${encodeURIComponent(String(startTs))}` : "") +
+        (endTs ? `&end_ts=${encodeURIComponent(String(endTs))}` : "");
 
       const data = await apiGetWithRetry(url, { signal: ac.signal });
       if (!aliveRef.current || ac.signal.aborted) return;
 
       const raw = Array.isArray(data?.items) ? data.items : [];
-      const ordered = raw.slice().reverse();
+      const ordered = raw.slice(); // already chronological from service
       setItems(ordered);
 
       logsCache.ts = Date.now();
@@ -373,7 +351,6 @@ export default function BotLogsCard({
     }
   }
 
-  // hydrate from cache, then fetch
   useEffect(() => {
     const fresh = isFresh(logsCache.ts) && logsCache.key === cacheKey;
     if (fresh) setItems(Array.isArray(logsCache.items) ? logsCache.items : []);
@@ -381,7 +358,7 @@ export default function BotLogsCard({
 
     refreshStatus();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [botId, limit]);
+  }, [botId, limit, startTs, endTs]);
 
   const availableDays = useMemo(() => {
     const dayList = (Array.isArray(items) ? items : []).map((r) => dayKey(r?.ts)).filter(Boolean);
@@ -481,13 +458,10 @@ export default function BotLogsCard({
           ) : null}
         </div>
 
-        {/* Human-friendly status banner */}
         <div className={`blog-statusBanner blog-statusBanner--${explain.tone}`}>
           <div className="blog-statusTitle">{explain.title}</div>
           <div className="blog-statusBody">{explain.body}</div>
-          {eff === "waiting_for_market" && nextOpen ? (
-            <div className="blog-statusMeta">Next open: {fmtTime(nextOpen)}</div>
-          ) : null}
+          {eff === "waiting_for_market" && nextOpen ? <div className="blog-statusMeta">Next open: {fmtTime(nextOpen)}</div> : null}
         </div>
 
         <div className="blog-controls">
@@ -508,12 +482,7 @@ export default function BotLogsCard({
 
           <label className="blog-field">
             <span className="blog-label">Day</span>
-            <select
-              value={selectedDay || ""}
-              onChange={(e) => setSelectedDay(e.target.value)}
-              className="blog-input"
-              disabled={busy}
-            >
+            <select value={selectedDay || ""} onChange={(e) => setSelectedDay(e.target.value)} className="blog-input" disabled={busy}>
               {availableDays.length ? (
                 availableDays.map((d) => (
                   <option key={d} value={d}>
@@ -548,12 +517,7 @@ export default function BotLogsCard({
 
           <label className="blog-field">
             <span className="blog-label">Limit</span>
-            <select
-              value={String(limit)}
-              onChange={(e) => setLimit(Number(e.target.value))}
-              className="blog-input"
-              disabled={busy}
-            >
+            <select value={String(limit)} onChange={(e) => setLimit(Number(e.target.value))} className="blog-input" disabled={busy}>
               <option value="120">120</option>
               <option value="240">240</option>
               <option value="480">480</option>
@@ -573,12 +537,7 @@ export default function BotLogsCard({
               {busy ? "Refreshing…" : "Refresh"}
             </button>
 
-            <button
-              type="button"
-              className="mBtn"
-              onClick={() => setOpen(true)}
-              disabled={busy || (!filtered?.length && !items?.length)}
-            >
+            <button type="button" className="mBtn" onClick={() => setOpen(true)} disabled={busy || (!filtered?.length && !items?.length)}>
               View all
             </button>
           </div>

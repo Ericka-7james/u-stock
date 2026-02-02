@@ -48,8 +48,20 @@ def log(
     response: Response,
     bot_id: str = Query(...),
     limit: int = Query(50, ge=1, le=300),
+
+    # ✅ NEW: timeframe filtering (epoch seconds, inclusive bounds)
+    start_ts: int = Query(0, ge=0, description="Epoch seconds (inclusive). 0 = no lower bound."),
+    end_ts: int = Query(0, ge=0, description="Epoch seconds (inclusive). 0 = no upper bound."),
+
     svc: BotService = Depends(get_bot_service),
 ):
+    """
+    UI endpoint: bot logs (cookie auth)
+
+    New behavior:
+      - If start_ts/end_ts are provided, logs are filtered server-side.
+      - Still returns newest `limit` rows within the range.
+    """
     u = require_user(request, response)
     user_id = u["id"]
 
@@ -57,7 +69,13 @@ def log(
     if not bid:
         return JSONResponse(status_code=400, content={"detail": "bot_id required"})
 
-    return svc.get_log(user_id, bid, limit=int(limit))
+    return svc.get_log(
+        user_id,
+        bid,
+        limit=int(limit),
+        start_ts=int(start_ts or 0),
+        end_ts=int(end_ts or 0),
+    )
 
 
 @router.post("/start")
@@ -129,6 +147,7 @@ def intents_snapshot(
         "items": items[: int(limit)],
     }
 
+
 @router.get("/events")
 def events_feed(
     request: Request,
@@ -136,18 +155,20 @@ def events_feed(
     bot_id: str = Query(...),
     mode: str = Query("paper"),
     limit: int = Query(60, ge=1, le=300),
+
+    # existing cursor
     before_ts: int = Query(0, ge=0),
+
+    # ✅ NEW: timeframe range filtering in addition to cursor
+    start_ts: int = Query(0, ge=0, description="Epoch seconds (inclusive). 0 = no lower bound."),
+    end_ts: int = Query(0, ge=0, description="Epoch seconds (inclusive). 0 = no upper bound."),
 ):
     """
     UI endpoint: read merged strategy+execution events from Supabase bot_events.
-    The runner writes tx events (and risk_gate_block) into bot_events via service-role key.
-    We READ with service-role key here server-side (safe).
 
-    Params:
-      - bot_id: bot id
-      - mode: paper/live
-      - limit: max rows
-      - before_ts: optional cursor in epoch seconds; fetch events strictly older than this
+    Now supports BOTH:
+      - cursor pagination via before_ts
+      - timeframe bounding via start_ts/end_ts
     """
     u = require_user(request, response)
     user_id = str(u.get("id") or "").strip()
@@ -159,8 +180,6 @@ def events_feed(
     m = normalize_mode(mode)
     svc = get_supabase_service()
 
-    # Supabase stores ts as ISO (timestamptz). We'll filter with ISO if before_ts is provided.
-    # Convert epoch -> ISO-ish "YYYY-MM-DDTHH:MM:SSZ" via naive UTC conversion:
     def _epoch_to_iso_z(ep: int) -> str:
         import time as _t
         return _t.strftime("%Y-%m-%dT%H:%M:%SZ", _t.gmtime(int(ep)))
@@ -175,8 +194,17 @@ def events_feed(
             .order("ts", desc=True)
             .limit(int(limit))
         )
+
+        # cursor
         if int(before_ts or 0) > 0:
             q = q.lt("ts", _epoch_to_iso_z(int(before_ts)))
+
+        # timeframe bounds (inclusive)
+        if int(end_ts or 0) > 0:
+            # Supabase filters are strict; use <= by bumping +1 second via lt(end+1)
+            q = q.lt("ts", _epoch_to_iso_z(int(end_ts) + 1))
+        if int(start_ts or 0) > 0:
+            q = q.gte("ts", _epoch_to_iso_z(int(start_ts)))
 
         res = q.execute()
         rows = res.data if hasattr(res, "data") else (res.get("data") if isinstance(res, dict) else None)
@@ -202,7 +230,6 @@ def events_feed(
                 }
             )
 
-        # next cursor = oldest ts in this page (for "load more")
         next_before = 0
         if items:
             next_before = int(items[-1].get("ts") or 0)
@@ -210,7 +237,6 @@ def events_feed(
         return {"ok": True, "bot_id": bid, "mode": m, "items": items, "next_before_ts": next_before}
 
     except Exception as e:
-        # fail-safe: UI should never crash because events aren't available
         return {"ok": False, "bot_id": bid, "mode": m, "items": [], "error": f"{type(e).__name__}"}
 
 
@@ -224,9 +250,6 @@ def heartbeat(
     runner_user_id: str = Depends(require_bot_runner),
     svc: BotService = Depends(get_bot_service),
 ):
-    """
-    Runner-authenticated endpoint (Bearer token).
-    """
     bid = clean_bot_id(payload.get("bot_id"))
     if not bid:
         return JSONResponse(status_code=400, content={"detail": "bot_id required"})
@@ -242,9 +265,6 @@ def status_runner(
     runner_user_id: str = Depends(require_bot_runner),
     svc: BotService = Depends(get_bot_service),
 ):
-    """
-    Runner-authenticated endpoint (Bearer token).
-    """
     bid = clean_bot_id(bot_id)
     if not bid:
         return JSONResponse(status_code=400, content={"detail": "bot_id required"})
@@ -258,10 +278,6 @@ def submit_intents(
     runner_user_id: str = Depends(require_bot_runner),
     svc: BotService = Depends(get_bot_service),
 ):
-    """
-    Runner-authenticated endpoint (Bearer token).
-    Used to report strategy intents back to backend for UI visibility.
-    """
     bid = clean_bot_id(payload.get("bot_id"))
     if not bid:
         return JSONResponse(status_code=400, content={"detail": "bot_id required"})
@@ -276,7 +292,6 @@ def submit_intents(
     if not isinstance(items, list):
         return JSONResponse(status_code=400, content={"detail": "items must be a list"})
 
-    # Service does sanitization + caps
     return svc.submit_intents(runner_user_id, bid, ts_int, items)
 
 

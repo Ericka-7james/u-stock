@@ -5,7 +5,13 @@
   background: #ffffff;
   border: 1px solid rgba(148, 163, 184, 0.25);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.06);
-  overflow: hidden;
+
+  /*
+    ✅ IMPORTANT:
+    This card was clipping on mobile when parent layouts got tight.
+    "hidden" is great for rounding corners, but it can hide content.
+  */
+  overflow: visible;
 
   /* ✅ Force readable foreground (fixes pill/select text blending) */
   color: #0f172a;
@@ -42,6 +48,9 @@
   border: 1px solid rgba(148, 163, 184, 0.25);
   background: rgba(255, 255, 255, 0.95);
   color: #0f172a; /* ✅ visible text */
+
+  /* ✅ prevents pills from squeezing into unreadable tiny widths */
+  white-space: nowrap;
 }
 
 /* dark mode (if you use data-theme) */
@@ -103,6 +112,9 @@
   color: #0f172a;
   font-weight: 800;
   outline: none;
+
+  /* ✅ iOS/Safari: stop weird zoom/layout */
+  font-size: 16px;
 }
 
 .botSelect:focus {
@@ -136,6 +148,9 @@
   background: #ffffff;
   color: #0f172a;
   cursor: pointer;
+
+  /* ✅ prevents text wrapping in buttons */
+  white-space: nowrap;
 }
 
 .botBtn:disabled {
@@ -183,6 +198,10 @@
   font-weight: 900;
   font-size: 13px;
   color: #0f172a;
+
+  /* ✅ long error/status strings won't blow the card out */
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .botPausedLine {
@@ -205,6 +224,9 @@
   font-weight: 800;
   font-size: 12px;
   color: #7f1d1d;
+
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .botError.subtle {
@@ -243,7 +265,7 @@
    Step 2: Arming pill (intentional)
    ----------------------------- */
 
-/* wrapper for the two pills in the header */
+/* wrapper for the pills in the header */
 .botPillRow {
   display: flex;
   align-items: center;
@@ -293,4 +315,46 @@
 .botCardStatePill.status {
   letter-spacing: 0.35px;
   text-transform: uppercase;
+}
+
+/* ---------------------------------
+   ✅ Mobile layout hardening
+   --------------------------------- */
+@media (max-width: 520px) {
+  /* allow header to wrap so it doesn't force a short card width/height */
+  .botCardHead {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .botCardTitleRow {
+    width: 100%;
+  }
+
+  /* pills wrap cleanly */
+  .botPillRow {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 8px;
+  }
+
+  /* select area should not insist on desktop min-width */
+  .botSelectWrap {
+    min-width: 0;
+    width: 100%;
+  }
+
+  /* buttons should drop below and not squeeze the select */
+  .botActions {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  /* slightly tighter padding on tiny screens */
+  .botCardBody {
+    padding: 14px;
+  }
 }

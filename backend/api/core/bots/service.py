@@ -19,9 +19,6 @@ from api.core.events.sink import get_event_sink
 from api.core.events.models import BotEvent
 
 
-# -------------------------
-# Submit-intents hard limits (prod safety)
-# -------------------------
 _MAX_INTENTS_PER_SUBMIT = 50
 _MAX_INTENTS_PREVIEW = 10
 _MAX_REASON_CODES = 25
@@ -49,8 +46,6 @@ def compute_offline(desired_state: str, last_heartbeat_epoch: int) -> Tuple[bool
     return age > HEARTBEAT_STALE_SECONDS, age
 
 
-# NOTE: Legacy auth helper (secret + X-Runner-User-Id).
-# Your routes now use Bearer token via require_bot_runner, which is correct.
 def require_runner(*, x_bot_runner_secret: Optional[str], x_runner_user_id: Optional[str]) -> str:
     if not BOT_RUNNER_SECRET:
         raise RuntimeError("Server not configured for runner auth (BOT_RUNNER_SECRET missing)")
@@ -104,10 +99,6 @@ def _trim_reason_codes(x: Any) -> List[str]:
 
 
 def _normalize_intent_item(raw: Any, *, bot_id: str) -> Optional[Dict[str, Any]]:
-    """
-    Defensive normalization for UI visibility (NOT execution).
-    Keep payload stable and small.
-    """
     if not isinstance(raw, dict):
         return None
 
@@ -138,10 +129,6 @@ def _normalize_intent_item(raw: Any, *, bot_id: str) -> Optional[Dict[str, Any]]
 
 
 def _stable_hash(obj: Any) -> str:
-    """
-    Cheap deterministic signature so we can avoid spamming logs
-    when intents haven't changed.
-    """
     try:
         return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
     except Exception:
@@ -172,7 +159,6 @@ class BotService:
         if offline:
             effective = "offline"
 
-        # ✅ Intents visibility (runner -> submit-intents)
         try:
             last_intents_count = int(runtime.get("last_intents_count") or 0)
         except Exception:
@@ -237,20 +223,61 @@ class BotService:
 
         return {"ok": True, "bot_id": bot_id, "intent": "paused", "effective_state": "paused"}
 
-    def get_log(self, user_id: str, bot_id: str, limit: int) -> Dict[str, Any]:
-        rows = self.repo.get_logs(user_id, bot_id, limit=limit)
-        items: List[Dict[str, Any]] = []
+    # ✅ UPDATED: server-side timeframe filtering
+    def get_log(self, user_id: str, bot_id: str, limit: int, start_ts: int = 0, end_ts: int = 0) -> Dict[str, Any]:
+        """
+        Reads logs and returns newest `limit` rows that fall within [start_ts, end_ts] (inclusive),
+        when provided.
+
+        Safe strategy:
+          - fetch up to 300 rows from repo (max)
+          - convert to epoch seconds
+          - filter
+          - return newest `limit` in chronological order
+        """
+        eff_limit = max(1, min(300, int(limit or 50)))
+        lo = int(start_ts or 0)
+        hi = int(end_ts or 0)
+
+        # fetch a generous window so filtering doesn't return empty by accident
+        fetch_n = 300 if (lo or hi) else eff_limit
+        rows = self.repo.get_logs(user_id, bot_id, limit=int(fetch_n))
+
+        normalized: List[Dict[str, Any]] = []
         for r in rows:
-            items.append(
+            ts = parse_ts_to_epoch_seconds(r.get("ts"))
+            normalized.append(
                 {
-                    "ts": parse_ts_to_epoch_seconds(r.get("ts")),
+                    "ts": ts,
                     "level": r.get("level"),
                     "message": r.get("message"),
                     "meta": r.get("meta") or {},
                 }
             )
-        items = list(reversed(items))
-        return {"bot_id": bot_id, "items": items}
+
+        # repo returns newest-first in most setups; your prior code reversed for UI.
+        # We'll treat it as newest-first, but normalize into chronological at end.
+        filtered = []
+        for it in normalized:
+            ts = int(it.get("ts") or 0)
+            if lo and ts and ts < lo:
+                continue
+            if hi and ts and ts > hi:
+                continue
+            filtered.append(it)
+
+        # keep newest N in range
+        newest_first = filtered[:]
+        newest_first.sort(key=lambda x: int(x.get("ts") or 0), reverse=True)
+        newest_first = newest_first[:eff_limit]
+
+        # return chronological like before
+        newest_first.sort(key=lambda x: int(x.get("ts") or 0))
+        return {
+            "bot_id": bot_id,
+            "items": newest_first,
+            "meta": {"start_ts": lo or None, "end_ts": hi or None, "returned": len(newest_first)},
+        }
 
     def set_config(self, user_id: str, bot_id: str, config: Dict[str, Any]) -> Dict[str, Any]:
         existing = self.repo.get_config(user_id, bot_id, default_config())
@@ -284,15 +311,6 @@ class BotService:
         return {"bot_id": bot_id, "config": cfg if isinstance(cfg, dict) else default_config()}
 
     def submit_intents(self, user_id: str, bot_id: str, ts: int, intents: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """
-        Persist runner-submitted strategy intents for UI visibility.
-
-        Storage strategy (no new tables required):
-          - write to runtime_state as last_intents_* fields
-          - keep a small preview list for UI
-
-        This endpoint MUST NOT be able to take down runner loops.
-        """
         bid = str(bot_id or "").strip()[:_MAX_BOT_ID_LEN]
         if not bid:
             return {"ok": False, "error": "bot_id required"}
@@ -306,26 +324,22 @@ class BotService:
             if clean:
                 normalized.append(clean)
 
-        # compare signature to avoid log spam
         prev = self.repo.get_runtime_state(user_id, bid)
         prev_sig = str(prev.get("last_intents_sig") or "")
         sig = _stable_hash(normalized[:_MAX_INTENTS_PREVIEW])
 
         patch: Dict[str, Any] = {
             "last_intents_count": len(normalized),
-            "last_intents_at": iso_now(),  # iso string; your status parses it
+            "last_intents_at": iso_now(),
             "last_intents_preview": normalized[:_MAX_INTENTS_PREVIEW],
             "last_intents_sig": sig,
         }
 
-        # store (repo should tolerate extra keys; if it doesn't, we’ll adjust BotRepo next)
         try:
             self.repo.upsert_runtime_state(user_id, bid, patch)
         except Exception as e:
-            # fail safe: don't break runner, but surface for debugging
             return {"ok": False, "bot_id": bid, "error": f"persist_failed: {type(e).__name__}"}
 
-        # only log when preview changed
         if sig and sig != prev_sig:
             try:
                 self.repo.insert_log(user_id, bid, "info", "Strategy intents submitted", {"count": len(normalized)})

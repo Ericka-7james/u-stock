@@ -1,51 +1,44 @@
 /* ========= DASHBOARD PAGE LAYOUT =================================== */
 
-/* AppShell wraps page with .app-page; we just control internal layout */
-
 .dashboard-main {
   display: grid;
-  grid-template-columns: 1fr; /* mobile: single column */
+  grid-template-columns: 1fr; /* mobile single column */
   gap: 20px;
   align-items: flex-start;
 
-  /* ✅ KEY: prevent horizontal layout weirdness when one column grows */
   width: 100%;
   min-width: 0;
 }
 
-/* ✅ MOBILE/TABLET: Right stack first (chart + sentiment), then left (trade cards) */
-.dashboard-right {
+/* ✅ MOBILE ORDER:
+   1) Opportunities
+   2) Chart stack
+*/
+.dashboard-left {
   order: 1;
   display: grid;
-  gap: 14px; /* spacing between price + sentiment */
+  gap: 14px;
   align-content: start;
-
-  /* ✅ KEY: allow this column to shrink in grid */
   min-width: 0;
 }
 
-.dashboard-left {
+.dashboard-right {
   order: 2;
   display: grid;
-  gap: 14px; /* spacing between trade cards */
+  gap: 14px;
   align-content: start;
-
-  /* ✅ KEY: allow this column to shrink in grid */
   min-width: 0;
 }
 
-/* ✅ NEW: ensure panels/cards inside columns can shrink and don't force overflow */
+/* Allow children to shrink and prevent overflow */
 .dashboard-left > *,
-.dashboard-right > *,
-.panel,
-.card {
+.dashboard-right > * {
   min-width: 0;
 }
 
-/* Desktop: trade left, chart + sentiment right */
+/* Desktop: 2 columns */
 @media (min-width: 1024px) {
   .dashboard-main {
-    /* ✅ KEY: BOTH columns must be shrinkable (minmax(0, ...)) */
     grid-template-columns: minmax(0, 440px) minmax(0, 1fr);
     gap: 1.5rem;
     align-items: start;
@@ -60,204 +53,16 @@
   }
 }
 
-/* Chart / sentiment panels extend the base .panel style from AppShell */
-
+/* Keep your intended chart panel padding tweak */
 .panel.panel-chart {
-  padding: 18px 18px 20px; /* small tweak from base panel */
+  padding: 18px 18px 20px;
 }
 
-.card-main-chart {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  box-sizing: border-box;
-
-  /* ✅ helps prevent inner content from forcing width */
-  min-width: 0;
-}
-
-/* Header on the chart card (green gradient area) */
-.card-header {
-  background: radial-gradient(
-    circle at top left,
-    var(--ustock-green-soft) 0%,
-    var(--ustock-bg-card-soft) 35%,
-    var(--ustock-bg-card) 100%
-  );
-  padding: 10px 14px;
-  border-radius: 12px;
-  margin-bottom: 12px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-
-  /* ✅ prevent header row from forcing layout wider */
-  min-width: 0;
-}
-
-.card-header-left {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-
-  /* ✅ allow text to wrap instead of pushing width */
-  min-width: 0;
-}
-
-.card-header h2 {
-  margin: 0;
-  font-size: 18px;
-  color: var(--ustock-text-main);
-
-  /* ✅ avoid long titles pushing the whole card */
-  min-width: 0;
-}
-
-.card-subtitle {
-  margin: 0;
-  font-size: 12px;
-  color: var(--ustock-text-strong);
-  opacity: 1;
-}
-
-/* Make title + ? icon sit on one row */
-.card-title-row {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 8px;
-  flex-wrap: nowrap;
-  white-space: nowrap;
-
-  /* ✅ critical for flex rows in grid columns */
-  min-width: 0;
-}
-
-/* Chart area */
+/* Internal chart layout safety */
+.card-main-chart,
+.card-header,
+.card-header-left,
+.card-title-row,
 .chart-wrapper {
-  flex: 1;
-  min-height: 260px;
-  width: 100%;
-
-  /* ✅ prevents inner chart container from forcing width */
   min-width: 0;
-}
-
-/* Filters column (left) – this is NOT a card itself */
-.panel.panel-filters {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 0;
-  background: transparent;
-  box-shadow: none;
-  border-radius: 0;
-  border: none;
-}
-
-.panel,
-.panel-filters {
-  transform: none !important;
-}
-
-/* Filters cards: use AppShell .panel as base, only tweak what’s special */
-.filters-card {
-  padding: 16px 18px; /* slight padding tweak from base panel */
-  transition: box-shadow 0.18s ease, transform 0.18s ease;
-
-  /* ✅ prevent inner content from blowing out width */
-  min-width: 0;
-}
-
-.filters-card:hover {
-  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.12);
-}
-
-/* Green accent only on the index card */
-.filters-card--index {
-  border-top: 4px solid var(--ustock-green-main);
-  background: radial-gradient(
-    circle at top left,
-    var(--ustock-green-soft) 0%,
-    var(--ustock-bg-card-soft) 45%,
-    var(--ustock-bg-card) 100%
-  );
-}
-
-.filters-card-header h3 {
-  margin: 0 0 4px;
-}
-
-/* Data snapshots card can stay plain, but via variables */
-.filters-card--macro {
-  border-top: none;
-  background: var(--ustock-bg-card);
-}
-
-/* Last updated footer within dashboard */
-.dashboard-last-updated {
-  text-align: right;
-  font-size: 13px;
-  color: var(--ustock-text-muted);
-  padding: 12px 4px 0;
-  margin-top: 20px;
-}
-
-/* Make header text pop over the green blend in dark mode */
-body.ustock-dark .card-header h2,
-body.ustock-dark .card-header .card-subtitle {
-  text-shadow: 0 0 8px rgba(0, 0, 0, 0.7);
-}
-
-/* ⬇️ NEW: brighten the subtitle specifically in dark mode */
-body.ustock-dark .card-header .card-subtitle {
-  color: var(--ustock-text-strong); /* bright white-ish */
-  opacity: 1;
-  text-shadow: 0 0 8px rgba(0, 0, 0, 0.65);
-}
-
-/* ================================================================
-   Connected Brokers mini card (under sentiment)
-   ================================================================ */
-
-.connected-mini-card {
-  display: block;
-  text-decoration: none;
-
-  border-radius: 14px;
-  border: 1px solid rgba(148, 163, 184, 0.22);
-  background: radial-gradient(
-    circle at top left,
-    var(--ustock-green-soft) 0%,
-    var(--ustock-bg-card-soft) 42%,
-    var(--ustock-bg-card) 100%
-  );
-
-  padding: 12px 14px;
-  transition: box-shadow 0.18s ease, transform 0.18s ease, border-color 0.18s ease;
-
-  min-width: 0;
-}
-
-.connected-mini-card:hover {
-  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.12);
-  transform: translateY(-1px);
-  border-color: rgba(22, 163, 74, 0.35);
-}
-
-.connected-mini-title {
-  font-weight: 950;
-  color: var(--ustock-text-strong);
-  font-size: 14px;
-  margin: 0;
-}
-
-.connected-mini-sub {
-  margin-top: 4px;
-  font-size: 12px;
-  font-weight: 800;
-  color: var(--ustock-text-muted);
-  line-height: 1.25;
 }

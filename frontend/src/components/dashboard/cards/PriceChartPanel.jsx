@@ -1,5 +1,5 @@
-// src/components/dashboard/cards/PriceChartPanel.jsx
-import { useEffect, useRef } from "react";
+// frontend/src/components/dashboard/cards/PriceChartPanel.jsx
+import { useEffect, useMemo, useRef } from "react";
 import HelpTooltip from "../../common/HelpTooltip.jsx";
 import "../../../css/dashboard/cards/PriceChartPanel.css";
 
@@ -9,7 +9,6 @@ function loadTradingViewScript() {
 
     const existing = document.querySelector('script[data-tv="true"]');
     if (existing) {
-      // If it already exists, attach listeners (but also resolve if it already loaded)
       existing.addEventListener("load", resolve);
       existing.addEventListener("error", reject);
       return;
@@ -32,13 +31,47 @@ function normalizeSymbol(sym) {
   return last.toUpperCase();
 }
 
-export default function PriceChartPanel({ currentTicker = "AAPL", isDarkMode = false }) {
+// TradingView interval is not 1:1 with human labels, so normalize to something readable.
+function prettyInterval(interval) {
+  const v = String(interval || "").trim();
+
+  // numeric minutes
+  if (/^\d+$/.test(v)) {
+    const mins = Number(v);
+    if (mins === 15) return "15m";
+    if (mins === 30) return "30m";
+    if (mins === 60) return "1h";
+    if (mins === 120) return "2h";
+    if (mins === 240) return "4h";
+    return `${mins}m`;
+  }
+
+  // letter intervals
+  const up = v.toUpperCase();
+  if (up === "D") return "1D";
+  if (up === "W") return "1W";
+  if (up === "M") return "1M";
+  return up || "—";
+}
+
+export default function PriceChartPanel({
+  currentTicker = "AAPL",
+  isDarkMode = false,
+
+  // This is the Opportunities timeframe (used for filters elsewhere)
+  timeframeLabel = "Past week",
+
+  // We will use this to show the candle interval label (or any extra hint)
+  activeRangeLabel = "",
+
+  // TradingView free widget: interval only (candle size)
+  interval = "60",
+}) {
   const containerIdRef = useRef(`tv-${Math.random().toString(16).slice(2)}`);
   const widgetRef = useRef(null);
 
-  // ✅ Recreate on theme OR ticker changes.
-  // TradingView free embed doesn't always support clean live switching,
-  // so hard rebuild is the most reliable approach.
+  const intervalLabel = useMemo(() => prettyInterval(interval), [interval]);
+
   useEffect(() => {
     let alive = true;
 
@@ -49,7 +82,7 @@ export default function PriceChartPanel({ currentTicker = "AAPL", isDarkMode = f
 
         const symbol = normalizeSymbol(currentTicker) || "AAPL";
 
-        // 🔥 Hard cleanup: wipe container + drop old widget reference
+        // Hard cleanup
         const containerEl = document.getElementById(containerIdRef.current);
         if (containerEl) containerEl.innerHTML = "";
         widgetRef.current = null;
@@ -57,17 +90,22 @@ export default function PriceChartPanel({ currentTicker = "AAPL", isDarkMode = f
         widgetRef.current = new window.TradingView.widget({
           container_id: containerIdRef.current,
           symbol,
-          interval: "D",
+
+          // ✅ interval controlled by DashboardPage mapping
+          interval: String(interval || "60"),
+
           autosize: true,
           theme: isDarkMode ? "dark" : "light",
           locale: "en",
-
-          // Keep search enabled inside the chart
           allow_symbol_change: true,
 
           hide_top_toolbar: false,
           hide_side_toolbar: false,
-          withdateranges: true,
+
+          // ✅ IMPORTANT: prevents the bottom 1D/5D/1M bar that implies we control the window
+          // If you want it back, set to true.
+          withdateranges: false,
+
           save_image: false,
         });
       } catch (e) {
@@ -78,8 +116,7 @@ export default function PriceChartPanel({ currentTicker = "AAPL", isDarkMode = f
     return () => {
       alive = false;
     };
-    // ✅ IMPORTANT: ticker changes must rebuild too
-  }, [isDarkMode, currentTicker]);
+  }, [isDarkMode, currentTicker, interval]);
 
   return (
     <section className="panel panel-chart">
@@ -88,14 +125,26 @@ export default function PriceChartPanel({ currentTicker = "AAPL", isDarkMode = f
           <div className="card-header-left">
             <div className="card-title-row">
               <h2 className="card-title-text">Price action viewer</h2>
+
               <HelpTooltip title="What is the Price action viewer?">
                 <p>This chart is powered by TradingView.</p>
                 <p className="help-popover__note">
-                  Theme and external symbol updates require recreating the free embed.
+                  The free embed supports changing candle interval (e.g., 15m/1h/1D). It does not let us force the
+                  visible date window. Use the chart controls to zoom/pan.
                 </p>
               </HelpTooltip>
             </div>
-            <p className="card-subtitle">Search any symbol directly in the chart.</p>
+
+            <p className="card-subtitle">
+              Candle interval:{" "}
+              <strong>{intervalLabel}</strong>
+              {activeRangeLabel ? (
+                <>
+                  {" "}
+                  · <span style={{ opacity: 0.85 }}>{activeRangeLabel}</span>
+                </>
+              ) : null}
+            </p>
           </div>
         </div>
 

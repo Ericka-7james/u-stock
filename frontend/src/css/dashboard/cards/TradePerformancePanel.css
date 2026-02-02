@@ -3,30 +3,67 @@
 /* Panel wrapper (not a card) */
 .tpPanel {
   display: block;
+  width: 100%;
+  box-sizing: border-box;
+
+  /* guards: prevent horizontal bleed from grids/buttons */
+  max-width: 100%;
+  overflow-x: hidden;
+
+  /* IMPORTANT:
+     Do NOT add padding/margins here.
+     The app layout (.app-page / .dashboard) already provides gutters.
+     Adding padding here makes this panel narrower than other cards. */
 }
 
-/* Header bar matches PriceChartPanel header vibe */
+/* Ensure inner sections also respect sizing */
+.tpHeaderBar,
+.tpLeft,
+.tpLeftGrid,
+.tpCard,
+.tpOppMiniTable {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* -------------------------------------------------
+   Header bar (neutral card surface + subtle green accent)
+-------------------------------------------------- */
 .tpHeaderBar {
-  background: radial-gradient(
-    circle at top left,
-    var(--ustock-green-soft) 0%,
-    var(--ustock-bg-card-soft) 35%,
-    var(--ustock-bg-card) 100%
-  );
-  padding: 10px 14px;
+  width: 100%;
+  background: var(--ustock-bg-card);
+  border: 1px solid var(--ustock-border-card);
   border-radius: 12px;
+  padding: 10px 14px;
   margin-bottom: 12px;
+
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 12px;
-  border: 1px solid var(--ustock-border-card);
+
+  position: relative;
+  overflow: hidden;
+}
+
+/* subtle U-Stock accent stripe */
+.tpHeaderBar::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--ustock-green, #0f766e);
+  opacity: 0.9;
 }
 
 .tpHeaderLeft {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  min-width: 0;
 }
 
 .tpTitleRow {
@@ -39,22 +76,43 @@
 .tpTitleText {
   margin: 0;
   font-size: 18px;
-  color: var(--ustock-text-main);
+  color: var(--ustock-text-strong);
 }
 
 .tpSubtitle {
   margin: 0;
   font-size: 12px;
-  color: var(--ustock-text-strong);
+  color: var(--ustock-text-muted);
   opacity: 1;
 }
 
+/* right side controls wrapper */
 .tpTabs {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
 }
 
+/* stack timeframe + active range line */
+.tpTimeframeStack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.tpActiveRangeDays {
+  font-size: 12px;
+  color: var(--ustock-text-muted);
+  white-space: nowrap;
+}
+
+.tpActiveRangeStrong {
+  font-weight: 900;
+  color: var(--ustock-text-strong);
+}
+
+/* existing tab style (used elsewhere too) */
 .tpTab {
   border: 1px solid var(--ustock-border-card);
   background: var(--ustock-bg-card);
@@ -63,6 +121,7 @@
   padding: 6px 10px;
   font-size: 12px;
   cursor: pointer;
+  min-width: 0;
 }
 
 .tpTab:hover {
@@ -72,6 +131,7 @@
 /* Main grid for cards */
 .tpLeft {
   display: block;
+  width: 100%;
 }
 
 /* Each card is its own surface */
@@ -93,6 +153,7 @@
 
 .tpLeftGrid {
   display: grid;
+  width: 100%;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
@@ -100,6 +161,7 @@
 /* span helpers */
 .tpSpan2 {
   grid-column: span 2;
+  min-width: 0;
 }
 
 /* Big stat cards */
@@ -137,6 +199,7 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
+  min-width: 0;
 }
 
 .tpMiniCard {
@@ -144,6 +207,7 @@
   border: 1px solid var(--ustock-border-card);
   border-radius: 12px;
   padding: 12px;
+  min-width: 0;
 }
 
 .tpMiniLabel {
@@ -169,6 +233,7 @@
   display: flex;
   justify-content: space-between;
   gap: 12px;
+  min-width: 0;
 }
 
 .muted {
@@ -185,6 +250,7 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
+  width: 100%;
 }
 
 .tpTableCard {
@@ -213,6 +279,7 @@
   border-radius: 10px;
   background: var(--ustock-bg-card-soft);
   border: 1px solid rgba(15, 118, 110, 0.12);
+  min-width: 0;
 }
 
 .tpRow.pos .right {
@@ -235,11 +302,13 @@
   text-align: right;
 }
 
-/* NEW: Opportunity grid inside the bottom card */
+/* Opportunity grid inside the bottom card */
 .tpOppGrid {
   display: grid;
+  width: 100%;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
+  min-width: 0;
 }
 
 .tpOppMiniTable {
@@ -247,6 +316,7 @@
   border: 1px solid var(--ustock-border-card);
   border-radius: 12px;
   padding: 12px;
+  min-width: 0;
 }
 
 .tpOppMiniTitle {
@@ -268,6 +338,7 @@
 .tpOppBody {
   display: grid;
   gap: 8px;
+  min-width: 0;
 }
 
 .tpOppRow {
@@ -278,6 +349,7 @@
   border-radius: 10px;
   background: var(--ustock-bg-card);
   border: 1px solid rgba(15, 118, 110, 0.12);
+  min-width: 0;
 }
 
 .tpOppFootnote {
@@ -286,16 +358,42 @@
   color: var(--ustock-text-muted);
 }
 
-/* Connected brokers mini card should span full width like other cards */
+/* Connected brokers mini card should look like a real card (not default blue link) */
 .connected-mini-card {
-  display: flex;          /* or display:block; both work */
+  display: flex;
   flex-direction: column;
   width: 100%;
   box-sizing: border-box;
+
+  background: var(--ustock-bg-card);
+  border: 1px solid var(--ustock-border-card);
+  border-radius: 12px;
+  padding: 14px;
+  box-shadow: 0 8px 20px rgba(15, 118, 110, 0.06);
+
+  text-decoration: none;
+  color: var(--ustock-text-main);
+}
+
+.connected-mini-card:hover {
+  filter: brightness(1.02);
+}
+
+.connected-mini-title {
+  font-weight: 800;
+  font-size: 13px;
+  color: var(--ustock-text-strong);
+  margin-bottom: 6px;
+}
+
+.connected-mini-sub {
+  font-size: 12px;
+  color: var(--ustock-text-muted);
 }
 
 /* Responsive */
 @media (max-width: 900px) {
+  /* keep widths consistent with app-page gutters */
   .tpLeftGrid {
     grid-template-columns: 1fr;
   }
@@ -315,5 +413,15 @@
 
   .tpOppGrid {
     grid-template-columns: 1fr;
+  }
+
+  /* internal padding tweaks (safe) */
+  .tpHeaderBar {
+    padding: 0.85rem 0.9rem;
+  }
+
+  /* keep right-side stack aligned on mobile */
+  .tpTimeframeStack {
+    align-items: flex-start;
   }
 }

@@ -1,5 +1,5 @@
 // frontend/src/components/dashboard/cards/BotControlCard.jsx
-import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import HelpTooltip from "../../common/HelpTooltip.jsx";
 import Modal from "../../common/Modal.jsx";
 import "../../../css/dashboard/cards/BotControlCard.css";
@@ -37,6 +37,16 @@ function n(x, fallback = 0) {
   return Number.isFinite(v) ? v : fallback;
 }
 
+function fmtTime(epochSec) {
+  const t = Number(epochSec);
+  if (!Number.isFinite(t) || t <= 0) return "—";
+  try {
+    return new Date(t * 1000).toLocaleString();
+  } catch {
+    return "—";
+  }
+}
+
 function fmtAge(sec) {
   const s = Number(sec);
   if (!Number.isFinite(s) || s < 0) return "—";
@@ -50,76 +60,74 @@ function fmtAge(sec) {
   return remH ? `${d}d ${remH}h` : `${d}d`;
 }
 
-function fmtTime(epoch) {
-  const t = Number(epoch);
-  if (!Number.isFinite(t) || t <= 0) return "—";
-  try {
-    return new Date(t * 1000).toLocaleString();
-  } catch {
-    return "—";
-  }
-}
-
-function pillTone(uiState) {
-  if (uiState === "running") return "pos";
-  if (uiState === "paused") return "warn";
+function pillTone(kind) {
+  if (kind === "pos") return "pos";
+  if (kind === "warn") return "warn";
   return "neg";
 }
 
-export default function BotControlCard({ activeBotId, onActiveBotChange }) {
+function normalizeEff(x) {
+  const v = String(x || "").trim().toLowerCase();
+  const ok = new Set([
+    "running",
+    "waiting_for_market",
+    "starting",
+    "paused",
+    "stopped",
+    "offline",
+    "error",
+    "degraded",
+    "idle",
+    "armed",
+    "disarmed",
+  ]);
+  return ok.has(v) ? v : v || "stopped";
+}
+
+function normalizeIntent(x) {
+  const v = String(x || "").trim().toLowerCase();
+  return v || "";
+}
+
+export default function BotControlCard({ activeBotId, onActiveBotChange, onStartBot, onStopBot }) {
   const [available, setAvailable] = useState([]);
   const [selected, setSelected] = useState(activeBotId || "ema_trend");
 
+  const [status, setStatus] = useState(null);
   const [market, setMarket] = useState(null);
   const [config, setConfig] = useState(null);
-
-  // live status from backend /api/bots/status
-  const [status, setStatus] = useState(null);
 
   const [busy, setBusy] = useState(false);
   const [uiError, setUiError] = useState("");
 
-  // Modals
-  const [cfgOpen, setCfgOpen] = useState(false);
-  const [logOpen, setLogOpen] = useState(false);
-
-  // Start confirmation + arming
+  // confirm start
   const [startConfirmOpen, setStartConfirmOpen] = useState(false);
+
+  // View log modal
+  const [logOpen, setLogOpen] = useState(false);
+  const [logItems, setLogItems] = useState([]);
+  const [logBusy, setLogBusy] = useState(false);
+
+  // Risk Controls modal
+  const [riskOpen, setRiskOpen] = useState(false);
+  const [riskBusy, setRiskBusy] = useState(false);
+  const [riskDraft, setRiskDraft] = useState({
+    risk_per_trade: "",
+    max_trades_per_day: "",
+    min_confidence: "",
+  });
+
+  // arm
   const ARM_WINDOW_MS = 15_000;
   const [armedUntil, setArmedUntil] = useState(0);
   const isArmed = armedUntil > Date.now();
 
-  // Live toggle gating (paper-first)
-  const [liveConfirmOpen, setLiveConfirmOpen] = useState(false);
-  const [liveNotEnabledOpen, setLiveNotEnabledOpen] = useState(false);
-
-  const [cfgDraft, setCfgDraft] = useState({
-    mode: "paper",
-    risk_per_trade: 0.005,
-    max_trades_per_day: 3,
-    min_confidence: 0.62,
-  });
-
-  const [logItems, setLogItems] = useState([]);
-  const [logBusy, setLogBusy] = useState(false);
-  const [logErr, setLogErr] = useState("");
+  // mode (paper-only for now)
+  const [mode, setMode] = useState("paper");
 
   const aliveRef = useRef(true);
-  const inflightRef = useRef({
-    available: null,
-    market: null,
-    config: null,
-    status: null,
-    action: null,
-    log: null,
-  });
-
-  // timers: use timeout for status (self-scheduling poll), interval for market, interval for arm tick
-  const timersRef = useRef({
-    market: null,
-    status: null, // timeout id
-    armTick: null,
-  });
+  const inflightRef = useRef({ available: null, status: null, market: null, config: null, action: null });
+  const timersRef = useRef({ status: null, market: null, armTick: null });
 
   function abortInflight(key) {
     const cur = inflightRef.current?.[key];
@@ -127,7 +135,6 @@ export default function BotControlCard({ activeBotId, onActiveBotChange }) {
     inflightRef.current[key] = null;
   }
 
-  // robust cleanup for both interval + timeout
   function clearTimer(t) {
     if (!t) return;
     clearInterval(t);
@@ -138,14 +145,13 @@ export default function BotControlCard({ activeBotId, onActiveBotChange }) {
     aliveRef.current = true;
     return () => {
       aliveRef.current = false;
-
       Object.keys(inflightRef.current || {}).forEach((k) => abortInflight(k));
       Object.values(timersRef.current || {}).forEach((t) => clearTimer(t));
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Keep selected in sync with parent
+  // sync selected with parent
   useEffect(() => {
     if (!activeBotId) return;
     setSelected(activeBotId);
@@ -153,12 +159,7 @@ export default function BotControlCard({ activeBotId, onActiveBotChange }) {
     setStartConfirmOpen(false);
   }, [activeBotId]);
 
-  const selectedMeta = useMemo(
-    () => available.find((b) => b.id === selected) || null,
-    [available, selected]
-  );
-
-  // -------- load available bots ----------
+  // load bots list
   useEffect(() => {
     abortInflight("available");
     const ac = new AbortController();
@@ -185,9 +186,8 @@ export default function BotControlCard({ activeBotId, onActiveBotChange }) {
     return () => ac.abort();
   }, [activeBotId]);
 
-  // -------- market session ----------
-  const refreshMarketSession = useCallback(async () => {
-    abortInflight("market");
+  const refreshMarket = useCallback(async () => {
+    if (inflightRef.current.market) return;
     const ac = new AbortController();
     inflightRef.current.market = ac;
 
@@ -196,124 +196,109 @@ export default function BotControlCard({ activeBotId, onActiveBotChange }) {
       if (!aliveRef.current || ac.signal.aborted) return;
       setMarket(data);
     } catch {
-      // ignore
+      // fail-open
     } finally {
       if (inflightRef.current.market === ac) inflightRef.current.market = null;
     }
   }, []);
 
-  // -------- config ----------
-  const refreshConfig = useCallback(
-    async (botId = selected) => {
-      const id = safeStr(botId);
-      if (!id) return;
+  const refreshConfig = useCallback(async (botId) => {
+    const id = safeStr(botId);
+    if (!id || inflightRef.current.config) return;
 
-      abortInflight("config");
-      const ac = new AbortController();
-      inflightRef.current.config = ac;
+    const ac = new AbortController();
+    inflightRef.current.config = ac;
 
-      try {
-        const data = await apiGet(`/api/bots/config?bot_id=${encodeURIComponent(id)}`, {
-          signal: ac.signal,
-        });
-        if (!aliveRef.current || ac.signal.aborted) return;
+    try {
+      const data = await apiGet(`/api/bots/config?bot_id=${encodeURIComponent(id)}`, { signal: ac.signal });
+      if (!aliveRef.current || ac.signal.aborted) return;
 
-        const cfg = data?.config && typeof data.config === "object" ? data.config : null;
-        setConfig(cfg);
+      const cfg = data?.config && typeof data.config === "object" ? data.config : null;
+      setConfig(cfg);
 
-        if (cfg) {
-          // IMPORTANT: if backend returns live but we don't support it yet, coerce to paper in UI draft
-          const backendMode = safeStr(cfg.mode, "paper");
-          const safeMode = backendMode === "live" ? "paper" : backendMode;
+      const m = safeStr(cfg?.mode, "paper");
+      setMode(m === "live" ? "paper" : m);
 
-          setCfgDraft({
-            mode: safeMode,
-            risk_per_trade: n(cfg.risk_per_trade, 0.005),
-            max_trades_per_day: Math.max(1, Math.floor(n(cfg.max_trades_per_day, 3))),
-            min_confidence: Math.min(0.99, Math.max(0.0, n(cfg.min_confidence, 0.62))),
-          });
-        }
-      } catch {
-        // ignore
-      } finally {
-        if (inflightRef.current.config === ac) inflightRef.current.config = null;
-      }
-    },
-    [selected]
-  );
+      // seed risk draft for modal
+      setRiskDraft({
+        risk_per_trade: cfg?.risk_per_trade ?? "",
+        max_trades_per_day: cfg?.max_trades_per_day ?? "",
+        min_confidence: cfg?.min_confidence ?? "",
+      });
+    } catch {
+      // ignore
+    } finally {
+      if (inflightRef.current.config === ac) inflightRef.current.config = null;
+    }
+  }, []);
 
-  // -------- status polling (NO abort spam) ----------
   const refreshStatus = useCallback(
-    async (botId = selected) => {
+    async (botId) => {
       const id = safeStr(botId);
-      if (!id) return;
-
-      // never overlap status requests
-      if (inflightRef.current.status) return;
+      if (!id || inflightRef.current.status) return;
 
       const ac = new AbortController();
       inflightRef.current.status = ac;
 
       try {
-        const data = await apiGet(`/api/bots/status?bot_id=${encodeURIComponent(id)}`, {
-          signal: ac.signal,
-        });
+        const data = await apiGet(`/api/bots/status?bot_id=${encodeURIComponent(id)}`, { signal: ac.signal });
         if (!aliveRef.current || ac.signal.aborted) return;
         setStatus(data);
+
+        // prefer backend mode when present
+        const m = safeStr(data?.mode, safeStr(config?.mode, mode));
+        setMode(m === "live" ? "paper" : m);
       } catch {
         // ignore
       } finally {
         if (inflightRef.current.status === ac) inflightRef.current.status = null;
       }
     },
-    [selected]
+    [config?.mode, mode]
   );
 
-  // Start timers on selected change
+  // polling on selected
   useEffect(() => {
     if (!selected) return;
-
     setUiError("");
 
-    // initial loads
-    refreshMarketSession();
     refreshConfig(selected);
     refreshStatus(selected);
+    refreshMarket();
 
-    // market interval (cheap)
-    if (timersRef.current.market) clearTimer(timersRef.current.market);
-    timersRef.current.market = setInterval(() => {
-      refreshMarketSession();
-    }, 30_000);
+    clearTimer(timersRef.current.market);
+    timersRef.current.market = setInterval(() => refreshMarket(), 30_000);
 
-    // status self-scheduling poll
     let stopped = false;
-
     const poll = async () => {
       if (stopped) return;
       await refreshStatus(selected);
       if (stopped) return;
       timersRef.current.status = setTimeout(poll, 1500);
     };
-
-    if (timersRef.current.status) clearTimer(timersRef.current.status);
+    clearTimer(timersRef.current.status);
     poll();
 
     return () => {
       stopped = true;
-      if (timersRef.current.market) clearTimer(timersRef.current.market);
-      if (timersRef.current.status) clearTimer(timersRef.current.status);
+      clearTimer(timersRef.current.market);
+      clearTimer(timersRef.current.status);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected, refreshMarketSession, refreshConfig, refreshStatus]);
+  }, [selected, refreshStatus, refreshMarket, refreshConfig]);
 
-  // Arm countdown tick (renders countdown)
+  // arm tick
   useEffect(() => {
     if (!isArmed) return;
-    if (timersRef.current.armTick) clearInterval(timersRef.current.armTick);
+    clearTimer(timersRef.current.armTick);
     timersRef.current.armTick = setInterval(() => setArmedUntil((v) => v), 250);
-    return () => timersRef.current.armTick && clearInterval(timersRef.current.armTick);
+    return () => clearTimer(timersRef.current.armTick);
   }, [isArmed]);
+
+  const armRemainingSec = useMemo(() => {
+    if (!isArmed) return 0;
+    return Math.max(0, Math.ceil((armedUntil - Date.now()) / 1000));
+  }, [armedUntil, isArmed]);
 
   function armNow() {
     setArmedUntil(Date.now() + ARM_WINDOW_MS);
@@ -321,11 +306,6 @@ export default function BotControlCard({ activeBotId, onActiveBotChange }) {
   function disarm() {
     setArmedUntil(0);
   }
-
-  const armRemainingSec = useMemo(() => {
-    if (!isArmed) return 0;
-    return Math.max(0, Math.ceil((armedUntil - Date.now()) / 1000));
-  }, [armedUntil, isArmed]);
 
   function onSelect(e) {
     const id = e.target.value;
@@ -335,115 +315,133 @@ export default function BotControlCard({ activeBotId, onActiveBotChange }) {
     setStartConfirmOpen(false);
   }
 
-  // -------- start/pause actions ----------
-  async function doStart() {
-    setUiError("");
+  /* ----------------------------
+     ✅ Derived state (canonical)
+  ---------------------------- */
 
-    // hard block live (future-ready UI, but no live keys yet)
-    if (safeStr(cfgDraft.mode, "paper") === "live") {
-      setLiveNotEnabledOpen(true);
-      setCfgDraft((s) => ({ ...s, mode: "paper" }));
-      return;
-    }
-
-    setBusy(true);
-    try {
-      await apiPost("/api/bots/start", { bot_id: selected, mode: safeStr(cfgDraft.mode, "paper") });
-      await refreshStatus(selected);
-    } catch (e) {
-      setUiError(String(e?.message || e));
-    } finally {
-      if (aliveRef.current) setBusy(false);
-    }
-  }
-
-  // NOTE: backend endpoint is /stop but it represents "pause intent"
-  async function doPause() {
-    setUiError("");
-    setBusy(true);
-    try {
-      await apiPost("/api/bots/stop", { bot_id: selected, paused_reason: "manual_pause" });
-      await refreshStatus(selected);
-    } catch (e) {
-      setUiError(String(e?.message || e));
-    } finally {
-      if (aliveRef.current) setBusy(false);
-    }
-  }
-
-  // -------- derive UI state ----------
-  const intent = safeStr(status?.intent, "paused").toLowerCase();
-  const effective = safeStr(status?.effective_state, "stopped").toLowerCase();
-  const backendMsg = safeStr(status?.message, "");
-  const pausedReason = safeStr(status?.pausedReason, "");
-  const lastError = safeStr(status?.lastError, "");
-
-  // mode preference: status -> config -> draft -> paper
-  const mode = safeStr(status?.mode, safeStr(config?.mode, safeStr(cfgDraft.mode, "paper")));
-  const safeMode = mode === "live" ? "paper" : mode; // UI safety until live is supported
-
-  // market
-  const marketOk = market && typeof market === "object" && market.ok === true;
-  const isOpen = marketOk ? Boolean(market.is_open) : null;
-
-  const nextOpenEpochRaw =
-    Number.isFinite(Number(status?.nextOpenEpoch)) && Number(status?.nextOpenEpoch) > 0
-      ? Number(status?.nextOpenEpoch)
-      : Number.isFinite(Number(market?.next_open)) && Number(market?.next_open) > 0
-      ? Number(market?.next_open)
-      : null;
+  const intent = normalizeIntent(status?.intent); // no default "paused"
+  const eff = normalizeEff(status?.effective_state);
 
   const hbAge = Number.isFinite(Number(status?.heartbeatAgeSec)) ? Number(status.heartbeatAgeSec) : null;
 
-  const isError = effective === "error" || Boolean(lastError);
-  const isOffline = effective === "offline";
-  const isPausedEff = effective === "paused";
-  const isWaiting = effective === "waiting_for_market";
-  const isStarting = effective === "starting";
-  const isRunningEff = effective === "running";
-  const isDegraded = effective === "degraded";
+  const lastError = safeStr(status?.lastError, "");
+  const pausedReason = safeStr(status?.pausedReason, "");
+  const message = safeStr(status?.message, "");
 
-  const liveish = isStarting || isRunningEff || isWaiting || isDegraded;
+  const marketOk = market && typeof market === "object" && market.ok === true;
+  const isOpen = marketOk ? Boolean(market.is_open) : null;
 
-  let uiState = "stopped";
-  if (isError || isOffline || isPausedEff || isWaiting) uiState = "paused";
-  else if (liveish) uiState = "running";
-  else uiState = "stopped";
+  const nextOpenEpoch =
+    n(status?.nextOpenEpoch, 0) > 0
+      ? n(status.nextOpenEpoch)
+      : n(market?.next_open, 0) > 0
+      ? n(market.next_open)
+      : 0;
 
-  const isRunningUi = uiState === "running";
+  // Offline always overrides other display states
+  const isOffline = eff === "offline";
+  const isErr = eff === "error" || Boolean(lastError);
 
-  const showNextOpen =
-    (effective === "waiting_for_market" || (intent === "running" && isOpen === false) || effective === "paused") &&
-    Boolean(nextOpenEpochRaw);
+  const isWaiting = eff === "waiting_for_market";
+  const isStarting = eff === "starting";
 
-  let statusDetail = "Idle";
+  // Running means effective is truly executing-ish (not "intent running")
+  const isRunningEff = eff === "running" || eff === "degraded";
 
-  if (isError) {
-    statusDetail = lastError ? `Error: ${lastError}` : "Error";
-  } else if (isOffline) {
-    statusDetail =
-      hbAge != null ? `Offline (no heartbeat · ${fmtAge(hbAge)} ago)` : "Offline (runner not heartbeating)";
-  } else if (isPausedEff) {
-    statusDetail = pausedReason || backendMsg || "Paused";
-  } else if (isWaiting) {
-    statusDetail = isOpen === false ? "Waiting for market open" : backendMsg || "Waiting for market";
-  } else if (isStarting) {
-    statusDetail = backendMsg || "Starting…";
-  } else if (isDegraded) {
-    statusDetail = backendMsg ? `Degraded: ${backendMsg}` : "Degraded (running)";
-  } else if (isRunningEff) {
-    statusDetail = isOpen === false ? "Running (market closed)" : backendMsg || "Running";
-  } else {
-    statusDetail = backendMsg || "Idle";
+  // Paused means effective paused OR intent paused (when not offline)
+  const isPaused = !isOffline && (eff === "paused" || intent === "paused");
+
+  // Disarmed is a “disabled” state if you ever return it later
+  const isDisarmed = eff === "disarmed" || intent === "disarmed";
+
+  // For the pill label (what the user perceives as the runtime state)
+  const runtimeLabel = isOffline
+    ? "OFFLINE"
+    : isErr
+    ? "ERROR"
+    : isWaiting
+    ? "WAITING"
+    : isStarting
+    ? "STARTING"
+    : isRunningEff
+    ? "LIVE"
+    : isPaused
+    ? "PAUSED"
+    : isDisarmed
+    ? "DISARMED"
+    : "IDLE";
+
+  const runtimeTone = isErr || isOffline ? "neg" : isRunningEff ? "pos" : isWaiting || isStarting ? "pos" : "warn";
+
+  const statusLine = isErr
+    ? `Error: ${lastError || "unknown"}`
+    : isOffline
+    ? hbAge != null
+      ? `Offline · ${fmtAge(hbAge)} since heartbeat`
+      : "Offline · no heartbeat"
+    : isWaiting
+    ? "Waiting for market open"
+    : isStarting
+    ? "Starting…"
+    : isRunningEff
+    ? isOpen === false
+      ? "Running (market closed)"
+      : "Running"
+    : isPaused
+    ? pausedReason || message || "Paused"
+    : message || "Idle";
+
+  const canArm = !busy && !isRunningEff && !isWaiting && !isStarting;
+  const canStart = !busy && !isRunningEff && !isWaiting && !isStarting && isArmed;
+  const canPause = !busy && (isRunningEff || isWaiting || isStarting);
+
+  async function doStart() {
+    setUiError("");
+    setBusy(true);
+    abortInflight("action");
+    const ac = new AbortController();
+    inflightRef.current.action = ac;
+
+    try {
+      if (typeof onStartBot === "function") {
+        await onStartBot({ bot_id: selected, mode });
+      } else {
+        await apiPost("/api/bots/start", { bot_id: selected, mode }, { signal: ac.signal });
+      }
+      await refreshStatus(selected);
+    } catch (e) {
+      if (!aliveRef.current || ac.signal.aborted) return;
+      setUiError(String(e?.message || e));
+    } finally {
+      if (inflightRef.current.action === ac) inflightRef.current.action = null;
+      if (aliveRef.current) setBusy(false);
+    }
   }
 
-  // gating
-  const canArm = !busy && !isRunningUi;
-  const canStart = !busy && !isRunningUi && isArmed;
-  const canPause = !busy && isRunningUi;
+  async function doPause() {
+    setUiError("");
+    setBusy(true);
+    abortInflight("action");
+    const ac = new AbortController();
+    inflightRef.current.action = ac;
+
+    try {
+      if (typeof onStopBot === "function") {
+        await onStopBot({ bot_id: selected });
+      } else {
+        await apiPost("/api/bots/stop", { bot_id: selected, paused_reason: "manual_pause" }, { signal: ac.signal });
+      }
+      await refreshStatus(selected);
+    } catch (e) {
+      if (!aliveRef.current || ac.signal.aborted) return;
+      setUiError(String(e?.message || e));
+    } finally {
+      if (inflightRef.current.action === ac) inflightRef.current.action = null;
+      if (aliveRef.current) setBusy(false);
+    }
+  }
 
   function requestStart() {
-    setUiError("");
     if (!canStart) return;
     setStartConfirmOpen(true);
   }
@@ -454,94 +452,48 @@ export default function BotControlCard({ activeBotId, onActiveBotChange }) {
     await doStart();
   }
 
-  // -------- log ----------
   async function openLog() {
-    setLogErr("");
-    setLogItems([]);
+    setUiError("");
     setLogOpen(true);
     setLogBusy(true);
-
-    abortInflight("log");
-    const ac = new AbortController();
-    inflightRef.current.log = ac;
-
     try {
-      const data = await apiGet(`/api/bots/log?bot_id=${encodeURIComponent(selected)}&limit=120`, {
-        signal: ac.signal,
-      });
-      if (!aliveRef.current || ac.signal.aborted) return;
-
+      const data = await apiGet(`/api/bots/log?bot_id=${encodeURIComponent(selected)}&limit=50`);
       const items = Array.isArray(data?.items) ? data.items : [];
-      setLogItems(items.reverse());
+      setLogItems(items);
     } catch (e) {
-      if (!aliveRef.current || ac.signal.aborted) return;
-      setLogErr(String(e?.message || e));
+      setLogItems([]);
+      setUiError(String(e?.message || e));
     } finally {
-      if (inflightRef.current.log === ac) inflightRef.current.log = null;
-      if (aliveRef.current) setLogBusy(false);
+      setLogBusy(false);
     }
   }
 
-  function requestLiveMode() {
-    setLiveConfirmOpen(true);
-  }
-
-  function confirmLiveMode() {
-    setLiveConfirmOpen(false);
-    // We don’t actually enable live yet
-    setLiveNotEnabledOpen(true);
-    setCfgDraft((s) => ({ ...s, mode: "paper" }));
-  }
-
-  async function saveConfig() {
+  function openRisk() {
     setUiError("");
+    setRiskOpen(true);
+  }
 
-    // hard block live save
-    if (safeStr(cfgDraft.mode, "paper") === "live") {
-      setLiveNotEnabledOpen(true);
-      setCfgDraft((s) => ({ ...s, mode: "paper" }));
-      return;
-    }
-
-    setBusy(true);
-
-    abortInflight("action");
-    const ac = new AbortController();
-    inflightRef.current.action = ac;
-
+  async function saveRisk() {
+    setUiError("");
+    setRiskBusy(true);
     try {
       const payload = {
         bot_id: selected,
         config: {
-          mode: safeStr(cfgDraft.mode, "paper"),
-          risk_per_trade: n(cfgDraft.risk_per_trade, 0.005),
-          max_trades_per_day: Math.max(1, Math.floor(n(cfgDraft.max_trades_per_day, 3))),
-          min_confidence: Math.min(0.99, Math.max(0.0, n(cfgDraft.min_confidence, 0.62))),
+          risk_per_trade: riskDraft.risk_per_trade,
+          max_trades_per_day: riskDraft.max_trades_per_day,
+          min_confidence: riskDraft.min_confidence,
         },
       };
-
-      await apiPost("/api/bots/config", payload, { signal: ac.signal });
-      if (!aliveRef.current || ac.signal.aborted) return;
-
+      await apiPost("/api/bots/config", payload);
       await refreshConfig(selected);
-      setCfgOpen(false);
+      setRiskOpen(false);
     } catch (e) {
-      if (!aliveRef.current || ac.signal.aborted) return;
       setUiError(String(e?.message || e));
     } finally {
-      if (inflightRef.current.action === ac) inflightRef.current.action = null;
-      if (aliveRef.current) setBusy(false);
+      setRiskBusy(false);
     }
   }
-
-  const cfgSummary = config
-    ? `Mode ${safeStr(config.mode, "paper")} · Risk ${(n(config.risk_per_trade, 0) * 100).toFixed(
-        2
-      )}% · Max ${Math.floor(n(config.max_trades_per_day, 0))}/day · Min conf ${n(
-        config.min_confidence,
-        0
-      ).toFixed(2)}`
-    : "Not loaded yet";
 
   return (
     <>
@@ -549,25 +501,23 @@ export default function BotControlCard({ activeBotId, onActiveBotChange }) {
         <div className="botCardHead">
           <div className="botCardTitleRow">
             <div className="botCardTitle">Bot Control</div>
-            <HelpTooltip text="Arm, then Start with confirmation. Use Pause to halt trading. Risk Controls tune behavior. Logs show runner + bot messages." />
+            <HelpTooltip text="Arm → Start. Pause anytime. This card only controls the bot; intents/opportunities are shown elsewhere on the dashboard." />
           </div>
 
           <div className="botPillRow">
-            {/* Mode pill (paper-first) */}
-            <div className="botCardStatePill mode" title="Paper trading is enabled. Live is coming soon.">
-              {safeMode === "paper" ? "PAPER" : "LIVE"}
+            <div className="botCardStatePill mode" title="Paper trading only (live soon).">
+              {mode === "paper" ? "PAPER" : "PAPER"}
             </div>
 
             <div
               className={`botCardStatePill ${isArmed ? "warn" : "neg"}`}
-              title={isArmed ? "Start is enabled briefly." : "Arm to enable Start."}
+              title={isArmed ? "Start enabled briefly." : "Arm to enable Start."}
             >
               {isArmed ? `ARMED · ${armRemainingSec}s` : "DISARMED"}
             </div>
 
-            <div className={`botCardStatePill status ${pillTone(uiState)}`}>
-              {uiState === "paused" ? "PAUSED" : uiState === "running" ? "LIVE" : "IDLE"}
-            </div>
+            {/* ✅ runtime state pill (LIVE/PAUSED/OFFLINE/WAITING/STARTING/ERROR) */}
+            <div className={`botCardStatePill status ${pillTone(runtimeTone)}`}>{runtimeLabel}</div>
           </div>
         </div>
 
@@ -584,31 +534,25 @@ export default function BotControlCard({ activeBotId, onActiveBotChange }) {
                 ))}
               </select>
 
-              <div className="botHint">{selectedMeta?.description || ""}</div>
+              <div className="botHint">{safeStr(available.find((b) => b.id === selected)?.description, "")}</div>
             </div>
 
             <div className="botActions">
-              <button className="botBtn" type="button" onClick={() => setCfgOpen(true)} disabled={busy}>
-                Risk Controls
-              </button>
-
-              <button className="botBtn" type="button" onClick={openLog} disabled={busy}>
+              <button className="botBtn" type="button" onClick={openLog} disabled={busy} aria-label="View log">
                 View log
               </button>
 
-              {!isRunningUi ? (
-                <button
-                  className="botBtn"
-                  type="button"
-                  onClick={isArmed ? disarm : armNow}
-                  disabled={!canArm}
-                  title={canArm ? "Arm to enable Start briefly." : "Disabled"}
-                >
+              <button className="botBtn" type="button" onClick={openRisk} disabled={busy} aria-label="Risk controls">
+                Risk Controls
+              </button>
+
+              {!isRunningEff && !isWaiting && !isStarting ? (
+                <button className="botBtn" type="button" onClick={isArmed ? disarm : armNow} disabled={!canArm}>
                   {isArmed ? "Disarm" : "Arm"}
                 </button>
               ) : null}
 
-              {isRunningUi ? (
+              {isRunningEff || isWaiting || isStarting ? (
                 <button className="botBtn stop" type="button" onClick={doPause} disabled={!canPause}>
                   Pause
                 </button>
@@ -618,7 +562,7 @@ export default function BotControlCard({ activeBotId, onActiveBotChange }) {
                   type="button"
                   onClick={requestStart}
                   disabled={!canStart}
-                  title={!isArmed ? "Arm first, then Start." : "Start bot"}
+                  title={!isArmed ? "Arm first." : "Start bot"}
                 >
                   Start
                 </button>
@@ -628,55 +572,39 @@ export default function BotControlCard({ activeBotId, onActiveBotChange }) {
 
           <div className="botGrid">
             <div className="botTile">
-              <div className="botTileLabel">Mode</div>
-              <div className="botTileValue">{safeMode}</div>
+              <div className="botTileLabel">Intent</div>
+              <div className="botTileValue">{intent || "—"}</div>
             </div>
 
             <div className="botTile">
-              <div className="botTileLabel">Last run</div>
-              <div className="botTileValue">{status?.lastRun ? fmtTime(status.lastRun) : "—"}</div>
+              <div className="botTileLabel">Effective</div>
+              <div className="botTileValue">{eff || "—"}</div>
             </div>
 
             <div className="botTile">
-              <div className="botTileLabel">Last intents</div>
-              <div className="botTileValue">
-                {Number.isFinite(Number(status?.lastIntents)) ? String(status.lastIntents) : "—"}
-              </div>
+              <div className="botTileLabel">Heartbeat</div>
+              <div className="botTileValue">{hbAge == null ? "—" : `${fmtAge(hbAge)} ago`}</div>
             </div>
 
             <div className="botTile">
-              <div className="botTileLabel">Status detail</div>
-              <div className="botTileValue">
-                {uiState === "paused" ? (
-                  <>
-                    <div className="botPausedLine">{statusDetail}</div>
-                    <div className="botPausedSub">
-                      Next open: {showNextOpen && nextOpenEpochRaw ? fmtTime(nextOpenEpochRaw) : "—"}
-                    </div>
-                  </>
-                ) : (
-                  <span>{statusDetail}</span>
-                )}
-              </div>
+              <div className="botTileLabel">Next open</div>
+              <div className="botTileValue">{nextOpenEpoch ? fmtTime(nextOpenEpoch) : "—"}</div>
             </div>
 
             <div className="botTile" style={{ gridColumn: "1 / -1" }}>
-              <div className="botTileLabel" style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
-                <span>Mode + Risk Controls</span>
-                <button className="botLinkBtn" type="button" onClick={() => setCfgOpen(true)} disabled={busy}>
-                  Edit
-                </button>
-              </div>
-              <div className="botTileValue">{cfgSummary}</div>
+              <div className="botTileLabel">Status</div>
+              <div className="botTileValue">{statusLine}</div>
+              {message ? (
+                <div style={{ fontSize: 12, opacity: 0.75, fontWeight: 800, marginTop: 4 }}>{message}</div>
+              ) : null}
             </div>
           </div>
 
           {uiError ? <div className="botError">{uiError}</div> : null}
-          {status?.lastError ? <div className="botError subtle">Last error: {String(status.lastError)}</div> : null}
         </div>
       </div>
 
-      {/* Start confirmation */}
+      {/* Start confirm */}
       <Modal
         open={startConfirmOpen}
         title="Start this bot?"
@@ -694,195 +622,92 @@ export default function BotControlCard({ activeBotId, onActiveBotChange }) {
       >
         <div style={{ display: "grid", gap: 10 }}>
           <div style={{ fontWeight: 900 }}>
-            You’re about to start: <span className="mMono">{selected}</span>
+            Start: <span className="mono">{selected}</span>
           </div>
-
           <div style={{ fontSize: 12, opacity: 0.8, fontWeight: 800 }}>
-            Mode: <span className="mMono">{safeStr(cfgDraft.mode, "paper")}</span>
-            {" · "}
-            Risk/trade: <span className="mMono">{(n(cfgDraft.risk_per_trade, 0.005) * 100).toFixed(2)}%</span>
-            {" · "}
-            Max/day: <span className="mMono">{Math.floor(n(cfgDraft.max_trades_per_day, 3))}</span>
-          </div>
-
-          <div style={{ fontSize: 12, opacity: 0.75, fontWeight: 800 }}>
-            Confirm to start. Use Pause anytime to halt trading.
+            Mode: <span className="mono">{mode}</span> · You can Pause anytime.
           </div>
         </div>
       </Modal>
 
-      {/* Config modal */}
+      {/* View log */}
       <Modal
-        open={cfgOpen}
-        title="Mode + Risk Controls"
-        onClose={() => setCfgOpen(false)}
+        open={logOpen}
+        title="Bot log"
+        onClose={() => setLogOpen(false)}
+        footer={
+          <button className="mBtn" type="button" onClick={() => setLogOpen(false)} disabled={logBusy}>
+            Close
+          </button>
+        }
+      >
+        {logBusy ? (
+          <div style={{ fontWeight: 800, opacity: 0.8 }}>Loading…</div>
+        ) : (
+          <div style={{ display: "grid", gap: 8 }}>
+            {logItems.length === 0 ? (
+              <div style={{ fontWeight: 800, opacity: 0.8 }}>No log entries.</div>
+            ) : (
+              logItems.map((it, idx) => (
+                <div key={idx} style={{ border: "1px solid rgba(148,163,184,0.25)", borderRadius: 12, padding: 10 }}>
+                  <div style={{ fontWeight: 900, fontSize: 12, opacity: 0.85 }}>
+                    {safeStr(it.level, "info").toUpperCase()} · {it.ts ? fmtTime(it.ts) : "—"}
+                  </div>
+                  <div style={{ fontWeight: 800, marginTop: 6 }}>{safeStr(it.message, "")}</div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+      </Modal>
+
+      {/* Risk controls */}
+      <Modal
+        open={riskOpen}
+        title="Risk Controls"
+        onClose={() => setRiskOpen(false)}
         footer={
           <>
-            <button className="mBtn" type="button" onClick={() => setCfgOpen(false)} disabled={busy}>
+            <button className="mBtn" type="button" onClick={() => setRiskOpen(false)} disabled={riskBusy}>
               Cancel
             </button>
-            <button className="mBtn mBtnPrimary" type="button" onClick={saveConfig} disabled={busy}>
+            <button className="mBtn mBtnPrimary" type="button" onClick={saveRisk} disabled={riskBusy}>
               Save
             </button>
           </>
         }
       >
-        <div style={{ display: "grid", gap: 12 }}>
-          <div style={{ display: "grid", gap: 6 }}>
-            <div style={{ fontWeight: 900, fontSize: 12, opacity: 0.8 }}>Mode</div>
-            <select
-              className="botSelect"
-              value={cfgDraft.mode}
-              onChange={(e) => {
-                const next = e.target.value;
-                if (next === "live") {
-                  // Paper-first: confirm → show not enabled → keep paper
-                  requestLiveMode();
-                  return;
-                }
-                setCfgDraft((s) => ({ ...s, mode: next }));
-              }}
-              disabled={busy}
-            >
-              <option value="paper">paper</option>
-              <option value="live">live</option>
-            </select>
-            <div style={{ fontSize: 12, opacity: 0.7 }}>
-              Live trading is coming soon. Paper-first while we harden stability + risk.
-            </div>
-          </div>
-
-          <div style={{ display: "grid", gap: 6 }}>
-            <div style={{ fontWeight: 900, fontSize: 12, opacity: 0.8 }}>Risk per trade (fraction)</div>
-            <input
-              className="botInput"
-              type="number"
-              step="0.001"
-              min="0"
-              max="0.05"
-              value={cfgDraft.risk_per_trade}
-              onChange={(e) => setCfgDraft((s) => ({ ...s, risk_per_trade: e.target.value }))}
-              disabled={busy}
-            />
-            <div style={{ fontSize: 12, opacity: 0.7 }}>Example: 0.005 = 0.5% risk per trade</div>
-          </div>
-
-          <div style={{ display: "grid", gap: 6 }}>
-            <div style={{ fontWeight: 900, fontSize: 12, opacity: 0.8 }}>Max trades per day</div>
-            <input
-              className="botInput"
-              type="number"
-              step="1"
-              min="1"
-              max="50"
-              value={cfgDraft.max_trades_per_day}
-              onChange={(e) => setCfgDraft((s) => ({ ...s, max_trades_per_day: e.target.value }))}
-              disabled={busy}
-            />
-          </div>
-
-          <div style={{ display: "grid", gap: 6 }}>
-            <div style={{ fontWeight: 900, fontSize: 12, opacity: 0.8 }}>Min confidence</div>
-            <input
-              className="botInput"
-              type="number"
-              step="0.01"
-              min="0"
-              max="0.99"
-              value={cfgDraft.min_confidence}
-              onChange={(e) => setCfgDraft((s) => ({ ...s, min_confidence: e.target.value }))}
-              disabled={busy}
-            />
-          </div>
-        </div>
-      </Modal>
-
-      {/* Live confirmation modal */}
-      <Modal
-        open={liveConfirmOpen}
-        title="Switch to LIVE?"
-        onClose={() => setLiveConfirmOpen(false)}
-        footer={
-          <>
-            <button className="mBtn" type="button" onClick={() => setLiveConfirmOpen(false)}>
-              Cancel
-            </button>
-            <button className="mBtn mBtnPrimary" type="button" onClick={confirmLiveMode}>
-              Yes, switch
-            </button>
-          </>
-        }
-      >
         <div style={{ display: "grid", gap: 10 }}>
-          <div style={{ fontWeight: 900 }}>Live trading can place real orders.</div>
-          <div style={{ fontSize: 12, opacity: 0.8, fontWeight: 800 }}>
-            We’re paper-first until strategies are stable + efficient 24/7.
-          </div>
+          <label style={{ display: "grid", gap: 6 }}>
+            <div style={{ fontWeight: 900, fontSize: 12, opacity: 0.85 }}>risk_per_trade</div>
+            <input
+              className="botInput"
+              value={riskDraft.risk_per_trade}
+              onChange={(e) => setRiskDraft((d) => ({ ...d, risk_per_trade: e.target.value }))}
+              placeholder="0.005"
+            />
+          </label>
+
+          <label style={{ display: "grid", gap: 6 }}>
+            <div style={{ fontWeight: 900, fontSize: 12, opacity: 0.85 }}>max_trades_per_day</div>
+            <input
+              className="botInput"
+              value={riskDraft.max_trades_per_day}
+              onChange={(e) => setRiskDraft((d) => ({ ...d, max_trades_per_day: e.target.value }))}
+              placeholder="3"
+            />
+          </label>
+
+          <label style={{ display: "grid", gap: 6 }}>
+            <div style={{ fontWeight: 900, fontSize: 12, opacity: 0.85 }}>min_confidence</div>
+            <input
+              className="botInput"
+              value={riskDraft.min_confidence}
+              onChange={(e) => setRiskDraft((d) => ({ ...d, min_confidence: e.target.value }))}
+              placeholder="0.62"
+            />
+          </label>
         </div>
-      </Modal>
-
-      {/* Live not enabled modal (LandingPage-style simple message) */}
-      <Modal
-        open={liveNotEnabledOpen}
-        title="Not enabled yet"
-        onClose={() => setLiveNotEnabledOpen(false)}
-        footer={
-          <button className="mBtn mBtnPrimary" type="button" onClick={() => setLiveNotEnabledOpen(false)}>
-            Okay
-          </button>
-        }
-      >
-        <div style={{ display: "grid", gap: 10 }}>
-          <div style={{ fontWeight: 900 }}>Live trading isn’t available yet.</div>
-          <div style={{ fontSize: 12, opacity: 0.85, fontWeight: 800 }}>
-            U-Stock is currently paper trading only. Live keys + live execution will unlock after we validate
-            reliability and risk behavior.
-          </div>
-        </div>
-      </Modal>
-
-      {/* Log modal */}
-      <Modal
-        open={logOpen}
-        title={`Bot log · ${selected}`}
-        onClose={() => setLogOpen(false)}
-        footer={
-          <button className="mBtn" type="button" onClick={() => setLogOpen(false)}>
-            Close
-          </button>
-        }
-      >
-        {logErr ? <div className="botError">{logErr}</div> : null}
-
-        {logBusy ? (
-          <div style={{ opacity: 0.75, fontWeight: 800 }}>Loading log…</div>
-        ) : logItems.length ? (
-          <div style={{ display: "grid", gap: 8 }}>
-            {logItems.map((r, idx) => (
-              <div
-                key={`${idx}-${r.ts}`}
-                style={{
-                  border: "1px solid rgba(148,163,184,0.22)",
-                  borderRadius: 12,
-                  padding: "10px 12px",
-                  background: "rgba(248,250,252,0.65)",
-                }}
-              >
-                <div className="mMono" style={{ fontWeight: 900, fontSize: 12 }}>
-                  {fmtTime(r.ts)} · {String(r.level || "info").toUpperCase()}
-                </div>
-                <div style={{ marginTop: 4, fontWeight: 800 }}>{String(r.message || "")}</div>
-                {r.meta ? (
-                  <pre className="mMono" style={{ marginTop: 8, fontSize: 12, opacity: 0.85, whiteSpace: "pre-wrap" }}>
-                    {JSON.stringify(r.meta, null, 2)}
-                  </pre>
-                ) : null}
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div style={{ opacity: 0.75, fontWeight: 800 }}>No log entries yet.</div>
-        )}
       </Modal>
     </>
   );

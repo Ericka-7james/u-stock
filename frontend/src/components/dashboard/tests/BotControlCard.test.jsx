@@ -162,6 +162,8 @@ describe("BotControlCard", () => {
   });
 
   it("Start requires Arm, then Confirm start, and then refreshes status to LIVE", async () => {
+    let started = false;
+
     global.fetch.mockImplementation((url, opts = {}) => {
       const method = (opts.method || "GET").toUpperCase();
       const u = String(url);
@@ -169,24 +171,25 @@ describe("BotControlCard", () => {
       if (method === "GET" && u === "/api/bots/available") {
         return jsonResponse({ bots: [{ id: "ema_trend", name: "EMA Trend Bot" }] });
       }
+
       if (method === "GET" && u === "/api/market/us/session") {
         return jsonResponse({ ok: true, is_open: true });
       }
+
       if (method === "GET" && u.startsWith("/api/bots/config?bot_id=")) {
         return jsonResponse({ config: { mode: "paper" } });
       }
 
+      // ✅ Stay stopped until we actually POST /api/bots/start
       if (method === "GET" && u.startsWith("/api/bots/status?bot_id=")) {
-        const statusCalls = global.fetch.mock.calls.filter((c) =>
-          String(c[0]).startsWith("/api/bots/status?bot_id=")
-        ).length;
-
-        return statusCalls <= 1
-          ? jsonResponse({ effective_state: "stopped", mode: "paper" })
-          : jsonResponse({ effective_state: "running", mode: "paper" });
+        return jsonResponse({
+          effective_state: started ? "running" : "stopped",
+          mode: "paper",
+        });
       }
 
       if (method === "POST" && u === "/api/bots/start") {
+        started = true;
         return jsonResponse({ ok: true });
       }
 
@@ -195,12 +198,14 @@ describe("BotControlCard", () => {
 
     render(<BotControlCard activeBotId="ema_trend" />);
 
+    // wait for initial render
     const startBtn = await screen.findByRole("button", { name: /^start$/i });
     expect(startBtn).toBeDisabled();
 
     const armBtn = await screen.findByRole("button", { name: /^arm$/i });
     await user.click(armBtn);
 
+    // ✅ Start should become enabled (still stopped, so Start exists)
     await waitFor(() => {
       expect(screen.getByRole("button", { name: /^start$/i })).not.toBeDisabled();
     });
@@ -212,6 +217,7 @@ describe("BotControlCard", () => {
 
     await user.click(within(modal).getByRole("button", { name: /confirm start/i }));
 
+    // ✅ After POST start, our mock flips status to running -> UI shows LIVE + Pause
     await waitFor(() => {
       expect(screen.getByText(/live/i)).toBeInTheDocument();
     });
@@ -291,7 +297,9 @@ describe("BotControlCard", () => {
     await user.click(openBtn);
 
     const modal = await screen.findByTestId("modal");
-    expect(within(modal).getByTestId("modal-title").textContent).toMatch(/mode \+ risk controls/i);
+
+    // ✅ Updated expectation to match current UI
+    expect(within(modal).getByTestId("modal-title").textContent).toMatch(/^risk controls$/i);
 
     const saveBtn = within(modal).getByRole("button", { name: /save/i });
     await user.click(saveBtn);

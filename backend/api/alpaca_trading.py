@@ -3,9 +3,9 @@ from __future__ import annotations
 
 import requests
 from datetime import datetime, timezone, timedelta
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Tuple, Optional
 
-from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi import APIRouter, HTTPException, Request, Response, Query
 
 from .core.security import require_user, decrypt_secret, get_supabase_service
 
@@ -78,23 +78,41 @@ def _iso(dt: datetime) -> str:
 
 
 def _format_day(dt: datetime) -> str:
-    """
-    Windows-safe formatter (avoids %-d).
-    Example: Jan 3, 2026
-    """
     dt = dt.astimezone(timezone.utc)
     return f"{dt.strftime('%b')} {dt.day}, {dt.year}"
 
 
 def _parse_dt(s: str) -> datetime | None:
-    """
-    Returns UTC datetime or None if parsing fails.
-    """
     try:
         s2 = (s or "").replace("Z", "+00:00")
         return datetime.fromisoformat(s2).astimezone(timezone.utc)
     except Exception:
         return None
+
+
+def _parse_date_or_iso(s: str) -> Optional[datetime]:
+    """
+    Accepts:
+      - YYYY-MM-DD
+      - ISO timestamps
+    Returns UTC datetime at start-of-day for date-only inputs.
+    """
+    raw = (s or "").strip()
+    if not raw:
+        return None
+
+    # date-only
+    if len(raw) == 10 and raw[4] == "-" and raw[7] == "-":
+        try:
+            y = int(raw[0:4])
+            m = int(raw[5:7])
+            d = int(raw[8:10])
+            return datetime(y, m, d, tzinfo=timezone.utc)
+        except Exception:
+            return None
+
+    # ISO
+    return _parse_dt(raw)
 
 
 def _clamp_preset(p: str) -> str:
@@ -211,7 +229,14 @@ def _fifo_realized_trades_from_fills(
 def trade_summary(
     request: Request,
     response: Response,
-    preset: str = "Week",
+
+    # Default behavior
+    preset: str = Query("Week"),
+
+    # ✅ NEW: Optional custom range
+    start: Optional[str] = Query(None, description="YYYY-MM-DD or ISO. Overrides preset if both start+end provided."),
+    end: Optional[str] = Query(None, description="YYYY-MM-DD or ISO. Overrides preset if both start+end provided."),
+
     slippage_bps: float = 0.0,
     fee_bps: float = 0.0,
 ):
@@ -220,8 +245,18 @@ def trade_summary(
         sb = get_supabase_service()
         api_key, api_secret, mode = _load_alpaca_keys(sb, user["id"])
 
-        preset_norm = _clamp_preset(preset)
-        start_dt, end_dt = _preset_window(preset_norm)
+        start_dt = _parse_date_or_iso(start or "")
+        end_dt = _parse_date_or_iso(end or "")
+
+        if start_dt and end_dt:
+            # inclusive end day if date-only was passed: treat as end-of-day
+            # If end was date-only (00:00), extend to end of day.
+            if len((end or "").strip()) == 10:
+                end_dt = end_dt + timedelta(days=1) - timedelta(seconds=1)
+            preset_norm = "Custom"
+        else:
+            preset_norm = _clamp_preset(preset)
+            start_dt, end_dt = _preset_window(preset_norm)
 
         base = _trading_base_url(mode)
         url = f"{base}/v2/account/activities"
@@ -276,6 +311,7 @@ def trade_summary(
                 "fee_bps": fee_bps,
                 "fetchedAt": _iso(datetime.now(timezone.utc)),
                 "source": "alpaca_trading_api",
+                "range": {"start": (start or None), "end": (end or None)},
             },
         }
 
