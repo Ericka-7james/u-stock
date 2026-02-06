@@ -15,6 +15,42 @@ async function safeJson(res) {
   }
 }
 
+function extractDetailMessage(detail) {
+  if (!detail) return "";
+  if (typeof detail === "string") return detail;
+
+  if (typeof detail === "object") {
+    // your backend sends: { code, message }
+    return String(detail.message || detail.detail || detail.error || "");
+  }
+
+  return String(detail);
+}
+
+function makeHttpError(res, data) {
+  const detail = data?.detail ?? null;
+
+  const code =
+    (typeof detail === "object" && detail?.code) ? detail.code :
+    (typeof data === "object" && data?.code) ? data.code :
+    null;
+
+  const msg =
+    extractDetailMessage(detail) ||
+    String(data?.message || data?.error || "") ||
+    `Request failed (${res.status})`;
+
+  const err = new Error(msg);
+
+  // attach metadata so explainAnyError() can use it
+  err.status = res.status;
+  err.code = code;
+  err.detail = detail;
+  err.payload = data;
+
+  return err;
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -184,7 +220,7 @@ export function AuthProvider({ children }) {
     });
 
     const data = await safeJson(res);
-    if (!res.ok) throw new Error(data?.detail || "Login failed");
+    if (!res.ok) throw makeHttpError(res, data);
 
     setUser(data.user || null);
     setIsAuthed(true);
@@ -196,18 +232,17 @@ export function AuthProvider({ children }) {
     await refreshSession({ force: true });
   };
 
-  const signup = async ({ username, email, password, avatar }) => {
+  const signup = async ({ username, email, phone, password, avatar }) => {
     const res = await authFetch("auth/signup", {
       method: "POST",
-      body: JSON.stringify({ username, email, password, avatar }),
+      body: JSON.stringify({ username, email, phone, password, avatar }),
     });
 
     const data = await safeJson(res);
-    if (!res.ok) throw new Error(data?.detail || "Signup failed");
+    if (!res.ok) throw makeHttpError(res, data);
 
     setUser(data.user || null);
 
-    // signup implies we likely have a session/cookie right after
     setHintOn();
     await refreshSession({ force: true });
   };

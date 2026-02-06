@@ -12,7 +12,7 @@ import MarketLeadersCard from "./cards/MarketLeadersCard.jsx";
 
 import { useAlpacaDailyBars } from "../../hooks/useAlpacaDailyBars.js";
 import { useAlpacaTradeSummary } from "../../hooks/useAlpacaTradeSummary.js";
-import { explainAnyError } from "../common/errorMessages.js";
+import { explainAnyError } from "../common/errorMessages.jsx";
 
 import "../../css/dashboard/DashboardPage.css";
 import "../../css/dashboard/cards/ChartControls.css";

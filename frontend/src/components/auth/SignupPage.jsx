@@ -1,114 +1,220 @@
 // src/components/auth/SignupPage.jsx
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+
 import AppShell from "../layout/AppShell";
+import ErrorModal from "../common/errorMessages";
 import { useAuth } from "../../context/AuthContext";
+import { explainAnyError } from "../common/errorMessages";
+
 import "../../css/auth/SignupPage.css";
 
-function getErrorMessage(err) {
-  if (!err) return "Something went wrong while creating your account.";
-  if (typeof err === "string") return err;
-  if (typeof err === "object" && "message" in err && err.message) return String(err.message);
-  return "Something went wrong while creating your account.";
+/** Normalize phone: keep digits only, E.164-ish length guard */
+function normalizePhone(input) {
+  return String(input || "").replace(/\D/g, "");
+}
+function isValidPhoneDigits(digits) {
+  return digits.length >= 10 && digits.length <= 15;
+}
+function normalizeEmail(input) {
+  return String(input || "").trim().toLowerCase();
+}
+
+/** Detect “duplicate email/phone” from a variety of backend styles */
+function isDuplicateCredentialError(anyErr) {
+  const raw =
+    anyErr?.detail?.message ||
+    anyErr?.payload?.detail?.message ||
+    anyErr?.message ||
+    anyErr?.body ||
+    anyErr;
+
+  const s = String(raw || "").toLowerCase();
+
+  return (
+    s.includes("already registered") ||
+    s.includes("already exists") ||
+    s.includes("account already exists") ||
+    s.includes("duplicate") ||
+    s.includes("unique constraint") ||
+    s.includes("23505") ||
+    s.includes("user already") ||
+    s.includes("email already") ||
+    s.includes("phone already") ||
+    s.includes("already in use")
+  );
 }
 
 export default function SignupPage() {
-  const { signup } = useAuth();
   const navigate = useNavigate();
-
-  const [name, setName] = useState(""); // maps to username for backend
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState(""); // optional UI only for now
-  const [password, setPassword] = useState("");
-  const [avatar, setAvatar] = useState("📈");
-
-  const [errors, setErrors] = useState({
-    name: "",
-    email: "",
-    phone: "",
-    password: "",
-    backend: "",
-  });
-
-  const [loading, setLoading] = useState(false);
+  const { signup, signupWithGoogle, signupWithFacebook } = useAuth();
 
   const avatars = ["📈", "📊", "🤖", "💡"];
   const emailRegex = useMemo(() => /^[^\s@]+@[^\s@]+\.[^\s@]+$/, []);
 
-  const validate = () => {
-    const nextErrors = { name: "", email: "", phone: "", password: "", backend: "" };
+  // Form state
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [password, setPassword] = useState("");
+  const [avatar, setAvatar] = useState("📈");
+
+  const [errors, setErrors] = useState({ name: "", email: "", phone: "", password: "" });
+
+  // ErrorModal state
+  const [errModalOpen, setErrModalOpen] = useState(false);
+  const [errModal, setErrModal] = useState(null);
+
+  const [loading, setLoading] = useState(false);
+
+  const clearFieldError = useCallback((key) => {
+    setErrors((prev) => (prev[key] ? { ...prev, [key]: "" } : prev));
+  }, []);
+
+  const closeErrorModal = useCallback(() => {
+    setErrModalOpen(false);
+    setErrModal(null);
+  }, []);
+
+  const openErrorModal = useCallback((anyErr, { feature = "signup" } = {}) => {
+    // ✅ always go through mapper (it should split Fix -> subtitle if needed)
+    const friendly = explainAnyError(anyErr, { feature });
+
+    // ✅ hard override for duplicate (ensures subtitle is separate no matter what)
+    if (isDuplicateCredentialError(anyErr)) {
+      setErrModal({
+        title: "Account already exists",
+        body: "That email or phone number is already in use.",
+        subtitle: "Try signing in instead, or use a different email/phone.",
+        action: { label: "Sign in", href: "/auth" },
+      });
+      setErrModalOpen(true);
+      return;
+    }
+
+    setErrModal({
+      title: friendly?.title || "Error",
+      body: friendly?.body || "Something went wrong.",
+      subtitle: friendly?.subtitle || "",
+      action: friendly?.action || null,
+    });
+    setErrModalOpen(true);
+  }, []);
+
+  const validate = useCallback(() => {
+    const next = { name: "", email: "", phone: "", password: "" };
 
     const trimmedName = name.trim();
-    const trimmedEmail = email.trim();
-    const trimmedPhone = phone.trim();
+    const normalizedEmail = normalizeEmail(email);
+    const phoneDigits = normalizePhone(phone);
 
-    if (!trimmedName) nextErrors.name = "Please enter your name.";
+    if (!trimmedName) next.name = "Please enter your username.";
 
-    if (!trimmedEmail || !emailRegex.test(trimmedEmail)) {
-      nextErrors.email = "Please enter a valid email address.";
+    if (!normalizedEmail || !emailRegex.test(normalizedEmail)) {
+      next.email = "Please enter a valid email address.";
     }
 
-    if (trimmedPhone) {
-      const phoneDigits = trimmedPhone.replace(/\D/g, "");
-      if (phoneDigits.length < 10 || phoneDigits.length > 15) {
-        nextErrors.phone = "Please enter a valid phone number (10–15 digits).";
-      }
+    if (phoneDigits && !isValidPhoneDigits(phoneDigits)) {
+      next.phone = "Please enter a valid phone number (10–15 digits).";
     }
 
-    const emailLocal = trimmedEmail.includes("@") ? trimmedEmail.split("@")[0].toLowerCase() : "";
+    const emailLocal = normalizedEmail.includes("@") ? normalizedEmail.split("@")[0] : "";
 
     if (!password || password.length < 12) {
-      nextErrors.password = "Password must be at least 12 characters long.";
+      next.password = "Password must be at least 12 characters long.";
     } else if (!/[A-Z]/.test(password)) {
-      nextErrors.password = "Password must include at least 1 uppercase letter.";
+      next.password = "Password must include at least 1 uppercase letter.";
     } else if (!/[a-z]/.test(password)) {
-      nextErrors.password = "Password must include at least 1 lowercase letter.";
+      next.password = "Password must include at least 1 lowercase letter.";
     } else if (!/\d/.test(password)) {
-      nextErrors.password = "Password must include at least 1 number.";
+      next.password = "Password must include at least 1 number.";
     } else if (!/[^\w\s]/.test(password)) {
-      nextErrors.password = "Password must include at least 1 special character.";
+      next.password = "Password must include at least 1 special character.";
     } else if (emailLocal && password.toLowerCase().includes(emailLocal)) {
-      nextErrors.password = "Password must not contain your email.";
+      next.password = "Password must not contain your email.";
     } else if (trimmedName && password.toLowerCase().includes(trimmedName.toLowerCase())) {
-      nextErrors.password = "Password must not contain your name/username.";
+      next.password = "Password must not contain your username.";
     }
 
-    setErrors(nextErrors);
+    setErrors(next);
+    return !(next.name || next.email || next.phone || next.password);
+  }, [name, email, phone, password, emailRegex]);
 
-    const hasClientError =
-      !!nextErrors.name || !!nextErrors.email || !!nextErrors.phone || !!nextErrors.password;
+  const handleSubmit = useCallback(
+    async (e) => {
+      e.preventDefault();
+      if (loading) return;
 
-    return !hasClientError;
-  };
+      const ok = validate();
+      if (!ok) return;
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+      setLoading(true);
+      try {
+        await signup({
+          username: name.trim(),
+          email: normalizeEmail(email),
+          phone: normalizePhone(phone) || null,
+          password,
+          avatar,
+        });
+
+        navigate("/auth");
+      } catch (err) {
+        openErrorModal(err, { feature: "signup" });
+      } finally {
+        setLoading(false);
+      }
+    },
+    [loading, validate, signup, name, email, phone, password, avatar, navigate, openErrorModal]
+  );
+
+  const handleGoogle = useCallback(async () => {
     if (loading) return;
-
-    setErrors((prev) => ({ ...prev, backend: "" }));
-
-    const ok = validate();
-    if (!ok) return;
-
     setLoading(true);
     try {
-      await signup({
-        username: name.trim(),
-        email: email.trim(),
-        password,
-        avatar,
-      });
-
-      navigate("/auth");
+      if (!signupWithGoogle) {
+        openErrorModal("Google signup is not configured yet.", { feature: "signup_google" });
+        return;
+      }
+      await signupWithGoogle();
+      navigate("/dashboard");
     } catch (err) {
-      setErrors((prev) => ({ ...prev, backend: getErrorMessage(err) }));
+      openErrorModal(err, { feature: "signup_google" });
     } finally {
       setLoading(false);
     }
-  };
+  }, [loading, signupWithGoogle, navigate, openErrorModal]);
+
+  const handleFacebook = useCallback(async () => {
+    if (loading) return;
+    setLoading(true);
+    try {
+      if (!signupWithFacebook) {
+        openErrorModal("Facebook signup is not configured yet.", { feature: "signup_facebook" });
+        return;
+      }
+      await signupWithFacebook();
+      navigate("/dashboard");
+    } catch (err) {
+      openErrorModal(err, { feature: "signup_facebook" });
+    } finally {
+      setLoading(false);
+    }
+  }, [loading, signupWithFacebook, navigate, openErrorModal]);
+
+  const handleErrorAction = useCallback(
+    (action) => {
+      if (!action?.href) return;
+      closeErrorModal();
+      navigate(action.href);
+    },
+    [navigate, closeErrorModal]
+  );
 
   return (
     <AppShell>
+      <ErrorModal open={errModalOpen} error={errModal} onClose={closeErrorModal} onAction={handleErrorAction} />
+
       <div className="app-page signup-page">
         <div className="signup-auth-card">
           <div className="signup-auth-header">
@@ -116,14 +222,8 @@ export default function SignupPage() {
             <p className="signup-auth-subtitle">Sign up to start using U-Stock.</p>
           </div>
 
-          {errors.backend && (
-            <div className="signup-banner-error" role="alert" aria-live="polite">
-              {errors.backend}
-            </div>
-          )}
-
           <form className="signup-auth-form" onSubmit={handleSubmit} noValidate>
-            {/* Name / Username */}
+            {/* Username */}
             <label className="signup-auth-field" htmlFor="signup-name">
               <span className="signup-auth-icon" aria-hidden="true">
                 👤
@@ -135,10 +235,13 @@ export default function SignupPage() {
                 placeholder="Enter your username"
                 required
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(e) => {
+                  setName(e.target.value);
+                  clearFieldError("name");
+                }}
                 autoComplete="username"
                 disabled={loading}
-                aria-label="Name"
+                aria-invalid={!!errors.name}
               />
             </label>
             {errors.name && (
@@ -159,10 +262,13 @@ export default function SignupPage() {
                 placeholder="Enter your email"
                 required
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  clearFieldError("email");
+                }}
                 autoComplete="email"
                 disabled={loading}
-                aria-label="Email"
+                aria-invalid={!!errors.email}
               />
             </label>
             {errors.email && (
@@ -171,7 +277,7 @@ export default function SignupPage() {
               </p>
             )}
 
-            {/* Phone (optional) */}
+            {/* Phone */}
             <label className="signup-auth-field" htmlFor="signup-phone">
               <span className="signup-auth-icon" aria-hidden="true">
                 📞
@@ -180,12 +286,15 @@ export default function SignupPage() {
                 id="signup-phone"
                 name="phone"
                 type="tel"
-                placeholder="(555) 555-5555"
+                placeholder="(555) 555-5555 (optional)"
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                onChange={(e) => {
+                  setPhone(e.target.value);
+                  clearFieldError("phone");
+                }}
                 autoComplete="tel"
                 disabled={loading}
-                aria-label="Phone"
+                aria-invalid={!!errors.phone}
               />
             </label>
             {errors.phone && (
@@ -207,9 +316,12 @@ export default function SignupPage() {
                 autoComplete="new-password"
                 required
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  clearFieldError("password");
+                }}
                 disabled={loading}
-                aria-label="Password"
+                aria-invalid={!!errors.password}
               />
             </label>
             {errors.password && (
@@ -218,7 +330,7 @@ export default function SignupPage() {
               </p>
             )}
 
-            {/* Avatar row (compact) */}
+            {/* Avatar */}
             <div className="signup-avatar-strip">
               <span className="signup-avatar-strip-label">Avatar</span>
               <div className="signup-avatar-strip-grid" role="group" aria-label="Choose your avatar">
@@ -242,17 +354,16 @@ export default function SignupPage() {
               {loading ? "Creating account…" : "Sign up"}
             </button>
 
-            {/* Divider + social row (visual only) */}
             <div className="signup-divider">
               <span>or sign up with</span>
             </div>
 
             <div className="signup-social">
-              <button type="button" className="signup-social-btn" disabled>
+              <button type="button" className="signup-social-btn" onClick={handleGoogle} disabled={loading}>
                 <span aria-hidden="true">G</span>
                 Google
               </button>
-              <button type="button" className="signup-social-btn" disabled>
+              <button type="button" className="signup-social-btn" onClick={handleFacebook} disabled={loading}>
                 <span aria-hidden="true">f</span>
                 Facebook
               </button>
