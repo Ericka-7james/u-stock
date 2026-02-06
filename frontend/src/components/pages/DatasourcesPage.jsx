@@ -13,6 +13,8 @@ import DatasourcesSquirrel from "../../assets/images/DatasourcesSquirrel.png";
 import "../../css/pages/DatasourcesPage.css";
 import "../../css/dashboard/cards/CardShared.css";
 
+import { DATASOURCES_PAGE_COPY } from "../../content/datasources.content";
+
 // -------- Small in-memory cache (stale-while-revalidate) --------
 const CACHE_TTL_MS = 60_000;
 
@@ -114,38 +116,46 @@ export default function DatasourcesPage() {
   const navigate = useNavigate();
   const { items: leaders, meta: leadersMeta, loading: leadersLoading } = useMarketLeaders();
 
+  const c = DATASOURCES_PAGE_COPY;
+
   return (
     <AppShell>
       <div className="app-page datasources-page">
-        {/* ✅ Match ConnectedAppsPage: PageHeaderCard stands alone (it already clamps via .page-header-wrap) */}
         <PageHeaderCard
-          title="Data Sources"
+          title={c.header.title}
           subtitle={
             <>
-              This page is for <strong>market context + observability</strong> — view today’s top movers and filter bot
-              logs to validate behavior. (Start/Stop controls live on the Dashboard.)
+              {c.header.subtitle.split("market context + observability").map((part, i, arr) =>
+                i < arr.length - 1 ? (
+                  <span key={i}>
+                    {part}
+                    <strong>market context + observability</strong>
+                  </span>
+                ) : (
+                  <span key={i}>{part}</span>
+                )
+              )}
             </>
           }
           right={<img src={DatasourcesSquirrel} alt="DatasourcesSquirrel" className="datasources-hero-logo" />}
         >
           <div className="ds-header-actions">
             <Link to="/" className="back-link-pill">
-              ← Back to dashboard
+              {c.header.actions.backToDashboardLabel}
             </Link>
             <Link to="/connected-apps" className="back-link-pill">
-              Connected apps →
+              {c.header.actions.connectedAppsLabel}
             </Link>
           </div>
         </PageHeaderCard>
 
-        {/* ✅ Match ConnectedAppsPage: content lane aligned to the same max-width + gutters */}
         <div className="ds-page-wrap">
           <main className="ds-main">
             <div className="ds-left">
               <div className="ds-cardClamp">
                 <MarketLeadersCard
-                  title="Market leaders"
-                  subtitle="Top movers (today). Click a ticker to load it on the dashboard chart."
+                  title={c.cards.marketLeaders.title}
+                  subtitle={c.cards.marketLeaders.subtitle}
                   items={leaders}
                   meta={leadersMeta}
                   loading={leadersLoading}
@@ -166,11 +176,11 @@ export default function DatasourcesPage() {
 
             <div className="ds-right">
               <BotLogsCard
-                defaultBotId="ema_trend"
-                maxPreview={3}
-                title="Bot logs"
-                subtitle="Filter by day, status, and search terms. Use logs to debug decisions + runner health."
-                showQuickLink={true}
+                defaultBotId={c.cards.botLogs.defaultBotId}
+                maxPreview={c.cards.botLogs.maxPreview}
+                title={c.cards.botLogs.title}
+                subtitle={c.cards.botLogs.subtitle}
+                showQuickLink={c.cards.botLogs.showQuickLink}
               />
             </div>
           </main>
