@@ -1,61 +1,49 @@
-/* ========= FEEDBACK PAGE (match SignupPage sizing + centered lane) ========= */
+/* src/css/pages/FeedbackPage.css */
 
+/* =========================================================
+   FEEDBACK PAGE — match Landing lane (1100px)
+   Landing's "correct cards" are centered using --landing-lane.
+   So Feedback must use the same lane + no extra side padding.
+========================================================= */
+
+:root {
+  /* If LandingPage.css already defines this, this is harmless.
+     Keeping it here makes FeedbackPage self-contained too. */
+  --landing-lane: 1100px;
+}
+
+/* Page container: same “lane” centering strategy as Landing */
 .feedback-page {
   width: 100%;
-  min-height: calc(100vh - 64px);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 32px 24px;
-}
-
-.feedback-lane {
-  width: 100%;
-  max-width: 1100px; /* like landing-section-inner / signup-lane vibe */
+  max-width: var(--landing-lane);
   margin: 0 auto;
+  box-sizing: border-box;
+
+  /* IMPORTANT:
+     Do NOT add padding here.
+     AppShell/.app-page already provides gutters. */
+  padding: 0;
+
+  /* Center the header card consistently */
   display: flex;
   justify-content: center;
 }
 
-/* Card (signup-sized) */
-.feedback-auth-card {
+/* Ensure the PageHeaderCard (outer card) doesn't overflow its lane */
+.feedback-page > * {
   width: 100%;
-  max-width: 520px;          /* a lil wider than signup (feels “ice”) */
-  min-height: 620px;         /* taller like you want */
-  background: var(--ustock-bg-card);
-  border: 1px solid var(--ustock-border-card);
-  border-radius: 18px;
-  padding: 28px 28px 26px;
-  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.12);
-
-  /* ✅ keep your green banner */
-  border-top: 4px solid var(--ustock-green-main);
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
-/* Header */
-.feedback-auth-header {
-  text-align: center;
-  margin-bottom: 12px;
-}
+/* =========================================================
+   FORM width inside PageHeaderCard
+========================================================= */
 
-.feedback-auth-title {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 900;
-  color: var(--ustock-green-main);
-}
-
-.feedback-auth-subtitle {
-  margin: 8px auto 0;
-  font-size: 12.5px;
-  color: var(--ustock-text-main);
-  opacity: 0.85;
-  max-width: 520px;
-  line-height: 1.5;
-}
-
-/* Form */
 .feedback-auth-form {
+  width: 100%;
+  max-width: 520px; /* same vibe as Signup */
+  margin: 0 auto;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -78,6 +66,9 @@
 .feedback-input,
 .feedback-select,
 .feedback-textarea {
+  width: 100%;
+  box-sizing: border-box;
+
   background: var(--ustock-bg-card-soft);
   color: var(--ustock-text-main);
   border: 1px solid var(--ustock-border-card);
@@ -106,7 +97,7 @@
   min-height: 150px;
 }
 
-/* Small helper text */
+/* Helper text */
 .feedback-hint,
 .feedback-footer-hint {
   font-size: 12px;
@@ -147,6 +138,9 @@
 }
 
 .feedback-btn {
+  flex: 1;
+  min-width: 140px;
+
   border-radius: 10px;
   padding: 10px 12px;
   font-size: 13px;
@@ -154,8 +148,6 @@
   cursor: pointer;
   border: 1px solid transparent;
   transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
-  flex: 1;
-  min-width: 140px;
 }
 
 .feedback-btn--primary {
@@ -188,7 +180,7 @@
   box-shadow: none;
 }
 
-/* Captcha centered like signup vibe */
+/* Captcha */
 .feedback-captcha {
   display: flex;
   justify-content: center;
@@ -225,13 +217,7 @@
 
 /* Mobile */
 @media (max-width: 768px) {
-  .feedback-page {
-    padding: 20px 16px;
-    align-items: flex-start; /* avoids cramped vertical center on short screens */
-  }
-
-  .feedback-auth-card {
-    max-width: 520px;
-    min-height: auto;
+  .feedback-actions {
+    gap: 10px;
   }
 }

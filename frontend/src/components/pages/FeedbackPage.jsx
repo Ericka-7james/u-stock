@@ -145,7 +145,7 @@ export default function FeedbackPage() {
 
   return (
     <AppShell>
-      <div className="app-page feedback-page">
+      <div className="feedback-page">
         {/* ✅ Swapped to shared header card */}
         <PageHeaderCard
           title="Feedback"

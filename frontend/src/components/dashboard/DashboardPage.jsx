@@ -1,5 +1,5 @@
 // frontend/src/components/dashboard/DashboardPage.jsx
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import AppShell from "../layout/AppShell.jsx";
 import { useAuth } from "../../context/AuthContext";
@@ -12,7 +12,10 @@ import MarketLeadersCard from "./cards/MarketLeadersCard.jsx";
 
 import { useAlpacaDailyBars } from "../../hooks/useAlpacaDailyBars.js";
 import { useAlpacaTradeSummary } from "../../hooks/useAlpacaTradeSummary.js";
-import { explainAnyError } from "../common/errorMessages.jsx";
+
+// ✅ UI component (modal)
+import ErrorModal from "../common/ErrorMessages.jsx";
+import { explainAnyError } from "../../lib/errorMessages.jsx";
 
 import "../../css/dashboard/DashboardPage.css";
 import "../../css/dashboard/cards/ChartControls.css";
@@ -125,7 +128,6 @@ function isTvSafe(sym) {
 }
 
 function isTradingViewOrigin(origin) {
-  // allow https://*.tradingview.com only
   try {
     const u = new URL(String(origin || ""));
     if (u.protocol !== "https:") return false;
@@ -136,75 +138,11 @@ function isTradingViewOrigin(origin) {
   }
 }
 
-function BodyWithInlineAction({ body, action, onAction }) {
-  const text = String(body || "");
-  const label = action?.label ? String(action.label) : "";
-  const canInline = Boolean(label && text.includes(label) && typeof onAction === "function");
-  const lines = text.split("\n");
-
-  const renderLine = (line, lineIdx) => {
-    if (!canInline) return <span key={`l-${lineIdx}`}>{line}</span>;
-
-    const parts = line.split(label);
-    if (parts.length === 1) return <span key={`l-${lineIdx}`}>{line}</span>;
-
-    return (
-      <span key={`l-${lineIdx}`}>
-        {parts.map((p, i) => (
-          <span key={`p-${lineIdx}-${i}`}>
-            {p}
-            {i < parts.length - 1 ? (
-              <button
-                type="button"
-                onClick={onAction}
-                style={{
-                  padding: 0,
-                  border: "none",
-                  background: "transparent",
-                  fontWeight: 800,
-                  textDecoration: "underline",
-                  cursor: "pointer",
-                  color: "#2563eb",
-                }}
-                aria-label={label}
-                title={label}
-              >
-                {label}
-              </button>
-            ) : null}
-          </span>
-        ))}
-      </span>
-    );
-  };
-
-  return (
-    <span>
-      {lines.map((line, idx) => (
-        <span key={`line-${idx}`}>
-          {renderLine(line, idx)}
-          {idx < lines.length - 1 ? <br /> : null}
-        </span>
-      ))}
-    </span>
-  );
-}
-
-function ErrorBanner({ title, body, debug, action, onAction }) {
+function ErrorBanner({ title, body }) {
   return (
     <div className="errorBanner">
       <strong>{title}</strong>
-
-      <div style={{ marginTop: 6 }}>
-        <BodyWithInlineAction body={body} action={action} onAction={onAction} />
-      </div>
-
-      {import.meta.env.DEV && debug ? (
-        <details style={{ marginTop: 10, fontSize: 12, opacity: 0.8 }}>
-          <summary>Debug info</summary>
-          <pre style={{ overflowX: "auto" }}>{JSON.stringify(debug, null, 2)}</pre>
-        </details>
-      ) : null}
+      <div style={{ marginTop: 6, whiteSpace: "pre-line" }}>{body}</div>
     </div>
   );
 }
@@ -421,7 +359,6 @@ function computeInclusiveDays(start, end) {
 }
 
 function computeRangeDaysLabel(timeframe) {
-  // default “Past week” if timeframe is null/empty
   if (!timeframe) return { days: 7, label: "7 days" };
 
   const start = timeframe?.start ?? timeframe?.from ?? timeframe?.date_from ?? timeframe?.time_min;
@@ -440,7 +377,6 @@ function computeTimeframeLabel(timeframe) {
   return s || "Custom";
 }
 
-// ✅ your rule
 function mapDaysToTvInterval(days) {
   const d = Number(days);
   if (!Number.isFinite(d) || d <= 0) return "60";
@@ -456,9 +392,31 @@ export default function DashboardPage() {
   const navigate = useNavigate();
 
   const [currentTicker, setCurrentTicker] = useState(() => loadLastTicker());
-
-  // ✅ default behavior: null means "user has not chosen" -> treat as Past week
   const [timeframe, setTimeframe] = useState(null);
+
+  // ✅ centralized ErrorModal state for dashboard
+  const [errOpen, setErrOpen] = useState(false);
+  const [errPayload, setErrPayload] = useState(null);
+
+  const closeErr = useCallback(() => {
+    setErrOpen(false);
+    setErrPayload(null);
+  }, []);
+
+  const showErr = useCallback((uiErr) => {
+    setErrPayload(uiErr);
+    setErrOpen(true);
+  }, []);
+
+  const onErrAction = useCallback(
+    (action) => {
+      const href = action?.href;
+      if (!href) return;
+      closeErr();
+      navigate(href);
+    },
+    [closeErr, navigate]
+  );
 
   if (authLoading) return null;
   if (!isAuthed) return null;
@@ -487,7 +445,6 @@ export default function DashboardPage() {
     return () => obs.disconnect();
   }, []);
 
-  // Update ticker when user searches inside TradingView widget
   useEffect(() => {
     const handler = (e) => {
       if (!isTradingViewOrigin(e?.origin)) return;
@@ -568,8 +525,6 @@ export default function DashboardPage() {
       const intent = String(s.intent || "").toLowerCase();
       const eff = normalizeEffectiveState(s.effective_state || s.effectiveState || s.state);
 
-      // Bot is considered "active" if user intent exists,
-      // even if runner is offline
       return intent === "running" || eff === "running" || eff === "waiting_for_market" || eff === "offline";
     });
   }, [botStatuses]);
@@ -581,14 +536,11 @@ export default function DashboardPage() {
     return BOT_OPTIONS.find((b) => b.id === activeBotId) || null;
   }, [activeBotId]);
 
-
-  // ✅ Display labels
   const tfLabel = useMemo(() => computeTimeframeLabel(timeframe), [timeframe]);
   const tfRangeLabel = useMemo(() => computeRangeDaysLabel(timeframe)?.label || "—", [timeframe]);
 
-  // ✅ TradingView interval (interval-only) — default Past week unless user explicitly changes timeframe
   const tvInterval = useMemo(() => {
-    if (!timeframe) return "60"; // Past week default => 1h candles
+    if (!timeframe) return "60";
     if (timeframe?.tvInterval) return String(timeframe.tvInterval);
     const days = timeframe?.days ?? computeRangeDaysLabel(timeframe)?.days ?? 7;
     return mapDaysToTvInterval(days);
@@ -596,19 +548,23 @@ export default function DashboardPage() {
 
   return (
     <AppShell>
+      {/* ✅ One modal for the whole dashboard */}
+      <ErrorModal open={errOpen} error={errPayload} onClose={closeErr} onAction={onErrAction} />
+
       <main className="dashboard-main">
         <div className="dashboard-left">
           {tradeErrUI ? (
-            <ErrorBanner
-              title={tradeErrUI.title}
-              body={tradeErrUI.body}
-              debug={tradeErrUI.debug}
-              action={tradeErrUI.action}
-              onAction={() => {
-                const href = tradeErrUI?.action?.href;
-                if (href) navigate(href);
-              }}
-            />
+            <div style={{ marginBottom: 12 }}>
+              <ErrorBanner title={tradeErrUI.title} body={tradeErrUI.body} />
+              <button
+                type="button"
+                className="ustockErrorBtn ustockErrorBtnGhost"
+                style={{ marginTop: 10 }}
+                onClick={() => showErr(tradeErrUI)}
+              >
+                Details
+              </button>
+            </div>
           ) : null}
 
           <TradePerformancePanel
@@ -629,29 +585,31 @@ export default function DashboardPage() {
           {leadersLoading ? <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>Loading leaders…</div> : null}
 
           {oppErrUI ? (
-            <ErrorBanner
-              title={oppErrUI.title}
-              body={oppErrUI.body}
-              debug={oppErrUI.debug}
-              action={oppErrUI.action}
-              onAction={() => {
-                const href = oppErrUI?.action?.href;
-                if (href) navigate(href);
-              }}
-            />
+            <div style={{ marginTop: 12 }}>
+              <ErrorBanner title={oppErrUI.title} body={oppErrUI.body} />
+              <button
+                type="button"
+                className="ustockErrorBtn ustockErrorBtnGhost"
+                style={{ marginTop: 10 }}
+                onClick={() => showErr(oppErrUI)}
+              >
+                Details
+              </button>
+            </div>
           ) : null}
 
           {leadersErrUI ? (
-            <ErrorBanner
-              title={leadersErrUI.title}
-              body={leadersErrUI.body}
-              debug={leadersErrUI.debug}
-              action={leadersErrUI.action}
-              onAction={() => {
-                const href = leadersErrUI?.action?.href;
-                if (href) navigate(href);
-              }}
-            />
+            <div style={{ marginTop: 12 }}>
+              <ErrorBanner title={leadersErrUI.title} body={leadersErrUI.body} />
+              <button
+                type="button"
+                className="ustockErrorBtn ustockErrorBtnGhost"
+                style={{ marginTop: 10 }}
+                onClick={() => showErr(leadersErrUI)}
+              >
+                Details
+              </button>
+            </div>
           ) : null}
         </div>
 
@@ -661,23 +619,23 @@ export default function DashboardPage() {
             onSelectTicker={onPickSymbol}
             isDarkMode={isDarkMode}
             timeframeLabel={tfLabel}
-            // we keep this as a hint only; we are NOT claiming we control the window
             activeRangeLabel={timeframe ? `Selected range: ${tfRangeLabel}` : ""}
             interval={tvInterval}
           />
 
           <section className="panel panel-sentiment">
             {barsErrUI ? (
-              <ErrorBanner
-                title={barsErrUI.title}
-                body={barsErrUI.body}
-                debug={barsErrUI.debug}
-                action={barsErrUI.action}
-                onAction={() => {
-                  const href = barsErrUI?.action?.href;
-                  if (href) navigate(href);
-                }}
-              />
+              <div style={{ marginBottom: 12 }}>
+                <ErrorBanner title={barsErrUI.title} body={barsErrUI.body} />
+                <button
+                  type="button"
+                  className="ustockErrorBtn ustockErrorBtnGhost"
+                  style={{ marginTop: 10 }}
+                  onClick={() => showErr(barsErrUI)}
+                >
+                  Details
+                </button>
+              </div>
             ) : null}
 
             <SentimentCard
@@ -694,7 +652,12 @@ export default function DashboardPage() {
             ) : null}
           </section>
 
-          <MarketLeadersCard items={leadersItems} meta={leadersMeta} loading={leadersLoading} onSelectSymbol={onPickSymbol} />
+          <MarketLeadersCard
+            items={leadersItems}
+            meta={leadersMeta}
+            loading={leadersLoading}
+            onSelectSymbol={onPickSymbol}
+          />
 
           <MacroCard />
         </div>

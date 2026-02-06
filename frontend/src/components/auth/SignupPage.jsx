@@ -3,9 +3,11 @@ import { useCallback, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import AppShell from "../layout/AppShell";
-import ErrorModal from "../common/errorMessages";
+import ErrorModal from "../common/ErrorMessages";
 import { useAuth } from "../../context/AuthContext";
-import { explainAnyError } from "../common/errorMessages";
+import { explainAnyError } from "../../lib/errorMessages";
+
+import dapperSquirrel from "../../assets/images/DapperSquirrel_HQ.png";
 
 import "../../css/auth/SignupPage.css";
 
@@ -77,15 +79,14 @@ export default function SignupPage() {
   }, []);
 
   const openErrorModal = useCallback((anyErr, { feature = "signup" } = {}) => {
-    // ✅ always go through mapper (it should split Fix -> subtitle if needed)
     const friendly = explainAnyError(anyErr, { feature });
 
-    // ✅ hard override for duplicate (ensures subtitle is separate no matter what)
     if (isDuplicateCredentialError(anyErr)) {
       setErrModal({
         title: "Account already exists",
         body: "That email or phone number is already in use.",
         subtitle: "Try signing in instead, or use a different email/phone.",
+        image: dapperSquirrel,
         action: { label: "Sign in", href: "/auth" },
       });
       setErrModalOpen(true);
@@ -96,10 +97,12 @@ export default function SignupPage() {
       title: friendly?.title || "Error",
       body: friendly?.body || "Something went wrong.",
       subtitle: friendly?.subtitle || "",
+      image: dapperSquirrel,
       action: friendly?.action || null,
     });
     setErrModalOpen(true);
   }, []);
+
 
   const validate = useCallback(() => {
     const next = { name: "", email: "", phone: "", password: "" };
@@ -213,9 +216,14 @@ export default function SignupPage() {
 
   return (
     <AppShell>
-      <ErrorModal open={errModalOpen} error={errModal} onClose={closeErrorModal} onAction={handleErrorAction} />
+      <ErrorModal
+        open={errModalOpen}
+        error={errModal}
+        onClose={closeErrorModal}
+        onAction={handleErrorAction}
+      />
 
-      <div className="app-page signup-page">
+      <div className="signup-page">
         <div className="signup-auth-card">
           <div className="signup-auth-header">
             <h1 className="signup-auth-title">Create account</h1>

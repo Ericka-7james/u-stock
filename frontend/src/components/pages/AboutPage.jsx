@@ -8,7 +8,7 @@ import PageHeaderCard from "../common/PageHeaderCard";
 export default function AboutPage() {
   return (
     <AppShell>
-      <div className="app-page about-page">
+      <div className="about-page">
         {/* HERO / HEADER CARD (reusable) */}
         <PageHeaderCard
           title="About Lucent Financial"

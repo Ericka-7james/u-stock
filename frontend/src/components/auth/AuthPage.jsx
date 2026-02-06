@@ -5,11 +5,13 @@ import { useAuth } from "../../context/AuthContext";
 import "../../css/auth/AuthPage.css";
 import AppShell from "../layout/AppShell";
 
+import { AUTH_PAGE_COPY } from "../../content/authpage.content";
+
 function getErrorMessage(err) {
-  if (!err) return "Unable to sign in";
+  if (!err) return AUTH_PAGE_COPY.errors.fallback;
   if (typeof err === "string") return err;
   if (typeof err === "object" && "message" in err && err.message) return String(err.message);
-  return "Unable to sign in";
+  return AUTH_PAGE_COPY.errors.fallback;
 }
 
 export default function AuthPage() {
@@ -55,7 +57,7 @@ export default function AuthPage() {
             {/* LEFT: Sign in */}
             <section className="auth-left">
               <div className="auth-left-inner">
-                <h1 className="auth-title">Welcome back</h1>
+                <h1 className="auth-title">{AUTH_PAGE_COPY.left.title}</h1>
 
                 <form className="auth-form" onSubmit={handleLogin} noValidate>
                   <label className="auth-field">
@@ -65,7 +67,7 @@ export default function AuthPage() {
                     <input
                       type="email"
                       name="email"
-                      placeholder="Email"
+                      placeholder={AUTH_PAGE_COPY.left.fields.emailPlaceholder}
                       value={loginEmail}
                       onChange={(e) => setLoginEmail(e.target.value)}
                       required
@@ -84,7 +86,7 @@ export default function AuthPage() {
                       type="password"
                       name="password"
                       autoComplete="current-password"
-                      placeholder="Password"
+                      placeholder={AUTH_PAGE_COPY.left.fields.passwordPlaceholder}
                       value={loginPassword}
                       onChange={(e) => setLoginPassword(e.target.value)}
                       required
@@ -101,19 +103,19 @@ export default function AuthPage() {
                   )}
 
                   <button type="submit" className="auth-primary-btn" disabled={!canSubmit}>
-                    {loginLoading ? "Signing in…" : "Sign In →"}
+                    {loginLoading ? AUTH_PAGE_COPY.left.submit.loading : AUTH_PAGE_COPY.left.submit.idle}
                   </button>
                 </form>
 
                 <div className="auth-alt">
-                  <span>New here? </span>
+                  <span>{AUTH_PAGE_COPY.left.alt.prefix}</span>
                   <button
                     type="button"
                     onClick={goToSignup}
                     disabled={loginLoading}
                     className="auth-link-btn"
                   >
-                    Create an account →
+                    {AUTH_PAGE_COPY.left.alt.cta}
                   </button>
                 </div>
               </div>
@@ -122,13 +124,16 @@ export default function AuthPage() {
             {/* RIGHT: green panel */}
             <section className="auth-right">
               <div className="auth-right-inner">
-                <h2 className="auth-right-title">U-Stock Radar Suite</h2>
-                <p className="auth-right-text">
-                  Log in to see your market dashboard, signals, and sentiment in one place.
-                </p>
+                <h2 className="auth-right-title">{AUTH_PAGE_COPY.right.title}</h2>
+                <p className="auth-right-text">{AUTH_PAGE_COPY.right.description}</p>
 
-                <button type="button" className="auth-secondary-btn" onClick={goToSignup} disabled={loginLoading}>
-                  Sign Up
+                <button
+                  type="button"
+                  className="auth-secondary-btn"
+                  onClick={goToSignup}
+                  disabled={loginLoading}
+                >
+                  {AUTH_PAGE_COPY.right.cta}
                 </button>
               </div>
             </section>
