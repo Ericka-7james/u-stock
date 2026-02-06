@@ -9,6 +9,8 @@ import { explainAnyError } from "../../lib/errorMessages";
 
 import dapperSquirrel from "../../assets/images/DapperSquirrel_HQ.png";
 
+import { SIGNUP_PAGE_CONTENT } from "../../content/signuppage.content";
+
 import "../../css/auth/SignupPage.css";
 
 /** Normalize phone: keep digits only, E.164-ish length guard */
@@ -51,7 +53,9 @@ export default function SignupPage() {
   const navigate = useNavigate();
   const { signup, signupWithGoogle, signupWithFacebook } = useAuth();
 
-  const avatars = ["📈", "📊", "🤖", "💡"];
+  const CONTENT = SIGNUP_PAGE_CONTENT;
+
+  const avatars = CONTENT.avatar.options;
   const emailRegex = useMemo(() => /^[^\s@]+@[^\s@]+\.[^\s@]+$/, []);
 
   // Form state
@@ -59,7 +63,7 @@ export default function SignupPage() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
-  const [avatar, setAvatar] = useState("📈");
+  const [avatar, setAvatar] = useState(avatars[0] || "📈");
 
   const [errors, setErrors] = useState({ name: "", email: "", phone: "", password: "" });
 
@@ -78,31 +82,36 @@ export default function SignupPage() {
     setErrModal(null);
   }, []);
 
-  const openErrorModal = useCallback((anyErr, { feature = "signup" } = {}) => {
-    const friendly = explainAnyError(anyErr, { feature });
+  const openErrorModal = useCallback(
+    (anyErr, { feature = "signup" } = {}) => {
+      const friendly = explainAnyError(anyErr, { feature });
 
-    if (isDuplicateCredentialError(anyErr)) {
+      if (isDuplicateCredentialError(anyErr)) {
+        setErrModal({
+          title: CONTENT.duplicateAccountModal.title,
+          body: CONTENT.duplicateAccountModal.body,
+          subtitle: CONTENT.duplicateAccountModal.subtitle,
+          image: dapperSquirrel,
+          action: {
+            label: CONTENT.duplicateAccountModal.actionLabel,
+            href: CONTENT.duplicateAccountModal.actionHref,
+          },
+        });
+        setErrModalOpen(true);
+        return;
+      }
+
       setErrModal({
-        title: "Account already exists",
-        body: "That email or phone number is already in use.",
-        subtitle: "Try signing in instead, or use a different email/phone.",
+        title: friendly?.title || "Error",
+        body: friendly?.body || "Something went wrong.",
+        subtitle: friendly?.subtitle || "",
         image: dapperSquirrel,
-        action: { label: "Sign in", href: "/auth" },
+        action: friendly?.action || null,
       });
       setErrModalOpen(true);
-      return;
-    }
-
-    setErrModal({
-      title: friendly?.title || "Error",
-      body: friendly?.body || "Something went wrong.",
-      subtitle: friendly?.subtitle || "",
-      image: dapperSquirrel,
-      action: friendly?.action || null,
-    });
-    setErrModalOpen(true);
-  }, []);
-
+    },
+    [CONTENT]
+  );
 
   const validate = useCallback(() => {
     const next = { name: "", email: "", phone: "", password: "" };
@@ -216,18 +225,13 @@ export default function SignupPage() {
 
   return (
     <AppShell>
-      <ErrorModal
-        open={errModalOpen}
-        error={errModal}
-        onClose={closeErrorModal}
-        onAction={handleErrorAction}
-      />
+      <ErrorModal open={errModalOpen} error={errModal} onClose={closeErrorModal} onAction={handleErrorAction} />
 
       <div className="signup-page">
         <div className="signup-auth-card">
           <div className="signup-auth-header">
-            <h1 className="signup-auth-title">Create account</h1>
-            <p className="signup-auth-subtitle">Sign up to start using U-Stock.</p>
+            <h1 className="signup-auth-title">{CONTENT.header.title}</h1>
+            <p className="signup-auth-subtitle">{CONTENT.header.subtitle}</p>
           </div>
 
           <form className="signup-auth-form" onSubmit={handleSubmit} noValidate>
@@ -240,7 +244,7 @@ export default function SignupPage() {
                 id="signup-name"
                 name="name"
                 type="text"
-                placeholder="Enter your username"
+                placeholder={CONTENT.fields.usernamePlaceholder}
                 required
                 value={name}
                 onChange={(e) => {
@@ -267,7 +271,7 @@ export default function SignupPage() {
                 id="signup-email"
                 name="email"
                 type="email"
-                placeholder="Enter your email"
+                placeholder={CONTENT.fields.emailPlaceholder}
                 required
                 value={email}
                 onChange={(e) => {
@@ -294,7 +298,7 @@ export default function SignupPage() {
                 id="signup-phone"
                 name="phone"
                 type="tel"
-                placeholder="(555) 555-5555 (optional)"
+                placeholder={CONTENT.fields.phonePlaceholder}
                 value={phone}
                 onChange={(e) => {
                   setPhone(e.target.value);
@@ -320,7 +324,7 @@ export default function SignupPage() {
                 id="signup-password"
                 name="password"
                 type="password"
-                placeholder="Create password"
+                placeholder={CONTENT.fields.passwordPlaceholder}
                 autoComplete="new-password"
                 required
                 value={password}
@@ -340,7 +344,7 @@ export default function SignupPage() {
 
             {/* Avatar */}
             <div className="signup-avatar-strip">
-              <span className="signup-avatar-strip-label">Avatar</span>
+              <span className="signup-avatar-strip-label">{CONTENT.avatar.label}</span>
               <div className="signup-avatar-strip-grid" role="group" aria-label="Choose your avatar">
                 {avatars.map((icon) => (
                   <button
@@ -359,26 +363,26 @@ export default function SignupPage() {
             </div>
 
             <button type="submit" className="signup-auth-btn" disabled={loading}>
-              {loading ? "Creating account…" : "Sign up"}
+              {loading ? CONTENT.buttons.submitLoading : CONTENT.buttons.submit}
             </button>
 
             <div className="signup-divider">
-              <span>or sign up with</span>
+              <span>{CONTENT.divider.text}</span>
             </div>
 
             <div className="signup-social">
               <button type="button" className="signup-social-btn" onClick={handleGoogle} disabled={loading}>
                 <span aria-hidden="true">G</span>
-                Google
+                {CONTENT.buttons.google}
               </button>
               <button type="button" className="signup-social-btn" onClick={handleFacebook} disabled={loading}>
                 <span aria-hidden="true">f</span>
-                Facebook
+                {CONTENT.buttons.facebook}
               </button>
             </div>
 
             <div className="signup-footer">
-              Already have an account? <Link to="/auth">Sign in</Link>
+              {CONTENT.footer.text} <Link to="/auth">{CONTENT.footer.linkText}</Link>
             </div>
           </form>
         </div>
