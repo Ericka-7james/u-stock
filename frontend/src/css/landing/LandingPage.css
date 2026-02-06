@@ -1,6 +1,13 @@
 /* src/css/landing/LandingPage.css */
 
 /* =========================================================
+   LANE (single source of truth for card widths on Landing)
+========================================================= */
+:root {
+  --landing-lane: 1100px;
+}
+
+/* =========================================================
    BASE
 ========================================================= */
 
@@ -10,14 +17,17 @@
   overflow: visible;
 }
 
-/* Keep your original spacing for sections */
+/* ✅ AppShell already provides horizontal padding via .app-page.
+   So sections should NOT add extra horizontal padding (that’s why they look narrower). */
 .landing-section {
-  padding: 64px 24px;
+  padding: 64px 0; /* was: 64px 24px */
 }
 
 .landing-section-inner {
-  max-width: 1100px;
+  max-width: var(--landing-lane);
   margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .landing-section-title {
@@ -30,12 +40,12 @@
 .landing-section-text {
   max-width: 720px;
   font-size: 14px;
-  color: var(--ustock-text-muted); 
+  color: var(--ustock-text-muted);
   margin: 0 0 24px;
 }
 
 /* =========================================================
-   HERO (KEEP ORIGINAL LOOK, but use yellow primary + clean ghost)
+   HERO (KEEP ORIGINAL LOOK, buttons untouched)
 ========================================================= */
 
 .landing-hero {
@@ -57,6 +67,14 @@
     var(--lucent-hero-glow);
   position: relative;
   z-index: 1;
+
+  /* ✅ match section lane exactly */
+  max-width: var(--landing-lane);
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+
+  box-sizing: border-box;
 }
 
 .landing-hero::after {
@@ -118,7 +136,7 @@
   margin-bottom: 18px;
 }
 
-/* --- HERO BUTTONS: yellow primary + “learn more” ghost --- */
+/* --- HERO BUTTONS: unchanged --- */
 .landing-btn {
   border-radius: 999px;
   padding: 10px 22px;
@@ -195,8 +213,7 @@
 }
 
 /* =========================================================
-   WHY U-STOCK (MAKE IT LOOK LIKE THE OTHER “WHITE SURFACE” CARDS)
-   This is the main change you asked for.
+   WHY U-STOCK
 ========================================================= */
 
 .landing-about-shell {
@@ -234,8 +251,6 @@
   margin-top: 14px;
 }
 
-/* ✅ Feature cards updated: now same “white surface” language as bigcard,
-   with only a subtle green highlight (not the full green wash). */
 .landing-feature-card {
   border-radius: 18px;
   padding: 16px 18px;
@@ -270,7 +285,6 @@
   padding: 4px 10px;
   border-radius: 999px;
 
-  /* match the Roadmap pill vibe */
   background: rgba(42, 137, 114, 0.10);
   border: 1px solid rgba(42, 137, 114, 0.22);
   color: rgba(42, 137, 114, 0.98);
@@ -286,7 +300,7 @@
 .landing-feature-card h3 {
   margin: 0 0 6px;
   font-size: 15px;
-  color: var(--ustock-text-main); 
+  color: var(--ustock-text-main);
   position: relative;
   z-index: 1;
 }
@@ -294,18 +308,16 @@
 .landing-feature-card p {
   margin: 0;
   font-size: 13px;
-  color: var(--ustock-text-muted); 
+  color: var(--ustock-text-muted);
   line-height: 1.55;
   position: relative;
   z-index: 1;
 }
 
-/* keep your className in JSX without needing special styling */
 .landing-feature-card--green {
-  /* intentionally empty: the base card is now the cohesive style */
+  /* intentionally empty */
 }
 
-/* optional micro-interaction (matches modern feel) */
 .landing-feature-card:hover {
   transform: translateY(-1px);
   transition: transform 120ms ease, box-shadow 120ms ease;
@@ -313,7 +325,7 @@
 }
 
 /* =========================================================
-   BIG MARKETING CARD (KEEP YOUR ORIGINAL)
+   BIG MARKETING CARD
 ========================================================= */
 
 .landing-bigcard-shell {
@@ -333,7 +345,7 @@
 }
 
 .landing-bigcard-eyebrow {
-  color: var(--ustock-green-main); 
+  color: var(--ustock-green-main);
   font-weight: 900;
   font-size: 22px;
   margin-bottom: 10px;
@@ -356,7 +368,7 @@
   max-width: 560px;
   font-size: 15px;
   line-height: 1.65;
-  color: var(--ustock-text-muted); 
+  color: var(--ustock-text-muted);
 }
 
 /* Roadmap list */
@@ -365,7 +377,7 @@
   padding: 0;
   margin: 0 0 18px;
   font-size: 13px;
-  color: var(--ustock-text-main); 
+  color: var(--ustock-text-main);
 }
 
 .landing-roadmap-list li + li {
@@ -428,7 +440,7 @@
 }
 
 /* =========================================================
-   MODAL (KEEP YOURS)
+   MODAL
 ========================================================= */
 
 .landing-modal-block + .landing-modal-block {
@@ -489,7 +501,10 @@
   color: rgba(42, 137, 114, 0.98);
 }
 
-/* Dark mode: make the hero card darker but keep the same gradient vibe */
+/* =========================================================
+   DARK MODE
+========================================================= */
+
 body.ustock-dark .landing-hero {
   background: linear-gradient(
     135deg,
@@ -504,24 +519,22 @@ body.ustock-dark .landing-hero {
     0 40px 80px rgba(0, 0, 0, 0.45);
 }
 
-/* (optional) slightly stronger kicker surface in dark */
 body.ustock-dark .landing-hero-kicker {
   background: rgba(255, 255, 255, 0.10);
   border-color: rgba(255, 255, 255, 0.16);
 }
+
 /* =========================================================
    RESPONSIVE
 ========================================================= */
 
 @media (max-width: 900px) {
-  /* ✅ keep 2 columns so the illustration never drops below */
   .landing-hero-inner {
     grid-template-columns: minmax(0, 1.35fr) minmax(0, 0.65fr);
     gap: 24px;
     align-items: center;
   }
 
-  /* ✅ allow the right column/image to shrink properly */
   .landing-hero-right { min-width: 0; }
   .landing-hero-img { max-width: 420px; width: 100%; }
 
@@ -539,96 +552,36 @@ body.ustock-dark .landing-hero-kicker {
   .landing-about-shell { padding: 24px 22px; }
 
   .landing-bigcard-title { font-size: 34px; }
+
+  .landing-hero-kicker { white-space: normal; }
 }
 
-/* ✅ only hide it on true mobile */
-/* =========================================================
-   RESPONSIVE
-========================================================= */
-
-@media (max-width: 900px) {
-  /* ✅ keep 2 columns so the illustration never drops below */
-  .landing-hero-inner {
-    grid-template-columns: minmax(0, 1.35fr) minmax(0, 0.65fr);
-    gap: 24px;
-    align-items: center;
-  }
-
-  /* ✅ allow the right column/image to shrink properly */
-  .landing-hero-right { min-width: 0; }
-  .landing-hero-img { max-width: 420px; width: 100%; }
-
-  .landing-hero-title { font-size: 32px; }
-
-  .landing-grid-3 { grid-template-columns: minmax(0, 1fr); }
-
-  .landing-hero-metrics { grid-template-columns: minmax(0, 1fr); }
-
-  .landing-bigcard-shell {
-    grid-template-columns: minmax(0, 1fr);
-    padding: 26px 22px;
-  }
-
-  .landing-about-shell { padding: 24px 22px; }
-
-  .landing-bigcard-title { font-size: 34px; }
-}
-
-/* ✅ only hide it on true mobile */
 @media (max-width: 768px) {
-  /* ✅ match other cards: centered inner lane like landing-section-inner */
   .landing-hero-inner {
-    max-width: 1100px;             /* was 1200px */
-    margin: 0 auto;
     grid-template-columns: 1fr;
     gap: 0;
   }
 
-  /* ✅ remove the artificial max width so content fills the centered lane */
-  .landing-hero-left {
-    max-width: none;
-    width: 100%;
-  }
-
-  /* ✅ give the hero card the same “centered card padding” vibe as the rest */
   .landing-hero {
-    padding: 72px 24px 84px;       /* keep consistent with your app spacing */
+    padding: 72px 24px 84px;
   }
 
-  /* ✅ ensure the metrics stretch and feel roomy */
   .landing-hero-metrics {
     max-width: 100%;
   }
 
-  /* ✅ hide the illustration */
   .landing-hero-right {
     display: none;
   }
 }
 
-/* ✅ very small phones (fix hero looking tighter than other cards) */
 @media (max-width: 480px) {
-  /* Let AppShell/page padding control the lane — avoid double padding */
-  .landing-hero {
-    padding-left: 0;
-    padding-right: 0;
-  }
-
-  /* Keep the content centered with normal app padding */
-  .landing-hero-inner {
-    padding-left: 24px;
-    padding-right: 24px;
-  }
-
-  /* Optional: slightly smaller title so it doesn’t feel cramped */
   .landing-hero-title {
     font-size: 30px;
   }
 
-  /* Optional: kicker can wrap instead of forcing tight layout */
   .landing-hero-kicker {
     white-space: normal;
   }
 }
-
 
