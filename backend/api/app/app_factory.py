@@ -22,13 +22,16 @@ def _effective_env(settings_env: str) -> str:
     raw = (os.getenv("ENV") or "").strip().lower()
     if raw:
         return raw
-    # fallback to settings if ENV missing
     return (settings_env or "development").strip().lower()
 
 
 def create_app() -> FastAPI:
     backend_dir = bootstrap_paths()
     _ = load_env(backend_dir)  # loads .env/.env.local into os.environ
+
+    # ✅ CRITICAL: Settings are cached; env is loaded *now*, so clear cache.
+    # Without this, CORS origins can get "stuck" from earlier imports.
+    get_settings.cache_clear()
     settings = get_settings()
 
     app = FastAPI(title="u-stock-auth-backend")
@@ -42,16 +45,17 @@ def create_app() -> FastAPI:
         expose_headers=["set-cookie"],
     )
 
-    # Preserve FastAPI / Starlette HTTP errors (do not turn them into 500s)
+    # Preserve FastAPI HTTP errors (do not turn them into 500s)
     @app.exception_handler(HTTPException)
     async def _http_exception_handler(request: Request, exc: HTTPException):
         return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
 
+    # Preserve Starlette HTTP errors
     @app.exception_handler(StarletteHTTPException)
     async def _starlette_http_exception_handler(request: Request, exc: StarletteHTTPException):
         return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
 
-    # Catch-all for truly unexpected errors
+    # Catch-all for unexpected errors
     @app.exception_handler(Exception)
     async def _unhandled_exception_handler(request: Request, exc: Exception):
         env = (os.getenv("ENV") or "development").strip().lower()
@@ -70,6 +74,7 @@ def create_app() -> FastAPI:
             "status": "running",
             "env": env,
             "strict_settings": bool(getattr(settings, "strict", False)),
+            "cors_origins": settings.cors_origins if env != "production" else None,
         }
 
     @app.get("/health")
@@ -81,4 +86,5 @@ def create_app() -> FastAPI:
     api.include_router(get_auth_router())
     register_routers(app, api)
     app.include_router(api)
+
     return app
