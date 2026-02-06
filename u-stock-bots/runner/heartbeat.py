@@ -57,10 +57,14 @@ def should_heartbeat(state: HeartbeatState, signature: str, *, now: int) -> bool
 def safe_heartbeat(api: UStockAPI, **kwargs: Any) -> None:
     """
     Never let heartbeat break the runner loop.
+    But DO surface errors when RUNNER_DEBUG=1 so "offline" doesn't hide auth failures.
     """
+    debug = (os.getenv("RUNNER_DEBUG") or "").strip() in ("1", "true", "TRUE", "yes", "YES")
     try:
         api_client.post_heartbeat(api, **kwargs)
-    except Exception:
+    except Exception as e:
+        if debug:
+            print("[runner] heartbeat failed:", repr(e))
         return
 
 

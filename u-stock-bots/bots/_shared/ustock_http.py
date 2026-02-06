@@ -253,7 +253,7 @@ class UStockAPI:
                     body = self._truncate_body(r.text)
                     code = int(getattr(r, "status_code", 0) or 0)
 
-                    # Only count backend-ish failures against breaker
+                    # Only count backend-ish failures against breaker explains
                     if code >= 500:
                         self.cb.on_failure()
                     else:
@@ -304,8 +304,22 @@ class UStockAPI:
             raise last_exc
         raise RuntimeError("Request failed")
 
-    def get(self, path: str, params: Optional[Dict[str, Any]] = None) -> Any:
-        return self.request("GET", path, params=params)
+    # ✅ UPDATED: accept headers and pass through
+    def get(
+        self,
+        path: str,
+        params: Optional[Dict[str, Any]] = None,
+        *,
+        headers: Optional[Dict[str, str]] = None,
+    ) -> Any:
+        return self.request("GET", path, params=params, headers=headers)
 
-    def post(self, path: str, json: Optional[Dict[str, Any]] = None) -> Any:
-        return self.request("POST", path, json=json)
+    # ✅ UPDATED: accept headers and pass through
+    def post(
+        self,
+        path: str,
+        json: Optional[Dict[str, Any]] = None,
+        *,
+        headers: Optional[Dict[str, str]] = None,
+    ) -> Any:
+        return self.request("POST", path, json=json, headers=headers)

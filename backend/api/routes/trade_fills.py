@@ -55,7 +55,6 @@ def list_trade_fills(
 # Runner-facing (Bearer token)
 # -------------------------
 class SyncRunnerIn(BaseModel):
-    user_id: str = Field(..., min_length=1)
     bot_id: str = Field(..., min_length=1)
     mode: str = Field(..., pattern=r"^(paper|live)$")
 
@@ -66,20 +65,27 @@ def sync_trade_fills_runner(
     runner_user_id: str = Depends(require_bot_runner),
 ):
     """
-    Runner-facing endpoint (Bearer token). Used by the local bot runner to
+    Runner-facing endpoint (Bearer token). Used by the bot runner to
     sync fills into trade_fills.
 
     Security:
       - Bearer token validated by require_bot_runner
-      - body.user_id must match runner token sub
+      - user_id is derived from token sub (runner_user_id)
+      - runner never submits user_id
     """
-    # ✅ prevent runner from writing fills for other users
-    if body.user_id != runner_user_id:
-        raise HTTPException(status_code=403, detail="user_id does not match runner token")
+    user_id = runner_user_id  # ✅ derived from token sub
+    bot_id = str(body.bot_id).strip()
+    mode = str(body.mode).strip().lower()
 
     # TODO: implement the real sync:
     # - fetch fills from Alpaca for (user_id, bot_id, mode)
     # - upsert into trade_fills
     #
-    # For now return a stub so you can wire the runner + endpoint end-to-end.
-    return {"ok": True, "status": "not_implemented_yet", "user_id": body.user_id, "bot_id": body.bot_id, "mode": body.mode}
+    # For now return a stub so you can wire runner + endpoint end-to-end.
+    return {
+        "ok": True,
+        "status": "not_implemented_yet",
+        "user_id": user_id,
+        "bot_id": bot_id,
+        "mode": mode,
+    }

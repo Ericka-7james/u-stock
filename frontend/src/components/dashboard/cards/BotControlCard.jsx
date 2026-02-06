@@ -57,7 +57,7 @@ function fmtAge(sec) {
   if (h < 24) return `${h}h`;
   const d = Math.floor(h / 24);
   const remH = h % 24;
-  return remH ? `${d}d ${remH}h` : `${d}d`;
+  return remH ? `${d}d ${remH}h` : `${d}`;
 }
 
 function pillTone(kind) {
@@ -91,7 +91,7 @@ function normalizeIntent(x) {
 
 export default function BotControlCard({ activeBotId, onActiveBotChange, onStartBot, onStopBot }) {
   const [available, setAvailable] = useState([]);
-  const [selected, setSelected] = useState(activeBotId || "ema_trend");
+  const [selected, setSelected] = useState(() => safeStr(activeBotId, "ema_trend"));
 
   const [status, setStatus] = useState(null);
   const [market, setMarket] = useState(null);
@@ -102,6 +102,9 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
 
   // confirm start
   const [startConfirmOpen, setStartConfirmOpen] = useState(false);
+
+  // ✅ NEW: confirm arm
+  const [armConfirmOpen, setArmConfirmOpen] = useState(false);
 
   // View log modal
   const [logOpen, setLogOpen] = useState(false);
@@ -117,17 +120,24 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
     min_confidence: "",
   });
 
-  // arm
-  const ARM_WINDOW_MS = 15_000;
-  const [armedUntil, setArmedUntil] = useState(0);
-  const isArmed = armedUntil > Date.now();
-
   // mode (paper-only for now)
   const [mode, setMode] = useState("paper");
 
+  // Refs to avoid “mode/config changed → callback recreated → effect reruns → abort → canceled”
+  const modeRef = useRef("paper");
+  const configModeRef = useRef("");
+
+  useEffect(() => {
+    modeRef.current = mode;
+  }, [mode]);
+
+  useEffect(() => {
+    configModeRef.current = safeStr(config?.mode, "");
+  }, [config?.mode, config]);
+
   const aliveRef = useRef(true);
   const inflightRef = useRef({ available: null, status: null, market: null, config: null, action: null });
-  const timersRef = useRef({ status: null, market: null, armTick: null });
+  const timersRef = useRef({ statusPoll: null, marketPoll: null });
 
   function abortInflight(key) {
     const cur = inflightRef.current?.[key];
@@ -151,15 +161,16 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // sync selected with parent
+  // sync selected with parent (only when parent provides a real id)
   useEffect(() => {
-    if (!activeBotId) return;
-    setSelected(activeBotId);
-    setArmedUntil(0);
+    const next = safeStr(activeBotId, "");
+    if (!next) return;
+    setSelected((prev) => (prev === next ? prev : next));
     setStartConfirmOpen(false);
+    setArmConfirmOpen(false);
   }, [activeBotId]);
 
-  // load bots list
+  // load bots list (ONCE)
   useEffect(() => {
     abortInflight("available");
     const ac = new AbortController();
@@ -173,8 +184,11 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
         const bots = Array.isArray(data?.bots) ? data.bots : [];
         setAvailable(bots);
 
-        const fallback = activeBotId || bots?.[0]?.id || "ema_trend";
-        setSelected((prev) => prev || fallback);
+        setSelected((prev) => {
+          const cur = safeStr(prev, "");
+          if (cur) return cur;
+          return safeStr(activeBotId, bots?.[0]?.id || "ema_trend");
+        });
       } catch (e) {
         if (!aliveRef.current || ac.signal.aborted) return;
         setUiError(String(e?.message || e));
@@ -184,7 +198,8 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
     })();
 
     return () => ac.abort();
-  }, [activeBotId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const refreshMarket = useCallback(async () => {
     if (inflightRef.current.market) return;
@@ -219,7 +234,6 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
       const m = safeStr(cfg?.mode, "paper");
       setMode(m === "live" ? "paper" : m);
 
-      // seed risk draft for modal
       setRiskDraft({
         risk_per_trade: cfg?.risk_per_trade ?? "",
         max_trades_per_day: cfg?.max_trades_per_day ?? "",
@@ -232,95 +246,72 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
     }
   }, []);
 
-  const refreshStatus = useCallback(
-    async (botId) => {
-      const id = safeStr(botId);
-      if (!id || inflightRef.current.status) return;
+  // ✅ STABLE — avoids rerun/abort loop
+  const refreshStatus = useCallback(async (botId) => {
+    const id = safeStr(botId);
+    if (!id || inflightRef.current.status) return;
 
-      const ac = new AbortController();
-      inflightRef.current.status = ac;
+    const ac = new AbortController();
+    inflightRef.current.status = ac;
 
-      try {
-        const data = await apiGet(`/api/bots/status?bot_id=${encodeURIComponent(id)}`, { signal: ac.signal });
-        if (!aliveRef.current || ac.signal.aborted) return;
-        setStatus(data);
+    try {
+      const data = await apiGet(`/api/bots/status?bot_id=${encodeURIComponent(id)}`, { signal: ac.signal });
+      if (!aliveRef.current || ac.signal.aborted) return;
 
-        // prefer backend mode when present
-        const m = safeStr(data?.mode, safeStr(config?.mode, mode));
-        setMode(m === "live" ? "paper" : m);
-      } catch {
-        // ignore
-      } finally {
-        if (inflightRef.current.status === ac) inflightRef.current.status = null;
-      }
-    },
-    [config?.mode, mode]
-  );
+      setStatus(data);
+
+      const currentMode = safeStr(modeRef.current, "paper");
+      const cfgMode = safeStr(configModeRef.current, "");
+      const nextMode = safeStr(data?.mode, cfgMode || currentMode);
+      setMode(nextMode === "live" ? "paper" : nextMode);
+    } catch {
+      // ignore
+    } finally {
+      if (inflightRef.current.status === ac) inflightRef.current.status = null;
+    }
+  }, []);
 
   // polling on selected
   useEffect(() => {
-    if (!selected) return;
+    const id = safeStr(selected, "");
+    if (!id) return;
+
     setUiError("");
 
-    refreshConfig(selected);
-    refreshStatus(selected);
+    refreshConfig(id);
+    refreshStatus(id);
     refreshMarket();
 
-    clearTimer(timersRef.current.market);
-    timersRef.current.market = setInterval(() => refreshMarket(), 30_000);
+    clearTimer(timersRef.current.marketPoll);
+    timersRef.current.marketPoll = setInterval(() => refreshMarket(), 30_000);
 
-    let stopped = false;
-    const poll = async () => {
-      if (stopped) return;
-      await refreshStatus(selected);
-      if (stopped) return;
-      timersRef.current.status = setTimeout(poll, 1500);
-    };
-    clearTimer(timersRef.current.status);
-    poll();
+    clearTimer(timersRef.current.statusPoll);
+    timersRef.current.statusPoll = setInterval(() => refreshStatus(id), 4_000);
 
     return () => {
-      stopped = true;
-      clearTimer(timersRef.current.market);
-      clearTimer(timersRef.current.status);
+      clearTimer(timersRef.current.marketPoll);
+      clearTimer(timersRef.current.statusPoll);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected, refreshStatus, refreshMarket, refreshConfig]);
-
-  // arm tick
-  useEffect(() => {
-    if (!isArmed) return;
-    clearTimer(timersRef.current.armTick);
-    timersRef.current.armTick = setInterval(() => setArmedUntil((v) => v), 250);
-    return () => clearTimer(timersRef.current.armTick);
-  }, [isArmed]);
-
-  const armRemainingSec = useMemo(() => {
-    if (!isArmed) return 0;
-    return Math.max(0, Math.ceil((armedUntil - Date.now()) / 1000));
-  }, [armedUntil, isArmed]);
-
-  function armNow() {
-    setArmedUntil(Date.now() + ARM_WINDOW_MS);
-  }
-  function disarm() {
-    setArmedUntil(0);
-  }
 
   function onSelect(e) {
     const id = e.target.value;
     setSelected(id);
     onActiveBotChange?.(id);
-    disarm();
     setStartConfirmOpen(false);
+    setArmConfirmOpen(false);
   }
 
   /* ----------------------------
-     ✅ Derived state (canonical)
+     Derived state (canonical)
   ---------------------------- */
 
-  const intent = normalizeIntent(status?.intent); // no default "paused"
+  const intent = normalizeIntent(status?.intent);
   const eff = normalizeEff(status?.effective_state);
+
+  const desiredState = safeStr(status?.desired_state, "");
+  const isArmed = desiredState === "armed"; // ✅ persisted arming
+  const isDesiredRunning = desiredState === "running";
 
   const hbAge = Number.isFinite(Number(status?.heartbeatAgeSec)) ? Number(status.heartbeatAgeSec) : null;
 
@@ -338,23 +329,15 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
       ? n(market.next_open)
       : 0;
 
-  // Offline always overrides other display states
   const isOffline = eff === "offline";
   const isErr = eff === "error" || Boolean(lastError);
 
   const isWaiting = eff === "waiting_for_market";
   const isStarting = eff === "starting";
-
-  // Running means effective is truly executing-ish (not "intent running")
   const isRunningEff = eff === "running" || eff === "degraded";
-
-  // Paused means effective paused OR intent paused (when not offline)
   const isPaused = !isOffline && (eff === "paused" || intent === "paused");
+  const isDisarmed = !isArmed && !isDesiredRunning && (eff === "disarmed" || intent === "disarmed");
 
-  // Disarmed is a “disabled” state if you ever return it later
-  const isDisarmed = eff === "disarmed" || intent === "disarmed";
-
-  // For the pill label (what the user perceives as the runtime state)
   const runtimeLabel = isOffline
     ? "OFFLINE"
     : isErr
@@ -367,6 +350,8 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
     ? "LIVE"
     : isPaused
     ? "PAUSED"
+    : isArmed
+    ? "ARMED"
     : isDisarmed
     ? "DISARMED"
     : "IDLE";
@@ -387,13 +372,56 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
     ? isOpen === false
       ? "Running (market closed)"
       : "Running"
+    : isArmed
+    ? "Armed (persisted) · Ready to start"
     : isPaused
     ? pausedReason || message || "Paused"
     : message || "Idle";
 
-  const canArm = !busy && !isRunningEff && !isWaiting && !isStarting;
+  const canArm = !busy && !isRunningEff && !isWaiting && !isStarting && !isArmed;
+  const canDisarm = !busy && isArmed && !isRunningEff && !isWaiting && !isStarting;
+
+  // ✅ Start only allowed if persisted-arm is present
   const canStart = !busy && !isRunningEff && !isWaiting && !isStarting && isArmed;
   const canPause = !busy && (isRunningEff || isWaiting || isStarting);
+
+  async function doArm() {
+    setUiError("");
+    setBusy(true);
+    abortInflight("action");
+    const ac = new AbortController();
+    inflightRef.current.action = ac;
+
+    try {
+      await apiPost("/api/bots/arm", { bot_id: selected, mode }, { signal: ac.signal });
+      await refreshStatus(selected);
+    } catch (e) {
+      if (!aliveRef.current || ac.signal.aborted) return;
+      setUiError(String(e?.message || e));
+    } finally {
+      if (inflightRef.current.action === ac) inflightRef.current.action = null;
+      if (aliveRef.current) setBusy(false);
+    }
+  }
+
+  async function doDisarm() {
+    setUiError("");
+    setBusy(true);
+    abortInflight("action");
+    const ac = new AbortController();
+    inflightRef.current.action = ac;
+
+    try {
+      await apiPost("/api/bots/disarm", { bot_id: selected }, { signal: ac.signal });
+      await refreshStatus(selected);
+    } catch (e) {
+      if (!aliveRef.current || ac.signal.aborted) return;
+      setUiError(String(e?.message || e));
+    } finally {
+      if (inflightRef.current.action === ac) inflightRef.current.action = null;
+      if (aliveRef.current) setBusy(false);
+    }
+  }
 
   async function doStart() {
     setUiError("");
@@ -448,8 +476,17 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
 
   async function confirmStart() {
     setStartConfirmOpen(false);
-    disarm();
     await doStart();
+  }
+
+  function requestArm() {
+    if (!canArm) return;
+    setArmConfirmOpen(true);
+  }
+
+  async function confirmArm() {
+    setArmConfirmOpen(false);
+    await doArm();
   }
 
   async function openLog() {
@@ -501,7 +538,7 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
         <div className="botCardHead">
           <div className="botCardTitleRow">
             <div className="botCardTitle">Bot Control</div>
-            <HelpTooltip text="Arm → Start. Pause anytime. This card only controls the bot; intents/opportunities are shown elsewhere on the dashboard." />
+            <HelpTooltip text="Arm → Start. Pause anytime. Arm is persisted server-side (survives logout) until you Disarm." />
           </div>
 
           <div className="botPillRow">
@@ -511,12 +548,11 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
 
             <div
               className={`botCardStatePill ${isArmed ? "warn" : "neg"}`}
-              title={isArmed ? "Start enabled briefly." : "Arm to enable Start."}
+              title={isArmed ? "Armed (persisted). Start enabled." : "Arm to enable Start."}
             >
-              {isArmed ? `ARMED · ${armRemainingSec}s` : "DISARMED"}
+              {isArmed ? "ARMED" : "DISARMED"}
             </div>
 
-            {/* ✅ runtime state pill (LIVE/PAUSED/OFFLINE/WAITING/STARTING/ERROR) */}
             <div className={`botCardStatePill status ${pillTone(runtimeTone)}`}>{runtimeLabel}</div>
           </div>
         </div>
@@ -547,9 +583,15 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
               </button>
 
               {!isRunningEff && !isWaiting && !isStarting ? (
-                <button className="botBtn" type="button" onClick={isArmed ? disarm : armNow} disabled={!canArm}>
-                  {isArmed ? "Disarm" : "Arm"}
-                </button>
+                isArmed ? (
+                  <button className="botBtn" type="button" onClick={doDisarm} disabled={!canDisarm}>
+                    Disarm
+                  </button>
+                ) : (
+                  <button className="botBtn" type="button" onClick={requestArm} disabled={!canArm}>
+                    Arm
+                  </button>
+                )
               ) : null}
 
               {isRunningEff || isWaiting || isStarting ? (
@@ -582,6 +624,11 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
             </div>
 
             <div className="botTile">
+              <div className="botTileLabel">Desired</div>
+              <div className="botTileValue">{desiredState || "—"}</div>
+            </div>
+
+            <div className="botTile">
               <div className="botTileLabel">Heartbeat</div>
               <div className="botTileValue">{hbAge == null ? "—" : `${fmtAge(hbAge)} ago`}</div>
             </div>
@@ -604,7 +651,35 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
         </div>
       </div>
 
-      {/* Start confirm */}
+      {/* ✅ NEW: Arm confirm modal */}
+      <Modal
+        open={armConfirmOpen}
+        title="Arm this bot?"
+        onClose={() => setArmConfirmOpen(false)}
+        footer={
+          <>
+            <button className="mBtn" type="button" onClick={() => setArmConfirmOpen(false)} disabled={busy}>
+              Cancel
+            </button>
+            <button className="mBtn mBtnPrimary" type="button" onClick={confirmArm} disabled={busy}>
+              Confirm arm
+            </button>
+          </>
+        }
+      >
+        <div style={{ display: "grid", gap: 10 }}>
+          <div style={{ fontWeight: 900 }}>
+            Arm: <span className="mono">{selected}</span>
+          </div>
+          <div style={{ fontSize: 12, opacity: 0.8, fontWeight: 800 }}>
+            This persists server-side (survives logout) until you Disarm.
+          </div>
+          <div style={{ fontSize: 12, opacity: 0.8, fontWeight: 800 }}>
+            Mode: <span className="mono">{mode}</span>
+          </div>
+        </div>
+      </Modal>
+
       <Modal
         open={startConfirmOpen}
         title="Start this bot?"
@@ -627,10 +702,14 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
           <div style={{ fontSize: 12, opacity: 0.8, fontWeight: 800 }}>
             Mode: <span className="mono">{mode}</span> · You can Pause anytime.
           </div>
+          {!isArmed ? (
+            <div style={{ fontSize: 12, fontWeight: 900, color: "#b91c1c" }}>
+              Not armed. Close and Arm first.
+            </div>
+          ) : null}
         </div>
       </Modal>
 
-      {/* View log */}
       <Modal
         open={logOpen}
         title="Bot log"
@@ -661,7 +740,6 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
         )}
       </Modal>
 
-      {/* Risk controls */}
       <Modal
         open={riskOpen}
         title="Risk Controls"

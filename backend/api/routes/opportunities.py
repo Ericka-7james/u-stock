@@ -3,23 +3,23 @@ from __future__ import annotations
 
 import os
 import time
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Tuple
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 
-from api.security.bot_runner_dep import require_bot_runner
+from api.deps import require_user
+from api.security.bot_runner_token import load_bot_runner_config, verify_bot_runner_token
 from api.core.integrations.alpaca_creds import get_user_alpaca_creds_by_user_id
 from api.core.market.market_leaders_service import market_leaders as market_leaders_service
 
 router = APIRouter(prefix="/api/opportunities", tags=["opportunities"])
 
 _CACHE: Dict[str, Dict[str, Any]] = {}
-_CACHE_VERSION = "v7-opportunities-safe-fallback-auth-consistent"
+_CACHE_VERSION = "v8-opportunities-ui+runner-bearer"
 
 BOT_RUNNER_SECRET = (os.getenv("BOT_RUNNER_SECRET") or "").strip()
 ENV = (os.getenv("ENV") or "development").strip().lower()
 
-# ✅ Safe fallback (so bots never stall if leader fetch + fallbacks are misconfigured)
 SAFE_FALLBACK_ENABLED = (os.getenv("OPPORTUNITIES_ALLOW_SAFE_FALLBACK", "true").strip().lower() != "false")
 SAFE_FALLBACK_SYMBOLS_RAW = (os.getenv("OPPORTUNITIES_SAFE_FALLBACK_SYMBOLS", "SPY,QQQ,AAPL") or "").strip()
 
@@ -122,12 +122,26 @@ def _require_runner_secret_if_configured(request: Request) -> None:
         )
 
 
-def _maybe_runner_user_id(request: Request) -> Optional[str]:
+def _maybe_runner_user_id_from_bearer(request: Request) -> Optional[str]:
+    """
+    Extracts runner user id from Authorization: Bearer <token>.
+    Uses verify_bot_runner_token directly (NOT FastAPI dependency) for robustness.
+    """
     auth = (request.headers.get("authorization") or "").strip()
     if not auth.startswith("Bearer "):
         return None
-    # require_bot_runner expects the raw "Authorization" header value
-    return require_bot_runner(auth)
+
+    token = auth.split(" ", 1)[1].strip()
+    if not token:
+        return None
+
+    try:
+        cfg = load_bot_runner_config()
+        payload = verify_bot_runner_token(token, cfg)
+        sub = str(payload.get("sub") or "").strip()
+        return sub or None
+    except Exception:
+        return None
 
 
 def _extract_leader_symbols(payload: Dict[str, Any]) -> List[str]:
@@ -166,6 +180,34 @@ def _fetch_market_leaders_for_user(
     )
 
 
+# -------------------------------------------------------------------
+# ✅ UI endpoint (cookies) — fixes your Dashboard 404
+# GET /api/opportunities/bot/top?limit=8
+# -------------------------------------------------------------------
+@router.get("/bot/top")
+def bot_top_for_ui(
+    request: Request,
+    response: Response,
+    limit: int = Query(8, ge=1, le=50),
+    bot_id: Optional[str] = Query(None),
+):
+    """
+    Dashboard-friendly endpoint (cookie-auth).
+    Your frontend expects:
+      { stocks: [...], crypto: [...], funds: [...] }
+
+    For now: returns empty lists (safe) until your ranking logic is wired.
+    """
+    _ = require_user(request, response)  # ensures cookies auth
+    _ = (bot_id or "").strip()
+
+    return {"stocks": [], "crypto": [], "funds": []}
+
+
+# -------------------------------------------------------------------
+# ✅ Runner endpoint (Bearer token preferred)
+# GET /api/opportunities?limit=12&bot_id=ema_trend...
+# -------------------------------------------------------------------
 @router.get("")
 @router.get("/")
 def opportunities_for_runner(
@@ -181,17 +223,15 @@ def opportunities_for_runner(
     """
     Runner-friendly symbol universe endpoint.
 
-    Auth policy (consistent):
-      - production: requires Authorization Bearer token
-      - dev/test: Bearer preferred; otherwise BOT_RUNNER_SECRET if configured; otherwise allow unauth
-
-    Why: your runner client (UStockAPI) always tries to send Bearer first.
+    Auth policy:
+      - production: Authorization Bearer token REQUIRED
+      - dev/test: Bearer preferred; else if BOT_RUNNER_SECRET configured require it; else allow unauth
     """
     eff_limit = _clamp_int(int(limit), 1, _MAX_LIMIT)
     bid = (bot_id or "").strip() or "unknown"
     show_more = bool(int(leaders_show_more) == 1)
 
-    runner_user_id = _maybe_runner_user_id(request)
+    runner_user_id = _maybe_runner_user_id_from_bearer(request)
 
     requires_auth = True
     warnings: List[Dict[str, str]] = []
@@ -203,13 +243,11 @@ def opportunities_for_runner(
                 detail={"code": "BOT_RUNNER_UNAUTHORIZED", "message": "Authorization Bearer token required."},
             )
     else:
-        # dev/test: only require secret if it is configured
         if runner_user_id is None:
             if BOT_RUNNER_SECRET:
                 _require_runner_secret_if_configured(request)
                 requires_auth = True
             else:
-                # allow local/dev without auth
                 requires_auth = False
                 warnings.append({"code": "DEV_AUTH_DISABLED", "message": "Dev mode: no runner auth configured."})
 
@@ -248,21 +286,18 @@ def opportunities_for_runner(
             leaders_symbols = []
             leader_fetch_ok = False
 
-    # bot fallback
     bot_fallback = _FALLBACK_BY_BOT.get(bid) or []
     _unique_extend(symbols, seen, bot_fallback)
 
-    # global fallback
     if len(symbols) < eff_limit:
         _unique_extend(symbols, seen, _FALLBACK_GLOBAL)
 
     final_symbols = symbols[:eff_limit]
 
-    # ✅ LAST RESORT: safe fallback (prevents “empty universe” stalling)
     safe_used = False
     if (not final_symbols) and SAFE_FALLBACK_ENABLED:
         safe_list = _parse_csv_symbols(SAFE_FALLBACK_SYMBOLS_RAW) or ["SPY", "QQQ"]
-        _unique_extend(final_symbols, set(), safe_list)  # stable, no seen needed here
+        _unique_extend(final_symbols, set(), safe_list)
         final_symbols = final_symbols[:eff_limit]
         safe_used = True
         warnings.append({"code": "SAFE_FALLBACK_USED", "message": "Used safe fallback symbols."})
@@ -289,14 +324,14 @@ def opportunities_for_runner(
                 {"name": "market_leaders", "count": len(leaders_symbols)},
                 {"name": "bot_fallback", "count": len(bot_fallback)},
                 {"name": "global_fallback", "count": len(_FALLBACK_GLOBAL)},
-                {"name": "safe_fallback", "count": len(_parse_csv_symbols(SAFE_FALLBACK_SYMBOLS_RAW)) if safe_used else 0},
+                {
+                    "name": "safe_fallback",
+                    "count": len(_parse_csv_symbols(SAFE_FALLBACK_SYMBOLS_RAW)) if safe_used else 0,
+                },
             ],
             "leaders_payload_meta": leaders_payload_meta,
             "warnings": warnings,
-            "safe_fallback": {
-                "enabled": bool(SAFE_FALLBACK_ENABLED),
-                "used": bool(safe_used),
-            },
+            "safe_fallback": {"enabled": bool(SAFE_FALLBACK_ENABLED), "used": bool(safe_used)},
         },
     }
 

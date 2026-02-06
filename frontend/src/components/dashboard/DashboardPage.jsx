@@ -9,6 +9,7 @@ import SentimentCard from "./cards/SentimentCard.jsx";
 import MacroCard from "./cards/MacroCard.jsx";
 import TradePerformancePanel from "./cards/TradePerformancePanel.jsx";
 import MarketLeadersCard from "./cards/MarketLeadersCard.jsx";
+import BotControlCard from "./cards/BotControlCard.jsx";
 
 import { useAlpacaDailyBars } from "../../hooks/useAlpacaDailyBars.js";
 import { useAlpacaTradeSummary } from "../../hooks/useAlpacaTradeSummary.js";
@@ -312,7 +313,7 @@ function useMarketLeaders({ direction = "up", limit = 10 } = {}) {
 }
 
 /* ------------------------------------------------------------------
-   ✅ BOT STATUS WIRING FOR TradePerformancePanel
+   ✅ BOT STATUS (shared) + BotControlCard data fetch lives HERE now
    ------------------------------------------------------------------ */
 
 const BOT_OPTIONS = [
@@ -336,16 +337,65 @@ function normalizeEffectiveState(x) {
   return ok.has(v) ? v : v || "stopped";
 }
 
-function useBotStatuses(botOptions) {
+function useBotRuntime({ botOptions, activeBotId }) {
   const botIds = useMemo(
     () => (Array.isArray(botOptions) ? botOptions.map((b) => b.id).filter(Boolean) : []),
     [botOptions]
   );
 
-  const [botStatuses, setBotStatuses] = useState(() => ({}));
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [availableBots, setAvailableBots] = useState([]);
+  const [marketSession, setMarketSession] = useState(null);
+  const [botStatuses, setBotStatuses] = useState({});
+  const [activeConfig, setActiveConfig] = useState(null);
 
+  // available bots (once)
+  useEffect(() => {
+    const ac = new AbortController();
+    let alive = true;
+
+    (async () => {
+      try {
+        const json = await apiGetWithRetry("/api/bots/available", { signal: ac.signal });
+        if (!alive || ac.signal.aborted) return;
+        setAvailableBots(Array.isArray(json?.bots) ? json.bots : []);
+      } catch {
+        if (!alive || ac.signal.aborted) return;
+        setAvailableBots([]);
+      }
+    })();
+
+    return () => {
+      alive = false;
+      ac.abort();
+    };
+  }, []);
+
+  // market session poll
+  useEffect(() => {
+    const ac = new AbortController();
+    let alive = true;
+
+    async function run() {
+      try {
+        const json = await apiGetWithRetry("/api/market/us/session", { signal: ac.signal });
+        if (!alive || ac.signal.aborted) return;
+        setMarketSession(json);
+      } catch {
+        // fail-open
+      }
+    }
+
+    run();
+    const t = window.setInterval(run, 30_000);
+
+    return () => {
+      alive = false;
+      ac.abort();
+      window.clearInterval(t);
+    };
+  }, []);
+
+  // status poll for all bots (single poller for the whole dashboard)
   useEffect(() => {
     if (!botIds.length) return;
 
@@ -353,9 +403,6 @@ function useBotStatuses(botOptions) {
     let alive = true;
 
     async function run() {
-      setError(null);
-      setLoading(false);
-
       try {
         const results = await Promise.all(
           botIds.map(async (id) => {
@@ -366,22 +413,17 @@ function useBotStatuses(botOptions) {
           })
         );
 
-        if (!alive) return;
+        if (!alive || ac.signal.aborted) return;
 
         const next = {};
         for (const [id, json] of results) {
           const eff = normalizeEffectiveState(json?.effective_state || json?.effectiveState || json?.state);
           next[id] = { ...json, effective_state: eff };
         }
-
         setBotStatuses(next);
-      } catch (e) {
-        if (!alive) return;
-        if (ac.signal.aborted) return;
-        setError(toError(e));
-      } finally {
-        if (!alive) return;
-        setLoading(false);
+      } catch {
+        if (!alive || ac.signal.aborted) return;
+        // fail-open (keep previous)
       }
     }
 
@@ -395,7 +437,53 @@ function useBotStatuses(botOptions) {
     };
   }, [botIds]);
 
-  return { botStatuses, loading, error };
+  // config fetch for active bot only
+  async function refreshActiveConfig(botId, { signal } = {}) {
+    const id = String(botId || "").trim();
+    if (!id) {
+      setActiveConfig(null);
+      return;
+    }
+    const json = await apiGetWithRetry(`/api/bots/config?bot_id=${encodeURIComponent(id)}`, { signal });
+    setActiveConfig(json?.config && typeof json.config === "object" ? json.config : null);
+  }
+
+  useEffect(() => {
+    if (!activeBotId) {
+      setActiveConfig(null);
+      return;
+    }
+
+    const ac = new AbortController();
+    let alive = true;
+
+    (async () => {
+      try {
+        await refreshActiveConfig(activeBotId, { signal: ac.signal });
+      } catch {
+        if (!alive || ac.signal.aborted) return;
+        setActiveConfig(null);
+      }
+    })();
+
+    return () => {
+      alive = false;
+      ac.abort();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeBotId]);
+
+  const onRefreshConfig = async () => {
+    if (!activeBotId) return;
+    const ac = new AbortController();
+    try {
+      await refreshActiveConfig(activeBotId, { signal: ac.signal });
+    } finally {
+      ac.abort(); // ensure no dangling
+    }
+  };
+
+  return { availableBots, marketSession, botStatuses, activeConfig, onRefreshConfig };
 }
 
 /* ------------------------------------------------------------------
@@ -558,8 +646,16 @@ export default function DashboardPage() {
     setCurrentTicker(clean);
   };
 
-  const { botStatuses } = useBotStatuses(BOT_OPTIONS);
+  // ✅ BotControlCard selection is owned by Dashboard now
+  const [selectedBotId, setSelectedBotId] = useState("ema_trend");
 
+  // Single source of truth for: available bots, market session, statuses, selected config
+  const { availableBots, marketSession, botStatuses, activeConfig, onRefreshConfig } = useBotRuntime({
+    botOptions: BOT_OPTIONS,
+    activeBotId: selectedBotId,
+  });
+
+  // Active bots list for TradePerformancePanel
   const activeBots = useMemo(() => {
     return BOT_OPTIONS.filter((b) => {
       const s = botStatuses?.[b.id];
@@ -575,6 +671,14 @@ export default function DashboardPage() {
   }, [botStatuses]);
 
   const activeBotId = activeBots?.[0]?.id || null;
+
+  const activeBot = useMemo(() => {
+    if (!activeBotId) return null;
+    return BOT_OPTIONS.find((b) => b.id === activeBotId) || null;
+  }, [activeBotId]);
+
+  // Data for BotControlCard (selected bot)
+  const selectedStatus = botStatuses?.[selectedBotId] || null;
 
   // ✅ Display labels
   const tfLabel = useMemo(() => computeTimeframeLabel(timeframe), [timeframe]);
@@ -650,6 +754,17 @@ export default function DashboardPage() {
         </div>
 
         <div className="dashboard-right">
+          {/* ✅ BotControlCard now receives all data via props (no polling inside the card) */}
+          <BotControlCard
+            activeBotId={selectedBotId}
+            onActiveBotChange={setSelectedBotId}
+            available={availableBots}
+            status={selectedStatus}
+            market={marketSession}
+            config={activeConfig}
+            onRefreshConfig={onRefreshConfig}
+          />
+
           <PriceChartPanel
             currentTicker={currentTicker}
             onSelectTicker={onPickSymbol}
@@ -688,7 +803,12 @@ export default function DashboardPage() {
             ) : null}
           </section>
 
-          <MarketLeadersCard items={leadersItems} meta={leadersMeta} loading={leadersLoading} onSelectSymbol={onPickSymbol} />
+          <MarketLeadersCard
+            items={leadersItems}
+            meta={leadersMeta}
+            loading={leadersLoading}
+            onSelectSymbol={onPickSymbol}
+          />
 
           <MacroCard />
         </div>

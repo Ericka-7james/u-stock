@@ -54,7 +54,6 @@ Common variables:
 - RUNNER_LOOP_SECONDS   : loop interval (seconds)
 - RUNNER_BOT_ID         : bot to run (ex: ema_trend)
 - USTOCK_API_BASE       : backend base URL (ex: http://127.0.0.1:8000)
-- BOT_RUNNER_SECRET     : must match backend BOT_RUNNER_SECRET
 - SUPABASE_URL          : optional tx upload
 - SUPABASE_SERVICE_ROLE_KEY : optional tx upload
 
@@ -64,10 +63,7 @@ Common variables:
 From repo root:
 
 ```bash
-source .venv/bin/activate
-set -a
-source u-stock-bots/.env
-set +a
+.\.venv\Scripts\Activate.ps1
 
 cd u-stock-bots
 python -m runner.main
