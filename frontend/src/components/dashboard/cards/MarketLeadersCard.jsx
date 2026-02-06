@@ -123,7 +123,7 @@ export default function MarketLeadersCard({
   }
 
   return (
-    <section className="mlCard">
+    <section className="panel mlCard">
       <div className="mlHeader">
         <div className="mlTitle">{title}</div>
         {subtitle ? <div className="mlSubtitle">{subtitle}</div> : null}

@@ -117,70 +117,64 @@ export default function DatasourcesPage() {
   return (
     <AppShell>
       <div className="app-page datasources-page">
-        {/* Header: relies on PageHeaderCard lane behavior, just like IndexFunds */}
-        <div className="page-header-wrap">
-          <PageHeaderCard
-            title="Data Sources"
-            subtitle={
-              <>
-                This page is for <strong>market context + observability</strong> — view today’s top movers and filter bot
-                logs to validate behavior. (Start/Stop controls live on the Dashboard.)
-              </>
-            }
-            actions={
-              <>
-                <Link to="/" className="back-link-pill">
-                  ← Back to dashboard
-                </Link>
-                <Link to="/connected-apps" className="back-link-pill">
-                  Connected apps →
-                </Link>
-              </>
-            }
-            rightMedia={
-              <img
-                src={DatasourcesSquirrel}
-                alt="DatasourcesSquirrel"
-                className="datasources-hero-logo"
-              />
-            }
-          />
-        </div>
+        {/* ✅ Match ConnectedAppsPage: PageHeaderCard stands alone (it already clamps via .page-header-wrap) */}
+        <PageHeaderCard
+          title="Data Sources"
+          subtitle={
+            <>
+              This page is for <strong>market context + observability</strong> — view today’s top movers and filter bot
+              logs to validate behavior. (Start/Stop controls live on the Dashboard.)
+            </>
+          }
+          right={<img src={DatasourcesSquirrel} alt="DatasourcesSquirrel" className="datasources-hero-logo" />}
+        >
+          <div className="ds-header-actions">
+            <Link to="/" className="back-link-pill">
+              ← Back to dashboard
+            </Link>
+            <Link to="/connected-apps" className="back-link-pill">
+              Connected apps →
+            </Link>
+          </div>
+        </PageHeaderCard>
 
-        <main className="ds-main">
-          <div className="ds-left">
-            <div className="ds-cardClamp">
-              <MarketLeadersCard
-                title="Market leaders"
-                subtitle="Top movers (today). Click a ticker to load it on the dashboard chart."
-                items={leaders}
-                meta={leadersMeta}
-                loading={leadersLoading}
-                onSelectSymbol={(sym) => {
-                  const clean = normalizeSymbol(sym);
-                  if (!clean) return;
-                  if (!isTvSafe(clean)) return;
+        {/* ✅ Match ConnectedAppsPage: content lane aligned to the same max-width + gutters */}
+        <div className="ds-page-wrap">
+          <main className="ds-main">
+            <div className="ds-left">
+              <div className="ds-cardClamp">
+                <MarketLeadersCard
+                  title="Market leaders"
+                  subtitle="Top movers (today). Click a ticker to load it on the dashboard chart."
+                  items={leaders}
+                  meta={leadersMeta}
+                  loading={leadersLoading}
+                  onSelectSymbol={(sym) => {
+                    const clean = normalizeSymbol(sym);
+                    if (!clean) return;
+                    if (!isTvSafe(clean)) return;
 
-                  try {
-                    localStorage.setItem("ustock:last_ticker", clean);
-                  } catch {}
+                    try {
+                      localStorage.setItem("ustock:last_ticker", clean);
+                    } catch {}
 
-                  navigate(`/?ticker=${encodeURIComponent(clean)}`);
-                }}
+                    navigate(`/?ticker=${encodeURIComponent(clean)}`);
+                  }}
+                />
+              </div>
+            </div>
+
+            <div className="ds-right">
+              <BotLogsCard
+                defaultBotId="ema_trend"
+                maxPreview={3}
+                title="Bot logs"
+                subtitle="Filter by day, status, and search terms. Use logs to debug decisions + runner health."
+                showQuickLink={true}
               />
             </div>
-          </div>
-
-          <div className="ds-right">
-            <BotLogsCard
-              defaultBotId="ema_trend"
-              maxPreview={3}
-              title="Bot logs"
-              subtitle="Filter by day, status, and search terms. Use logs to debug decisions + runner health."
-              showQuickLink={true}
-            />
-          </div>
-        </main>
+          </main>
+        </div>
       </div>
     </AppShell>
   );
