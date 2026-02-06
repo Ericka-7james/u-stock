@@ -1,66 +1,70 @@
 # backend/api/routes/integrations_alpaca.py
 from __future__ import annotations
 
-from typing import Optional, Dict, Any, Literal
+from typing import Optional, Literal, Dict, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
-from api.db import get_supabase_service
-from api.crypto_utils import decrypt_secret, encrypt_secret
-from api.security.bot_runner_dep import require_bot_runner
 from api.deps import require_user
+from api.security.bot_runner_dep import require_bot_runner
+from api.db import get_supabase_service
+from api.core.crypto import encrypt_secret, decrypt_secret
 
 router = APIRouter(prefix="/integrations/alpaca", tags=["integrations-alpaca"])
 
 
 # -------------------------
-# Models
+# Models (keep simple + test-friendly)
 # -------------------------
-class AlpacaCredsOut(BaseModel):
-    ok: bool = True
-    provider: str = "alpaca"
+class AlpacaKeysIn(BaseModel):
+    api_key: str = Field(..., min_length=5)
+    api_secret: str = Field(..., min_length=5)
+    mode: Literal["paper", "live"]
+
+
+class AlpacaKeysOut(BaseModel):
+    ok: bool
+    provider: str
     status: str
-    mode: Optional[str] = "paper"
+    mode: str
+
+
+class AlpacaCredsOut(BaseModel):
+    ok: bool
+    provider: str
+    status: str
+    mode: str
     api_key: Optional[str] = None
     api_secret: Optional[str] = None
 
 
-class AlpacaKeysIn(BaseModel):
-    api_key: str = Field(..., min_length=5)
-    api_secret: str = Field(..., min_length=5)
-    mode: Optional[Literal["paper", "live"]] = "paper"
+def _normalize_mode(m: str) -> str:
+    m2 = (m or "paper").strip().lower()
+    return "live" if m2 == "live" else "paper"
 
 
-class AlpacaKeysOut(BaseModel):
-    ok: bool = True
-    provider: str = "alpaca"
-    status: str = "connected"
-    mode: str = "paper"
+def _http_err(status_code: int, code: str, message: str, extra: Optional[Dict[str, Any]] = None) -> HTTPException:
+    detail: Dict[str, Any] = {"code": code, "message": message, "provider": "alpaca"}
+    if extra:
+        detail.update(extra)
+    return HTTPException(status_code=status_code, detail=detail)
 
 
-# -------------------------
-# UI route: save keys (Connected Apps)
-# -------------------------
 @router.post("/keys", response_model=AlpacaKeysOut)
 def save_alpaca_keys(body: AlpacaKeysIn, request: Request, response: Response):
-    """
-    UI uses this to save Alpaca keys for the currently signed-in user (cookie auth).
-    POST /api/integrations/alpaca/keys
-    """
     u = require_user(request, response)
     user_id = u["id"]
 
     api_key = (body.api_key or "").strip()
     api_secret = (body.api_secret or "").strip()
-    mode = (body.mode or "paper").strip().lower()
-    if mode not in ("paper", "live"):
-        mode = "paper"
+    mode = _normalize_mode(body.mode)
 
     if not api_key or not api_secret:
-        raise HTTPException(
-            status_code=400,
-            detail={"code": "ALPACA_KEYS_MISSING", "message": "Alpaca keys missing. Please paste key + secret."},
+        raise _http_err(
+            400,
+            "ALPACA_KEYS_MISSING",
+            "API key/secret missing after trimming whitespace",
         )
 
     sb = get_supabase_service()
@@ -74,11 +78,13 @@ def save_alpaca_keys(body: AlpacaKeysIn, request: Request, response: Response):
         "api_secret_enc": encrypt_secret(api_secret),
     }
 
+    # Preferred path: upsert
     try:
-        # Preferred if you have a unique constraint on (user_id, provider)
         sb.table("integrations").upsert(payload, on_conflict="user_id,provider").execute()
-    except Exception as e:
-        # Fallback: if on_conflict fails due to schema/constraint mismatch, try manual update/insert
+        return AlpacaKeysOut(ok=True, provider="alpaca", status="connected", mode=mode)
+    except Exception:
+        # fallback path used by tests:
+        # if row exists -> update; else -> insert
         try:
             existing = (
                 sb.table("integrations")
@@ -87,28 +93,34 @@ def save_alpaca_keys(body: AlpacaKeysIn, request: Request, response: Response):
                 .eq("provider", "alpaca")
                 .maybe_single()
                 .execute()
+            ).data
+        except Exception as e:
+            raise _http_err(
+                500,
+                "INTEGRATION_CHECK_FAILED",
+                "Failed to check existing integration",
+                {"error": repr(e)},
             )
-            if existing.data:
+
+        try:
+            if existing:
                 sb.table("integrations").update(payload).eq("user_id", user_id).eq("provider", "alpaca").execute()
             else:
                 sb.table("integrations").insert(payload).execute()
-        except Exception as e2:
-            raise HTTPException(status_code=500, detail=f"Failed to save Alpaca integration: {repr(e)} / {repr(e2)}")
+        except Exception as e:
+            raise _http_err(
+                500,
+                "INTEGRATION_SAVE_FAILED",
+                "Failed to save Alpaca keys",
+                {"error": repr(e)},
+            )
 
-    return AlpacaKeysOut(ok=True, provider="alpaca", status="connected", mode=mode)
+        return AlpacaKeysOut(ok=True, provider="alpaca", status="connected", mode=mode)
 
 
-# -------------------------
-# Bot-runner route: fetch keys (runner token auth)
-# -------------------------
 @router.get("/creds", response_model=AlpacaCredsOut)
 def get_alpaca_creds(user_id: str = Depends(require_bot_runner)):
-    """
-    Bot runner uses this to fetch Alpaca keys tied to the logged-in user (via bot-runner token).
-    GET /api/integrations/alpaca/creds
-    """
     sb = get_supabase_service()
-
     try:
         res = (
             sb.table("integrations")
@@ -119,20 +131,28 @@ def get_alpaca_creds(user_id: str = Depends(require_bot_runner)):
             .execute()
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to load Alpaca integration: {repr(e)}")
+        # ✅ structured detail (tests expect dict)
+        raise _http_err(
+            500,
+            "INTEGRATION_LOAD_FAILED",
+            "Failed to load Alpaca integration",
+            {"error": repr(e)},
+        )
 
-    row: Dict[str, Any] | None = (res.data[0] if res.data else None)
+    rows = res.data or []
+    row = rows[0] if rows else None
+
     if not row:
-        return AlpacaCredsOut(ok=True, status="not_connected", mode="paper", api_key=None, api_secret=None)
+        return AlpacaCredsOut(ok=True, provider="alpaca", status="not_connected", mode="paper", api_key=None, api_secret=None)
 
-    status = str(row.get("status") or "not_connected").lower()
-    mode = str(row.get("mode") or "paper").lower()
+    status = str(row.get("status") or "").strip().lower()
+    mode = _normalize_mode(str(row.get("mode") or "paper"))
 
-    # Only return secrets if connected
     if status != "connected":
-        return AlpacaCredsOut(ok=True, status="not_connected", mode=mode, api_key=None, api_secret=None)
+        return AlpacaCredsOut(ok=True, provider="alpaca", status="not_connected", mode=mode, api_key=None, api_secret=None)
 
+    # only decrypt when connected
     api_key = decrypt_secret(row.get("api_key_enc"))
     api_secret = decrypt_secret(row.get("api_secret_enc"))
 
-    return AlpacaCredsOut(ok=True, status="connected", mode=mode, api_key=api_key, api_secret=api_secret)
+    return AlpacaCredsOut(ok=True, provider="alpaca", status="connected", mode=mode, api_key=api_key, api_secret=api_secret)

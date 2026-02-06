@@ -6,7 +6,7 @@ import json
 import os
 import time
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from urllib.parse import urljoin
 
 import requests
@@ -19,6 +19,8 @@ TRANSACTION_EVENT_TYPES = {
     "order_rejected",
     "order_failed",
     "trade_closed",
+    # optional: if you want to store the risk gate event in bot_events, add it here
+    "risk_gate_block",
 }
 
 DEFAULT_TABLE = "bot_events"
@@ -54,7 +56,6 @@ def _deadletter_path() -> Path:
     if base:
         root = Path(base).expanduser().resolve()
     else:
-        # runner/ -> u-stock-bots/
         root = Path(__file__).resolve().parents[1]
     p = root / "runtime" / "deadletter"
     p.mkdir(parents=True, exist_ok=True)
@@ -66,12 +67,12 @@ def _write_deadletter(rows: List[Dict[str, Any]], error: str) -> None:
         return
     path = _deadletter_path()
 
-    # keep deadletter smaller (don’t dump huge payloads unbounded)
     slim_rows: List[Dict[str, Any]] = []
     for r in rows:
         slim_rows.append(
             {
                 "ts": r.get("ts"),
+                "user_id": r.get("user_id"),
                 "bot_id": r.get("bot_id"),
                 "mode": r.get("mode"),
                 "event_type": r.get("event_type"),
@@ -113,7 +114,11 @@ def _event_id_for_row(row: Dict[str, Any]) -> str:
     return _hash_event_id([bot_id, mode, event_type, symbol, order_id, entry, stop, tp])
 
 
-def _build_rows(bot_id: str, mode: str, events: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def _build_rows(user_id: str, bot_id: str, mode: str, events: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    u = str(user_id or "").strip()
+    if not u:
+        return []
+
     b = str(bot_id or "").strip()
     if not b:
         return []
@@ -137,6 +142,7 @@ def _build_rows(bot_id: str, mode: str, events: List[Dict[str, Any]]) -> List[Di
 
         row = {
             "ts": evt.get("ts") or now_iso,
+            "user_id": u,
             "bot_id": b,
             "mode": m,
             "level": str(evt.get("level") or "info").strip().lower(),
@@ -145,6 +151,7 @@ def _build_rows(bot_id: str, mode: str, events: List[Dict[str, Any]]) -> List[Di
             "payload": payload,
         }
 
+        # Prefer explicit event_id (decision scoped) if provided.
         row["event_id"] = evt.get("event_id") or _event_id_for_row(row)
         rows.append(row)
 
@@ -167,7 +174,7 @@ def _post_rows(rows: List[Dict[str, Any]]) -> None:
         "apikey": key,
         "Authorization": f"Bearer {key}",
         "Content-Type": "application/json",
-        # ✅ ignore duplicates if table has UNIQUE(event_id)
+        # duplicates ignored if you later add UNIQUE(user_id,event_id,event_type,ts) etc.
         "Prefer": "resolution=ignore-duplicates,return=minimal",
     }
 
@@ -177,7 +184,7 @@ def _post_rows(rows: List[Dict[str, Any]]) -> None:
         raise RuntimeError(f"Supabase insert failed {r.status_code}: {body}")
 
 
-def upload_transaction_events(bot_id: str, mode: str, events: List[Dict[str, Any]]) -> None:
+def upload_transaction_events(user_id: str, bot_id: str, mode: str, events: List[Dict[str, Any]]) -> None:
     """
     Upload ONLY transaction events. Batched. Retries. Dead-letter on failure.
     """
@@ -186,7 +193,7 @@ def upload_transaction_events(bot_id: str, mode: str, events: List[Dict[str, Any
     if not sb_enabled():
         return
 
-    rows = _build_rows(bot_id, mode, events)
+    rows = _build_rows(user_id, bot_id, mode, events)
     if not rows:
         return
 

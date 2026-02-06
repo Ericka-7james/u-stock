@@ -90,10 +90,19 @@ export default function NavBar({
     setUserMenuOpen((open) => !open);
   };
 
-  const handleLogout = () => {
-    logout();
-    setUserMenuOpen(false);
-    setNavOpen(false);
+  const handleLogout = async () => {
+    try {
+      await logout(); // ✅ wait for cookies + hint to clear
+    } finally {
+      setUserMenuOpen(false);
+      setNavOpen(false);
+
+      // ✅ make it feel “real” even on public pages like /feedback
+      navigate("/auth", { replace: true });
+
+      // optional: if you ever see stale UI due to cached state, use hard reset instead:
+      // window.location.assign("/auth");
+    }
   };
 
   const closeAuthModal = () => {

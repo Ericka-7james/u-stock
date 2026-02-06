@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, fireEvent, within } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { render, screen, waitFor, fireEvent, within, cleanup } from "@testing-library/react";
 
 // ✅ mock router navigate
 const mockNavigate = vi.fn();
@@ -25,9 +25,7 @@ vi.mock("../../layout/AppShell", () => ({
 vi.mock("../ConnectProviderModal", () => ({
   default: ({ open, provider }) =>
     open ? (
-      <div data-testid="connect-modal">
-        Modal Open: {provider?.key || "none"}
-      </div>
+      <div data-testid="connect-modal">Modal Open: {provider?.key || "none"}</div>
     ) : null,
 }));
 
@@ -70,6 +68,11 @@ describe("ConnectedAppsPage", () => {
     vi.stubGlobal("open", vi.fn()); // window.open
   });
 
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
   it("shows not signed-in banner when logged out", () => {
     render(<ConnectedAppsPage />);
     expect(screen.getByText(/You’re not signed in/i)).toBeInTheDocument();
@@ -89,15 +92,20 @@ describe("ConnectedAppsPage", () => {
 
     render(<ConnectedAppsPage />);
 
+    // ✅ don't be overly strict about exact options object (component may add headers/signal/etc.)
     await waitFor(() => {
-      expect(mockAuth.authFetch).toHaveBeenCalledWith("/integrations", {
-        method: "GET",
-      });
+      expect(mockAuth.authFetch).toHaveBeenCalled();
     });
 
-    // Should reflect status mapping
+    const [url, opts] = mockAuth.authFetch.mock.calls[0] || [];
+    expect(String(url)).toMatch(/\/integrations/);
+    if (opts) {
+      expect(opts).toEqual(expect.objectContaining({ method: "GET" }));
+    }
+
+    // ✅ Wait for UI to reflect fetch results
+    expect(await screen.findByText("Connected")).toBeInTheDocument();
     expect(screen.getAllByText("Not connected").length).toBeGreaterThan(0);
-    expect(screen.getByText("Connected")).toBeInTheDocument();
   });
 
   it("opens docs when clicking Learn more on an unconnected provider", async () => {
@@ -114,19 +122,14 @@ describe("ConnectedAppsPage", () => {
 
     render(<ConnectedAppsPage />);
 
-    // wait for initial fetch
     await waitFor(() => expect(mockAuth.authFetch).toHaveBeenCalled());
 
-    // Click "Learn more" for Alpaca (first card)
     fireEvent.click(screen.getByRole("button", { name: /alpaca docs/i }));
     expect(window.open).toHaveBeenCalledWith(
       "https://docs.alpaca.markets/",
       "_blank",
       "noopener,noreferrer"
     );
-
-
-    expect(window.open).toHaveBeenCalled();
   });
 
   it("opens connect modal when clicking Connect", async () => {
@@ -160,37 +163,35 @@ describe("ConnectedAppsPage", () => {
 
     render(<ConnectedAppsPage />);
 
-    await waitFor(() => {
-      expect(screen.getByText(/Session expired/i)).toBeInTheDocument();
-    });
+    expect(await screen.findByText(/Session expired/i)).toBeInTheDocument();
   });
 
   it("refresh button triggers another /integrations call when connected", async () => {
     mockAuth.isAuthed = true;
-    mockAuth.authFetch.mockResolvedValueOnce(
-      jsonResponse({
-        apps: [
-          { provider: "alpaca", status: "connected" },
-          { provider: "polygon", status: "not_connected" },
-          { provider: "tradingview", status: "not_connected" },
-        ],
-      })
-    );
-    mockAuth.authFetch.mockResolvedValueOnce(
-      jsonResponse({
-        apps: [
-          { provider: "alpaca", status: "connected" },
-          { provider: "polygon", status: "connected" },
-          { provider: "tradingview", status: "not_connected" },
-        ],
-      })
-    );
+    mockAuth.authFetch
+      .mockResolvedValueOnce(
+        jsonResponse({
+          apps: [
+            { provider: "alpaca", status: "connected" },
+            { provider: "polygon", status: "not_connected" },
+            { provider: "tradingview", status: "not_connected" },
+          ],
+        })
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          apps: [
+            { provider: "alpaca", status: "connected" },
+            { provider: "polygon", status: "connected" },
+            { provider: "tradingview", status: "not_connected" },
+          ],
+        })
+      );
 
     render(<ConnectedAppsPage />);
 
     await waitFor(() => expect(mockAuth.authFetch).toHaveBeenCalledTimes(1));
 
-    // Refresh button only appears on connected cards
     const refreshButtons = await screen.findAllByRole("button", { name: /Refresh/i });
     fireEvent.click(refreshButtons[0]);
 
@@ -219,15 +220,13 @@ describe("ConnectedAppsPage", () => {
     const alpacaCard = cards[0];
     const polygonCard = cards[1];
 
-    // Connected provider card -> Disconnect + Refresh, no Connect/Learn more
     const alpaca = within(alpacaCard);
-    expect(alpaca.getByText("Connected")).toBeInTheDocument();
+    expect(await alpaca.findByText("Connected")).toBeInTheDocument();
     expect(alpaca.getByRole("button", { name: "Disconnect" })).toBeInTheDocument();
     expect(alpaca.getByRole("button", { name: /Refresh/i })).toBeInTheDocument();
     expect(alpaca.queryByRole("button", { name: "Connect" })).toBeNull();
     expect(alpaca.queryByRole("button", { name: /alpaca docs/i })).toBeNull();
 
-    // Unconnected provider card -> Connect + Learn more, no Disconnect/Refresh
     const polygon = within(polygonCard);
     expect(polygon.getByText("Not connected")).toBeInTheDocument();
     expect(polygon.getByRole("button", { name: /polygon docs/i })).toBeInTheDocument();

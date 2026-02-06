@@ -1,41 +1,49 @@
-# api/security/bot_runner_dep.py
 from __future__ import annotations
 
-from fastapi import Header, HTTPException
+import os
+from typing import Optional
+
+from fastapi import HTTPException, Request
 import jwt
 
-from api.security.bot_runner_token import load_bot_runner_config, verify_bot_runner_token
+
+def _env(name: str, default: str = "") -> str:
+    return str(os.getenv(name, default) or "").strip()
 
 
-def require_bot_runner(authorization: str = Header(default="")) -> str:
-    """
-    FastAPI dependency:
-      - Validates Authorization: Bearer <token>
-      - Returns user_id (payload['sub'])
-    """
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing Bearer token")
+def _get_bearer(request: Request) -> Optional[str]:
+    auth = request.headers.get("authorization") or request.headers.get("Authorization")
+    if not auth:
+        return None
+    parts = auth.split(" ", 1)
+    if len(parts) == 2 and parts[0].lower() == "bearer":
+        return parts[1].strip() or None
+    return None
 
-    token = authorization.split(" ", 1)[1].strip()
+
+def require_bot_runner(request: Request) -> str:
+    token = _get_bearer(request)
     if not token:
-        raise HTTPException(status_code=401, detail="Missing token")
+        raise HTTPException(status_code=401, detail="Runner token missing")
+
+    key = _env("RUNNER_JWT_SIGNING_KEY")
+    if not key:
+        raise HTTPException(status_code=500, detail="RUNNER_JWT_SIGNING_KEY not configured")
 
     try:
-        cfg = load_bot_runner_config()
-        payload = verify_bot_runner_token(token, cfg)
-
-        user_id = str(payload.get("sub") or "").strip()
-        if not user_id:
-            raise HTTPException(status_code=401, detail="Invalid token subject")
-
-        return user_id
-
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Bot runner token expired")
-    except jwt.InvalidTokenError as e:
-        raise HTTPException(status_code=401, detail=f"Invalid bot runner token: {str(e)}")
-    except HTTPException:
-        raise
+        claims = jwt.decode(
+            token,
+            key,
+            algorithms=["HS256"],
+            issuer=_env("RUNNER_JWT_ISSUER", "ustock-backend"),
+            audience=_env("RUNNER_JWT_AUDIENCE", "ustock-runner"),
+            options={"require": ["exp", "iat", "iss", "aud"]},
+        )
     except Exception:
-        # Fail closed for any unexpected verification/config errors
-        raise HTTPException(status_code=401, detail="Invalid bot runner token")
+        raise HTTPException(status_code=401, detail="Invalid runner token")
+
+    runner_id = str(claims.get("sub") or "").strip()
+    if not runner_id:
+        raise HTTPException(status_code=401, detail="Invalid runner token")
+
+    return runner_id

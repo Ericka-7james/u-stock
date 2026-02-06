@@ -9,6 +9,7 @@ import SentimentCard from "./cards/SentimentCard.jsx";
 import MacroCard from "./cards/MacroCard.jsx";
 import TradePerformancePanel from "./cards/TradePerformancePanel.jsx";
 import MarketLeadersCard from "./cards/MarketLeadersCard.jsx";
+import BotControlCard from "./cards/BotControlCard.jsx";
 
 import { useAlpacaDailyBars } from "../../hooks/useAlpacaDailyBars.js";
 import { useAlpacaTradeSummary } from "../../hooks/useAlpacaTradeSummary.js";
@@ -300,9 +301,7 @@ function useMarketLeaders({ direction = "up", limit = 10 } = {}) {
 
     run();
 
-    // lightweight refresh so “today” stays fresh; won’t spam due to backend cache_ttl
     const t = window.setInterval(run, 20_000);
-
     return () => {
       alive = false;
       ac.abort();
@@ -313,14 +312,244 @@ function useMarketLeaders({ direction = "up", limit = 10 } = {}) {
   return { data, loading, error };
 }
 
+/* ------------------------------------------------------------------
+   ✅ BOT STATUS (shared) + BotControlCard data fetch lives HERE now
+   ------------------------------------------------------------------ */
+
+const BOT_OPTIONS = [
+  { id: "ema_trend", name: "EMA Trend" },
+  { id: "orb", name: "ORB Breakout" },
+  { id: "mean_revert", name: "Mean Reversion" },
+];
+
+function normalizeEffectiveState(x) {
+  const v = String(x || "").trim().toLowerCase();
+  const ok = new Set([
+    "running",
+    "waiting_for_market",
+    "starting",
+    "paused",
+    "stopped",
+    "offline",
+    "error",
+    "degraded",
+  ]);
+  return ok.has(v) ? v : v || "stopped";
+}
+
+function useBotRuntime({ botOptions, activeBotId }) {
+  const botIds = useMemo(
+    () => (Array.isArray(botOptions) ? botOptions.map((b) => b.id).filter(Boolean) : []),
+    [botOptions]
+  );
+
+  const [availableBots, setAvailableBots] = useState([]);
+  const [marketSession, setMarketSession] = useState(null);
+  const [botStatuses, setBotStatuses] = useState({});
+  const [activeConfig, setActiveConfig] = useState(null);
+
+  // available bots (once)
+  useEffect(() => {
+    const ac = new AbortController();
+    let alive = true;
+
+    (async () => {
+      try {
+        const json = await apiGetWithRetry("/api/bots/available", { signal: ac.signal });
+        if (!alive || ac.signal.aborted) return;
+        setAvailableBots(Array.isArray(json?.bots) ? json.bots : []);
+      } catch {
+        if (!alive || ac.signal.aborted) return;
+        setAvailableBots([]);
+      }
+    })();
+
+    return () => {
+      alive = false;
+      ac.abort();
+    };
+  }, []);
+
+  // market session poll
+  useEffect(() => {
+    const ac = new AbortController();
+    let alive = true;
+
+    async function run() {
+      try {
+        const json = await apiGetWithRetry("/api/market/us/session", { signal: ac.signal });
+        if (!alive || ac.signal.aborted) return;
+        setMarketSession(json);
+      } catch {
+        // fail-open
+      }
+    }
+
+    run();
+    const t = window.setInterval(run, 30_000);
+
+    return () => {
+      alive = false;
+      ac.abort();
+      window.clearInterval(t);
+    };
+  }, []);
+
+  // status poll for all bots (single poller for the whole dashboard)
+  useEffect(() => {
+    if (!botIds.length) return;
+
+    const ac = new AbortController();
+    let alive = true;
+
+    async function run() {
+      try {
+        const results = await Promise.all(
+          botIds.map(async (id) => {
+            const json = await apiGetWithRetry(`/api/bots/status?bot_id=${encodeURIComponent(id)}`, {
+              signal: ac.signal,
+            });
+            return [id, json];
+          })
+        );
+
+        if (!alive || ac.signal.aborted) return;
+
+        const next = {};
+        for (const [id, json] of results) {
+          const eff = normalizeEffectiveState(json?.effective_state || json?.effectiveState || json?.state);
+          next[id] = { ...json, effective_state: eff };
+        }
+        setBotStatuses(next);
+      } catch {
+        if (!alive || ac.signal.aborted) return;
+        // fail-open (keep previous)
+      }
+    }
+
+    run();
+    const t = window.setInterval(run, 10_000);
+
+    return () => {
+      alive = false;
+      ac.abort();
+      window.clearInterval(t);
+    };
+  }, [botIds]);
+
+  // config fetch for active bot only
+  async function refreshActiveConfig(botId, { signal } = {}) {
+    const id = String(botId || "").trim();
+    if (!id) {
+      setActiveConfig(null);
+      return;
+    }
+    const json = await apiGetWithRetry(`/api/bots/config?bot_id=${encodeURIComponent(id)}`, { signal });
+    setActiveConfig(json?.config && typeof json.config === "object" ? json.config : null);
+  }
+
+  useEffect(() => {
+    if (!activeBotId) {
+      setActiveConfig(null);
+      return;
+    }
+
+    const ac = new AbortController();
+    let alive = true;
+
+    (async () => {
+      try {
+        await refreshActiveConfig(activeBotId, { signal: ac.signal });
+      } catch {
+        if (!alive || ac.signal.aborted) return;
+        setActiveConfig(null);
+      }
+    })();
+
+    return () => {
+      alive = false;
+      ac.abort();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeBotId]);
+
+  const onRefreshConfig = async () => {
+    if (!activeBotId) return;
+    const ac = new AbortController();
+    try {
+      await refreshActiveConfig(activeBotId, { signal: ac.signal });
+    } finally {
+      ac.abort(); // ensure no dangling
+    }
+  };
+
+  return { availableBots, marketSession, botStatuses, activeConfig, onRefreshConfig };
+}
+
+/* ------------------------------------------------------------------
+   ✅ Timeframe display + TradingView interval mapping (interval-only)
+   ------------------------------------------------------------------ */
+
+function parseDateLoose(v) {
+  const s = String(v || "").trim();
+  if (!s) return null;
+  const d = new Date(s);
+  return Number.isFinite(d?.getTime?.()) ? d : null;
+}
+
+function computeInclusiveDays(start, end) {
+  const a = parseDateLoose(start);
+  const b = parseDateLoose(end);
+  if (!a || !b) return null;
+
+  const ms = b.getTime() - a.getTime();
+  const days = Math.floor(ms / 86400000) + 1;
+  if (!Number.isFinite(days) || days <= 0) return null;
+  return days;
+}
+
+function computeRangeDaysLabel(timeframe) {
+  // default “Past week” if timeframe is null/empty
+  if (!timeframe) return { days: 7, label: "7 days" };
+
+  const start = timeframe?.start ?? timeframe?.from ?? timeframe?.date_from ?? timeframe?.time_min;
+  const end = timeframe?.end ?? timeframe?.to ?? timeframe?.date_to ?? timeframe?.time_max;
+
+  const d = timeframe?.days ?? computeInclusiveDays(start, end);
+  if (d !== null) return { days: d, label: `${d} day${d === 1 ? "" : "s"}` };
+
+  return { days: null, label: "—" };
+}
+
+function computeTimeframeLabel(timeframe) {
+  if (!timeframe) return "Past week";
+  const label = timeframe?.label || timeframe?.preset || timeframe?.name || timeframe?.title || timeframe?.key || "";
+  const s = String(label || "").trim();
+  return s || "Custom";
+}
+
+// ✅ your rule
+function mapDaysToTvInterval(days) {
+  const d = Number(days);
+  if (!Number.isFinite(d) || d <= 0) return "60";
+  if (d <= 2) return "15";
+  if (d <= 10) return "60";
+  if (d <= 45) return "240";
+  if (d <= 180) return "D";
+  return "W";
+}
+
 export default function DashboardPage() {
   const { isAuthed, loading: authLoading } = useAuth();
   const navigate = useNavigate();
 
   const [currentTicker, setCurrentTicker] = useState(() => loadLastTicker());
 
+  // ✅ default behavior: null means "user has not chosen" -> treat as Past week
+  const [timeframe, setTimeframe] = useState(null);
+
   if (authLoading) return null;
-if (!isAuthed) return null;
+  if (!isAuthed) return null;
 
   useEffect(() => {
     try {
@@ -346,7 +575,7 @@ if (!isAuthed) return null;
     return () => obs.disconnect();
   }, []);
 
-  // TradingView -> update ticker
+  // Update ticker when user searches inside TradingView widget
   useEffect(() => {
     const handler = (e) => {
       if (!isTradingViewOrigin(e?.origin)) return;
@@ -378,10 +607,7 @@ if (!isAuthed) return null;
   const { bars: alpacaBars, loading: alpacaLoading, error: alpacaError, meta: alpacaMeta } =
     useAlpacaDailyBars(currentTicker, 220);
 
-  const alpacaHistoryBySymbol = useMemo(
-    () => ({ [currentTicker]: alpacaBars || [] }),
-    [currentTicker, alpacaBars]
-  );
+  const alpacaHistoryBySymbol = useMemo(() => ({ [currentTicker]: alpacaBars || [] }), [currentTicker, alpacaBars]);
 
   const [tradePreset, setTradePreset] = useState("Week");
   const { data: tradePerfData, loading: tradePerfLoading, error: tradePerfError } = useAlpacaTradeSummary(
@@ -401,10 +627,7 @@ if (!isAuthed) return null;
   });
   const leadersErrUI = leadersError ? explainAnyError(leadersError, { feature: "market_leaders" }) : null;
 
-  const leadersItems = useMemo(() => {
-    const arr = Array.isArray(leadersResp?.items) ? leadersResp.items : [];
-    return arr;
-  }, [leadersResp]);
+  const leadersItems = useMemo(() => (Array.isArray(leadersResp?.items) ? leadersResp.items : []), [leadersResp]);
 
   const leadersMeta = useMemo(() => {
     const meta = leadersResp?.meta && typeof leadersResp.meta === "object" ? leadersResp.meta : {};
@@ -422,6 +645,52 @@ if (!isAuthed) return null;
     if (!isTvSafe(clean)) return;
     setCurrentTicker(clean);
   };
+
+  // ✅ BotControlCard selection is owned by Dashboard now
+  const [selectedBotId, setSelectedBotId] = useState("ema_trend");
+
+  // Single source of truth for: available bots, market session, statuses, selected config
+  const { availableBots, marketSession, botStatuses, activeConfig, onRefreshConfig } = useBotRuntime({
+    botOptions: BOT_OPTIONS,
+    activeBotId: selectedBotId,
+  });
+
+  // Active bots list for TradePerformancePanel
+  const activeBots = useMemo(() => {
+    return BOT_OPTIONS.filter((b) => {
+      const s = botStatuses?.[b.id];
+      if (!s) return false;
+
+      const intent = String(s.intent || "").toLowerCase();
+      const eff = normalizeEffectiveState(s.effective_state || s.effectiveState || s.state);
+
+      // Bot is considered "active" if user intent exists,
+      // even if runner is offline
+      return intent === "running" || eff === "running" || eff === "waiting_for_market" || eff === "offline";
+    });
+  }, [botStatuses]);
+
+  const activeBotId = activeBots?.[0]?.id || null;
+
+  const activeBot = useMemo(() => {
+    if (!activeBotId) return null;
+    return BOT_OPTIONS.find((b) => b.id === activeBotId) || null;
+  }, [activeBotId]);
+
+  // Data for BotControlCard (selected bot)
+  const selectedStatus = botStatuses?.[selectedBotId] || null;
+
+  // ✅ Display labels
+  const tfLabel = useMemo(() => computeTimeframeLabel(timeframe), [timeframe]);
+  const tfRangeLabel = useMemo(() => computeRangeDaysLabel(timeframe)?.label || "—", [timeframe]);
+
+  // ✅ TradingView interval (interval-only) — default Past week unless user explicitly changes timeframe
+  const tvInterval = useMemo(() => {
+    if (!timeframe) return "60"; // Past week default => 1h candles
+    if (timeframe?.tvInterval) return String(timeframe.tvInterval);
+    const days = timeframe?.days ?? computeRangeDaysLabel(timeframe)?.days ?? 7;
+    return mapDaysToTvInterval(days);
+  }, [timeframe]);
 
   return (
     <AppShell>
@@ -442,10 +711,15 @@ if (!isAuthed) return null;
 
           <TradePerformancePanel
             data={tradePerfData || { start: "—", end: "—", trades: [] }}
-            onChangeRange={(preset) => setTradePreset(preset)}
             opportunities={oppData}
-            leaders={leadersItems}   // ✅ NOW REAL DATA
+            leaders={leadersItems}
             onPickSymbol={onPickSymbol}
+            activeBot={activeBot}
+            activeBotId={activeBot?.id || null}
+            botStatuses={botStatuses}
+            timeframe={timeframe}
+            onTimeframeChange={setTimeframe}
+            onChangeRange={(preset) => setTradePreset(preset)}
           />
 
           {tradePerfLoading ? <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>Loading…</div> : null}
@@ -480,10 +754,25 @@ if (!isAuthed) return null;
         </div>
 
         <div className="dashboard-right">
+          {/* ✅ BotControlCard now receives all data via props (no polling inside the card) */}
+          <BotControlCard
+            activeBotId={selectedBotId}
+            onActiveBotChange={setSelectedBotId}
+            available={availableBots}
+            status={selectedStatus}
+            market={marketSession}
+            config={activeConfig}
+            onRefreshConfig={onRefreshConfig}
+          />
+
           <PriceChartPanel
             currentTicker={currentTicker}
             onSelectTicker={onPickSymbol}
             isDarkMode={isDarkMode}
+            timeframeLabel={tfLabel}
+            // we keep this as a hint only; we are NOT claiming we control the window
+            activeRangeLabel={timeframe ? `Selected range: ${tfRangeLabel}` : ""}
+            interval={tvInterval}
           />
 
           <section className="panel panel-sentiment">
@@ -514,19 +803,14 @@ if (!isAuthed) return null;
             ) : null}
           </section>
 
-          {/* ✅ NEW: nicer leaders card (optional but recommended) */}
-          <div style={{ marginTop: 12 }}>
-            <MarketLeadersCard
-              items={leadersItems}
-              meta={leadersMeta}
-              loading={leadersLoading}
-              onSelectSymbol={onPickSymbol}
-            />
-          </div>
+          <MarketLeadersCard
+            items={leadersItems}
+            meta={leadersMeta}
+            loading={leadersLoading}
+            onSelectSymbol={onPickSymbol}
+          />
 
-          <div style={{ marginTop: 12 }}>
-            <MacroCard />
-          </div>
+          <MacroCard />
         </div>
       </main>
     </AppShell>

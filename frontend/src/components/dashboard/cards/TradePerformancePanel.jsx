@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import BotControlCard from "./BotControlCard.jsx";
+import TimeframeCard from "./TimeframeCard.jsx";
 import "../../../css/dashboard/cards/TradePerformancePanel.css";
 
 function n(x) {
@@ -26,8 +27,6 @@ function isAlphaOnlySymbol(sym) {
   return /^[A-Z]+$/.test(s);
 }
 
-// If prevClose missing but we have last + pct move,
-// back-calc prev ≈ last / (1 + pct/100)
 function computePrevFallback(last, pct) {
   const L = nn(last);
   const P = nn(pct);
@@ -175,10 +174,6 @@ function OpportunityTable({ title, rows, emptyMessage, onPickSymbol, sourceLabel
   );
 }
 
-/* -------------------------------------------
-   Bot Intents section (visible bot value)
--------------------------------------------- */
-
 function fmtTime(epochSec) {
   const t = Number(epochSec);
   if (!Number.isFinite(t) || t <= 0) return "—";
@@ -205,7 +200,105 @@ function safeSym(it) {
   return String(it?.symbol || "").trim().toUpperCase();
 }
 
-function BotIntentsCard({ botRunning, botId, onPickSymbol }) {
+/* ----------------------------
+   ✅ Bot state normalization
+---------------------------- */
+
+function normalizeEffectiveState(x) {
+  const v = String(x || "").trim().toLowerCase();
+
+  // Expand accepted keys/states (safe)
+  const ok = new Set([
+    "running",
+    "waiting_for_market",
+    "starting",
+    "paused",
+    "stopped",
+    "offline",
+    "error",
+    "degraded",
+    "idle",
+    "armed",
+    "disarmed",
+  ]);
+
+  return ok.has(v) ? v : v || "stopped";
+}
+
+// Pull effective state from multiple possible keys
+function readEffectiveState(s) {
+  if (!s || typeof s !== "object") return "stopped";
+  return normalizeEffectiveState(
+    s.effective_state ??
+      s.effectiveState ??
+      s.effective ??
+      s.effective_status ??
+      s.effectiveStatus ??
+      s.state ??
+      s.status
+  );
+}
+
+function readIntent(s) {
+  if (!s || typeof s !== "object") return "";
+  return String(s.intent ?? s.target_intent ?? s.desired_intent ?? "").trim().toLowerCase();
+}
+
+function readRunnerOnline(s) {
+  // If backend provides heartbeat_age_s, honor it.
+  // Otherwise treat "offline" state as offline and everything else as unknown/online-ish.
+  const age =
+    Number(s?.heartbeat_age_s ?? s?.heartbeatAgeS ?? s?.heartbeat_age ?? s?.heartbeatAge ?? NaN);
+
+  if (Number.isFinite(age)) {
+    // pick a conservative default stale threshold (matches your UI expectation)
+    return age >= 0 && age <= 180;
+  }
+
+  const eff = readEffectiveState(s);
+  if (eff === "offline") return false;
+  if (eff === "error") return true; // runner likely alive but failing
+
+  // Unknown: don’t hard-fail the UI; treat as "maybe online"
+  return true;
+}
+
+function deriveBotUiState(botId, botStatuses) {
+  const id = String(botId || "").trim();
+  if (!id) {
+    return { kind: "no_bot", runnerOnline: false, intent: "", eff: "stopped" };
+  }
+
+  const s = botStatuses?.[id] || {};
+  const eff = readEffectiveState(s);
+  const intent = readIntent(s);
+  const runnerOnline = readRunnerOnline(s);
+
+  if (!runnerOnline || eff === "offline") {
+    return { kind: "offline", runnerOnline: false, intent, eff };
+  }
+
+  // Prefer intent for UX messaging
+  if (intent === "paused" || eff === "paused") return { kind: "paused", runnerOnline, intent, eff };
+  if (intent === "running" || eff === "running") return { kind: "running", runnerOnline, intent, eff };
+  if (eff === "waiting_for_market") return { kind: "waiting", runnerOnline, intent, eff };
+  if (eff === "starting") return { kind: "starting", runnerOnline, intent, eff };
+  if (intent === "disarmed" || eff === "disarmed") return { kind: "disarmed", runnerOnline, intent, eff };
+  if (intent === "armed" || eff === "armed") return { kind: "armed", runnerOnline, intent, eff };
+
+  return { kind: "idle", runnerOnline, intent, eff };
+}
+
+// What counts as "bot active enough to show bot-driven content"
+function isBotActiveForUi(ui) {
+  if (!ui) return false;
+  if (ui.kind === "no_bot") return false;
+  if (ui.kind === "offline") return false;
+  // paused still counts as active (you want to see last snapshots)
+  return true;
+}
+
+function BotIntentsCard({ botUi, botId, onPickSymbol }) {
   const [items, setItems] = useState([]);
   const [ts, setTs] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -231,26 +324,25 @@ function BotIntentsCard({ botRunning, botId, onPickSymbol }) {
       setTs(Number(data?.ts) || 0);
     } catch (e) {
       setErr(String(e?.message || e));
-      setItems([]);
-      setTs(0);
+      // keep last snapshot if we had one; don’t hard-wipe unless bot changes
     } finally {
       setBusy(false);
     }
   }
 
-  // Poll when bot is running/armed (runner alive)
   useEffect(() => {
     const id = String(botId || "").trim();
 
-    if (!botRunning || !id) {
+    // ✅ Only clear if NO bot selected
+    if (!id) {
       setItems([]);
       setTs(0);
       setErr("");
-      lastBotIdRef.current = id;
+      lastBotIdRef.current = "";
       return;
     }
 
-    // If bot changes, clear old intents immediately
+    // ✅ If bot changes, clear
     if (lastBotIdRef.current && lastBotIdRef.current !== id) {
       setItems([]);
       setTs(0);
@@ -258,31 +350,41 @@ function BotIntentsCard({ botRunning, botId, onPickSymbol }) {
     }
     lastBotIdRef.current = id;
 
+    // ✅ Always allow refresh for selected bot (even paused/offline) to show last snapshot
     refresh();
+
+    // poll only when bot is "active enough" (running/paused/waiting/starting etc.)
+    const shouldPoll = isBotActiveForUi(botUi);
+    if (!shouldPoll) return;
+
     const t = setInterval(() => refresh(), 7000);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [botRunning, botId]);
+  }, [botId, botUi?.kind]);
+
+  const headerLine = useMemo(() => {
+    if (!botId) return "Select a bot to view intents.";
+    if (!botUi || botUi.kind === "no_bot") return "Select a bot to view intents.";
+    if (botUi.kind === "offline") return `Runner offline — showing last known intents for ${botId}.`;
+    if (botUi.kind === "paused") return `Bot paused — showing last intents for ${botId}.`;
+    if (botUi.kind === "waiting") return `Waiting for market — latest intents for ${botId}.`;
+    if (botUi.kind === "starting") return `Starting — latest intents for ${botId}.`;
+    if (botUi.kind === "disarmed") return `Bot disarmed — last intents (if any) for ${botId}.`;
+    return `Showing latest 10 from ${botId}.`;
+  }, [botId, botUi]);
 
   return (
     <CardShell title="Bot Intents" className="tpSpan2">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 }}>
         <div style={{ fontSize: 12, opacity: 0.75, fontWeight: 800 }}>
-          {botRunning ? (
-            <>
-              Showing latest 10 from <span className="mono">{botId || "bot"}</span> · Updated{" "}
-              <span className="mono">{ts ? fmtTime(ts) : "—"}</span>
-            </>
-          ) : (
-            "Start a bot to generate intents."
-          )}
+          {headerLine} · Updated <span className="mono">{ts ? fmtTime(ts) : "—"}</span>
         </div>
 
         <button
           className="tpTab"
           type="button"
           onClick={refresh}
-          disabled={!botRunning || !botId || busy}
+          disabled={!botId || busy}
           style={{ height: 34 }}
         >
           Refresh
@@ -321,21 +423,15 @@ function BotIntentsCard({ botRunning, botId, onPickSymbol }) {
                 symbol={`${sym} · ${side}`}
                 score={score}
                 sub={sub}
-                onClick={
-                  onPickSymbol
-                    ? () => {
-                        onPickSymbol(sym);
-                      }
-                    : undefined
-                }
+                onClick={onPickSymbol ? () => onPickSymbol(sym) : undefined}
               />
             );
           })
         ) : (
           <div className="tpEmpty">
-            {botRunning
-              ? "No intents yet. (When market opens and bot logic submits intents, they show here.)"
-              : "No bot running."}
+            {!botId
+              ? "Select a bot to view intents."
+              : "No intents yet. (When bot logic submits intents, they show here.)"}
           </div>
         )}
       </div>
@@ -347,25 +443,78 @@ function BotIntentsCard({ botRunning, botId, onPickSymbol }) {
   );
 }
 
+/* ----------------------------
+   Timeframe helpers (days)
+---------------------------- */
+
+function parseDateLoose(v) {
+  const s = String(v || "").trim();
+  if (!s) return null;
+  const d = new Date(s);
+  return Number.isFinite(d?.getTime?.()) ? d : null;
+}
+
+// inclusive days: Jan 28 -> Feb 1 = 5 days
+function computeInclusiveDays(start, end) {
+  const a = parseDateLoose(start);
+  const b = parseDateLoose(end);
+  if (!a || !b) return null;
+
+  const ms = b.getTime() - a.getTime();
+  const days = Math.floor(ms / 86400000) + 1;
+  if (!Number.isFinite(days) || days <= 0) return null;
+  return days;
+}
+
+function computeRangeDaysLabel(timeframe) {
+  // default “Past week” if timeframe is null/empty
+  if (!timeframe) return { days: 7, label: "7 days" };
+
+  const start = timeframe?.start ?? timeframe?.from ?? timeframe?.date_from ?? timeframe?.time_min;
+  const end = timeframe?.end ?? timeframe?.to ?? timeframe?.date_to ?? timeframe?.time_max;
+
+  const d = computeInclusiveDays(start, end);
+  if (d !== null) return { days: d, label: `${d} day${d === 1 ? "" : "s"}` };
+
+  // fallback if we can’t parse
+  return { days: null, label: "—" };
+}
+
 export default function TradePerformancePanel({
   data,
-  onChangeRange,
   opportunities = null,
   leaders = [],
   onPickSymbol,
 
-  // ✅ new controlled props from DashboardPage
-  activeBot = null,
+  timeframe = null,
+  onTimeframeChange,
+
+  activeBot = null, // initial selection from parent (optional)
+  botStatuses = null,
   onStartBot,
   onStopBot,
 }) {
+  /* ✅ SOURCE OF TRUTH:
+     TradePerformancePanel owns the selected bot id.
+  */
+  const [selectedBotId, setSelectedBotId] = useState(() => String(activeBot?.id || "").trim());
+
+  // If parent changes activeBot (route change / reload), sync it in.
+  useEffect(() => {
+    const next = String(activeBot?.id || "").trim();
+    if (next && next !== selectedBotId) setSelectedBotId(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeBot?.id]);
+
+  const botId = String(selectedBotId || "").trim();
+
+  const botUi = useMemo(() => deriveBotUiState(botId, botStatuses), [botId, botStatuses]);
+  const botActiveForUi = useMemo(() => isBotActiveForUi(botUi), [botUi]);
+
   const oppStocks = useMemo(() => {
     const raw = Array.isArray(opportunities?.stocks) ? opportunities.stocks : [];
     return raw
-      .map((x) => ({
-        ...x,
-        symbol: String(x?.symbol || "").toUpperCase().trim(),
-      }))
+      .map((x) => ({ ...x, symbol: String(x?.symbol || "").toUpperCase().trim() }))
       .filter((x) => x.symbol && isAlphaOnlySymbol(x.symbol));
   }, [opportunities]);
 
@@ -437,53 +586,71 @@ export default function TradePerformancePanel({
     return out.slice(0, 6);
   }, [leadersClean, oppStocks]);
 
-  // NOTE: dashboard gives { running, name/state/message... }
-  const botStateRaw = String(activeBot?.state || "").trim().toLowerCase();
-  const botRunning = Boolean(
-    activeBot?.running ||
-      botStateRaw === "running" ||
-      botStateRaw === "waiting_for_market" ||
-      botStateRaw === "starting" ||
-      botStateRaw === "paused"
-  );
-
-  const botName = String(activeBot?.name || "").trim();
-
   const safe = data || { start: "", end: "", trades: [] };
   const trades = Array.isArray(safe.trades) ? safe.trades : [];
   const winRate = trades.length ? (trades.filter((t) => n(t.pnl) > 0).length / trades.length) * 100 : 0;
 
-  // Bot Status card label/sub/tone based on effective state
+  // ✅ Single coherent Bot Status card
   const botStatusValue =
-    botStateRaw === "running"
-      ? "LIVE"
-      : botStateRaw === "waiting_for_market"
-      ? "WAITING"
-      : botStateRaw === "starting"
-      ? "STARTING"
-      : botStateRaw === "paused"
+    botUi.kind === "no_bot"
+      ? "—"
+      : botUi.kind === "offline"
+      ? "OFFLINE"
+      : botUi.kind === "paused"
       ? "PAUSED"
-      : botRunning
+      : botUi.kind === "waiting"
+      ? "WAITING"
+      : botUi.kind === "starting"
+      ? "STARTING"
+      : botUi.kind === "running"
       ? "LIVE"
-      : "OFF";
+      : botUi.kind === "disarmed"
+      ? "DISARMED"
+      : botUi.kind === "armed"
+      ? "ARMED"
+      : "IDLE";
 
   const botStatusSub =
-    botStateRaw === "waiting_for_market"
-      ? activeBot?.message || "Market closed"
-      : botStateRaw === "starting"
+    botUi.kind === "no_bot"
+      ? "Select a bot to enable bot-aligned picks."
+      : botUi.kind === "offline"
+      ? "Runner offline — no heartbeat."
+      : botUi.kind === "paused"
+      ? "Paused by user."
+      : botUi.kind === "waiting"
+      ? "Waiting for market open."
+      : botUi.kind === "starting"
       ? "Booting up…"
-      : botStateRaw === "paused"
-      ? activeBot?.message || "Manually paused"
-      : botRunning
+      : botUi.kind === "running"
       ? "Using bot alignment"
-      : "Leaders-only (Phase 1)";
+      : botUi.kind === "disarmed"
+      ? "Bot disabled"
+      : botUi.kind === "armed"
+      ? "Ready to run"
+      : "Standing by";
 
   const botStatusTone =
-    botStateRaw === "running" || botStateRaw === "waiting_for_market" || botStateRaw === "starting"
+    botUi.kind === "running" || botUi.kind === "waiting" || botUi.kind === "starting" || botUi.kind === "paused"
       ? "pos"
-      : botRunning
-      ? "pos"
-      : "neg";
+      : botUi.kind === "offline"
+      ? "neg"
+      : "";
+
+  // ✅ correct subtitle: ALWAYS refer to selected botId
+  const subtitle = useMemo(() => {
+    if (!botId) return "No bot selected — choose a bot to enable bot-aligned picks.";
+    if (botUi.kind === "paused") return `Bot paused: ${botId}`;
+    if (botUi.kind === "running") return `Bot live: ${botId}`;
+    if (botUi.kind === "waiting") return `Bot waiting: ${botId}`;
+    if (botUi.kind === "starting") return `Bot starting: ${botId}`;
+    if (botUi.kind === "offline") return `Bot offline: ${botId}`;
+    if (botUi.kind === "disarmed") return `Bot disarmed: ${botId}`;
+    return `Bot: ${botId}`;
+  }, [botId, botUi.kind]);
+
+  const rangeDays = useMemo(() => computeRangeDaysLabel(timeframe), [timeframe]);
+
+  const hasBotOpportunities = oppStocks.length > 0;
 
   return (
     <section className="tpPanel">
@@ -493,36 +660,30 @@ export default function TradePerformancePanel({
             <h2 className="tpTitleText">Opportunities</h2>
           </div>
 
-          <p className="tpSubtitle">
-            {botRunning
-              ? `Bot active: ${botName || "Unknown bot"}`
-              : "No bot running — start a bot to unlock bot-aligned picks."}
-          </p>
+          <p className="tpSubtitle">{subtitle}</p>
         </div>
 
-        <div className="tpTabs">
-          {["Week", "Month", "Year"].map((p) => (
-            <button key={p} className="tpTab" type="button" onClick={() => onChangeRange?.(p)}>
-              {p}
-            </button>
-          ))}
+        <div className="tpTabs tpTimeframeStack">
+          <TimeframeCard variant="inline" value={timeframe} onChange={onTimeframeChange} />
+
+          <div className="tpActiveRangeDays" aria-label="Active range days">
+            Active range: <strong className="tpActiveRangeStrong">{rangeDays?.label || "—"}</strong>
+          </div>
         </div>
       </div>
 
       <div className="tpLeft">
         <div className="tpLeftGrid">
-          {/* ✅ IMPORTANT: no CardShell wrapper here (prevents card-in-card) */}
           <div className="tpSpan2">
             <BotControlCard
-              activeBotId={botName || undefined}
-              onActiveBotChange={() => {}}
+              activeBotId={botId || undefined}
+              onActiveBotChange={(nextId) => setSelectedBotId(String(nextId || "").trim())}
               onStartBot={onStartBot}
               onStopBot={onStopBot}
             />
           </div>
 
           <BigStat label="Bot Status" value={botStatusValue} sub={botStatusSub} tone={botStatusTone} />
-
           <BigStat label="Trades Context" value={`${trades.length}`} sub={`Win rate ${fmtPct(winRate)}`} />
 
           <div className="tpMiniGrid">
@@ -531,15 +692,23 @@ export default function TradePerformancePanel({
             <MiniStat label="Internal Picks" value={String(oppStocks.length)} />
           </div>
 
-          {/* ✅ NEW: visible bot value */}
-          <BotIntentsCard botRunning={botRunning} botId={botName} onPickSymbol={onPickSymbol} />
+          <BotIntentsCard botUi={botUi} botId={botId} onPickSymbol={onPickSymbol} />
 
           <CardShell title="Top Day Trades (Opportunity)" className="tpSpan2">
             <div className="tpOppGrid">
               <OpportunityTable
                 title="Bot-aligned (leaders ∩ bot)"
-                rows={botRunning ? aligned : []}
-                emptyMessage={botRunning ? "No overlap yet." : "Start a bot to generate aligned picks."}
+                // ✅ show aligned if we have bot opportunities, even if paused
+                rows={hasBotOpportunities ? aligned : []}
+                emptyMessage={
+                  !botId
+                    ? "Select a bot to enable aligned picks."
+                    : !hasBotOpportunities
+                    ? "No bot opportunities yet."
+                    : botUi.kind === "offline"
+                    ? "Runner offline — last alignment may be stale."
+                    : "No overlap yet."
+                }
                 onPickSymbol={onPickSymbol}
               />
 
@@ -566,7 +735,6 @@ export default function TradePerformancePanel({
             <div className="tpOppFootnote">Hover any pill to see full details. Prices are USD/share.</div>
           </CardShell>
 
-          {/* ✅ Tiny "Connected brokers" card */}
           <div className="tpSpan2" style={{ marginTop: 12 }}>
             <ConnectedBrokersMiniCard />
           </div>

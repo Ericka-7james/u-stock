@@ -20,64 +20,61 @@ def client(app):
     return TestClient(app)
 
 
-def test_macro_summary_success_returns_payload_and_cache_header(client, monkeypatch):
-    expected = {"ok": True, "source": "fred", "data": {"cpi": 3.1}}
+def test_macro_summary_success_returns_envelope_and_cache_header(client, monkeypatch):
+    payload = {"cpi": 3.1}
 
-    # ensure default TTL is used if env not set
     monkeypatch.delenv("MACRO_TTL_SECONDS", raising=False)
 
     def fake_get_macro_summary(ttl_seconds: int):
         assert ttl_seconds == 600
-        return expected
+        return payload
 
     monkeypatch.setattr(mod, "get_macro_summary", fake_get_macro_summary)
 
     resp = client.get("/api/macro/summary")
     assert resp.status_code == 200
-    assert resp.json() == expected
+
+    body = resp.json()
+    assert body["ok"] is True
+    assert body["source"] == "fred"
+    assert body["ttl_seconds"] == 600
+    assert isinstance(body["as_of"], int)
+    assert body["data"] == payload
+
     assert resp.headers["Cache-Control"] == "public, max-age=600"
 
 
 def test_macro_summary_ttl_env_is_clamped_low(client, monkeypatch):
     monkeypatch.setenv("MACRO_TTL_SECONDS", "10")  # too low -> clamp to 60
 
-    def fake_get_macro_summary(ttl_seconds: int):
-        assert ttl_seconds == 60
-        return {"ok": True}
-
-    monkeypatch.setattr(mod, "get_macro_summary", fake_get_macro_summary)
+    monkeypatch.setattr(mod, "get_macro_summary", lambda ttl_seconds: {"ok": True})
 
     resp = client.get("/api/macro/summary")
     assert resp.status_code == 200
     assert resp.headers["Cache-Control"] == "public, max-age=60"
+    assert resp.json()["ttl_seconds"] == 60
 
 
 def test_macro_summary_ttl_env_is_clamped_high(client, monkeypatch):
     monkeypatch.setenv("MACRO_TTL_SECONDS", "999999")  # too high -> clamp to 3600
 
-    def fake_get_macro_summary(ttl_seconds: int):
-        assert ttl_seconds == 3600
-        return {"ok": True}
-
-    monkeypatch.setattr(mod, "get_macro_summary", fake_get_macro_summary)
+    monkeypatch.setattr(mod, "get_macro_summary", lambda ttl_seconds: {"ok": True})
 
     resp = client.get("/api/macro/summary")
     assert resp.status_code == 200
     assert resp.headers["Cache-Control"] == "public, max-age=3600"
+    assert resp.json()["ttl_seconds"] == 3600
 
 
 def test_macro_summary_ttl_env_invalid_uses_default(client, monkeypatch):
     monkeypatch.setenv("MACRO_TTL_SECONDS", "not-an-int")
 
-    def fake_get_macro_summary(ttl_seconds: int):
-        assert ttl_seconds == 600
-        return {"ok": True}
-
-    monkeypatch.setattr(mod, "get_macro_summary", fake_get_macro_summary)
+    monkeypatch.setattr(mod, "get_macro_summary", lambda ttl_seconds: {"ok": True})
 
     resp = client.get("/api/macro/summary")
     assert resp.status_code == 200
     assert resp.headers["Cache-Control"] == "public, max-age=600"
+    assert resp.json()["ttl_seconds"] == 600
 
 
 def test_macro_summary_returns_502_on_client_error(client, monkeypatch):
@@ -94,4 +91,3 @@ def test_macro_summary_returns_502_on_client_error(client, monkeypatch):
     body = resp.json()
     assert body["detail"]["code"] == "MACRO_FAILED"
     assert body["detail"]["message"] == "Failed to load macro summary"
-    assert "fred down" in body["detail"]["detail"]

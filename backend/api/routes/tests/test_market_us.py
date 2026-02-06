@@ -1,9 +1,8 @@
 # backend/api/routes/tests/test_market_us.py
 from __future__ import annotations
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
-from fastapi import HTTPException
 import pytest
 
 import api.routes.market_us as mod
@@ -12,49 +11,6 @@ import api.routes.market_us as mod
 # -------------------------
 # Fakes
 # -------------------------
-class _ExecResult:
-    def __init__(self, data=None):
-        self.data = data
-
-
-class FakeQuery:
-    def __init__(self, table, sb):
-        self._table = table
-        self._sb = sb
-        self._select_cols = None
-        self._filters = []
-        self._limit = None
-
-    def select(self, cols):
-        self._select_cols = cols
-        return self
-
-    def eq(self, k, v):
-        self._filters.append((k, v))
-        return self
-
-    def limit(self, n):
-        self._limit = n
-        return self
-
-    def execute(self):
-        self._sb.calls.append(("execute", self._table, self._select_cols, tuple(self._filters), self._limit))
-        if self._sb.fail_execute:
-            raise RuntimeError("db down")
-        return _ExecResult(data=self._sb.data)
-
-
-class FakeSupabase:
-    def __init__(self):
-        self.calls = []
-        self.fail_execute = False
-        self.data = []
-
-    def table(self, name):
-        self.calls.append(("table", name))
-        return FakeQuery(name, self)
-
-
 class FakeResp:
     def __init__(self, status_code=200, payload=None, text=""):
         self.status_code = status_code
@@ -86,29 +42,12 @@ def _clear_cache():
 
 
 def test_market_us_success_normalizes_and_returns_items(client, monkeypatch):
-    sb = FakeSupabase()
-    sb.data = [
-        {
-            "api_key_enc": "ENC_K",
-            "api_secret_enc": "ENC_S",
-            "mode": "paper",
-            "status": "connected",
-        }
-    ]
-
-    monkeypatch.setattr(mod, "require_user", lambda req, resp: {"id": "user-1"})
-    monkeypatch.setattr(mod, "get_supabase_service", lambda: sb)
-    monkeypatch.setattr(mod, "decrypt_secret", lambda s: "DEC(" + str(s) + ")")
+    monkeypatch.setattr(mod, "get_user_alpaca_creds", lambda req, resp: ("user-1", "K", "S", "paper"))
 
     payload = {
-        "gainers": [
-            {"symbol": "aapl", "change_pct": 0.0123, "last": 110, "prev_close": 100},
-        ],
-        "losers": [
-            {"ticker": "tsla", "changePct": 1.5, "last_price": 210, "prevClose": 200},
-        ],
+        "gainers": [{"symbol": "aapl", "change_pct": 0.0123, "last": 110, "prev_close": 100}],
+        "losers": [{"ticker": "tsla", "changePct": 1.5, "last_price": 210, "prevClose": 200}],
     }
-
     monkeypatch.setattr(mod, "_safe_get", lambda url, headers: FakeResp(200, payload))
 
     resp = client.get("/api/market/leaders", params={"market": "stocks", "direction": "both", "limit": 8, "cache_bust": 1})
@@ -122,13 +61,12 @@ def test_market_us_success_normalizes_and_returns_items(client, monkeypatch):
     assert body["mode"] == "paper"
     assert "asOf" in body
 
-    # Should contain both items, normalized
     items = body["items"]
     assert len(items) == 2
 
     assert items[0]["symbol"] == "AAPL"
     assert items[0]["direction"] == "up"
-    assert items[0]["changePct"] == pytest.approx(1.23)  # fraction -> percent points
+    assert items[0]["changePct"] == pytest.approx(1.23)
     assert items[0]["last"] == 110.0
     assert items[0]["prevClose"] == 100.0
 
@@ -138,28 +76,11 @@ def test_market_us_success_normalizes_and_returns_items(client, monkeypatch):
     assert items[1]["last"] == 210.0
     assert items[1]["prevClose"] == 200.0
 
-    # Ensure integrations table was queried correctly
-    assert ("table", "integrations") in sb.calls
-    assert any(
-        c[0] == "execute"
-        and ("user_id", "user-1") in c[3]
-        and ("provider", "alpaca") in c[3]
-        for c in sb.calls
-    )
-
 
 def test_market_us_direction_up_limits_to_gainers(client, monkeypatch):
-    sb = FakeSupabase()
-    sb.data = [{"api_key_enc": "K", "api_secret_enc": "S", "mode": "paper", "status": "connected"}]
+    monkeypatch.setattr(mod, "get_user_alpaca_creds", lambda req, resp: ("user-1", "K", "S", "paper"))
 
-    monkeypatch.setattr(mod, "require_user", lambda req, resp: {"id": "user-1"})
-    monkeypatch.setattr(mod, "get_supabase_service", lambda: sb)
-    monkeypatch.setattr(mod, "decrypt_secret", lambda s: "DEC")
-
-    payload = {
-        "gainers": [{"symbol": "AAPL", "change_pct": 0.01}],
-        "losers": [{"symbol": "TSLA", "change_pct": 0.99}],
-    }
+    payload = {"gainers": [{"symbol": "AAPL", "change_pct": 0.01}], "losers": [{"symbol": "TSLA", "change_pct": 0.99}]}
     monkeypatch.setattr(mod, "_safe_get", lambda url, headers: FakeResp(200, payload))
 
     resp = client.get("/api/market/leaders", params={"direction": "up", "limit": 1, "cache_bust": 1})
@@ -171,11 +92,10 @@ def test_market_us_direction_up_limits_to_gainers(client, monkeypatch):
 
 
 def test_market_us_returns_400_when_not_connected(client, monkeypatch):
-    sb = FakeSupabase()
-    sb.data = []  # no row
+    def boom(req, resp):
+        raise HTTPException(status_code=400, detail={"code": "ALPACA_NOT_CONNECTED"})
 
-    monkeypatch.setattr(mod, "require_user", lambda req, resp: {"id": "user-1"})
-    monkeypatch.setattr(mod, "get_supabase_service", lambda: sb)
+    monkeypatch.setattr(mod, "get_user_alpaca_creds", boom)
 
     resp = client.get("/api/market/leaders", params={"cache_bust": 1})
     assert resp.status_code == 400
@@ -183,13 +103,7 @@ def test_market_us_returns_400_when_not_connected(client, monkeypatch):
 
 
 def test_market_us_returns_401_when_alpaca_rejects_keys(client, monkeypatch):
-    sb = FakeSupabase()
-    sb.data = [{"api_key_enc": "K", "api_secret_enc": "S", "mode": "paper", "status": "connected"}]
-
-    monkeypatch.setattr(mod, "require_user", lambda req, resp: {"id": "user-1"})
-    monkeypatch.setattr(mod, "get_supabase_service", lambda: sb)
-    monkeypatch.setattr(mod, "decrypt_secret", lambda s: "DEC")
-
+    monkeypatch.setattr(mod, "get_user_alpaca_creds", lambda req, resp: ("user-1", "K", "S", "paper"))
     monkeypatch.setattr(mod, "_safe_get", lambda url, headers: FakeResp(401, {}, text="nope"))
 
     resp = client.get("/api/market/leaders", params={"cache_bust": 1})
@@ -198,13 +112,7 @@ def test_market_us_returns_401_when_alpaca_rejects_keys(client, monkeypatch):
 
 
 def test_market_us_returns_502_on_404_source_not_found(client, monkeypatch):
-    sb = FakeSupabase()
-    sb.data = [{"api_key_enc": "K", "api_secret_enc": "S", "mode": "paper", "status": "connected"}]
-
-    monkeypatch.setattr(mod, "require_user", lambda req, resp: {"id": "user-1"})
-    monkeypatch.setattr(mod, "get_supabase_service", lambda: sb)
-    monkeypatch.setattr(mod, "decrypt_secret", lambda s: "DEC")
-
+    monkeypatch.setattr(mod, "get_user_alpaca_creds", lambda req, resp: ("user-1", "K", "S", "paper"))
     monkeypatch.setattr(mod, "_safe_get", lambda url, headers: FakeResp(404, {}, text="missing"))
 
     resp = client.get("/api/market/leaders", params={"cache_bust": 1})
@@ -213,12 +121,7 @@ def test_market_us_returns_502_on_404_source_not_found(client, monkeypatch):
 
 
 def test_market_us_returns_502_on_network_error(client, monkeypatch):
-    sb = FakeSupabase()
-    sb.data = [{"api_key_enc": "K", "api_secret_enc": "S", "mode": "paper", "status": "connected"}]
-
-    monkeypatch.setattr(mod, "require_user", lambda req, resp: {"id": "user-1"})
-    monkeypatch.setattr(mod, "get_supabase_service", lambda: sb)
-    monkeypatch.setattr(mod, "decrypt_secret", lambda s: "DEC")
+    monkeypatch.setattr(mod, "get_user_alpaca_creds", lambda req, resp: ("user-1", "K", "S", "paper"))
 
     def boom(url, headers):
         raise HTTPException(status_code=502, detail={"code": "ALPACA_NETWORK_ERROR"})
@@ -231,12 +134,6 @@ def test_market_us_returns_502_on_network_error(client, monkeypatch):
 
 
 def test_market_us_caches_per_user(client, monkeypatch):
-    sb = FakeSupabase()
-    sb.data = [{"api_key_enc": "K", "api_secret_enc": "S", "mode": "paper", "status": "connected"}]
-
-    monkeypatch.setattr(mod, "get_supabase_service", lambda: sb)
-    monkeypatch.setattr(mod, "decrypt_secret", lambda s: "DEC")
-
     calls = {"safe_get": 0}
 
     def fake_safe_get(url, headers):
@@ -245,19 +142,23 @@ def test_market_us_caches_per_user(client, monkeypatch):
 
     monkeypatch.setattr(mod, "_safe_get", fake_safe_get)
 
+    def fake_creds(req, resp):
+        user_id = req.headers.get("x-user", "user-1")
+        return (user_id, "K", "S", "paper")
+
+    monkeypatch.setattr(mod, "get_user_alpaca_creds", fake_creds)
+
     # user-1 caches
-    monkeypatch.setattr(mod, "require_user", lambda req, resp: {"id": "user-1"})
-    r1 = client.get("/api/market/leaders", params={"direction": "up"})
+    r1 = client.get("/api/market/leaders", params={"direction": "up"}, headers={"x-user": "user-1"})
     assert r1.status_code == 200
     assert calls["safe_get"] == 1
 
     # user-1 should hit cache
-    r2 = client.get("/api/market/leaders", params={"direction": "up"})
+    r2 = client.get("/api/market/leaders", params={"direction": "up"}, headers={"x-user": "user-1"})
     assert r2.status_code == 200
     assert calls["safe_get"] == 1
 
     # user-2 should NOT hit user-1 cache
-    monkeypatch.setattr(mod, "require_user", lambda req, resp: {"id": "user-2"})
-    r3 = client.get("/api/market/leaders", params={"direction": "up"})
+    r3 = client.get("/api/market/leaders", params={"direction": "up"}, headers={"x-user": "user-2"})
     assert r3.status_code == 200
     assert calls["safe_get"] == 2

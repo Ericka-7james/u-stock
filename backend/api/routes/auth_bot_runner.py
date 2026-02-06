@@ -1,34 +1,56 @@
-# api/routes/auth_bot_runner.py
 from __future__ import annotations
 
-from fastapi import APIRouter, Request, Response, HTTPException
+import os
+import time
 
-from api.deps import require_user
-from api.core.errors import http_error
-from api.security.bot_runner_token import load_bot_runner_config, mint_bot_runner_token
+from fastapi import APIRouter, HTTPException, Request
+from pydantic import BaseModel, Field
 
-router = APIRouter()
+import jwt
+
+router = APIRouter(prefix="/api/runner", tags=["runner-auth"])
 
 
-@router.post("/auth/bot-runner-token")
-def create_bot_runner_token(request: Request, response: Response):
-    """
-    Uses cookie session auth (require_user) to mint a short-lived Bearer token
-    for local bot runner usage.
-    """
-    u = require_user(request, response)
-    user_id = u["id"]
+def _env(name: str, default: str = "") -> str:
+    return str(os.getenv(name, default) or "").strip()
 
-    try:
-        cfg = load_bot_runner_config()
-        return mint_bot_runner_token(user_id, cfg)
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise http_error(
-            500,
-            "BOT_RUNNER_TOKEN_MINT_FAILED",
-            "Could not mint bot runner token.",
-            detail={"error": repr(e)},
-            hint="Check server logs and BOT_RUNNER_* env vars.",
-        )
+
+class RunnerTokenIn(BaseModel):
+    runner_id: str = Field(..., min_length=1, max_length=200)
+
+
+class RunnerTokenOut(BaseModel):
+    token: str
+    expires_in: int
+
+
+@router.post("/token", response_model=RunnerTokenOut)
+def mint_runner_token(payload: RunnerTokenIn, request: Request) -> RunnerTokenOut:
+    expected = _env("RUNNER_SHARED_SECRET")
+    if not expected:
+        raise HTTPException(status_code=500, detail="RUNNER_SHARED_SECRET not configured")
+
+    got = (request.headers.get("X-Runner-Secret") or "").strip()
+    if not got or got != expected:
+        raise HTTPException(status_code=401, detail="Runner not authenticated")
+
+    signing_key = _env("RUNNER_JWT_SIGNING_KEY")
+    if not signing_key:
+        raise HTTPException(status_code=500, detail="RUNNER_JWT_SIGNING_KEY not configured")
+
+    issuer = _env("RUNNER_JWT_ISSUER", "ustock-backend")
+    audience = _env("RUNNER_JWT_AUDIENCE", "ustock-runner")
+    ttl = int(_env("RUNNER_JWT_TTL_SECONDS", "600") or 600)
+
+    now = int(time.time())
+    claims = {
+        "sub": str(payload.runner_id).strip(),
+        "iss": issuer,
+        "aud": audience,
+        "iat": now,
+        "exp": now + ttl,
+        "scope": "runner",
+    }
+
+    token = jwt.encode(claims, signing_key, algorithm="HS256")
+    return RunnerTokenOut(token=str(token), expires_in=int(ttl))
