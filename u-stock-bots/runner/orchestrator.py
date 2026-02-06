@@ -1,6 +1,14 @@
 # u-stock-bots/runner/orchestrator.py
 from __future__ import annotations
 
+# Load .env early (so BOT_ID / LOOP_SECONDS read correct values)
+try:
+    from dotenv import load_dotenv  # type: ignore
+
+    load_dotenv()
+except Exception:
+    pass
+
 import os
 import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -12,7 +20,15 @@ from runner.supabase import upload_transaction_events
 from runner import api_client
 from runner.config_loader import build_bot_cfg
 from runner.events import attach_event_id, merge_events, new_event_id, now_iso
-from runner.heartbeat import HeartbeatState, MarketClosed, gate_market_hours, send_paused, safe_heartbeat, should_heartbeat, now_epoch
+from runner.heartbeat import (
+    HeartbeatState,
+    MarketClosed,
+    gate_market_hours,
+    send_paused,
+    safe_heartbeat,
+    should_heartbeat,
+    now_epoch,
+)
 from runner.risk import RiskState, filter_intents_with_gates, record_orders_placed
 from runner.scanner import attach_scanner_context
 from runner.strategy_loader import compute_bot_output
@@ -61,13 +77,13 @@ def run_once(api: UStockAPI, *, risk_state: RiskState, hb_state: HeartbeatState)
     status_mode = _normalize_mode(status.get("mode") or "paper")
 
     if intent != "running":
-        send_paused(api, hb_state, bot_id=BOT_ID, status_mode=status_mode)
+        send_paused(api, hb_state, bot_id=BOT_ID, status_mode=status_mode, user_id=user_id or None)
         return
 
     mode, status_cfg = _extract_mode_cfg(status)
 
     if RESPECT_MARKET_HOURS:
-        gate_market_hours(api, hb_state, bot_id=BOT_ID, mode=mode)
+        gate_market_hours(api, hb_state, bot_id=BOT_ID, mode=mode, user_id=user_id or None)
 
     decision_event_id = new_event_id()
 
@@ -77,7 +93,11 @@ def run_once(api: UStockAPI, *, risk_state: RiskState, hb_state: HeartbeatState)
 
     # ✅ build final cfg (env baseline -> status overrides -> scanner injected)
     scanner_ctx = status_cfg.get("scanner") if isinstance(status_cfg, dict) else None
-    cfg = build_bot_cfg(bot_id=BOT_ID, status_cfg=status_cfg, scanner_ctx=scanner_ctx if isinstance(scanner_ctx, dict) else None)
+    cfg = build_bot_cfg(
+        bot_id=BOT_ID,
+        status_cfg=status_cfg,
+        scanner_ctx=scanner_ctx if isinstance(scanner_ctx, dict) else None,
+    )
 
     # Strategy (generic)
     result = compute_bot_output(api, BOT_ID, cfg)
@@ -126,6 +146,7 @@ def run_once(api: UStockAPI, *, risk_state: RiskState, hb_state: HeartbeatState)
         if should_heartbeat(hb_state, sig, now=now):
             safe_heartbeat(
                 api,
+                user_id=user_id or None,
                 bot_id=BOT_ID,
                 intent="running",
                 effective_state="running",
@@ -155,7 +176,7 @@ def run_once(api: UStockAPI, *, risk_state: RiskState, hb_state: HeartbeatState)
     if user_id:
         upload_transaction_events(user_id, BOT_ID, mode, combined)
         try:
-            api_client.sync_trade_fills(api, user_id=user_id, bot_id=BOT_ID, mode=mode)
+            api_client.sync_trade_fills(api, bot_id=BOT_ID, mode=mode)
         except Exception:
             pass
 
@@ -164,6 +185,7 @@ def run_once(api: UStockAPI, *, risk_state: RiskState, hb_state: HeartbeatState)
     if should_heartbeat(hb_state, sig, now=now):
         safe_heartbeat(
             api,
+            user_id=user_id or None,
             bot_id=BOT_ID,
             intent="running",
             effective_state="running",
@@ -202,12 +224,14 @@ def main(*, max_loops: Optional[int] = None, sleep_fn: Callable[[float], None] =
                 continue
 
             except Exception as e:
+                # If we don't have user_id here, safe_heartbeat() will skip to avoid 400 spam.
                 mode = "paper"
                 now = now_epoch()
                 sig = f"error|{mode}|runner_exception|{type(e).__name__}"
                 if should_heartbeat(hb_state, sig, now=now):
                     safe_heartbeat(
                         api,
+                        user_id=None,
                         bot_id=BOT_ID,
                         intent="running",
                         effective_state="error",
