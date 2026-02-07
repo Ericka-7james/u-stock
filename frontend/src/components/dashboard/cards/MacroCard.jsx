@@ -25,11 +25,7 @@ function safeRiskClass(risk) {
 
 function RiskPill({ risk }) {
   const cls = useMemo(() => safeRiskClass(risk), [risk]);
-  return (
-    <span className={`macro-pill macro-pill--${cls}`}>
-      {risk || "Unknown"}
-    </span>
-  );
+  return <span className={`macro-pill macro-pill--${cls}`}>{risk || "Unknown"}</span>;
 }
 
 async function safeReadJson(res) {
@@ -42,9 +38,87 @@ async function safeReadJson(res) {
   }
 }
 
+// Backend envelope: { ok, as_of, source, ttl_seconds, data: {...} }
+function normalizeMacroEnvelope(json) {
+  if (!json || typeof json !== "object") return null;
+
+  const data = json?.data && typeof json.data === "object" ? json.data : null;
+  if (!data) return null;
+
+  // Support a few likely shapes from fred_client.get_macro_summary():
+  // Preferred (what UI wants): data = { risk, rates:{fed_funds,ten_year}, inflation:{cpi_yoy}, labor:{unemployment} }
+  // Accept alternates: data may be flat or use common FRED series codes.
+  const rates = data.rates || data.rate || data.yields || {};
+  const inflation = data.inflation || data.prices || {};
+  const labor = data.labor || data.jobs || {};
+
+  const fedFunds =
+    rates.fed_funds ??
+    rates.fedFunds ??
+    rates.dff ??
+    rates.DFF ??
+    data.fed_funds ??
+    data.fedFunds ??
+    data.dff ??
+    data.DFF ??
+    null;
+
+  const tenYear =
+    rates.ten_year ??
+    rates.tenYear ??
+    rates.dgs10 ??
+    rates.DGS10 ??
+    data.ten_year ??
+    data.tenYear ??
+    data.dgs10 ??
+    data.DGS10 ??
+    null;
+
+  const cpiYoY =
+    inflation.cpi_yoy ??
+    inflation.cpiYoY ??
+    inflation.CPI_YOY ??
+    data.cpi_yoy ??
+    data.cpiYoY ??
+    data.CPI_YOY ??
+    null;
+
+  const unemployment =
+    labor.unemployment ??
+    labor.unrate ??
+    labor.UNRATE ??
+    data.unemployment ??
+    data.unrate ??
+    data.UNRATE ??
+    null;
+
+  const risk = data.risk ?? data.risk_signal ?? data.riskSignal ?? null;
+
+  return {
+    ok: Boolean(json?.ok),
+    as_of: json?.as_of ?? null,
+    source: json?.source ?? "fred",
+    ttl_seconds: json?.ttl_seconds ?? null,
+    data: {
+      risk,
+      rates: { fed_funds: fedFunds, ten_year: tenYear },
+      inflation: { cpi_yoy: cpiYoY },
+      labor: { unemployment },
+    },
+  };
+}
+
+function cacheLabelFromTtlSeconds(ttlSeconds) {
+  const s = Number(ttlSeconds);
+  if (!Number.isFinite(s) || s <= 0) return "cached 10m";
+  const m = Math.max(1, Math.round(s / 60));
+  return `cached ${m}m`;
+}
+
 export default function MacroCard() {
   const [data, setData] = useState(null);
   const [err, setErr] = useState("");
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -53,24 +127,37 @@ export default function MacroCard() {
     async function run() {
       try {
         setErr("");
+        setLoading(true);
 
         const res = await fetch("/api/macro/summary", {
           credentials: "include",
           signal: ctrl.signal,
+          headers: { Accept: "application/json" },
         });
 
         const json = await safeReadJson(res);
+
+        // Backend error detail is an object: { code, message }
         const detail =
+          json?.detail?.message ||
           json?.detail ||
           (res.ok ? null : `Failed to load macro (${res.status})`);
 
-        if (!res.ok) throw new Error(detail || "Failed to load macro");
+        if (!res.ok) throw new Error(typeof detail === "string" ? detail : "Failed to load macro");
 
-        if (alive) setData(json);
+        const normalized = normalizeMacroEnvelope(json);
+        if (!normalized) {
+          throw new Error("Macro payload missing expected envelope keys: { data, ttl_seconds, source }");
+        }
+
+        if (alive) setData(normalized);
       } catch (e) {
         if (!alive) return;
         if (e?.name === "AbortError") return;
         setErr(String(e?.message || e));
+      } finally {
+        if (!alive) return;
+        setLoading(false);
       }
     }
 
@@ -84,6 +171,9 @@ export default function MacroCard() {
     };
   }, []);
 
+  const risk = data?.data?.risk ?? null;
+  const ttlSeconds = data?.ttl_seconds ?? null;
+
   return (
     <div className="macro-card">
       <div className="macro-header">
@@ -91,40 +181,40 @@ export default function MacroCard() {
           <span>Macro</span>
 
           <HelpTooltip title="Macro help">
-            US macro snapshot (FRED): rates, inflation (CPI YoY), labor, and a
-            simple risk signal.
+            US macro snapshot (FRED): rates, inflation (CPI YoY), labor, and a simple risk signal.
           </HelpTooltip>
         </div>
 
-        <RiskPill risk={data?.risk} />
+        <RiskPill risk={risk} />
       </div>
 
       {err ? <div className="macro-error">{err}</div> : null}
+      {loading && !data ? <div className="macro-error" style={{ opacity: 0.7 }}>Loading…</div> : null}
 
       <div className="macro-grid">
         <div className="macro-metric">
           <div className="macro-label">Fed Funds (DFF)</div>
-          <div className="macro-value">{fmtRate(data?.rates?.fed_funds)}</div>
+          <div className="macro-value">{fmtRate(data?.data?.rates?.fed_funds)}</div>
         </div>
 
         <div className="macro-metric">
           <div className="macro-label">10Y Yield (DGS10)</div>
-          <div className="macro-value">{fmtRate(data?.rates?.ten_year)}</div>
+          <div className="macro-value">{fmtRate(data?.data?.rates?.ten_year)}</div>
         </div>
 
         <div className="macro-metric">
           <div className="macro-label">CPI YoY</div>
-          <div className="macro-value">{fmtPct(data?.inflation?.cpi_yoy)}</div>
+          <div className="macro-value">{fmtPct(data?.data?.inflation?.cpi_yoy)}</div>
         </div>
 
         <div className="macro-metric">
           <div className="macro-label">Unemployment (UNRATE)</div>
-          <div className="macro-value">{fmtPct(data?.labor?.unemployment)}</div>
+          <div className="macro-value">{fmtPct(data?.data?.labor?.unemployment)}</div>
         </div>
       </div>
 
       <div className="macro-footnote">
-        Source: {data?.source || "—"} · cached 10m
+        Source: {data?.source || "—"} · {cacheLabelFromTtlSeconds(ttlSeconds)}
       </div>
     </div>
   );
