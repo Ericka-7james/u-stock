@@ -1,5 +1,21 @@
 /* ========= DASHBOARD PAGE LAYOUT =================================== */
 
+/* ✅ Centered lane wrapper (matches PageHeaderCard / Connected Apps / Landing lane vibe) */
+.dashboard-page-wrap {
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 24px;
+  box-sizing: border-box;
+}
+
+/* Mobile gutters */
+@media (max-width: 768px) {
+  .dashboard-page-wrap {
+    padding: 0 16px;
+  }
+}
+
 .dashboard-main {
   display: grid;
   grid-template-columns: 1fr; /* mobile single column */
