@@ -7,7 +7,7 @@ import ErrorModal from "../common/ErrorMessages";
 import { useAuth } from "../../context/AuthContext";
 import { explainAnyError } from "../../lib/errorMessages";
 
-import { SIGNUP_PAGE_CONTENT } from "../../content/signup/signuppage.content";
+import { SIGNUP_PAGE_CONTENT } from "../../content/landing/signuppage.content";
 
 import "../../css/auth/SignupPage.css";
 
