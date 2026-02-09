@@ -91,6 +91,7 @@ def mint_access_jwt(*, user_id: str, device_id: str, bot_id: str, cfg: BotRunner
 
     payload = {
         "sub": str(user_id),
+        "uid": str(user_id),          # ✅ add this
         "did": str(device_id),
         "bot_id": str(bot_id),
         "iat": now,
@@ -101,7 +102,6 @@ def mint_access_jwt(*, user_id: str, device_id: str, bot_id: str, cfg: BotRunner
 
     token = jwt.encode(payload, cfg.jwt_secret, algorithm="HS256")
     return {"ok": True, "token": token, "expires_in": int(cfg.access_ttl_seconds), "exp": exp}
-
 
 def verify_bot_runner_token(token: str, cfg: BotRunnerConfig) -> Dict[str, Any]:
     # Raises jwt.InvalidTokenError / ExpiredSignatureError for caller to map

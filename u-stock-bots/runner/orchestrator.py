@@ -93,7 +93,8 @@ def run_once(api: UStockAPI, *, risk_state: RiskState, hb_state: HeartbeatState)
     """
     # ✅ Always pass user_id for status_runner (required by backend)
     uid_hint = _runner_user_id()
-    status = api_client.get_status(api, BOT_ID, user_id=uid_hint or None)
+    status = api_client.get_status(api, BOT_ID)
+    print("[runner] mint token uid header:", bool(uid))
 
     user_id = _pick_user_id_from_status(status)
     intent = str(status.get("intent") or "paused").strip().lower()

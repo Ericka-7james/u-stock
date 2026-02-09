@@ -7,9 +7,7 @@ import ErrorModal from "../common/ErrorMessages";
 import { useAuth } from "../../context/AuthContext";
 import { explainAnyError } from "../../lib/errorMessages";
 
-import dapperSquirrel from "../../assets/images/DapperSquirrel_HQ.png";
-
-import { SIGNUP_PAGE_CONTENT } from "../../content/signuppage.content";
+import { SIGNUP_PAGE_CONTENT } from "../../content/signup/signuppage.content";
 
 import "../../css/auth/SignupPage.css";
 
@@ -24,38 +22,13 @@ function normalizeEmail(input) {
   return String(input || "").trim().toLowerCase();
 }
 
-/** Detect “duplicate email/phone” from a variety of backend styles */
-function isDuplicateCredentialError(anyErr) {
-  const raw =
-    anyErr?.detail?.message ||
-    anyErr?.payload?.detail?.message ||
-    anyErr?.message ||
-    anyErr?.body ||
-    anyErr;
-
-  const s = String(raw || "").toLowerCase();
-
-  return (
-    s.includes("already registered") ||
-    s.includes("already exists") ||
-    s.includes("account already exists") ||
-    s.includes("duplicate") ||
-    s.includes("unique constraint") ||
-    s.includes("23505") ||
-    s.includes("user already") ||
-    s.includes("email already") ||
-    s.includes("phone already") ||
-    s.includes("already in use")
-  );
-}
-
 export default function SignupPage() {
   const navigate = useNavigate();
   const { signup, signupWithGoogle, signupWithFacebook } = useAuth();
 
   const CONTENT = SIGNUP_PAGE_CONTENT;
 
-  const avatars = CONTENT.avatar.options;
+  const avatars = CONTENT.avatar.options || [];
   const emailRegex = useMemo(() => /^[^\s@]+@[^\s@]+\.[^\s@]+$/, []);
 
   // Form state
@@ -65,7 +38,12 @@ export default function SignupPage() {
   const [password, setPassword] = useState("");
   const [avatar, setAvatar] = useState(avatars[0] || "📈");
 
-  const [errors, setErrors] = useState({ name: "", email: "", phone: "", password: "" });
+  const [errors, setErrors] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    password: "",
+  });
 
   // ErrorModal state
   const [errModalOpen, setErrModalOpen] = useState(false);
@@ -82,36 +60,18 @@ export default function SignupPage() {
     setErrModal(null);
   }, []);
 
-  const openErrorModal = useCallback(
-    (anyErr, { feature = "signup" } = {}) => {
-      const friendly = explainAnyError(anyErr, { feature });
+  const openErrorModal = useCallback((anyErr, { feature = "signup" } = {}) => {
+    const friendly = explainAnyError(anyErr, { feature });
 
-      if (isDuplicateCredentialError(anyErr)) {
-        setErrModal({
-          title: CONTENT.duplicateAccountModal.title,
-          body: CONTENT.duplicateAccountModal.body,
-          subtitle: CONTENT.duplicateAccountModal.subtitle,
-          image: dapperSquirrel,
-          action: {
-            label: CONTENT.duplicateAccountModal.actionLabel,
-            href: CONTENT.duplicateAccountModal.actionHref,
-          },
-        });
-        setErrModalOpen(true);
-        return;
-      }
-
-      setErrModal({
-        title: friendly?.title || "Error",
-        body: friendly?.body || "Something went wrong.",
-        subtitle: friendly?.subtitle || "",
-        image: dapperSquirrel,
-        action: friendly?.action || null,
-      });
-      setErrModalOpen(true);
-    },
-    [CONTENT]
-  );
+    setErrModal({
+      title: friendly?.title || "Error",
+      body: friendly?.body || "Something went wrong.",
+      subtitle: friendly?.subtitle || "",
+      image: friendly?.image || null,
+      action: friendly?.action || null,
+    });
+    setErrModalOpen(true);
+  }, []);
 
   const validate = useCallback(() => {
     const next = { name: "", email: "", phone: "", password: "" };
@@ -126,6 +86,7 @@ export default function SignupPage() {
       next.email = "Please enter a valid email address.";
     }
 
+    // Optional phone field, but validate if provided
     if (phoneDigits && !isValidPhoneDigits(phoneDigits)) {
       next.phone = "Please enter a valid phone number (10–15 digits).";
     }
@@ -170,6 +131,7 @@ export default function SignupPage() {
           avatar,
         });
 
+        // Your flow: signup -> then sign in
         navigate("/auth");
       } catch (err) {
         openErrorModal(err, { feature: "signup" });
@@ -225,7 +187,12 @@ export default function SignupPage() {
 
   return (
     <AppShell>
-      <ErrorModal open={errModalOpen} error={errModal} onClose={closeErrorModal} onAction={handleErrorAction} />
+      <ErrorModal
+        open={errModalOpen}
+        error={errModal}
+        onClose={closeErrorModal}
+        onAction={handleErrorAction}
+      />
 
       <div className="signup-page">
         <div className="signup-auth-card">

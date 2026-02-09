@@ -1,10 +1,16 @@
 /* src/css/landing/LandingPage.css */
 
 /* =========================================================
-   LANE (single source of truth for card widths on Landing)
+   GOAL
+   - Bring Landing spacing back to original (sections use 24px side padding)
+   - Make HERO + "Why U-Stock" + BigCard always the SAME width
+   - Stop “micro-viewport shrink” under 310px:
+     lock a minimum layout width so content overflows + gets clipped
 ========================================================= */
+
 :root {
   --landing-lane: 1100px;
+  --landing-min-viewport: 310px; /* ✅ below this: overflow + clip (no more shrinking) */
 }
 
 /* =========================================================
@@ -15,19 +21,26 @@
   background: transparent;
   color: var(--ustock-text-main);
   overflow: visible;
+
+  /* ✅ Prevent infinite shrink on ultra-narrow viewports.
+     Your AppShell already uses overflow-x: clip, so this will “cut off” instead of compress. */
+  min-width: var(--landing-min-viewport);
 }
 
-/* ✅ AppShell already provides horizontal padding via .app-page.
-   So sections should NOT add extra horizontal padding (that’s why they look narrower). */
+/* Keep your original spacing for sections */
 .landing-section {
-  padding: 64px 0; /* was: 64px 24px */
+  padding: 64px 24px; /* ✅ back to original */
 }
 
+/* Standard centered lane */
 .landing-section-inner {
   max-width: var(--landing-lane);
   margin: 0 auto;
   width: 100%;
   box-sizing: border-box;
+
+  /* ✅ also enforce min width to prevent squeeze under 310px */
+  min-width: var(--landing-min-viewport);
 }
 
 .landing-section-title {
@@ -45,7 +58,8 @@
 }
 
 /* =========================================================
-   HERO (KEEP ORIGINAL LOOK, buttons untouched)
+   HERO (KEEP ORIGINAL LOOK, yellow primary + clean ghost)
+   ✅ Key: hero uses SAME lane as other cards
 ========================================================= */
 
 .landing-hero {
@@ -58,7 +72,16 @@
   color: #ffffff;
   padding: 72px 24px 80px;
   border-radius: 20px;
-  margin-bottom: 26px;
+
+  /* ✅ match card lane exactly */
+  max-width: var(--landing-lane);
+  width: 100%;
+  margin: 0 auto 26px;
+  box-sizing: border-box;
+
+  /* ✅ prevent ultra-narrow compression */
+  min-width: var(--landing-min-viewport);
+
   border: 1px solid rgba(15, 23, 42, 0.10);
   box-shadow:
     0 2px 6px rgba(15, 23, 42, 0.10),
@@ -67,14 +90,6 @@
     var(--lucent-hero-glow);
   position: relative;
   z-index: 1;
-
-  /* ✅ match section lane exactly */
-  max-width: var(--landing-lane);
-  width: 100%;
-  margin-left: auto;
-  margin-right: auto;
-
-  box-sizing: border-box;
 }
 
 .landing-hero::after {
@@ -92,12 +107,17 @@
 }
 
 .landing-hero-inner {
-  max-width: 1200px;
-  margin: 0 auto;
+  /* ✅ IMPORTANT: don’t use a different max-width than the hero card */
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+
   display: grid;
   grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
   gap: 40px;
   align-items: center;
+  box-sizing: border-box;
+  min-width: 0;
 }
 
 .landing-hero-kicker {
@@ -111,7 +131,7 @@
   font-size: 12px;
   font-weight: 650;
   margin-bottom: 14px;
-  white-space: nowrap; /* keeps it from breaking weirdly */
+  white-space: nowrap;
 }
 
 .landing-hero-title {
@@ -136,7 +156,7 @@
   margin-bottom: 18px;
 }
 
-/* --- HERO BUTTONS: unchanged --- */
+/* --- HERO BUTTONS --- */
 .landing-btn {
   border-radius: 999px;
   padding: 10px 22px;
@@ -148,7 +168,7 @@
 
 .landing-btn--primary {
   border: none;
-  background: #fbbf24; /* yellow */
+  background: #fbbf24;
   color: #1f2a33;
   box-shadow: 0 12px 26px rgba(251, 191, 36, 0.22);
 }
@@ -200,6 +220,7 @@
   display: flex;
   justify-content: center;
   align-items: center;
+  min-width: 0;
 }
 
 .landing-hero-img {
@@ -214,6 +235,7 @@
 
 /* =========================================================
    WHY U-STOCK
+   ✅ Force SAME lane width as hero (even if wrapper differs)
 ========================================================= */
 
 .landing-about-shell {
@@ -224,6 +246,15 @@
   box-shadow:
     0 18px 55px rgba(15, 23, 42, 0.10),
     0 2px 8px rgba(15, 23, 42, 0.06);
+
+  /* ✅ match hero lane */
+  max-width: var(--landing-lane);
+  width: 100%;
+  margin: 0 auto;
+  box-sizing: border-box;
+
+  /* ✅ prevent ultra-narrow compression */
+  min-width: var(--landing-min-viewport);
 }
 
 .landing-about-head {
@@ -264,6 +295,8 @@
 
   position: relative;
   overflow: hidden;
+  box-sizing: border-box;
+  min-width: 0;
 }
 
 .landing-feature-card::before {
@@ -284,15 +317,12 @@
   width: fit-content;
   padding: 4px 10px;
   border-radius: 999px;
-
   background: rgba(42, 137, 114, 0.10);
   border: 1px solid rgba(42, 137, 114, 0.22);
   color: rgba(42, 137, 114, 0.98);
-
   font-size: 11px;
   font-weight: 850;
   margin-bottom: 10px;
-
   position: relative;
   z-index: 1;
 }
@@ -326,6 +356,7 @@
 
 /* =========================================================
    BIG MARKETING CARD
+   ✅ Force SAME lane width as hero
 ========================================================= */
 
 .landing-bigcard-shell {
@@ -342,6 +373,15 @@
   box-shadow:
     0 18px 55px rgba(15, 23, 42, 0.10),
     0 2px 8px rgba(15, 23, 42, 0.06);
+
+  /* ✅ match hero lane */
+  max-width: var(--landing-lane);
+  width: 100%;
+  margin: 0 auto;
+  box-sizing: border-box;
+
+  /* ✅ prevent ultra-narrow compression */
+  min-width: var(--landing-min-viewport);
 }
 
 .landing-bigcard-eyebrow {
@@ -440,7 +480,7 @@
 }
 
 /* =========================================================
-   MODAL
+   MODAL (unchanged)
 ========================================================= */
 
 .landing-modal-block + .landing-modal-block {
@@ -529,6 +569,7 @@ body.ustock-dark .landing-hero-kicker {
 ========================================================= */
 
 @media (max-width: 900px) {
+  /* keep 2 columns so illustration never drops below (until 768) */
   .landing-hero-inner {
     grid-template-columns: minmax(0, 1.35fr) minmax(0, 0.65fr);
     gap: 24px;
@@ -541,7 +582,6 @@ body.ustock-dark .landing-hero-kicker {
   .landing-hero-title { font-size: 32px; }
 
   .landing-grid-3 { grid-template-columns: minmax(0, 1fr); }
-
   .landing-hero-metrics { grid-template-columns: minmax(0, 1fr); }
 
   .landing-bigcard-shell {
@@ -550,12 +590,12 @@ body.ustock-dark .landing-hero-kicker {
   }
 
   .landing-about-shell { padding: 24px 22px; }
-
   .landing-bigcard-title { font-size: 34px; }
 
   .landing-hero-kicker { white-space: normal; }
 }
 
+/* Hide illustration on true mobile */
 @media (max-width: 768px) {
   .landing-hero-inner {
     grid-template-columns: 1fr;
@@ -575,6 +615,7 @@ body.ustock-dark .landing-hero-kicker {
   }
 }
 
+/* Very small phones */
 @media (max-width: 480px) {
   .landing-hero-title {
     font-size: 30px;
@@ -585,3 +626,13 @@ body.ustock-dark .landing-hero-kicker {
   }
 }
 
+/* ✅ under 310px: DO NOT shrink further (overflow + clip happens via AppShell overflow-x: clip) */
+@media (max-width: 309px) {
+  .landing-page,
+  .landing-section-inner,
+  .landing-hero,
+  .landing-about-shell,
+  .landing-bigcard-shell {
+    min-width: var(--landing-min-viewport);
+  }
+}

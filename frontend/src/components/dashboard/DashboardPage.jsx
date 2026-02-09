@@ -20,7 +20,7 @@ import { explainAnyError } from "../../lib/errorMessages.jsx";
 import { DASHBOARD_PAGE_COPY as COPY } from "../../content/dashboard.content.js";
 
 // ✅ same squirrel image NavBar uses
-import dapperSquirrel from "../../assets/images/DapperSquirrel.png";
+import welcomeBackImg from "../../assets/modal/WelcomeBack.png";
 
 import "../../css/dashboard/DashboardPage.css";
 import "../../css/dashboard/cards/ChartControls.css";
@@ -320,7 +320,7 @@ export default function DashboardPage() {
           title,
           body,
           subtitle: "Tip: You can change bots later from the Bot Runner page.",
-          image: dapperSquirrel, // ✅ same squirrel as NavBar
+          image: welcomeBackImg, // ✅ same squirrel as NavBar
           action: { label: "Connect a bot", href: "/bots" },
         });
         setConnectOpen(true);

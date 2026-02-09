@@ -1,5 +1,16 @@
 // frontend/src/lib/errorMessages.jsx
 
+import { ERROR_KEYS, ERROR_PRESETS } from "../content/error/errorCatalog";
+
+/**
+ * Output shape (ErrorModal-friendly):
+ * {
+ *   title, body, subtitle?, action?, image?,
+ *   status, code,
+ *   debug: { feature, status, statusText, detail, raw }
+ * }
+ */
+
 async function safeJson(res) {
   try {
     return await res.json();
@@ -13,32 +24,6 @@ function normalizeBackendDetail(detail) {
   if (typeof detail === "string") return { message: detail };
   if (typeof detail === "object") return detail;
   return { message: String(detail) };
-}
-
-function alpacaAction() {
-  return { label: "Connected Apps", href: "/connected-apps" };
-}
-
-function authAction() {
-  return { label: "Sign in", href: "/auth" };
-}
-
-function looksLikeAlpacaFeedOrEntitlement(msg = "") {
-  const m = String(msg || "").toLowerCase();
-
-  const hasForbidden =
-    m.includes("forbidden") || m.includes("not authorized") || m.includes("unauthorized");
-
-  const mentionsFeed =
-    m.includes("sip") ||
-    m.includes("iex") ||
-    m.includes("entitlement") ||
-    m.includes("subscription") ||
-    (m.includes("market data") && (m.includes("not available") || hasForbidden));
-
-  if (mentionsFeed && hasForbidden) return true;
-  if (m.includes("entitlement") || m.includes("subscription")) return true;
-  return false;
 }
 
 function extractMessage(detail, text) {
@@ -67,20 +52,39 @@ function splitFix(body, subtitle) {
   return { body: before, subtitle: after };
 }
 
-/**
- * Detect “duplicate email/phone” from a variety of backend styles
- */
+/** Robustly extract the most useful human-readable message from many shapes */
+export function extractErrorText(anyErr) {
+  const candidates = [
+    anyErr?.detail?.message,
+    anyErr?.detail,
+    anyErr?.payload?.detail?.message,
+    anyErr?.payload?.detail,
+    anyErr?.payload?.error,
+    anyErr?.payload?.message,
+    anyErr?.message,
+    anyErr?.body,
+    anyErr,
+  ];
+
+  for (const c of candidates) {
+    if (!c) continue;
+    if (typeof c === "string") return c;
+    if (typeof c === "object") {
+      if (typeof c.message === "string") return c.message;
+      if (typeof c.error === "string") return c.error;
+      try {
+        return JSON.stringify(c);
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+  return "";
+}
+
+/** Detect “duplicate email/phone” from a variety of backend styles */
 function looksLikeDuplicateCredential(anyErr) {
-  const raw =
-    anyErr?.detail?.message ||
-    anyErr?.payload?.detail?.message ||
-    anyErr?.message ||
-    anyErr?.body ||
-    anyErr?.detail ||
-    anyErr;
-
-  const s = String(raw || "").toLowerCase();
-
+  const s = extractErrorText(anyErr).toLowerCase();
   return (
     s.includes("already registered") ||
     s.includes("already exists") ||
@@ -95,7 +99,41 @@ function looksLikeDuplicateCredential(anyErr) {
   );
 }
 
+function looksLikeAlpacaFeedOrEntitlement(msg = "") {
+  const m = String(msg || "").toLowerCase();
+
+  const hasForbidden =
+    m.includes("forbidden") ||
+    m.includes("not authorized") ||
+    m.includes("unauthorized");
+
+  const mentionsFeed =
+    m.includes("sip") ||
+    m.includes("iex") ||
+    m.includes("entitlement") ||
+    m.includes("subscription") ||
+    (m.includes("market data") && (m.includes("not available") || hasForbidden));
+
+  if (mentionsFeed && hasForbidden) return true;
+  if (m.includes("entitlement") || m.includes("subscription")) return true;
+  return false;
+}
+
+function looksLikeNetworkError(anyErr) {
+  const s = extractErrorText(anyErr).toLowerCase();
+  return (
+    s.includes("network error") ||
+    s.includes("failed to fetch") ||
+    s.includes("timeout") ||
+    s.includes("connection refused") ||
+    s.includes("econnrefused") ||
+    s.includes("enotfound") ||
+    s.includes("fetch") && s.includes("failed")
+  );
+}
+
 function makeUiError({
+  key,
   title,
   body,
   subtitle,
@@ -106,23 +144,139 @@ function makeUiError({
   detail,
   raw,
   action,
+  image,
 }) {
   const split = splitFix(body, subtitle);
 
   return {
+    key,
     title,
     body: split.body,
     ...(split.subtitle ? { subtitle: split.subtitle } : {}),
+    ...(action ? { action } : {}),
+    ...(image ? { image } : {}),
     status,
     code,
-    ...(action ? { action } : {}),
     debug: { feature, status, statusText, detail, raw },
   };
 }
 
 /**
- * Response -> friendly error payload:
- * { title, body, subtitle?, action?, debug... }
+ * Apply preset defaults (title/body/subtitle/image/action),
+ * allowing resolver to override specific fields.
+ */
+function applyPreset(key, overrides = {}) {
+  const preset = ERROR_PRESETS[key] || ERROR_PRESETS[ERROR_KEYS.UNKNOWN];
+  return { ...preset, ...overrides };
+}
+
+/**
+ * Core resolver: takes normalized info, returns ErrorModal payload.
+ * This is the *one* place where matching happens.
+ */
+function resolveUiError({
+  status = 0,
+  code = null,
+  message = "",
+  feature = "request",
+  statusText = "",
+  detail = null,
+  raw = null,
+}) {
+  const msgLower = String(message || "").toLowerCase();
+
+  // Network problems (fetch threw / backend unreachable)
+  if (looksLikeNetworkError(raw) || msgLower.includes("failed to fetch")) {
+    const preset = applyPreset(ERROR_KEYS.NETWORK_ERROR);
+    return makeUiError({
+      key: ERROR_KEYS.NETWORK_ERROR,
+      ...preset,
+      status,
+      code: code || ERROR_KEYS.NETWORK_ERROR,
+      feature,
+      statusText,
+      detail,
+      raw,
+    });
+  }
+
+  // Auth
+  if (status === 401 || msgLower.includes("not authenticated") || msgLower.includes("session expired")) {
+    const preset = applyPreset(ERROR_KEYS.NOT_AUTHENTICATED);
+    return makeUiError({
+      key: ERROR_KEYS.NOT_AUTHENTICATED,
+      ...preset,
+      status,
+      code: code || ERROR_KEYS.NOT_AUTHENTICATED,
+      feature,
+      statusText,
+      detail,
+      raw,
+    });
+  }
+
+  // Duplicate signup
+  if (status === 409 || looksLikeDuplicateCredential({ detail, raw, message })) {
+    const preset = applyPreset(ERROR_KEYS.DUPLICATE, {
+      // Prefer backend message as body if it’s actually human-friendly
+      body: detail?.message || presetBodyFallback(ERROR_KEYS.DUPLICATE),
+    });
+    return makeUiError({
+      key: ERROR_KEYS.DUPLICATE,
+      ...preset,
+      status,
+      code: code || ERROR_KEYS.DUPLICATE,
+      feature,
+      statusText,
+      detail,
+      raw,
+    });
+  }
+
+  // Alpaca feed entitlement
+  if (status === 403 || code === ERROR_KEYS.ALPACA_FEED_FORBIDDEN || looksLikeAlpacaFeedOrEntitlement(msgLower)) {
+    const preset = applyPreset(ERROR_KEYS.ALPACA_FEED_FORBIDDEN);
+    return makeUiError({
+      key: ERROR_KEYS.ALPACA_FEED_FORBIDDEN,
+      ...preset,
+      status,
+      code: code || ERROR_KEYS.ALPACA_FEED_FORBIDDEN,
+      feature,
+      statusText,
+      detail,
+      raw,
+    });
+  }
+
+  // Server-ish fallback
+  const fallbackText =
+    String(message || "").trim() ||
+    (status ? `${status} ${statusText}`.trim() : "") ||
+    "Server error";
+
+  const preset = applyPreset(ERROR_KEYS.SERVER_ERROR, {
+    body: fallbackText,
+  });
+
+  return makeUiError({
+    key: ERROR_KEYS.SERVER_ERROR,
+    ...preset,
+    status,
+    code: code || ERROR_KEYS.SERVER_ERROR,
+    feature,
+    statusText,
+    detail,
+    raw,
+  });
+}
+
+function presetBodyFallback(key) {
+  const preset = ERROR_PRESETS[key];
+  return preset?.body || "Something went wrong.";
+}
+
+/**
+ * Response -> friendly error payload
  */
 export async function explainResponseError(res, { feature = "request" } = {}) {
   const status = res?.status || 0;
@@ -145,66 +299,12 @@ export async function explainResponseError(res, { feature = "request" } = {}) {
   const detail = normalizeBackendDetail(data?.detail) || null;
   const code = detail?.code || data?.code || null;
 
-  if (status === 401) {
-    return makeUiError({
-      title: "Session expired",
-      body: "You’re signed out or your session expired.",
-      subtitle: "Sign in again, then retry.",
-      status,
-      code: code || "NOT_AUTHENTICATED",
-      feature,
-      statusText,
-      detail,
-      raw: data || text,
-      action: authAction(),
-    });
-  }
+  const message = extractMessage(detail, text) || (typeof data === "string" ? data : "");
 
-  if (status === 409 || looksLikeDuplicateCredential({ payload: data, detail, message: text })) {
-    return makeUiError({
-      title: "Account already exists",
-      body: detail?.message || "That email or phone number is already in use.",
-      subtitle: "Try signing in instead, or use a different email/phone.",
-      status,
-      code: code || "DUPLICATE",
-      feature,
-      statusText,
-      detail,
-      raw: data || text,
-      action: authAction(),
-    });
-  }
-
-  const msg = extractMessage(detail, text).toLowerCase();
-
-  if (status === 403 || code === "ALPACA_FEED_FORBIDDEN" || looksLikeAlpacaFeedOrEntitlement(msg)) {
-    return makeUiError({
-      title: "Alpaca data feed not available",
-      body: "Your Alpaca account doesn’t have access to this market data feed (often SIP).",
-      subtitle: "Use IEX feed for dev, or upgrade your Alpaca market data plan.",
-      status,
-      code: code || "ALPACA_FEED_FORBIDDEN",
-      feature,
-      statusText,
-      detail,
-      raw: data || text,
-      action: alpacaAction(),
-    });
-  }
-
-  const fallbackText =
-    extractMessage(detail, text) ||
-    (typeof data === "string" ? data : null) ||
-    (text ? `Backend returned non-JSON (${status}).` : null) ||
-    `${status} ${statusText}`.trim() ||
-    "Server error";
-
-  return makeUiError({
-    title: "Server error",
-    body: fallbackText,
-    subtitle: "Refresh and try again. If it keeps happening, sign out/in or restart the backend.",
+  return resolveUiError({
     status,
-    code: code || "SERVER_ERROR",
+    code,
+    message,
     feature,
     statusText,
     detail,
@@ -214,15 +314,16 @@ export async function explainResponseError(res, { feature = "request" } = {}) {
 
 /**
  * Any error -> friendly error payload
+ * (supports thrown fetch errors, already-shaped UI errors, backend error objects, strings, etc.)
  */
 export function explainAnyError(err, { feature = "request" } = {}) {
   if (!err) {
+    const preset = applyPreset(ERROR_KEYS.UNKNOWN);
     return makeUiError({
-      title: "Something went wrong",
-      body: "An unknown error occurred.",
-      subtitle: "",
+      key: ERROR_KEYS.UNKNOWN,
+      ...preset,
       status: 0,
-      code: "UNKNOWN",
+      code: ERROR_KEYS.UNKNOWN,
       feature,
       statusText: "",
       detail: null,
@@ -230,71 +331,43 @@ export function explainAnyError(err, { feature = "request" } = {}) {
     });
   }
 
-  // already shaped
+  // already shaped (your own UI error)
   if (typeof err === "object" && err.title && err.body) {
-    return makeUiError({ ...err, feature, raw: err });
-  }
-
-  // duplicates (catch-all)
-  if (looksLikeDuplicateCredential(err)) {
+    // Ensure preset image/action exist if caller forgot them
+    const key = err.key || ERROR_KEYS.UNKNOWN;
+    const preset = applyPreset(key);
     return makeUiError({
-      title: "Account already exists",
-      body: "That email or phone number is already in use.",
-      subtitle: "Try signing in instead, or use a different email/phone.",
-      status: err?.status || 409,
-      code: err?.code || "DUPLICATE",
+      key,
+      title: err.title || preset.title,
+      body: err.body || preset.body,
+      subtitle: err.subtitle ?? preset.subtitle,
+      action: err.action ?? preset.action,
+      image: err.image ?? preset.image,
+      status: err.status || 0,
+      code: err.code || key,
       feature,
-      statusText: "",
-      detail: err?.detail || err?.payload?.detail || null,
-      raw: err,
-      action: authAction(),
+      statusText: err?.debug?.statusText || "",
+      detail: err?.debug?.detail || null,
+      raw: err?.debug?.raw || err,
     });
   }
 
-  // object-like
+  // Normalize common thrown/object shapes
   if (typeof err === "object") {
     const status = err.status || err?.payload?.status || 0;
     const detailObj = normalizeBackendDetail(err.detail || err?.payload?.detail) || null;
     const code = detailObj?.code || err.code || err?.payload?.code || null;
 
-    const msg = String(detailObj?.message || detailObj?.detail || err.message || "").toLowerCase();
+    const message =
+      detailObj?.message ||
+      detailObj?.detail ||
+      err.message ||
+      extractErrorText(err);
 
-    if (status === 401 || msg.includes("not authenticated") || msg.includes("session expired")) {
-      return makeUiError({
-        title: "Session expired",
-        body: "You’re signed out or your session expired.",
-        subtitle: "Sign in again, then retry.",
-        status,
-        code: code || "NOT_AUTHENTICATED",
-        feature,
-        statusText: "",
-        detail: detailObj,
-        raw: err,
-        action: authAction(),
-      });
-    }
-
-    if (status === 403 || code === "ALPACA_FEED_FORBIDDEN" || looksLikeAlpacaFeedOrEntitlement(msg)) {
-      return makeUiError({
-        title: "Alpaca data feed not available",
-        body: "Your Alpaca account doesn’t have access to this market data feed (often SIP).",
-        subtitle: "Use IEX feed for dev, or upgrade your Alpaca market data plan.",
-        status,
-        code: code || "ALPACA_FEED_FORBIDDEN",
-        feature,
-        statusText: "",
-        detail: detailObj,
-        raw: err,
-        action: alpacaAction(),
-      });
-    }
-
-    return makeUiError({
-      title: "Server error",
-      body: detailObj?.message || detailObj?.detail || err.message || "Something went wrong. Please try again.",
-      subtitle: "",
+    return resolveUiError({
       status,
-      code: code || "SERVER_ERROR",
+      code,
+      message,
       feature,
       statusText: "",
       detail: detailObj,
@@ -302,14 +375,11 @@ export function explainAnyError(err, { feature = "request" } = {}) {
     });
   }
 
-  // string
   if (typeof err === "string") {
-    return makeUiError({
-      title: "Server error",
-      body: err,
-      subtitle: "",
+    return resolveUiError({
       status: 0,
-      code: "SERVER_ERROR",
+      code: ERROR_KEYS.SERVER_ERROR,
+      message: err,
       feature,
       statusText: "",
       detail: null,
@@ -317,27 +387,13 @@ export function explainAnyError(err, { feature = "request" } = {}) {
     });
   }
 
-  // Error instance
-  if (err instanceof Error) {
-    return makeUiError({
-      title: "Server error",
-      body: err.message || "Unknown error",
-      subtitle: "",
-      status: err.status || 0,
-      code: err.code || "SERVER_ERROR",
-      feature,
-      statusText: "",
-      detail: err.detail || null,
-      raw: err,
-    });
-  }
-
+  // last resort
+  const preset = applyPreset(ERROR_KEYS.SERVER_ERROR);
   return makeUiError({
-    title: "Server error",
-    body: "Something went wrong.",
-    subtitle: "",
+    key: ERROR_KEYS.SERVER_ERROR,
+    ...preset,
     status: 0,
-    code: "SERVER_ERROR",
+    code: ERROR_KEYS.SERVER_ERROR,
     feature,
     statusText: "",
     detail: null,

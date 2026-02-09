@@ -120,8 +120,11 @@ body.ustock-dark .ustock-em-modal {
    - IMPORTANT: remove mix-blend-mode to avoid weird “white box” artifacts
 ========================================================= */
 .ustock-em-heroImg {
-  width: 96px;
-  height: 96px;
+  width: 160px;
+  height: 160px;
+  max-width: 90%;
+  max-height: 90%;
+  
   object-fit: contain;
   display: block;
 
@@ -134,11 +137,10 @@ body.ustock-dark .ustock-em-modal {
   filter: drop-shadow(0 14px 28px rgba(15, 23, 42, 0.18));
 }
 
-/* If you want it to feel even more “sticker-like”, uncomment:
+/* If you want it to feel even more “sticker-like”, uncomment:*/
 .ustock-em-heroImg {
   filter: drop-shadow(0 18px 36px rgba(15, 23, 42, 0.20));
 }
-*/
 
 /* =========================================================
    Body

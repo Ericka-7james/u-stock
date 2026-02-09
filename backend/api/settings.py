@@ -1,74 +1,270 @@
-# u-stock-bots/runner/settings.py
+# u-stock-bots/runner/api_client.py
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+import time
+from typing import Any, Dict, List, Optional, Tuple
+
+from bots._shared.ustock_http import UStockAPI
+
+
+def now_epoch() -> int:
+    return int(time.time())
 
 
 def _env(name: str, default: str = "") -> str:
     return str(os.getenv(name, default) or "").strip()
 
 
-def _env_bool(name: str, default: bool = False) -> bool:
-    v = _env(name, "")
-    if not v:
-        return bool(default)
-    return v.lower() in ("1", "true", "t", "yes", "y", "on")
+def _as_dict(x: Any) -> Dict[str, Any]:
+    return x if isinstance(x, dict) else {}
 
 
-def _env_int(name: str, default: int) -> int:
-    v = _env(name, "")
-    try:
-        return int(v)
-    except Exception:
-        return int(default)
+def _as_list_of_dicts(x: Any) -> List[Dict[str, Any]]:
+    if not isinstance(x, list):
+        return []
+    return [it for it in x if isinstance(it, dict)]
 
 
-@dataclass(frozen=True)
-class RunnerSettings:
-    # Backend API
-    api_base: str
+def _is_jwt(s: str) -> bool:
+    return str(s or "").count(".") == 2
 
-    # Runner identity / auth
-    bot_id: str
-    runner_id: str
-    runner_user_id: str
-    runner_shared_secret: str
 
-    # Loop behavior
-    loop_seconds: int
-    heartbeat_every_seconds: int
-    respect_market_hours: bool
+def _runner_id_for_mint(bot_id: str) -> str:
+    return _env("RUNNER_ID") or _env("RUNNER_DEVICE_ID") or str(bot_id or "").strip() or "local-runner"
 
-    # Execution / mode
-    executor: str
-    mode: str
 
-    # Logging / output
-    log_level: str
-    output_dir: str
+def _runner_user_id() -> str:
+    return _env("RUNNER_USER_ID") or _env("USTOCK_USER_ID")
 
-    @staticmethod
-    def load() -> "RunnerSettings":
-        bot_id = _env("RUNNER_BOT_ID", "ema_trend")
 
-        runner_id = _env("RUNNER_ID", "") or _env("RUNNER_DEVICE_ID", "") or bot_id or "local-runner"
-        runner_user_id = _env("RUNNER_USER_ID", "") or _env("USTOCK_USER_ID", "")
+def _mint_runner_token(api: UStockAPI, *, bot_id: str) -> Tuple[str, int]:
+    """
+    Calls backend POST /api/runner/token using shared secret to mint a JWT.
+    Returns (token, expires_in_seconds).
 
-        return RunnerSettings(
-            api_base=_env("USTOCK_API_BASE", "http://127.0.0.1:8000").rstrip("/"),
-            bot_id=bot_id,
-            runner_id=runner_id,
-            runner_user_id=runner_user_id,
-            runner_shared_secret=_env("RUNNER_SHARED_SECRET", ""),
-
-            loop_seconds=_env_int("RUNNER_LOOP_SECONDS", 5),
-            heartbeat_every_seconds=_env_int("RUNNER_HEARTBEAT_EVERY_SECONDS", 10),
-            respect_market_hours=_env_bool("RUNNER_RESPECT_MARKET_HOURS", True),
-
-            executor=_env("RUNNER_EXECUTOR", "paper"),
-            mode=_env("MODE", "paper").lower().strip() or "paper",
-
-            log_level=_env("LOG_LEVEL", "INFO"),
-            output_dir=_env("OUTPUT_DIR", "src/output"),
+    Where it can break:
+      - shared secret mismatch (401)
+      - backend signing key missing (500)
+      - network errors
+    """
+    shared = _env("RUNNER_SHARED_SECRET")
+    if not shared:
+        raise RuntimeError(
+            "RUNNER_SHARED_SECRET missing. Set it in u-stock-bots env to mint a token via /api/runner/token."
         )
+
+    runner_id = _runner_id_for_mint(bot_id)
+    headers = {"X-Runner-Secret": shared}
+
+    # Optional: pass user id to embed uid claim in token
+    uid = _runner_user_id()
+    if uid:
+        headers["X-Runner-User-Id"] = uid
+
+    res = api.post(
+        "/api/runner/token",
+        json={"runner_id": runner_id},
+        headers=headers,
+    )
+    data = _as_dict(res)
+    token = str(data.get("token") or "").strip()
+    expires_in = int(data.get("expires_in") or 0)
+
+    if not _is_jwt(token):
+        raise RuntimeError("Minted runner token is not a JWT (unexpected response).")
+
+    return token, max(30, expires_in)
+
+
+class _TokenCache:
+    def __init__(self) -> None:
+        self.token: str = ""
+        self.exp_epoch: int = 0
+
+    def valid(self) -> bool:
+        # refresh a bit early
+        return bool(self.token) and _is_jwt(self.token) and (now_epoch() + 20) < int(self.exp_epoch or 0)
+
+
+_CACHE = _TokenCache()
+
+
+def _dev_token_from_env() -> str:
+    """
+    DEV fallback tokens (optional):
+      - BOT_RUNNER_TOKEN
+      - RUNNER_TOKEN
+    """
+    return (os.getenv("BOT_RUNNER_TOKEN") or os.getenv("RUNNER_TOKEN") or "").strip()
+
+
+def _auth_headers_for_bot(api: UStockAPI, *, bot_id: str) -> Dict[str, str]:
+    """
+    Auth priority:
+      1) Mint JWT via /api/runner/token (RUNNER_SHARED_SECRET)
+      2) DEV env token (BOT_RUNNER_TOKEN / RUNNER_TOKEN)
+      3) Empty -> backend will 401
+    """
+    bid = str(bot_id or "").strip()
+
+    # 1) mint token via shared secret
+    if _env("RUNNER_SHARED_SECRET"):
+        if not _CACHE.valid():
+            tok, ttl = _mint_runner_token(api, bot_id=bid)
+            _CACHE.token = tok
+            _CACHE.exp_epoch = now_epoch() + ttl
+        return {"Authorization": f"Bearer {_CACHE.token}"}
+
+    # 2) dev env token
+    tok = _dev_token_from_env()
+    if not tok:
+        return {}
+
+    if not _is_jwt(tok):
+        raise RuntimeError(
+            "RUNNER_TOKEN/BOT_RUNNER_TOKEN is not a JWT. "
+            "Preferred: set RUNNER_SHARED_SECRET so the runner can mint a valid JWT from /api/runner/token."
+        )
+
+    return {"Authorization": f"Bearer {tok}"}
+
+
+def _s(x: Any) -> Optional[str]:
+    if x is None:
+        return None
+    s = str(x).strip()
+    return s if s else None
+
+
+# -------------------------
+# API methods
+# -------------------------
+def get_status(api: UStockAPI, bot_id: str, *, user_id: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Calls /api/bots/status_runner which (in your backend) requires BOTH:
+      - bot_id
+      - user_id
+    """
+    bid = str(bot_id or "").strip()
+    uid = (str(user_id or "").strip() or _runner_user_id() or "").strip()
+    if not uid:
+        # Return something useful; orchestrator will throw with a clear error
+        return {"ok": False, "detail": "runner missing user_id", "bot_id": bid}
+
+    data = api.get(
+        "/api/bots/status_runner",
+        params={"bot_id": bid, "user_id": uid},
+        headers=_auth_headers_for_bot(api, bot_id=bid),
+    )
+    return _as_dict(data)
+
+
+def submit_intents(api: UStockAPI, bot_id: str, intents: List[Dict[str, Any]], *, user_id: Optional[str] = None) -> None:
+    """
+    Backend /api/bots/submit-intents requires user_id in the JSON body.
+    """
+    bid = str(bot_id or "").strip()
+    uid = (str(user_id or "").strip() or _runner_user_id() or "").strip()
+    if not uid:
+        # TODO: optionally buffer intents locally
+        return
+
+    payload = {
+        "user_id": uid,
+        "bot_id": bid,
+        "ts": now_epoch(),
+        "items": _as_list_of_dicts(intents),
+    }
+    api.post(
+        "/api/bots/submit-intents",
+        json=payload,
+        headers=_auth_headers_for_bot(api, bot_id=bid),
+    )
+
+
+def market_session(api: UStockAPI, bot_id: str) -> Dict[str, Any]:
+    """
+    Market session does not need runner auth, but it's fine if present.
+    Fail-open shape on error.
+    """
+    try:
+        data = api.get(
+            "/api/market/us/session",
+            headers=_auth_headers_for_bot(api, bot_id=str(bot_id or "").strip()),
+        )
+        d = _as_dict(data)
+        if "ok" not in d:
+            d["ok"] = False
+        return d
+    except Exception:
+        return {"ok": False}
+
+
+def sync_trade_fills(api: UStockAPI, *, bot_id: str, mode: str, user_id: Optional[str] = None) -> None:
+    """
+    If your backend ties fills to the user session, you may later want user-bound runner claims.
+    """
+    bid = str(bot_id or "").strip()
+    api.post(
+        "/api/trade_fills/sync_runner",
+        json={"bot_id": bid, "mode": str(mode or "paper").strip().lower()},
+        headers=_auth_headers_for_bot(api, bot_id=bid),
+    )
+
+
+def post_heartbeat(
+    api: UStockAPI,
+    *,
+    user_id: str,
+    bot_id: str,
+    intent: str,
+    effective_state: str,
+    mode: str,
+    message: Optional[str] = None,
+    reason_code: Optional[str] = None,
+    paused_reason: Optional[str] = None,
+    next_open_epoch: Optional[int] = None,
+    last_error: Optional[str] = None,
+    last_tick: Optional[int] = None,
+) -> None:
+    """
+    Backend /api/bots/heartbeat requires:
+      - bot_id
+      - user_id
+    """
+    now = now_epoch()
+
+    uid = str(user_id or "").strip()
+    if not uid:
+        return
+
+    payload: Dict[str, Any] = {
+        "user_id": uid,
+        "bot_id": _s(bot_id) or "unknown",
+        "intent": (_s(intent) or "paused").lower(),
+        "effective_state": _s(effective_state) or "unknown",
+        "mode": (_s(mode) or "paper").lower(),
+        "heartbeat_at": now,
+        "last_run": now,
+        "last_tick": int(last_tick or now),
+        "reason_code": _s(reason_code),
+        "message": _s(message),
+        "paused_reason": _s(paused_reason),
+        "next_open_epoch": int(next_open_epoch) if isinstance(next_open_epoch, (int, float)) else None,
+        "last_error": _s(last_error),
+    }
+
+    api.post(
+        "/api/bots/heartbeat",
+        json=payload,
+        headers=_auth_headers_for_bot(api, bot_id=str(bot_id or "").strip()),
+    )
+
+
+"""
+TODO (security hardening you can do later):
+- Bind runner JWT to user_id claim (uid) and have backend enforce:
+    payload.user_id == claims['uid'].
+- Add local disk buffer for events/intents if backend is down.
+"""
