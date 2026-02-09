@@ -13,17 +13,27 @@ import MarketLeadersCard from "./cards/MarketLeadersCard.jsx";
 import { useAlpacaDailyBars } from "../../hooks/useAlpacaDailyBars.js";
 import { useAlpacaTradeSummary } from "../../hooks/useAlpacaTradeSummary.js";
 
-// ✅ UI component (modal)
+// ✅ Common modal that supports images + actions
 import ErrorModal from "../common/ErrorMessages.jsx";
 import { explainAnyError } from "../../lib/errorMessages.jsx";
 
 import { DASHBOARD_PAGE_COPY as COPY } from "../../content/dashboard.content.js";
+
+// ✅ same squirrel image NavBar uses
+import dapperSquirrel from "../../assets/images/DapperSquirrel.png";
 
 import "../../css/dashboard/DashboardPage.css";
 import "../../css/dashboard/cards/ChartControls.css";
 import "../../css/dashboard/cards/CardShared.css";
 
 const LAST_TICKER_KEY = "ustock:last_ticker";
+
+// AuthContext writes these on successful login/signup
+const JUST_AUTHED_KEY = "ustock:just_authed_v1";
+const JUST_AUTHED_KIND_KEY = "ustock:just_authed_kind_v1"; // "signup" | "login"
+
+// Local hint set once user connects a bot (you can also set this from your Bots page)
+const BOT_CONNECTED_HINT_KEY = "ustock:bot_connected_v1";
 
 // -------- Small in-memory caches (stale-while-revalidate) --------
 const CACHE_TTL_MS = 60_000;
@@ -113,15 +123,6 @@ function normalizeSymbol(sym) {
 
 function isTvSafe(sym) {
   return /^[A-Z]+$/.test(String(sym || "").toUpperCase());
-}
-
-function isTradingViewOrigin(origin) {
-  try {
-    const u = new URL(origin);
-    return u.protocol === "https:" && (u.hostname === "tradingview.com" || u.hostname.endsWith(".tradingview.com"));
-  } catch {
-    return false;
-  }
 }
 
 function ErrorBanner({ title, body }) {
@@ -227,6 +228,7 @@ export default function DashboardPage() {
   const [currentTicker, setCurrentTicker] = useState(loadLastTicker);
   const [timeframe, setTimeframe] = useState(null);
 
+  // ✅ Error modal (existing)
   const [errOpen, setErrOpen] = useState(false);
   const [errPayload, setErrPayload] = useState(null);
 
@@ -239,6 +241,107 @@ export default function DashboardPage() {
     setErrPayload(uiErr);
     setErrOpen(true);
   };
+
+  // ✅ NEW: “Connect a bot” modal using ErrorModal (supports image + action)
+  const [connectOpen, setConnectOpen] = useState(false);
+  const [connectPayload, setConnectPayload] = useState(null);
+
+  const closeConnect = useCallback(() => {
+    setConnectOpen(false);
+    setConnectPayload(null);
+  }, []);
+
+  const onConnectAction = useCallback(
+    (action) => {
+      // action: { label, href? }
+      closeConnect();
+      if (action?.href) navigate(action.href);
+    },
+    [closeConnect, navigate]
+  );
+
+  // best-effort: local hint first, optional backend check second
+  const checkHasConnectedBot = useCallback(async ({ signal } = {}) => {
+    try {
+      if (window.localStorage.getItem(BOT_CONNECTED_HINT_KEY) === "1") return true;
+    } catch {
+      // ignore
+    }
+
+    // Optional backend check (won’t break UI if endpoint isn't present yet).
+    // Replace with your real endpoint if you have one.
+    try {
+      const json = await apiGetWithRetry("/api/bots", { signal });
+
+      if (Array.isArray(json)) return json.length > 0;
+      if (json && typeof json === "object") {
+        if (typeof json.connected === "boolean") return json.connected;
+        if (Array.isArray(json.items)) return json.items.length > 0;
+        if (Array.isArray(json.bots)) return json.bots.length > 0;
+      }
+    } catch {
+      // ignore
+    }
+
+    return false;
+  }, []);
+
+  // ✅ Show connect-bot modal right after login/signup (ONLY if no bot connected)
+  useEffect(() => {
+    if (authLoading || !isAuthed) return;
+
+    const ac = new AbortController();
+    let alive = true;
+
+    async function run() {
+      let justAuthed = false;
+      let kind = "login";
+
+      try {
+        justAuthed = window.localStorage.getItem(JUST_AUTHED_KEY) === "1";
+        kind = window.localStorage.getItem(JUST_AUTHED_KIND_KEY) || "login";
+      } catch {
+        // ignore
+      }
+
+      if (!justAuthed || !alive) return;
+
+      const hasBot = await checkHasConnectedBot({ signal: ac.signal }).catch(() => false);
+      if (!alive || ac.signal.aborted) return;
+
+      if (!hasBot) {
+        const title = kind === "signup" ? "Welcome to Lucent 👋" : "Welcome back 👋";
+        const body =
+          kind === "signup"
+            ? "Next step: connect a bot so you can start/pause strategies and see activity in your dashboard."
+            : "Quick reminder: connect a bot to start/pause strategies and keep your dashboard data in sync.";
+
+        setConnectPayload({
+          title,
+          body,
+          subtitle: "Tip: You can change bots later from the Bot Runner page.",
+          image: dapperSquirrel, // ✅ same squirrel as NavBar
+          action: { label: "Connect a bot", href: "/bots" },
+        });
+        setConnectOpen(true);
+      }
+
+      // clear so it never shows again
+      try {
+        window.localStorage.removeItem(JUST_AUTHED_KEY);
+        window.localStorage.removeItem(JUST_AUTHED_KIND_KEY);
+      } catch {
+        // ignore
+      }
+    }
+
+    run();
+
+    return () => {
+      alive = false;
+      ac.abort();
+    };
+  }, [authLoading, isAuthed, checkHasConnectedBot]);
 
   if (authLoading || !isAuthed) return null;
 
@@ -277,9 +380,13 @@ export default function DashboardPage() {
 
   return (
     <AppShell>
+      {/* existing error modal */}
       <ErrorModal open={errOpen} error={errPayload} onClose={closeErr} />
 
-      {/* ✅ NEW: centered lane wrapper so both columns share the same left/right gutters (desktop + mobile) */}
+      {/* ✅ NEW: connect bot modal (same common modal, supports image + action) */}
+      <ErrorModal open={connectOpen} error={connectPayload} onClose={closeConnect} onAction={onConnectAction} />
+
+      {/* ✅ centered lane wrapper so both columns share the same left/right gutters (desktop + mobile) */}
       <div className="dashboard-page-wrap">
         <main className="dashboard-main">
           <div className="dashboard-left">

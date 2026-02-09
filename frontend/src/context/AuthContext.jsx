@@ -7,6 +7,10 @@ const AuthContext = createContext(null);
 // localStorage “hint” so we don’t ping /auth/me for brand new visitors
 const SESSION_HINT_KEY = "ustock_session_hint_v1";
 
+// one-time “show dashboard onboarding after auth”
+const JUST_AUTHED_KEY = "ustock:just_authed_v1";
+const JUST_AUTHED_KIND_KEY = "ustock:just_authed_kind_v1"; // "signup" | "login"
+
 async function safeJson(res) {
   try {
     return await res.json();
@@ -31,14 +35,13 @@ function makeHttpError(res, data) {
   const detail = data?.detail ?? null;
 
   const code =
-    (typeof detail === "object" && detail?.code) ? detail.code :
-    (typeof data === "object" && data?.code) ? data.code :
-    null;
+    typeof detail === "object" && detail?.code
+      ? detail.code
+      : typeof data === "object" && data?.code
+      ? data.code
+      : null;
 
-  const msg =
-    extractDetailMessage(detail) ||
-    String(data?.message || data?.error || "") ||
-    `Request failed (${res.status})`;
+  const msg = extractDetailMessage(detail) || String(data?.message || data?.error || "") || `Request failed (${res.status})`;
 
   const err = new Error(msg);
 
@@ -49,6 +52,15 @@ function makeHttpError(res, data) {
   err.payload = data;
 
   return err;
+}
+
+function setJustAuthed(kind = "login") {
+  try {
+    window.localStorage.setItem(JUST_AUTHED_KEY, "1");
+    window.localStorage.setItem(JUST_AUTHED_KIND_KEY, kind);
+  } catch {
+    // ignore
+  }
 }
 
 export function AuthProvider({ children }) {
@@ -112,8 +124,7 @@ export function AuthProvider({ children }) {
     async (opts = {}) => {
       const { force = false } = opts;
 
-      // ✅ Key behavior: don’t call /auth/me for brand-new visitors
-      // unless forced (login flow) or we already have a session hint.
+      // ✅ don’t call /auth/me for brand-new visitors unless forced or we have a hint
       if (!force && !sessionHint && !isAuthed) {
         setIsAuthed(false);
         setUser(null);
@@ -135,7 +146,7 @@ export function AuthProvider({ children }) {
           ({ ok, status, data } = await attempt());
         }
 
-        // 401 is “normal” when no cookie exists — treat as unauth silently
+        // 401 is normal when no cookie exists — treat as unauth silently
         if (!ok) {
           if (status === 401) {
             setIsAuthed(false);
@@ -147,7 +158,6 @@ export function AuthProvider({ children }) {
             return false;
           }
 
-          // other errors: still treat as unauth
           setIsAuthed(false);
           setUser(null);
           return false;
@@ -184,20 +194,19 @@ export function AuthProvider({ children }) {
     [authFetch, clearHint, isAuthed, sessionHint, setHintOn]
   );
 
-  // Initial boot: only refresh if we have a hint (or later if forced)
+  // Initial boot: only refresh if we have a hint
   useEffect(() => {
     if (didInitRef.current) return;
     didInitRef.current = true;
 
     (async () => {
-      // if no hint, don’t spam /me — just mark loading done
       if (!sessionHint) {
         setLoading(false);
         return;
       }
 
       setLoading(true);
-      await refreshSession({ force: true }); // we have a hint, so it’s safe to check
+      await refreshSession({ force: true });
       setLoading(false);
     })();
   }, [refreshSession, sessionHint]);
@@ -225,10 +234,13 @@ export function AuthProvider({ children }) {
     setUser(data.user || null);
     setIsAuthed(true);
 
-    // ✅ set hint so future reloads can restore session w/out spamming for new visitors
+    // ✅ set hint so future reloads can restore session
     setHintOn();
 
-    // confirm cookie works (force refresh even if hint missing)
+    // ✅ NEW: mark dashboard onboarding to show once
+    setJustAuthed("login");
+
+    // confirm cookie works
     await refreshSession({ force: true });
   };
 
@@ -242,8 +254,13 @@ export function AuthProvider({ children }) {
     if (!res.ok) throw makeHttpError(res, data);
 
     setUser(data.user || null);
+    setIsAuthed(true);
 
     setHintOn();
+
+    // ✅ NEW: mark dashboard onboarding to show once
+    setJustAuthed("signup");
+
     await refreshSession({ force: true });
   };
 

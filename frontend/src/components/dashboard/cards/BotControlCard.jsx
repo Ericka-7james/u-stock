@@ -2,29 +2,40 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import HelpTooltip from "../../common/HelpTooltip.jsx";
 import Modal from "../../common/Modal.jsx";
+import LoadingOverlay from "../../common/LoadingOverlay.jsx";
 import "../../../css/dashboard/cards/BotControlCard.css";
 
 /**
  * Fetch helpers (cookies included).
  */
 async function apiGet(url, { signal } = {}) {
-  const res = await fetch(url, { credentials: "include", signal });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data?.detail || "Request failed");
-  return data;
+  const res = await fetch(url, { credentials: "include", signal, headers: { Accept: "application/json" } });
+  const ct = res.headers.get("content-type") || "";
+  const data = ct.includes("application/json") ? await res.json().catch(() => ({})) : await res.text().catch(() => "");
+  if (!res.ok) {
+    const msg =
+      (typeof data === "object" && (data?.detail || data?.error || data?.message)) || `Request failed (${res.status})`;
+    throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
+  }
+  return typeof data === "object" ? data : { ok: true, raw: data };
 }
 
 async function apiPost(url, body, { signal } = {}) {
   const res = await fetch(url, {
     method: "POST",
     credentials: "include",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
     body: body ? JSON.stringify(body) : undefined,
     signal,
   });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data?.detail || "Request failed");
-  return data;
+  const ct = res.headers.get("content-type") || "";
+  const data = ct.includes("application/json") ? await res.json().catch(() => ({})) : await res.text().catch(() => "");
+  if (!res.ok) {
+    const msg =
+      (typeof data === "object" && (data?.detail || data?.error || data?.message)) || `Request failed (${res.status})`;
+    throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
+  }
+  return typeof data === "object" ? data : { ok: true, raw: data };
 }
 
 function safeStr(x, fallback = "") {
@@ -57,7 +68,7 @@ function fmtAge(sec) {
   if (h < 24) return `${h}h`;
   const d = Math.floor(h / 24);
   const remH = h % 24;
-  return remH ? `${d}d ${remH}h` : `${d}`;
+  return remH ? `${d}d ${remH}h` : `${d}d`;
 }
 
 function pillTone(kind) {
@@ -91,7 +102,9 @@ function normalizeIntent(x) {
 
 export default function BotControlCard({ activeBotId, onActiveBotChange, onStartBot, onStopBot }) {
   const [available, setAvailable] = useState([]);
-  const [selected, setSelected] = useState(() => safeStr(activeBotId, "ema_trend"));
+
+  // ✅ IMPORTANT: default is NONE until user selects (or parent provides one)
+  const [selected, setSelected] = useState(() => safeStr(activeBotId, ""));
 
   const [status, setStatus] = useState(null);
   const [market, setMarket] = useState(null);
@@ -100,10 +113,12 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
   const [busy, setBusy] = useState(false);
   const [uiError, setUiError] = useState("");
 
-  // confirm start
-  const [startConfirmOpen, setStartConfirmOpen] = useState(false);
+  // ✅ NEW: full-page overlay while initial status+config load is in flight
+  const [snapshotLoading, setSnapshotLoading] = useState(false);
+  const snapshotRef = useRef({ botId: "", status: false, config: false });
 
-  // ✅ NEW: confirm arm
+  // confirm start/arm
+  const [startConfirmOpen, setStartConfirmOpen] = useState(false);
   const [armConfirmOpen, setArmConfirmOpen] = useState(false);
 
   // View log modal
@@ -123,7 +138,7 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
   // mode (paper-only for now)
   const [mode, setMode] = useState("paper");
 
-  // Refs to avoid “mode/config changed → callback recreated → effect reruns → abort → canceled”
+  // Refs to prevent effect loops + to read latest values inside callbacks
   const modeRef = useRef("paper");
   const configModeRef = useRef("");
 
@@ -151,6 +166,13 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
     clearTimeout(t);
   }
 
+  function maybeStopSnapshotLoading(botId) {
+    const id = safeStr(botId, "");
+    const s = snapshotRef.current;
+    if (s.botId !== id) return;
+    if (!s.status && !s.config) setSnapshotLoading(false);
+  }
+
   useEffect(() => {
     aliveRef.current = true;
     return () => {
@@ -161,10 +183,9 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // sync selected with parent (only when parent provides a real id)
+  // ✅ sync selected with parent when parent changes (including clearing to "")
   useEffect(() => {
     const next = safeStr(activeBotId, "");
-    if (!next) return;
     setSelected((prev) => (prev === next ? prev : next));
     setStartConfirmOpen(false);
     setArmConfirmOpen(false);
@@ -183,12 +204,6 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
 
         const bots = Array.isArray(data?.bots) ? data.bots : [];
         setAvailable(bots);
-
-        setSelected((prev) => {
-          const cur = safeStr(prev, "");
-          if (cur) return cur;
-          return safeStr(activeBotId, bots?.[0]?.id || "ema_trend");
-        });
       } catch (e) {
         if (!aliveRef.current || ac.signal.aborted) return;
         setUiError(String(e?.message || e));
@@ -218,7 +233,7 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
   }, []);
 
   const refreshConfig = useCallback(async (botId) => {
-    const id = safeStr(botId);
+    const id = safeStr(botId, "");
     if (!id || inflightRef.current.config) return;
 
     const ac = new AbortController();
@@ -242,13 +257,16 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
     } catch {
       // ignore
     } finally {
+      if (snapshotRef.current.botId === id) {
+        snapshotRef.current.config = false;
+        maybeStopSnapshotLoading(id);
+      }
       if (inflightRef.current.config === ac) inflightRef.current.config = null;
     }
   }, []);
 
-  // ✅ STABLE — avoids rerun/abort loop
   const refreshStatus = useCallback(async (botId) => {
-    const id = safeStr(botId);
+    const id = safeStr(botId, "");
     if (!id || inflightRef.current.status) return;
 
     const ac = new AbortController();
@@ -267,23 +285,48 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
     } catch {
       // ignore
     } finally {
+      if (snapshotRef.current.botId === id) {
+        snapshotRef.current.status = false;
+        maybeStopSnapshotLoading(id);
+      }
       if (inflightRef.current.status === ac) inflightRef.current.status = null;
     }
   }, []);
 
-  // polling on selected
+  // polling (ONLY when selected is set)
   useEffect(() => {
     const id = safeStr(selected, "");
-    if (!id) return;
+
+    // Always keep market info fresh (even with no bot selected)
+    refreshMarket();
+    clearTimer(timersRef.current.marketPoll);
+    timersRef.current.marketPoll = setInterval(() => refreshMarket(), 30_000);
+
+    // If no bot selected, stop bot polling and clear snapshots
+    if (!id) {
+      clearTimer(timersRef.current.statusPoll);
+      setStatus(null);
+      setConfig(null);
+      setStartConfirmOpen(false);
+      setArmConfirmOpen(false);
+
+      snapshotRef.current = { botId: "", status: false, config: false };
+      setSnapshotLoading(false);
+
+      return () => {
+        clearTimer(timersRef.current.marketPoll);
+        clearTimer(timersRef.current.statusPoll);
+      };
+    }
 
     setUiError("");
 
+    // ✅ show overlay until BOTH config + status complete at least once for this selection
+    snapshotRef.current = { botId: id, status: true, config: true };
+    setSnapshotLoading(true);
+
     refreshConfig(id);
     refreshStatus(id);
-    refreshMarket();
-
-    clearTimer(timersRef.current.marketPoll);
-    timersRef.current.marketPoll = setInterval(() => refreshMarket(), 30_000);
 
     clearTimer(timersRef.current.statusPoll);
     timersRef.current.statusPoll = setInterval(() => refreshStatus(id), 4_000);
@@ -295,22 +338,25 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
   }, [selected, refreshStatus, refreshMarket, refreshConfig]);
 
   function onSelect(e) {
-    const id = e.target.value;
+    const id = safeStr(e.target.value, "");
     setSelected(id);
-    onActiveBotChange?.(id);
+    onActiveBotChange?.(id); // ✅ critical for TradePerformancePanel
     setStartConfirmOpen(false);
     setArmConfirmOpen(false);
+    setUiError("");
   }
 
   /* ----------------------------
      Derived state (canonical)
   ---------------------------- */
 
+  const hasSelection = Boolean(safeStr(selected, ""));
+
   const intent = normalizeIntent(status?.intent);
   const eff = normalizeEff(status?.effective_state);
 
   const desiredState = safeStr(status?.desired_state, "");
-  const isArmed = desiredState === "armed"; // ✅ persisted arming
+  const isArmed = Boolean(status?.armed) || desiredState === "armed";
   const isDesiredRunning = desiredState === "running";
 
   const hbAge = Number.isFinite(Number(status?.heartbeatAgeSec)) ? Number(status.heartbeatAgeSec) : null;
@@ -329,16 +375,18 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
       ? n(market.next_open)
       : 0;
 
-  const isOffline = eff === "offline";
-  const isErr = eff === "error" || Boolean(lastError);
+  const isOffline = hasSelection && eff === "offline";
+  const isErr = hasSelection && (eff === "error" || Boolean(lastError));
 
-  const isWaiting = eff === "waiting_for_market";
-  const isStarting = eff === "starting";
-  const isRunningEff = eff === "running" || eff === "degraded";
-  const isPaused = !isOffline && (eff === "paused" || intent === "paused");
-  const isDisarmed = !isArmed && !isDesiredRunning && (eff === "disarmed" || intent === "disarmed");
+  const isWaiting = hasSelection && eff === "waiting_for_market";
+  const isStarting = hasSelection && eff === "starting";
+  const isRunningEff = hasSelection && (eff === "running" || eff === "degraded");
+  const isPaused = hasSelection && !isOffline && (eff === "paused" || intent === "paused");
+  const isDisarmed = hasSelection && !isArmed && !isDesiredRunning && (eff === "disarmed" || intent === "disarmed");
 
-  const runtimeLabel = isOffline
+  const runtimeLabel = !hasSelection
+    ? "—"
+    : isOffline
     ? "OFFLINE"
     : isErr
     ? "ERROR"
@@ -356,9 +404,19 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
     ? "DISARMED"
     : "IDLE";
 
-  const runtimeTone = isErr || isOffline ? "neg" : isRunningEff ? "pos" : isWaiting || isStarting ? "pos" : "warn";
+  const runtimeTone = !hasSelection
+    ? "warn"
+    : isErr || isOffline
+    ? "neg"
+    : isRunningEff
+    ? "pos"
+    : isWaiting || isStarting
+    ? "pos"
+    : "warn";
 
-  const statusLine = isErr
+  const statusLine = !hasSelection
+    ? "Select a bot to view status."
+    : isErr
     ? `Error: ${lastError || "unknown"}`
     : isOffline
     ? hbAge != null
@@ -378,14 +436,15 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
     ? pausedReason || message || "Paused"
     : message || "Idle";
 
-  const canArm = !busy && !isRunningEff && !isWaiting && !isStarting && !isArmed;
-  const canDisarm = !busy && isArmed && !isRunningEff && !isWaiting && !isStarting;
+  const canArm = hasSelection && !busy && !isRunningEff && !isWaiting && !isStarting && !isArmed;
+  const canDisarm = hasSelection && !busy && isArmed && !isRunningEff && !isWaiting && !isStarting;
 
-  // ✅ Start only allowed if persisted-arm is present
-  const canStart = !busy && !isRunningEff && !isWaiting && !isStarting && isArmed;
-  const canPause = !busy && (isRunningEff || isWaiting || isStarting);
+  // Start only allowed if persisted-arm is present
+  const canStart = hasSelection && !busy && !isRunningEff && !isWaiting && !isStarting && isArmed;
+  const canPause = hasSelection && !busy && (isRunningEff || isWaiting || isStarting);
 
   async function doArm() {
+    if (!hasSelection) return;
     setUiError("");
     setBusy(true);
     abortInflight("action");
@@ -405,6 +464,7 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
   }
 
   async function doDisarm() {
+    if (!hasSelection) return;
     setUiError("");
     setBusy(true);
     abortInflight("action");
@@ -424,6 +484,7 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
   }
 
   async function doStart() {
+    if (!hasSelection) return;
     setUiError("");
     setBusy(true);
     abortInflight("action");
@@ -447,6 +508,7 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
   }
 
   async function doPause() {
+    if (!hasSelection) return;
     setUiError("");
     setBusy(true);
     abortInflight("action");
@@ -490,6 +552,7 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
   }
 
   async function openLog() {
+    if (!hasSelection) return;
     setUiError("");
     setLogOpen(true);
     setLogBusy(true);
@@ -506,11 +569,13 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
   }
 
   function openRisk() {
+    if (!hasSelection) return;
     setUiError("");
     setRiskOpen(true);
   }
 
   async function saveRisk() {
+    if (!hasSelection) return;
     setUiError("");
     setRiskBusy(true);
     try {
@@ -532,25 +597,33 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
     }
   }
 
+  const selectedMeta = useMemo(() => {
+    const id = safeStr(selected, "");
+    if (!id) return null;
+    return (available || []).find((b) => safeStr(b?.id, "") === id) || null;
+  }, [available, selected]);
+
   return (
     <>
-      <div className="botCard">
+      <LoadingOverlay open={snapshotLoading} label="Loading bot…" subtitle="Fetching intent, desired, status…" />
+
+      <div className="botCard" aria-busy={snapshotLoading}>
         <div className="botCardHead">
           <div className="botCardTitleRow">
             <div className="botCardTitle">Bot Control</div>
-            <HelpTooltip text="Arm → Start. Pause anytime. Arm is persisted server-side (survives logout) until you Disarm." />
+            <HelpTooltip text="Select a bot, then Arm → Start. Pause anytime. Arm is persisted server-side until you Disarm." />
           </div>
 
           <div className="botPillRow">
             <div className="botCardStatePill mode" title="Paper trading only (live soon).">
-              {mode === "paper" ? "PAPER" : "PAPER"}
+              PAPER
             </div>
 
             <div
-              className={`botCardStatePill ${isArmed ? "warn" : "neg"}`}
-              title={isArmed ? "Armed (persisted). Start enabled." : "Arm to enable Start."}
+              className={`botCardStatePill ${hasSelection && isArmed ? "warn" : "neg"}`}
+              title={!hasSelection ? "Select a bot first." : isArmed ? "Armed (persisted). Start enabled." : "Arm to enable Start."}
             >
-              {isArmed ? "ARMED" : "DISARMED"}
+              {!hasSelection ? "—" : isArmed ? "ARMED" : "DISARMED"}
             </div>
 
             <div className={`botCardStatePill status ${pillTone(runtimeTone)}`}>{runtimeLabel}</div>
@@ -562,23 +635,27 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
             <div className="botSelectWrap">
               <label className="botLabel">Bot</label>
 
-              <select className="botSelect" value={selected} onChange={onSelect} disabled={busy}>
-                {(available.length ? available : [{ id: "ema_trend", name: "EMA Trend Bot" }]).map((b) => (
+              {/* ✅ CONTROLLED: empty means “none selected” */}
+              <select className="botSelect" value={safeStr(selected, "")} onChange={onSelect} disabled={busy}>
+                <option value="">Select a bot…</option>
+                {(available || []).map((b) => (
                   <option key={b.id} value={b.id}>
                     {b.name || b.id}
                   </option>
                 ))}
               </select>
 
-              <div className="botHint">{safeStr(available.find((b) => b.id === selected)?.description, "")}</div>
+              <div className="botHint">
+                {safeStr(selectedMeta?.description, hasSelection ? "" : "Pick a bot to unlock intents + aligned picks.")}
+              </div>
             </div>
 
             <div className="botActions">
-              <button className="botBtn" type="button" onClick={openLog} disabled={busy} aria-label="View log">
+              <button className="botBtn" type="button" onClick={openLog} disabled={busy || !hasSelection} aria-label="View log">
                 View log
               </button>
 
-              <button className="botBtn" type="button" onClick={openRisk} disabled={busy} aria-label="Risk controls">
+              <button className="botBtn" type="button" onClick={openRisk} disabled={busy || !hasSelection} aria-label="Risk controls">
                 Risk Controls
               </button>
 
@@ -604,7 +681,7 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
                   type="button"
                   onClick={requestStart}
                   disabled={!canStart}
-                  title={!isArmed ? "Arm first." : "Start bot"}
+                  title={!hasSelection ? "Select a bot first." : !isArmed ? "Arm first." : "Start bot"}
                 >
                   Start
                 </button>
@@ -615,33 +692,33 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
           <div className="botGrid">
             <div className="botTile">
               <div className="botTileLabel">Intent</div>
-              <div className="botTileValue">{intent || "—"}</div>
+              <div className="botTileValue">{hasSelection ? intent || "—" : "—"}</div>
             </div>
 
             <div className="botTile">
               <div className="botTileLabel">Effective</div>
-              <div className="botTileValue">{eff || "—"}</div>
+              <div className="botTileValue">{hasSelection ? eff || "—" : "—"}</div>
             </div>
 
             <div className="botTile">
               <div className="botTileLabel">Desired</div>
-              <div className="botTileValue">{desiredState || "—"}</div>
+              <div className="botTileValue">{hasSelection ? desiredState || "—" : "—"}</div>
             </div>
 
             <div className="botTile">
               <div className="botTileLabel">Heartbeat</div>
-              <div className="botTileValue">{hbAge == null ? "—" : `${fmtAge(hbAge)} ago`}</div>
+              <div className="botTileValue">{!hasSelection ? "—" : hbAge == null ? "—" : `${fmtAge(hbAge)} ago`}</div>
             </div>
 
             <div className="botTile">
-              <div className="botTileLabel">Next open</div>
-              <div className="botTileValue">{nextOpenEpoch ? fmtTime(nextOpenEpoch) : "—"}</div>
+              <div className="botTileLabel">{isOpen ? "Market" : "Next open"}</div>
+              <div className="botTileValue">{isOpen ? "Open now" : nextOpenEpoch ? fmtTime(nextOpenEpoch) : "—"}</div>
             </div>
 
             <div className="botTile" style={{ gridColumn: "1 / -1" }}>
               <div className="botTileLabel">Status</div>
               <div className="botTileValue">{statusLine}</div>
-              {message ? (
+              {hasSelection && message ? (
                 <div style={{ fontSize: 12, opacity: 0.75, fontWeight: 800, marginTop: 4 }}>{message}</div>
               ) : null}
             </div>
@@ -651,7 +728,7 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
         </div>
       </div>
 
-      {/* ✅ NEW: Arm confirm modal */}
+      {/* Arm confirm modal */}
       <Modal
         open={armConfirmOpen}
         title="Arm this bot?"
@@ -669,17 +746,16 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
       >
         <div style={{ display: "grid", gap: 10 }}>
           <div style={{ fontWeight: 900 }}>
-            Arm: <span className="mono">{selected}</span>
+            Arm: <span className="mono">{safeStr(selected, "—")}</span>
           </div>
-          <div style={{ fontSize: 12, opacity: 0.8, fontWeight: 800 }}>
-            This persists server-side (survives logout) until you Disarm.
-          </div>
+          <div style={{ fontSize: 12, opacity: 0.8, fontWeight: 800 }}>This persists server-side (survives logout) until you Disarm.</div>
           <div style={{ fontSize: 12, opacity: 0.8, fontWeight: 800 }}>
             Mode: <span className="mono">{mode}</span>
           </div>
         </div>
       </Modal>
 
+      {/* Start confirm modal */}
       <Modal
         open={startConfirmOpen}
         title="Start this bot?"
@@ -697,19 +773,16 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
       >
         <div style={{ display: "grid", gap: 10 }}>
           <div style={{ fontWeight: 900 }}>
-            Start: <span className="mono">{selected}</span>
+            Start: <span className="mono">{safeStr(selected, "—")}</span>
           </div>
           <div style={{ fontSize: 12, opacity: 0.8, fontWeight: 800 }}>
             Mode: <span className="mono">{mode}</span> · You can Pause anytime.
           </div>
-          {!isArmed ? (
-            <div style={{ fontSize: 12, fontWeight: 900, color: "#b91c1c" }}>
-              Not armed. Close and Arm first.
-            </div>
-          ) : null}
+          {!isArmed ? <div style={{ fontSize: 12, fontWeight: 900, color: "#b91c1c" }}>Not armed. Close and Arm first.</div> : null}
         </div>
       </Modal>
 
+      {/* Log modal */}
       <Modal
         open={logOpen}
         title="Bot log"
@@ -740,6 +813,7 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
         )}
       </Modal>
 
+      {/* Risk modal */}
       <Modal
         open={riskOpen}
         title="Risk Controls"

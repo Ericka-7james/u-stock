@@ -21,7 +21,7 @@ function fmtMoney(v) {
   return Number.isFinite(x) ? `$${x.toFixed(2)}` : "—";
 }
 
-// ✅ STRICT: no dots, numbers, dashes — ONLY A–Z
+// ✅ STRICT: only A–Z (no dots, dashes, numbers)
 function isAlphaOnlySymbol(sym) {
   const s = String(sym || "").trim().toUpperCase();
   return /^[A-Z]+$/.test(s);
@@ -207,7 +207,6 @@ function safeSym(it) {
 function normalizeEffectiveState(x) {
   const v = String(x || "").trim().toLowerCase();
 
-  // Expand accepted keys/states (safe)
   const ok = new Set([
     "running",
     "waiting_for_market",
@@ -225,7 +224,6 @@ function normalizeEffectiveState(x) {
   return ok.has(v) ? v : v || "stopped";
 }
 
-// Pull effective state from multiple possible keys
 function readEffectiveState(s) {
   if (!s || typeof s !== "object") return "stopped";
   return normalizeEffectiveState(
@@ -245,22 +243,26 @@ function readIntent(s) {
 }
 
 function readRunnerOnline(s) {
-  // If backend provides heartbeat_age_s, honor it.
-  // Otherwise treat "offline" state as offline and everything else as unknown/online-ish.
-  const age =
-    Number(s?.heartbeat_age_s ?? s?.heartbeatAgeS ?? s?.heartbeat_age ?? s?.heartbeatAge ?? NaN);
-
-  if (Number.isFinite(age)) {
-    // pick a conservative default stale threshold (matches your UI expectation)
-    return age >= 0 && age <= 180;
-  }
-
+  // If backend explicitly says offline, trust it
   const eff = readEffectiveState(s);
   if (eff === "offline") return false;
-  if (eff === "error") return true; // runner likely alive but failing
 
-  // Unknown: don’t hard-fail the UI; treat as "maybe online"
-  return true;
+  const raw =
+    s?.heartbeatAgeSec ??
+    s?.heartbeat_age_s ??
+    s?.heartbeatAgeS ??
+    s?.heartbeat_age ??
+    s?.heartbeatAge ??
+    null;
+
+  // IMPORTANT: null/undefined means “no heartbeat yet”
+  if (raw === null || raw === undefined) return false;
+
+  const age = Number(raw);
+  if (!Number.isFinite(age)) return false;
+
+  // stale threshold should match backend “offline” (90s) plus buffer
+  return age >= 0 && age <= 180;
 }
 
 function deriveBotUiState(botId, botStatuses) {
@@ -278,7 +280,6 @@ function deriveBotUiState(botId, botStatuses) {
     return { kind: "offline", runnerOnline: false, intent, eff };
   }
 
-  // Prefer intent for UX messaging
   if (intent === "paused" || eff === "paused") return { kind: "paused", runnerOnline, intent, eff };
   if (intent === "running" || eff === "running") return { kind: "running", runnerOnline, intent, eff };
   if (eff === "waiting_for_market") return { kind: "waiting", runnerOnline, intent, eff };
@@ -289,13 +290,11 @@ function deriveBotUiState(botId, botStatuses) {
   return { kind: "idle", runnerOnline, intent, eff };
 }
 
-// What counts as "bot active enough to show bot-driven content"
 function isBotActiveForUi(ui) {
   if (!ui) return false;
   if (ui.kind === "no_bot") return false;
   if (ui.kind === "offline") return false;
-  // paused still counts as active (you want to see last snapshots)
-  return true;
+  return true; // paused still counts (show last snapshots)
 }
 
 function BotIntentsCard({ botUi, botId, onPickSymbol }) {
@@ -324,7 +323,7 @@ function BotIntentsCard({ botUi, botId, onPickSymbol }) {
       setTs(Number(data?.ts) || 0);
     } catch (e) {
       setErr(String(e?.message || e));
-      // keep last snapshot if we had one; don’t hard-wipe unless bot changes
+      // Keep last snapshot if any (don’t hard-wipe)
     } finally {
       setBusy(false);
     }
@@ -333,7 +332,6 @@ function BotIntentsCard({ botUi, botId, onPickSymbol }) {
   useEffect(() => {
     const id = String(botId || "").trim();
 
-    // ✅ Only clear if NO bot selected
     if (!id) {
       setItems([]);
       setTs(0);
@@ -342,7 +340,6 @@ function BotIntentsCard({ botUi, botId, onPickSymbol }) {
       return;
     }
 
-    // ✅ If bot changes, clear
     if (lastBotIdRef.current && lastBotIdRef.current !== id) {
       setItems([]);
       setTs(0);
@@ -350,10 +347,8 @@ function BotIntentsCard({ botUi, botId, onPickSymbol }) {
     }
     lastBotIdRef.current = id;
 
-    // ✅ Always allow refresh for selected bot (even paused/offline) to show last snapshot
     refresh();
 
-    // poll only when bot is "active enough" (running/paused/waiting/starting etc.)
     const shouldPoll = isBotActiveForUi(botUi);
     if (!shouldPoll) return;
 
@@ -380,13 +375,7 @@ function BotIntentsCard({ botUi, botId, onPickSymbol }) {
           {headerLine} · Updated <span className="mono">{ts ? fmtTime(ts) : "—"}</span>
         </div>
 
-        <button
-          className="tpTab"
-          type="button"
-          onClick={refresh}
-          disabled={!botId || busy}
-          style={{ height: 34 }}
-        >
+        <button className="tpTab" type="button" onClick={refresh} disabled={!botId || busy} style={{ height: 34 }}>
           Refresh
         </button>
       </div>
@@ -429,9 +418,7 @@ function BotIntentsCard({ botUi, botId, onPickSymbol }) {
           })
         ) : (
           <div className="tpEmpty">
-            {!botId
-              ? "Select a bot to view intents."
-              : "No intents yet. (When bot logic submits intents, they show here.)"}
+            {!botId ? "Select a bot to view intents." : "No intents yet. (When bot submits intents, they show here.)"}
           </div>
         )}
       </div>
@@ -454,7 +441,6 @@ function parseDateLoose(v) {
   return Number.isFinite(d?.getTime?.()) ? d : null;
 }
 
-// inclusive days: Jan 28 -> Feb 1 = 5 days
 function computeInclusiveDays(start, end) {
   const a = parseDateLoose(start);
   const b = parseDateLoose(end);
@@ -467,7 +453,6 @@ function computeInclusiveDays(start, end) {
 }
 
 function computeRangeDaysLabel(timeframe) {
-  // default “Past week” if timeframe is null/empty
   if (!timeframe) return { days: 7, label: "7 days" };
 
   const start = timeframe?.start ?? timeframe?.from ?? timeframe?.date_from ?? timeframe?.time_min;
@@ -476,7 +461,6 @@ function computeRangeDaysLabel(timeframe) {
   const d = computeInclusiveDays(start, end);
   if (d !== null) return { days: d, label: `${d} day${d === 1 ? "" : "s"}` };
 
-  // fallback if we can’t parse
   return { days: null, label: "—" };
 }
 
@@ -489,17 +473,13 @@ export default function TradePerformancePanel({
   timeframe = null,
   onTimeframeChange,
 
-  activeBot = null, // initial selection from parent (optional)
+  activeBot = null,
   botStatuses = null,
   onStartBot,
   onStopBot,
 }) {
-  /* ✅ SOURCE OF TRUTH:
-     TradePerformancePanel owns the selected bot id.
-  */
   const [selectedBotId, setSelectedBotId] = useState(() => String(activeBot?.id || "").trim());
 
-  // If parent changes activeBot (route change / reload), sync it in.
   useEffect(() => {
     const next = String(activeBot?.id || "").trim();
     if (next && next !== selectedBotId) setSelectedBotId(next);
@@ -509,7 +489,6 @@ export default function TradePerformancePanel({
   const botId = String(selectedBotId || "").trim();
 
   const botUi = useMemo(() => deriveBotUiState(botId, botStatuses), [botId, botStatuses]);
-  const botActiveForUi = useMemo(() => isBotActiveForUi(botUi), [botUi]);
 
   const oppStocks = useMemo(() => {
     const raw = Array.isArray(opportunities?.stocks) ? opportunities.stocks : [];
@@ -590,7 +569,6 @@ export default function TradePerformancePanel({
   const trades = Array.isArray(safe.trades) ? safe.trades : [];
   const winRate = trades.length ? (trades.filter((t) => n(t.pnl) > 0).length / trades.length) * 100 : 0;
 
-  // ✅ Single coherent Bot Status card
   const botStatusValue =
     botUi.kind === "no_bot"
       ? "—"
@@ -636,7 +614,6 @@ export default function TradePerformancePanel({
       ? "neg"
       : "";
 
-  // ✅ correct subtitle: ALWAYS refer to selected botId
   const subtitle = useMemo(() => {
     if (!botId) return "No bot selected — choose a bot to enable bot-aligned picks.";
     if (botUi.kind === "paused") return `Bot paused: ${botId}`;
@@ -698,7 +675,6 @@ export default function TradePerformancePanel({
             <div className="tpOppGrid">
               <OpportunityTable
                 title="Bot-aligned (leaders ∩ bot)"
-                // ✅ show aligned if we have bot opportunities, even if paused
                 rows={hasBotOpportunities ? aligned : []}
                 emptyMessage={
                   !botId
@@ -743,3 +719,11 @@ export default function TradePerformancePanel({
     </section>
   );
 }
+
+/**
+ * TODOs / likely breakpoints:
+ * - If botStatuses shape changes, ensure heartbeatAgeSec/effective_state keys remain mapped.
+ * - If you add OTC/crypto symbols, relax isAlphaOnlySymbol() (currently blocks dots/dashes/numbers).
+ * - If leader/opportunity sources return lowercase or extra metadata, normalize upstream before rendering.
+ * - If polling causes load, gate polling only to running/waiting (instead of paused).
+ */

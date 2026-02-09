@@ -7,7 +7,11 @@ from fastapi import APIRouter, Depends, Query, Request, Response
 from fastapi.responses import JSONResponse
 
 from api.deps import require_user
-from api.security.bot_runner_dep import require_bot_runner
+from api.security.bot_runner_dep import (
+    require_bot_runner,
+    require_bot_runner_claims,
+    enforce_runner_user,
+)
 from api.core.bots.validators import clean_bot_id, normalize_mode, parse_ts_to_epoch_seconds
 from api.core.bots.service import BotService
 from api.db import get_supabase_service
@@ -41,7 +45,9 @@ def status(
     return svc.status(user_id, bid)
 
 
-# ✅ NEW: Arm / Disarm (cookie auth)
+# -----------------------------
+# Cookie-auth control endpoints
+# -----------------------------
 @router.post("/arm")
 def arm(
     request: Request,
@@ -52,13 +58,12 @@ def arm(
     u = require_user(request, response)
     user_id = u["id"]
 
-    bid = clean_bot_id(payload.get("bot_id"))
+    bid = clean_bot_id((payload or {}).get("bot_id"))
     if not bid:
         return JSONResponse(status_code=400, content={"detail": "bot_id required"})
 
-    mode = payload.get("mode")
+    mode = (payload or {}).get("mode")
     mode_norm = normalize_mode(mode) if mode else None
-
     return svc.arm(user_id, bid, mode_norm)
 
 
@@ -72,37 +77,11 @@ def disarm(
     u = require_user(request, response)
     user_id = u["id"]
 
-    bid = clean_bot_id(payload.get("bot_id"))
+    bid = clean_bot_id((payload or {}).get("bot_id"))
     if not bid:
         return JSONResponse(status_code=400, content={"detail": "bot_id required"})
 
     return svc.disarm(user_id, bid)
-
-
-@router.get("/log")
-def log(
-    request: Request,
-    response: Response,
-    bot_id: str = Query(...),
-    limit: int = Query(50, ge=1, le=300),
-    start_ts: int = Query(0, ge=0, description="Epoch seconds (inclusive). 0 = no lower bound."),
-    end_ts: int = Query(0, ge=0, description="Epoch seconds (inclusive). 0 = no upper bound."),
-    svc: BotService = Depends(get_bot_service),
-):
-    u = require_user(request, response)
-    user_id = u["id"]
-
-    bid = clean_bot_id(bot_id)
-    if not bid:
-        return JSONResponse(status_code=400, content={"detail": "bot_id required"})
-
-    return svc.get_log(
-        user_id,
-        bid,
-        limit=int(limit),
-        start_ts=int(start_ts or 0),
-        end_ts=int(end_ts or 0),
-    )
 
 
 @router.post("/start")
@@ -115,11 +94,11 @@ def start(
     u = require_user(request, response)
     user_id = u["id"]
 
-    bid = clean_bot_id(payload.get("bot_id"))
+    bid = clean_bot_id((payload or {}).get("bot_id"))
     if not bid:
         return JSONResponse(status_code=400, content={"detail": "bot_id required"})
 
-    mode = normalize_mode(payload.get("mode"))
+    mode = normalize_mode((payload or {}).get("mode"))
     return svc.start(user_id, bid, mode)
 
 
@@ -142,6 +121,39 @@ def stop(
     return svc.stop(user_id, bid)
 
 
+# -----------------------------
+# Cookie-auth logs + snapshots
+# -----------------------------
+@router.get("/log")
+def log(
+    request: Request,
+    response: Response,
+    bot_id: str = Query(...),
+    mode: str = Query("paper", description="paper|live"),
+    limit: int = Query(50, ge=1, le=300),
+    start_ts: int = Query(0, ge=0, description="Epoch seconds (inclusive). 0 = no lower bound."),
+    end_ts: int = Query(0, ge=0, description="Epoch seconds (inclusive). 0 = no upper bound."),
+    svc: BotService = Depends(get_bot_service),
+):
+    u = require_user(request, response)
+    user_id = u["id"]
+
+    bid = clean_bot_id(bot_id)
+    if not bid:
+        return JSONResponse(status_code=400, content={"detail": "bot_id required"})
+
+    m = normalize_mode(mode)
+
+    # ✅ pass mode through so BotLogsCard can filter accurately
+    return svc.get_log(
+        user_id,
+        bid,
+        mode=m,
+        limit=int(limit),
+        start_ts=int(start_ts or 0),
+        end_ts=int(end_ts or 0),
+    )
+
 @router.get("/intents")
 def intents_snapshot(
     request: Request,
@@ -158,7 +170,7 @@ def intents_snapshot(
         return JSONResponse(status_code=400, content={"detail": "bot_id required"})
 
     st = svc.status(user_id, bid)
-    items = (st.get("lastIntentsPreview") or [])
+    items = st.get("lastIntentsPreview") or []
     if not isinstance(items, list):
         items = []
 
@@ -239,22 +251,26 @@ def events_feed(
                 }
             )
 
-        next_before = 0
-        if items:
-            next_before = int(items[-1].get("ts") or 0)
-
+        next_before = int(items[-1]["ts"]) if items else 0
         return {"ok": True, "bot_id": bid, "mode": m, "items": items, "next_before_ts": next_before}
 
     except Exception as e:
         return {"ok": False, "bot_id": bid, "mode": m, "items": [], "error": f"{type(e).__name__}"}
 
 
+# -----------------------------
+# Runner-auth endpoints
+# -----------------------------
 @router.post("/heartbeat")
 def heartbeat(
     payload: Dict[str, Any],
     runner_id: str = Depends(require_bot_runner),
+    claims: Dict[str, Any] = Depends(require_bot_runner_claims),
     svc: BotService = Depends(get_bot_service),
 ):
+    if not isinstance(payload, dict):
+        return JSONResponse(status_code=400, content={"detail": "payload must be an object"})
+
     bid = clean_bot_id(payload.get("bot_id"))
     if not bid:
         return JSONResponse(status_code=400, content={"detail": "bot_id required"})
@@ -263,10 +279,13 @@ def heartbeat(
     if not user_id:
         return JSONResponse(status_code=400, content={"detail": "user_id required"})
 
-    payload = dict(payload)
-    payload["bot_id"] = bid
-    payload["runner_id"] = runner_id
-    return svc.heartbeat(user_id, payload)
+    # Optional hardening (OFF by default)
+    enforce_runner_user(payload_user_id=user_id, claims=claims)
+
+    out = dict(payload)
+    out["bot_id"] = bid
+    out["runner_id"] = runner_id
+    return svc.heartbeat(user_id, out)
 
 
 @router.get("/status_runner")
@@ -274,15 +293,19 @@ def status_runner(
     bot_id: str = Query(...),
     user_id: str = Query(...),
     runner_id: str = Depends(require_bot_runner),
+    claims: Dict[str, Any] = Depends(require_bot_runner_claims),
     svc: BotService = Depends(get_bot_service),
 ):
     bid = clean_bot_id(bot_id)
     if not bid:
         return JSONResponse(status_code=400, content={"detail": "bot_id required"})
 
-    uid = str(user_id or "").strip()
+    uid = str((claims or {}).get("uid") or (claims or {}).get("sub") or "").strip()
     if not uid:
         return JSONResponse(status_code=400, content={"detail": "user_id required"})
+
+    # Optional hardening (OFF by default)
+    enforce_runner_user(payload_user_id=uid, claims=claims)
 
     return svc.status(uid, bid)
 
@@ -291,8 +314,12 @@ def status_runner(
 def submit_intents(
     payload: Dict[str, Any],
     runner_id: str = Depends(require_bot_runner),
+    claims: Dict[str, Any] = Depends(require_bot_runner_claims),
     svc: BotService = Depends(get_bot_service),
 ):
+    if not isinstance(payload, dict):
+        return JSONResponse(status_code=400, content={"detail": "payload must be an object"})
+
     bid = clean_bot_id(payload.get("bot_id"))
     if not bid:
         return JSONResponse(status_code=400, content={"detail": "bot_id required"})
@@ -300,6 +327,9 @@ def submit_intents(
     user_id = str(payload.get("user_id") or "").strip()
     if not user_id:
         return JSONResponse(status_code=400, content={"detail": "user_id required"})
+
+    # Optional hardening (OFF by default)
+    enforce_runner_user(payload_user_id=user_id, claims=claims)
 
     ts = payload.get("ts")
     try:
@@ -312,7 +342,11 @@ def submit_intents(
         return JSONResponse(status_code=400, content={"detail": "items must be a list"})
 
     return svc.submit_intents(user_id, bid, ts_int, items)
-    
+
+
+# -----------------------------
+# Config endpoints
+# -----------------------------
 @router.get("/config")
 def get_config(
     request: Request,
@@ -340,6 +374,9 @@ def set_config(
     u = require_user(request, response)
     user_id = u["id"]
 
+    if not isinstance(payload, dict):
+        return JSONResponse(status_code=400, content={"detail": "payload must be an object"})
+
     bid = clean_bot_id(payload.get("bot_id"))
     config = payload.get("config")
 
@@ -349,3 +386,11 @@ def set_config(
         return JSONResponse(status_code=400, content={"detail": "config must be an object"})
 
     return svc.set_config(user_id, bid, config)
+
+
+"""
+TODOs (future):
+- Add /api/bots/health (per bot) for “runner last seen”, “last tick”, etc.
+- Add server-side rate limiting for runner endpoints.
+- Consider moving events_feed into BotService for consistent error handling.
+"""

@@ -4,7 +4,6 @@ from __future__ import annotations
 # Load .env early (so BOT_ID / LOOP_SECONDS read correct values)
 try:
     from dotenv import load_dotenv  # type: ignore
-
     load_dotenv()
 except Exception:
     pass
@@ -14,9 +13,9 @@ import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from bots._shared.ustock_http import UStockAPI
+
 from runner.engine import BotEngine
 from runner.supabase import upload_transaction_events
-
 from runner import api_client
 from runner.config_loader import build_bot_cfg
 from runner.events import attach_event_id, merge_events, new_event_id, now_iso
@@ -65,25 +64,58 @@ def _extract_mode_cfg(status: Dict[str, Any]) -> Tuple[str, Dict[str, Any]]:
     return mode, cfg
 
 
+def _runner_user_id() -> str:
+    """
+    Runner endpoints require user_id. Prefer explicit env.
+    """
+    return (os.getenv("RUNNER_USER_ID") or os.getenv("USTOCK_USER_ID") or "").strip()
+
+
+def _pick_user_id_from_status(status: Dict[str, Any]) -> str:
+    """
+    status_runner should return user_id, but we also keep env fallback.
+    """
+    uid = str(status.get("user_id") or "").strip()
+    return uid or _runner_user_id()
+
+
 def run_once(api: UStockAPI, *, risk_state: RiskState, hb_state: HeartbeatState) -> None:
     """
     Runs a single orchestrator loop:
       status -> market gate -> scanner -> bot strategy -> risk gate -> execution -> event sink -> heartbeat
-    """
-    status = api_client.get_status(api, BOT_ID)
 
-    user_id = str(status.get("user_id") or "").strip()
+    Where it can break:
+      - status call fails (auth / missing user_id)
+      - submit_intents fails (backend requires user_id)
+      - heartbeat fails (network/auth) -> swallowed by safe_heartbeat
+      - upload_transaction_events can fail (supabase/network)
+      - engine.execute_intents can throw (broker integration)
+    """
+    # ✅ Always pass user_id for status_runner (required by backend)
+    uid_hint = _runner_user_id()
+    status = api_client.get_status(api, BOT_ID, user_id=uid_hint or None)
+
+    user_id = _pick_user_id_from_status(status)
     intent = str(status.get("intent") or "paused").strip().lower()
     status_mode = _normalize_mode(status.get("mode") or "paper")
 
+    # If we can't resolve user_id, runner cannot function safely.
+    # Better to fail loudly than silently do nothing forever.
+    if not user_id:
+        raise RuntimeError(
+            "Runner missing user_id. Set RUNNER_USER_ID in u-stock-bots env "
+            "or ensure backend status_runner returns user_id."
+        )
+
     if intent != "running":
-        send_paused(api, hb_state, bot_id=BOT_ID, status_mode=status_mode, user_id=user_id or None)
+        # ✅ emits heartbeat + bot_events heartbeat entries when user paused/disarmed
+        send_paused(api, hb_state, bot_id=BOT_ID, status_mode=status_mode, user_id=user_id)
         return
 
     mode, status_cfg = _extract_mode_cfg(status)
 
     if RESPECT_MARKET_HOURS:
-        gate_market_hours(api, hb_state, bot_id=BOT_ID, mode=mode, user_id=user_id or None)
+        gate_market_hours(api, hb_state, bot_id=BOT_ID, mode=mode, user_id=user_id)
 
     decision_event_id = new_event_id()
 
@@ -117,8 +149,9 @@ def run_once(api: UStockAPI, *, risk_state: RiskState, hb_state: HeartbeatState)
         status=status,
     )
 
-    # Always report what strategy wanted (even if gated)
-    api_client.submit_intents(api, BOT_ID, intents)
+    # ✅ Always report what strategy wanted (even if gated)
+    # NOTE: backend requires user_id, so we send it explicitly.
+    api_client.submit_intents(api, BOT_ID, intents, user_id=user_id)
 
     if not gated_intents:
         combined: List[Dict[str, Any]] = []
@@ -138,15 +171,14 @@ def run_once(api: UStockAPI, *, risk_state: RiskState, hb_state: HeartbeatState)
 
         attach_event_id(combined, decision_event_id)
 
-        if user_id:
-            upload_transaction_events(user_id, BOT_ID, mode, combined)
+        upload_transaction_events(user_id, BOT_ID, mode, combined)
 
         now = now_epoch()
         sig = f"running|{mode}|gated|{gate_reason}"
         if should_heartbeat(hb_state, sig, now=now):
             safe_heartbeat(
                 api,
-                user_id=user_id or None,
+                user_id=user_id,
                 bot_id=BOT_ID,
                 intent="running",
                 effective_state="running",
@@ -173,19 +205,19 @@ def run_once(api: UStockAPI, *, risk_state: RiskState, hb_state: HeartbeatState)
     combined = merge_events(strat_events, tx_events)
     attach_event_id(combined, decision_event_id)
 
-    if user_id:
-        upload_transaction_events(user_id, BOT_ID, mode, combined)
-        try:
-            api_client.sync_trade_fills(api, bot_id=BOT_ID, mode=mode)
-        except Exception:
-            pass
+    upload_transaction_events(user_id, BOT_ID, mode, combined)
+    try:
+        api_client.sync_trade_fills(api, bot_id=BOT_ID, mode=mode, user_id=user_id)
+    except Exception:
+        # TODO: emit a warning event (non-fatal)
+        pass
 
     now = now_epoch()
     sig = f"running|{mode}|loop_ok"
     if should_heartbeat(hb_state, sig, now=now):
         safe_heartbeat(
             api,
-            user_id=user_id or None,
+            user_id=user_id,
             bot_id=BOT_ID,
             intent="running",
             effective_state="running",
@@ -198,7 +230,7 @@ def run_once(api: UStockAPI, *, risk_state: RiskState, hb_state: HeartbeatState)
 
 
 def main(*, max_loops: Optional[int] = None, sleep_fn: Callable[[float], None] = time.sleep) -> None:
-    base_url = os.getenv("USTOCK_API_BASE", "http://127.0.0.1:8000")
+    base_url = os.getenv("USTOCK_API_BASE", "http://127.0.0.1:8000").strip()
     print(
         f"[runner] starting | base={base_url} | bot_id={BOT_ID} | loop={LOOP_SECONDS}s "
         f"| respect_market_hours={RESPECT_MARKET_HOURS}"
@@ -207,6 +239,9 @@ def main(*, max_loops: Optional[int] = None, sleep_fn: Callable[[float], None] =
     loops = 0
     risk_state = RiskState()
     hb_state = HeartbeatState()
+
+    # Simple failure backoff: if we hit repeated exceptions, slow down temporarily
+    fail_streak = 0
 
     with UStockAPI(base_url=base_url, timeout=15) as api:
         while True:
@@ -218,20 +253,25 @@ def main(*, max_loops: Optional[int] = None, sleep_fn: Callable[[float], None] =
 
             try:
                 run_once(api, risk_state=risk_state, hb_state=hb_state)
+                fail_streak = 0
 
             except MarketClosed:
+                # Not an error; just wait
                 _sleep_smart(LOOP_SECONDS - (time.time() - t0), sleep_fn=sleep_fn)
                 continue
 
             except Exception as e:
-                # If we don't have user_id here, safe_heartbeat() will skip to avoid 400 spam.
+                fail_streak += 1
+
+                # Best-effort mode/user_id for error heartbeat
                 mode = "paper"
+                uid = _runner_user_id() or None
                 now = now_epoch()
                 sig = f"error|{mode}|runner_exception|{type(e).__name__}"
                 if should_heartbeat(hb_state, sig, now=now):
                     safe_heartbeat(
                         api,
-                        user_id=None,
+                        user_id=uid,
                         bot_id=BOT_ID,
                         intent="running",
                         effective_state="error",
@@ -242,8 +282,21 @@ def main(*, max_loops: Optional[int] = None, sleep_fn: Callable[[float], None] =
                         last_tick=now,
                     )
 
+                # Backoff: 0s, 1s, 2s, 4s, 8s (cap 8s) added on top of normal pacing
+                backoff = min(8.0, float(2 ** max(0, min(fail_streak, 4)) - 1))
+                _sleep_smart(backoff, sleep_fn=sleep_fn)
+
+            # Normal pacing
             _sleep_smart(LOOP_SECONDS - (time.time() - t0), sleep_fn=sleep_fn)
 
 
 if __name__ == "__main__":
     main()
+
+"""
+TODOs (future):
+- Multi-bot runner: read BOT_IDs list and loop per bot, or spawn per bot.
+- Persist risk_state per user/bot (currently in-memory).
+- Emit explicit warning events for non-fatal failures (fills sync, upload failures).
+- Add jitter to polling to avoid stampede if many runners run at once.
+"""
