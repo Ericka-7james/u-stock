@@ -35,6 +35,10 @@ def _runner_id_for_mint(bot_id: str) -> str:
 
 
 def _runner_user_id() -> str:
+    """
+    Runner MUST know which user it is operating for.
+    Keep this required for status_runner + heartbeat + submit_intents.
+    """
     return _env("RUNNER_USER_ID") or _env("USTOCK_USER_ID")
 
 
@@ -42,11 +46,6 @@ def _mint_runner_token(api: UStockAPI, *, bot_id: str) -> Tuple[str, int]:
     """
     Calls backend POST /api/runner/token using shared secret to mint a JWT.
     Returns (token, expires_in_seconds).
-
-    Where it can break:
-      - shared secret mismatch (401)
-      - backend signing key missing (500)
-      - network errors
     """
     shared = _env("RUNNER_SHARED_SECRET")
     if not shared:
@@ -57,7 +56,7 @@ def _mint_runner_token(api: UStockAPI, *, bot_id: str) -> Tuple[str, int]:
     runner_id = _runner_id_for_mint(bot_id)
     headers = {"X-Runner-Secret": shared}
 
-    # Optional: pass user id to embed uid claim in token
+    # Optional: embed uid claim in token (if backend supports it)
     uid = _runner_user_id()
     if uid:
         headers["X-Runner-User-Id"] = uid
@@ -92,8 +91,6 @@ _CACHE = _TokenCache()
 
 def _is_token_expired_401(err: Exception) -> bool:
     s = str(err or "")
-    # ustock_http formats like:
-    # HTTPError('401 Unauthorized | {"detail":"Runner token expired"}')
     return ("401" in s) and ("expired" in s.lower() or "token expired" in s.lower())
 
 
@@ -143,9 +140,6 @@ def _auth_headers_for_bot(api: UStockAPI, *, bot_id: str) -> Dict[str, str]:
 
 
 def _post_with_auth_retry(api: UStockAPI, path: str, *, bot_id: str, json: Dict[str, Any]) -> Any:
-    """
-    POST with auth. If backend says token expired and we can mint, invalidate cache and retry once.
-    """
     bid = str(bot_id or "").strip()
     try:
         return api.post(path, json=json, headers=_auth_headers_for_bot(api, bot_id=bid))
@@ -157,9 +151,6 @@ def _post_with_auth_retry(api: UStockAPI, path: str, *, bot_id: str, json: Dict[
 
 
 def _get_with_auth_retry(api: UStockAPI, path: str, *, bot_id: str, params: Optional[Dict[str, Any]] = None) -> Any:
-    """
-    GET with auth. If backend says token expired and we can mint, invalidate cache and retry once.
-    """
     bid = str(bot_id or "").strip()
     try:
         return api.get(path, params=params or {}, headers=_auth_headers_for_bot(api, bot_id=bid))
@@ -175,6 +166,16 @@ def _s(x: Any) -> Optional[str]:
         return None
     s = str(x).strip()
     return s if s else None
+
+
+def _require_runner_user_id(where: str) -> str:
+    uid = (_runner_user_id() or "").strip()
+    if not uid:
+        raise RuntimeError(
+            f"Runner missing user_id for {where}. Set RUNNER_USER_ID in u-stock-bots env "
+            f"(or USTOCK_USER_ID). This is REQUIRED for status_runner + heartbeat + submit-intents."
+        )
+    return uid
 
 
 # -------------------------
@@ -194,10 +195,6 @@ def heartbeat_tick(
 ) -> None:
     """
     Convenience: uses RUNNER_USER_ID from env and posts heartbeat.
-
-    Notes:
-      - If RUNNER_SHARED_SECRET is set, runner will mint a JWT via /api/runner/token.
-      - RUNNER_USER_ID is still required by your /api/bots/heartbeat payload (until backend fully binds uid claim).
     """
     uid = (_runner_user_id() or "").strip()
     if not uid:
@@ -219,18 +216,32 @@ def heartbeat_tick(
     )
 
 
-def get_status(api: UStockAPI, bot_id: str) -> Dict[str, Any]:
+def get_status(
+    api: UStockAPI,
+    bot_id: str,
+    *,
+    user_id: Optional[str] = None,
+    **_ignore: Any,  # <-- swallow unexpected kwargs safely
+) -> Dict[str, Any]:
     """
     Calls /api/bots/status_runner.
-    user_id is intended to be bound to the runner token via uid claim (minted with X-Runner-User-Id),
-    so this endpoint should NOT require user_id as query param.
+
+    We accept **kwargs so older callers that pass user_id= won't crash.
+    user_id is REQUIRED for logging + current backend contract.
     """
     bid = str(bot_id or "").strip()
+
+    uid = (str(user_id or "").strip() or _runner_user_id() or "").strip()
+    if not uid:
+        raise RuntimeError(
+            "Runner missing user_id for get_status. Set RUNNER_USER_ID (or USTOCK_USER_ID) in runner env."
+        )
+
     data = _get_with_auth_retry(
         api,
         "/api/bots/status_runner",
         bot_id=bid,
-        params={"bot_id": bid},
+        params={"bot_id": bid, "user_id": uid},
     )
     return _as_dict(data)
 
@@ -242,7 +253,6 @@ def submit_intents(api: UStockAPI, bot_id: str, intents: List[Dict[str, Any]], *
     bid = str(bot_id or "").strip()
     uid = (str(user_id or "").strip() or _runner_user_id() or "").strip()
     if not uid:
-        # TODO: optionally buffer intents locally
         return
 
     payload = {
@@ -281,9 +291,6 @@ def market_session(api: UStockAPI, bot_id: str) -> Dict[str, Any]:
 
 
 def sync_trade_fills(api: UStockAPI, *, bot_id: str, mode: str, user_id: Optional[str] = None) -> None:
-    """
-    If your backend ties fills to the user session, you may later want user-bound runner claims.
-    """
     bid = str(bot_id or "").strip()
     payload = {"bot_id": bid, "mode": str(mode or "paper").strip().lower()}
 
@@ -321,6 +328,10 @@ def post_heartbeat(
     if not uid:
         return
 
+    # IMPORTANT: We intentionally send "" to CLEAR stale errors in storage.
+    # Many backends treat null/None as "do not overwrite", which would keep old last_error forever.
+    last_error_str = str(last_error or "").strip()
+
     payload: Dict[str, Any] = {
         "user_id": uid,
         "bot_id": _s(bot_id) or "unknown",
@@ -334,7 +345,7 @@ def post_heartbeat(
         "message": _s(message),
         "paused_reason": _s(paused_reason),
         "next_open_epoch": int(next_open_epoch) if isinstance(next_open_epoch, (int, float)) else None,
-        "last_error": _s(last_error),
+        "last_error": last_error_str,
     }
 
     _post_with_auth_retry(
@@ -343,12 +354,3 @@ def post_heartbeat(
         bot_id=str(bot_id or "").strip(),
         json=payload,
     )
-
-
-"""
-TODO (security hardening you can do later):
-- Bind runner JWT to user_id claim (uid) and have backend enforce:
-    payload.user_id == claims['uid'].
-- Add local disk buffer for events/intents if backend is down.
-- Consider checking uid presence in env at startup and warn loudly if missing.
-"""

@@ -6,17 +6,19 @@ import re
 
 BOT_ID_RE = re.compile(r"^[a-zA-Z0-9_]{1,64}$")
 
-# heartbeat intent values (runner -> server)
-INTENTS = {"running", "paused"}
+# intent values (user lifecycle intent)
+# running = user wants bot executing
+# stopped = user explicitly stopped / not started
+INTENTS = {"running", "stopped"}
 
-# desired_state values (ui -> server)
-DESIRED_STATES = {"running", "paused", "armed"}
+# desired_state values (UI composite)
+DESIRED_STATES = {"running", "stopped", "armed", "disarmed"}
 
+# effective_state values (runner reality)
 EFFECTIVE_STATES = {
     "starting",
     "running",
     "waiting_for_market",
-    "paused",
     "stopped",
     "degraded",
     "error",

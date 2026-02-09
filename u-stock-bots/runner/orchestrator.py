@@ -4,6 +4,7 @@ from __future__ import annotations
 # Load .env early (so BOT_ID / LOOP_SECONDS read correct values)
 try:
     from dotenv import load_dotenv  # type: ignore
+
     load_dotenv()
 except Exception:
     pass
@@ -23,7 +24,7 @@ from runner.heartbeat import (
     HeartbeatState,
     MarketClosed,
     gate_market_hours,
-    send_paused,
+    send_stopped,
     safe_heartbeat,
     should_heartbeat,
     now_epoch,
@@ -79,29 +80,24 @@ def _pick_user_id_from_status(status: Dict[str, Any]) -> str:
     return uid or _runner_user_id()
 
 
+def _normalize_intent(raw: Any) -> str:
+    v = str(raw or "").strip().lower()
+    if v == "paused":
+        v = "stopped"
+    return v if v in ("running", "stopped") else "stopped"
+
+
 def run_once(api: UStockAPI, *, risk_state: RiskState, hb_state: HeartbeatState) -> None:
     """
-    Runs a single orchestrator loop:
-      status -> market gate -> scanner -> bot strategy -> risk gate -> execution -> event sink -> heartbeat
-
-    Where it can break:
-      - status call fails (auth / missing user_id)
-      - submit_intents fails (backend requires user_id)
-      - heartbeat fails (network/auth) -> swallowed by safe_heartbeat
-      - upload_transaction_events can fail (supabase/network)
-      - engine.execute_intents can throw (broker integration)
+    status -> market gate -> scanner -> strategy -> risk gate -> execution -> sink -> heartbeat
     """
-    # ✅ Always pass user_id for status_runner (required by backend)
-    uid_hint = _runner_user_id()
     status = api_client.get_status(api, BOT_ID)
-    print("[runner] mint token uid header:", bool(uid))
 
     user_id = _pick_user_id_from_status(status)
-    intent = str(status.get("intent") or "paused").strip().lower()
+    intent = _normalize_intent(status.get("intent"))
     status_mode = _normalize_mode(status.get("mode") or "paper")
 
     # If we can't resolve user_id, runner cannot function safely.
-    # Better to fail loudly than silently do nothing forever.
     if not user_id:
         raise RuntimeError(
             "Runner missing user_id. Set RUNNER_USER_ID in u-stock-bots env "
@@ -109,8 +105,8 @@ def run_once(api: UStockAPI, *, risk_state: RiskState, hb_state: HeartbeatState)
         )
 
     if intent != "running":
-        # ✅ emits heartbeat + bot_events heartbeat entries when user paused/disarmed
-        send_paused(api, hb_state, bot_id=BOT_ID, status_mode=status_mode, user_id=user_id)
+        # Emit a stopped heartbeat + heartbeat event for UI
+        send_stopped(api, hb_state, bot_id=BOT_ID, status_mode=status_mode, user_id=user_id)
         return
 
     mode, status_cfg = _extract_mode_cfg(status)
@@ -124,7 +120,7 @@ def run_once(api: UStockAPI, *, risk_state: RiskState, hb_state: HeartbeatState)
     status_cfg, scan_events = attach_scanner_context(api, status_cfg)
     attach_event_id(scan_events, decision_event_id)
 
-    # ✅ build final cfg (env baseline -> status overrides -> scanner injected)
+    # build final cfg (env baseline -> status overrides -> scanner injected)
     scanner_ctx = status_cfg.get("scanner") if isinstance(status_cfg, dict) else None
     cfg = build_bot_cfg(
         bot_id=BOT_ID,
@@ -132,7 +128,7 @@ def run_once(api: UStockAPI, *, risk_state: RiskState, hb_state: HeartbeatState)
         scanner_ctx=scanner_ctx if isinstance(scanner_ctx, dict) else None,
     )
 
-    # Strategy (generic)
+    # Strategy
     result = compute_bot_output(api, BOT_ID, cfg)
     intents = [x for x in (result.get("intents") or []) if isinstance(x, dict)]
     strat_events = [x for x in (result.get("events") or []) if isinstance(x, dict)]
@@ -150,8 +146,7 @@ def run_once(api: UStockAPI, *, risk_state: RiskState, hb_state: HeartbeatState)
         status=status,
     )
 
-    # ✅ Always report what strategy wanted (even if gated)
-    # NOTE: backend requires user_id, so we send it explicitly.
+    # Always report what strategy wanted (even if gated)
     api_client.submit_intents(api, BOT_ID, intents, user_id=user_id)
 
     if not gated_intents:
@@ -171,7 +166,6 @@ def run_once(api: UStockAPI, *, risk_state: RiskState, hb_state: HeartbeatState)
             )
 
         attach_event_id(combined, decision_event_id)
-
         upload_transaction_events(user_id, BOT_ID, mode, combined)
 
         now = now_epoch()
@@ -202,7 +196,6 @@ def run_once(api: UStockAPI, *, risk_state: RiskState, hb_state: HeartbeatState)
             placed += 1
     record_orders_placed(risk_state, placed)
 
-    # Event sink (tx-only + strategy events)
     combined = merge_events(strat_events, tx_events)
     attach_event_id(combined, decision_event_id)
 
@@ -210,7 +203,6 @@ def run_once(api: UStockAPI, *, risk_state: RiskState, hb_state: HeartbeatState)
     try:
         api_client.sync_trade_fills(api, bot_id=BOT_ID, mode=mode, user_id=user_id)
     except Exception:
-        # TODO: emit a warning event (non-fatal)
         pass
 
     now = now_epoch()
@@ -240,8 +232,6 @@ def main(*, max_loops: Optional[int] = None, sleep_fn: Callable[[float], None] =
     loops = 0
     risk_state = RiskState()
     hb_state = HeartbeatState()
-
-    # Simple failure backoff: if we hit repeated exceptions, slow down temporarily
     fail_streak = 0
 
     with UStockAPI(base_url=base_url, timeout=15) as api:
@@ -257,14 +247,12 @@ def main(*, max_loops: Optional[int] = None, sleep_fn: Callable[[float], None] =
                 fail_streak = 0
 
             except MarketClosed:
-                # Not an error; just wait
                 _sleep_smart(LOOP_SECONDS - (time.time() - t0), sleep_fn=sleep_fn)
                 continue
 
             except Exception as e:
                 fail_streak += 1
 
-                # Best-effort mode/user_id for error heartbeat
                 mode = "paper"
                 uid = _runner_user_id() or None
                 now = now_epoch()
@@ -283,21 +271,11 @@ def main(*, max_loops: Optional[int] = None, sleep_fn: Callable[[float], None] =
                         last_tick=now,
                     )
 
-                # Backoff: 0s, 1s, 2s, 4s, 8s (cap 8s) added on top of normal pacing
                 backoff = min(8.0, float(2 ** max(0, min(fail_streak, 4)) - 1))
                 _sleep_smart(backoff, sleep_fn=sleep_fn)
 
-            # Normal pacing
             _sleep_smart(LOOP_SECONDS - (time.time() - t0), sleep_fn=sleep_fn)
 
 
 if __name__ == "__main__":
     main()
-
-"""
-TODOs (future):
-- Multi-bot runner: read BOT_IDs list and loop per bot, or spawn per bot.
-- Persist risk_state per user/bot (currently in-memory).
-- Emit explicit warning events for non-fatal failures (fills sync, upload failures).
-- Add jitter to polling to avoid stampede if many runners run at once.
-"""

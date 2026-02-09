@@ -5,15 +5,7 @@
   background: #ffffff;
   border: 1px solid rgba(148, 163, 184, 0.25);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.06);
-
-  /*
-    ✅ IMPORTANT:
-    This card was clipping on mobile when parent layouts got tight.
-    "hidden" is great for rounding corners, but it can hide content.
-  */
   overflow: visible;
-
-  /* ✅ Force readable foreground (fixes pill/select text blending) */
   color: #0f172a;
 }
 
@@ -40,6 +32,13 @@
   color: #0f172a;
 }
 
+/* pills */
+.botPillRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .botCardStatePill {
   font-weight: 900;
   font-size: 12px;
@@ -47,16 +46,8 @@
   border-radius: 999px;
   border: 1px solid rgba(148, 163, 184, 0.25);
   background: rgba(255, 255, 255, 0.95);
-  color: #0f172a; /* ✅ visible text */
-
-  /* ✅ prevents pills from squeezing into unreadable tiny widths */
+  color: #0f172a;
   white-space: nowrap;
-}
-
-/* dark mode (if you use data-theme) */
-[data-theme="dark"] .botCardStatePill.mode {
-  background: rgba(248, 250, 252, 0.06);
-  border-color: rgba(148, 163, 184, 0.22);
 }
 
 .botCardStatePill.pos {
@@ -77,6 +68,35 @@
   color: #7f1d1d;
 }
 
+.botCardStatePill.arm {
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  font-weight: 950;
+  padding: 7px 12px;
+  border-width: 1px;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.08);
+}
+
+.botCardStatePill.arm.warn {
+  background: rgba(245, 158, 11, 0.18);
+  border-color: rgba(245, 158, 11, 0.78);
+  color: #7c2d12;
+  box-shadow: 0 10px 24px rgba(245, 158, 11, 0.12), 0 0 0 3px rgba(245, 158, 11, 0.14);
+}
+
+.botCardStatePill.arm.neg {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.72);
+  color: #7f1d1d;
+  box-shadow: 0 10px 24px rgba(239, 68, 68, 0.08), 0 0 0 3px rgba(239, 68, 68, 0.1);
+}
+
+.botCardStatePill.status {
+  letter-spacing: 0.35px;
+  text-transform: uppercase;
+}
+
+/* body */
 .botCardBody {
   padding: 16px;
 }
@@ -102,7 +122,6 @@
   color: #0f172a;
 }
 
-/* ✅ Dropdown readability fix */
 .botSelect {
   width: 100%;
   border-radius: 12px;
@@ -112,8 +131,6 @@
   color: #0f172a;
   font-weight: 800;
   outline: none;
-
-  /* ✅ iOS/Safari: stop weird zoom/layout */
   font-size: 16px;
 }
 
@@ -138,6 +155,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
+  flex-wrap: wrap;
 }
 
 .botBtn {
@@ -148,8 +166,6 @@
   background: #ffffff;
   color: #0f172a;
   cursor: pointer;
-
-  /* ✅ prevents text wrapping in buttons */
   white-space: nowrap;
 }
 
@@ -164,6 +180,23 @@
 
 .botBtn.stop {
   border-color: rgba(239, 68, 68, 0.45);
+}
+
+.botInlineNote {
+  flex-basis: 100%;
+  border-radius: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(241, 245, 249, 0.65);
+  color: #0f172a;
+  font-weight: 800;
+  font-size: 12px;
+}
+
+.botInlineNoteSub {
+  margin-left: 8px;
+  opacity: 0.8;
+  font-weight: 800;
 }
 
 .botGrid {
@@ -187,6 +220,10 @@
   color: #0f172a;
 }
 
+.botTileFull {
+  grid-column: 1 / -1;
+}
+
 .botTileLabel {
   font-size: 12px;
   opacity: 0.7;
@@ -198,44 +235,18 @@
   font-weight: 900;
   font-size: 13px;
   color: #0f172a;
-
-  /* ✅ long error/status strings won't blow the card out */
   overflow-wrap: anywhere;
   word-break: break-word;
 }
 
 .botPausedLine {
-  font-weight: 900;
-}
-
-.botPausedSub {
   margin-top: 4px;
   font-size: 12px;
   opacity: 0.75;
-  font-weight: 700;
-}
-
-.botError {
-  margin-top: 12px;
-  border-radius: 12px;
-  padding: 10px 12px;
-  border: 1px solid rgba(239, 68, 68, 0.35);
-  background: rgba(254, 226, 226, 0.55);
   font-weight: 800;
-  font-size: 12px;
-  color: #7f1d1d;
-
-  overflow-wrap: anywhere;
-  word-break: break-word;
 }
 
-.botError.subtle {
-  border-color: rgba(148, 163, 184, 0.3);
-  background: rgba(241, 245, 249, 0.65);
-  color: #0f172a;
-}
-
-/* inputs + link button used in modal */
+/* inputs in modals */
 .botInput {
   width: 100%;
   border-radius: 12px;
@@ -243,85 +254,216 @@
   border: 1px solid rgba(148, 163, 184, 0.25);
   background: #ffffff;
   font-weight: 800;
-  color: var(--ustock-text-main);
+  color: #0f172a;
   box-sizing: border-box;
+  outline: none;
 }
 
-.botLinkBtn {
-  border: none;
-  background: transparent;
-  cursor: pointer;
+.botInput:focus {
+  border-color: rgba(34, 197, 94, 0.55);
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.12);
+}
+
+.botInputError {
+  border-color: rgba(239, 68, 68, 0.55) !important;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.12) !important;
+}
+
+.botFieldError {
+  margin-top: 6px;
+  border-radius: 10px;
+  padding: 8px 10px;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  background: rgba(254, 226, 226, 0.55);
+  color: #7f1d1d;
   font-weight: 900;
   font-size: 12px;
-  color: var(--ustock-green-main);
-  padding: 0;
 }
 
-.botLinkBtn:hover {
-  text-decoration: underline;
-}
-
-/* -----------------------------
-   Step 2: Arming pill (intentional)
-   ----------------------------- */
-
-/* wrapper for the pills in the header */
-.botPillRow {
-  display: flex;
-  align-items: center;
+.botRiskGrid {
+  display: grid;
   gap: 10px;
 }
 
-/* the ARMED/DISARMED pill gets this class in JSX:
-   it already renders as botCardStatePill + warn/neg
-   so we “upgrade” its feel with a dedicated class name.
-*/
-.botCardStatePill.arm {
-  text-transform: uppercase;
-  letter-spacing: 0.8px;
-  font-weight: 950;
-
-  padding: 7px 12px;
-  border-width: 1px;
-
-  /* reads like a deliberate toggle */
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.08);
+.botRiskField {
+  display: grid;
+  gap: 6px;
 }
 
-/* ARMED (warn) = strong, intentional */
-.botCardStatePill.arm.warn {
-  background: rgba(245, 158, 11, 0.18);
-  border-color: rgba(245, 158, 11, 0.78);
-  color: #7c2d12;
-
-  /* subtle ring = “armed” */
-  box-shadow:
-    0 10px 24px rgba(245, 158, 11, 0.12),
-    0 0 0 3px rgba(245, 158, 11, 0.14);
+.botRiskLabel {
+  font-weight: 900;
+  font-size: 12px;
+  opacity: 0.85;
 }
 
-/* DISARMED (neg) = “locked” */
-.botCardStatePill.arm.neg {
-  background: rgba(239, 68, 68, 0.12);
-  border-color: rgba(239, 68, 68, 0.72);
+.botRiskHint {
+  border-radius: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(241, 245, 249, 0.65);
+  color: #0f172a;
+  font-weight: 800;
+  font-size: 12px;
+}
+
+/* modal layout helpers */
+.botModalStack {
+  display: grid;
+  gap: 10px;
+}
+
+.botModalRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-weight: 900;
+}
+
+.botModalLabel {
+  opacity: 0.85;
+  font-weight: 900;
+}
+
+.botModalHelper {
+  font-size: 12px;
+  opacity: 0.8;
+  font-weight: 800;
+}
+
+.botModalDanger {
+  border-radius: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  background: rgba(254, 226, 226, 0.55);
   color: #7f1d1d;
-
-  box-shadow:
-    0 10px 24px rgba(239, 68, 68, 0.08),
-    0 0 0 3px rgba(239, 68, 68, 0.10);
+  font-weight: 900;
+  font-size: 12px;
 }
 
-/* the LIVE/OFF/PAUSED pill stays more “status-like” */
-.botCardStatePill.status {
-  letter-spacing: 0.35px;
-  text-transform: uppercase;
+.botModalWarn {
+  border-radius: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  background: rgba(254, 243, 199, 0.55);
+  color: #92400e;
+  font-weight: 900;
+  font-size: 12px;
+}
+
+.botModalLoading {
+  font-weight: 800;
+  opacity: 0.8;
+}
+
+/* log list */
+.botLogList {
+  display: grid;
+  gap: 8px;
+}
+
+.botLogItem {
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 12px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.75);
+}
+
+.botLogMeta {
+  font-weight: 900;
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.botLogMsg {
+  font-weight: 800;
+  margin-top: 6px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* ---------------------------------
+   ✅ Dark mode (matches your app)
+   --------------------------------- */
+
+body.ustock-dark .botCard {
+  background: var(--ustock-bg-card);
+  border-color: var(--ustock-border-card);
+  box-shadow: 0 20px 70px rgba(0, 0, 0, 0.55);
+  color: var(--ustock-text-main);
+}
+
+body.ustock-dark .botCardHead {
+  background: rgba(15, 23, 42, 0.45);
+  border-bottom-color: rgba(148, 163, 184, 0.18);
+}
+
+body.ustock-dark .botCardTitle,
+body.ustock-dark .botLabel,
+body.ustock-dark .botHint,
+body.ustock-dark .botTileLabel,
+body.ustock-dark .botTileValue,
+body.ustock-dark .botInlineNote,
+body.ustock-dark .botRiskHint,
+body.ustock-dark .botRiskLabel,
+body.ustock-dark .botModalHelper,
+body.ustock-dark .botModalLabel,
+body.ustock-dark .botModalRow {
+  color: var(--ustock-text-main);
+}
+
+body.ustock-dark .botCardStatePill {
+  background: rgba(2, 6, 23, 0.35);
+  border-color: rgba(148, 163, 184, 0.22);
+  color: var(--ustock-text-main);
+}
+
+body.ustock-dark .botBtn,
+body.ustock-dark .botSelect,
+body.ustock-dark .botInput,
+body.ustock-dark .botLogItem {
+  background: rgba(2, 6, 23, 0.35);
+  border-color: rgba(148, 163, 184, 0.22);
+  color: var(--ustock-text-main);
+}
+
+body.ustock-dark .botTile {
+  background: rgba(2, 6, 23, 0.25);
+  border-color: rgba(148, 163, 184, 0.18);
+}
+
+body.ustock-dark .botInlineNote {
+  background: rgba(2, 6, 23, 0.25);
+  border-color: rgba(148, 163, 184, 0.18);
+}
+
+body.ustock-dark .botSelect option {
+  background: #0b1220;
+  color: #e5e7eb;
+}
+
+body.ustock-dark .botFieldError {
+  background: rgba(127, 29, 29, 0.25);
+  border-color: rgba(239, 68, 68, 0.35);
+  color: #fecaca;
+}
+
+body.ustock-dark .botModalDanger {
+  background: rgba(127, 29, 29, 0.22);
+  border-color: rgba(239, 68, 68, 0.35);
+  color: #fecaca;
+}
+
+body.ustock-dark .botModalWarn {
+  background: rgba(146, 64, 14, 0.18);
+  border-color: rgba(245, 158, 11, 0.35);
+  color: #fde68a;
 }
 
 /* ---------------------------------
    ✅ Mobile layout hardening
    --------------------------------- */
 @media (max-width: 520px) {
-  /* allow header to wrap so it doesn't force a short card width/height */
   .botCardHead {
     flex-wrap: wrap;
     align-items: flex-start;
@@ -331,7 +473,6 @@
     width: 100%;
   }
 
-  /* pills wrap cleanly */
   .botPillRow {
     width: 100%;
     flex-wrap: wrap;
@@ -339,21 +480,17 @@
     gap: 8px;
   }
 
-  /* select area should not insist on desktop min-width */
   .botSelectWrap {
     min-width: 0;
     width: 100%;
   }
 
-  /* buttons should drop below and not squeeze the select */
   .botActions {
     width: 100%;
     justify-content: flex-start;
-    flex-wrap: wrap;
     gap: 10px;
   }
 
-  /* slightly tighter padding on tiny screens */
   .botCardBody {
     padding: 14px;
   }

@@ -13,13 +13,10 @@ import MarketLeadersCard from "./cards/MarketLeadersCard.jsx";
 import { useAlpacaDailyBars } from "../../hooks/useAlpacaDailyBars.js";
 import { useAlpacaTradeSummary } from "../../hooks/useAlpacaTradeSummary.js";
 
-// ✅ Common modal that supports images + actions
 import ErrorModal from "../common/ErrorMessages.jsx";
 import { explainAnyError } from "../../lib/errorMessages.jsx";
 
 import { DASHBOARD_PAGE_COPY as COPY } from "../../content/dashboard.content.js";
-
-// ✅ same squirrel image NavBar uses
 import welcomeBackImg from "../../assets/modal/WelcomeBack.png";
 
 import "../../css/dashboard/DashboardPage.css";
@@ -27,12 +24,8 @@ import "../../css/dashboard/cards/ChartControls.css";
 import "../../css/dashboard/cards/CardShared.css";
 
 const LAST_TICKER_KEY = "ustock:last_ticker";
-
-// AuthContext writes these on successful login/signup
 const JUST_AUTHED_KEY = "ustock:just_authed_v1";
 const JUST_AUTHED_KIND_KEY = "ustock:just_authed_kind_v1"; // "signup" | "login"
-
-// Local hint set once user connects a bot (you can also set this from your Bots page)
 const BOT_CONNECTED_HINT_KEY = "ustock:bot_connected_v1";
 
 // -------- Small in-memory caches (stale-while-revalidate) --------
@@ -228,7 +221,7 @@ export default function DashboardPage() {
   const [currentTicker, setCurrentTicker] = useState(loadLastTicker);
   const [timeframe, setTimeframe] = useState(null);
 
-  // ✅ Error modal (existing)
+  // ✅ Error modal
   const [errOpen, setErrOpen] = useState(false);
   const [errPayload, setErrPayload] = useState(null);
 
@@ -237,12 +230,7 @@ export default function DashboardPage() {
     setErrPayload(null);
   };
 
-  const showErr = (uiErr) => {
-    setErrPayload(uiErr);
-    setErrOpen(true);
-  };
-
-  // ✅ NEW: “Connect a bot” modal using ErrorModal (supports image + action)
+  // ✅ Connect bot modal
   const [connectOpen, setConnectOpen] = useState(false);
   const [connectPayload, setConnectPayload] = useState(null);
 
@@ -253,14 +241,22 @@ export default function DashboardPage() {
 
   const onConnectAction = useCallback(
     (action) => {
-      // action: { label, href? }
       closeConnect();
       if (action?.href) navigate(action.href);
     },
     [closeConnect, navigate]
   );
 
-  // best-effort: local hint first, optional backend check second
+  /**
+   * IMPORTANT:
+   * Your old call was GET /api/bots (404).
+   * Replace with an endpoint that exists.
+   *
+   * If your router exposes BotService.available() at /api/bots/available, use that.
+   * If your path differs, change ONLY BOT_AVAILABLE_PATH below.
+   */
+  const BOT_AVAILABLE_PATH = "/api/bots/available";
+
   const checkHasConnectedBot = useCallback(async ({ signal } = {}) => {
     try {
       if (window.localStorage.getItem(BOT_CONNECTED_HINT_KEY) === "1") return true;
@@ -268,25 +264,21 @@ export default function DashboardPage() {
       // ignore
     }
 
-    // Optional backend check (won’t break UI if endpoint isn't present yet).
-    // Replace with your real endpoint if you have one.
+    // Backend check: "do we have bots available to connect?"
+    // This is safer than calling a not-yet-implemented /api/bots list endpoint.
     try {
-      const json = await apiGetWithRetry("/api/bots", { signal });
-
-      if (Array.isArray(json)) return json.length > 0;
+      const json = await apiGetWithRetry(BOT_AVAILABLE_PATH, { signal });
       if (json && typeof json === "object") {
-        if (typeof json.connected === "boolean") return json.connected;
-        if (Array.isArray(json.items)) return json.items.length > 0;
         if (Array.isArray(json.bots)) return json.bots.length > 0;
       }
     } catch {
-      // ignore
+      // If this endpoint also doesn't exist yet, don't block UI.
+      return false;
     }
 
     return false;
   }, []);
 
-  // ✅ Show connect-bot modal right after login/signup (ONLY if no bot connected)
   useEffect(() => {
     if (authLoading || !isAuthed) return;
 
@@ -320,13 +312,12 @@ export default function DashboardPage() {
           title,
           body,
           subtitle: "Tip: You can change bots later from the Bot Runner page.",
-          image: welcomeBackImg, // ✅ same squirrel as NavBar
+          image: welcomeBackImg,
           action: { label: "Connect a bot", href: "/bots" },
         });
         setConnectOpen(true);
       }
 
-      // clear so it never shows again
       try {
         window.localStorage.removeItem(JUST_AUTHED_KEY);
         window.localStorage.removeItem(JUST_AUTHED_KIND_KEY);
@@ -336,7 +327,6 @@ export default function DashboardPage() {
     }
 
     run();
-
     return () => {
       alive = false;
       ac.abort();
@@ -380,13 +370,9 @@ export default function DashboardPage() {
 
   return (
     <AppShell>
-      {/* existing error modal */}
       <ErrorModal open={errOpen} error={errPayload} onClose={closeErr} />
-
-      {/* ✅ NEW: connect bot modal (same common modal, supports image + action) */}
       <ErrorModal open={connectOpen} error={connectPayload} onClose={closeConnect} onAction={onConnectAction} />
 
-      {/* ✅ centered lane wrapper so both columns share the same left/right gutters (desktop + mobile) */}
       <div className="dashboard-page-wrap">
         <main className="dashboard-main">
           <div className="dashboard-left">

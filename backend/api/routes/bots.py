@@ -23,6 +23,27 @@ def get_bot_service() -> BotService:
     return BotService()
 
 
+def _claims_user_id(claims: Dict[str, Any]) -> str:
+    """
+    Different minting paths may use different claim keys. Try common ones.
+    """
+    c = claims or {}
+    return str(c.get("uid") or c.get("sub") or c.get("user_id") or "").strip()
+
+
+# -----------------------------
+# Basic endpoints
+# -----------------------------
+@router.get("")
+def list_bots(svc: BotService = Depends(get_bot_service)):
+    """
+    Your UI calls GET /api/bots in DashboardPage's connect-bot check.
+    This endpoint did not exist earlier -> 404.
+    We return the same shape as available() for now.
+    """
+    return svc.available()
+
+
 @router.get("/available")
 def available(svc: BotService = Depends(get_bot_service)):
     return svc.available()
@@ -144,7 +165,6 @@ def log(
 
     m = normalize_mode(mode)
 
-    # ✅ pass mode through so BotLogsCard can filter accurately
     return svc.get_log(
         user_id,
         bid,
@@ -153,6 +173,7 @@ def log(
         start_ts=int(start_ts or 0),
         end_ts=int(end_ts or 0),
     )
+
 
 @router.get("/intents")
 def intents_snapshot(
@@ -275,12 +296,15 @@ def heartbeat(
     if not bid:
         return JSONResponse(status_code=400, content={"detail": "bot_id required"})
 
+    # ✅ user_id REQUIRED for logging
     user_id = str(payload.get("user_id") or "").strip()
     if not user_id:
         return JSONResponse(status_code=400, content={"detail": "user_id required"})
 
-    # Optional hardening (OFF by default)
-    enforce_runner_user(payload_user_id=user_id, claims=claims)
+    # Optional hardening: enforce payload user == claims uid IF claims has uid
+    uid_claims = _claims_user_id(claims)
+    if uid_claims:
+        enforce_runner_user(payload_user_id=user_id, claims=claims)
 
     out = dict(payload)
     out["bot_id"] = bid
@@ -291,7 +315,7 @@ def heartbeat(
 @router.get("/status_runner")
 def status_runner(
     bot_id: str = Query(...),
-    user_id: str = Query(...),
+    user_id: str = Query(...),  # ✅ REQUIRED (runner sends it; keeps logging consistent)
     runner_id: str = Depends(require_bot_runner),
     claims: Dict[str, Any] = Depends(require_bot_runner_claims),
     svc: BotService = Depends(get_bot_service),
@@ -300,12 +324,14 @@ def status_runner(
     if not bid:
         return JSONResponse(status_code=400, content={"detail": "bot_id required"})
 
-    uid = str((claims or {}).get("uid") or (claims or {}).get("sub") or "").strip()
+    uid = str(user_id or "").strip()
     if not uid:
         return JSONResponse(status_code=400, content={"detail": "user_id required"})
 
-    # Optional hardening (OFF by default)
-    enforce_runner_user(payload_user_id=uid, claims=claims)
+    # Optional hardening: enforce query user == claims uid IF claims has uid
+    uid_claims = _claims_user_id(claims)
+    if uid_claims:
+        enforce_runner_user(payload_user_id=uid, claims=claims)
 
     return svc.status(uid, bid)
 
@@ -324,12 +350,14 @@ def submit_intents(
     if not bid:
         return JSONResponse(status_code=400, content={"detail": "bot_id required"})
 
+    # ✅ user_id REQUIRED for logging
     user_id = str(payload.get("user_id") or "").strip()
     if not user_id:
         return JSONResponse(status_code=400, content={"detail": "user_id required"})
 
-    # Optional hardening (OFF by default)
-    enforce_runner_user(payload_user_id=user_id, claims=claims)
+    uid_claims = _claims_user_id(claims)
+    if uid_claims:
+        enforce_runner_user(payload_user_id=user_id, claims=claims)
 
     ts = payload.get("ts")
     try:
@@ -386,11 +414,3 @@ def set_config(
         return JSONResponse(status_code=400, content={"detail": "config must be an object"})
 
     return svc.set_config(user_id, bid, config)
-
-
-"""
-TODOs (future):
-- Add /api/bots/health (per bot) for “runner last seen”, “last tick”, etc.
-- Add server-side rate limiting for runner endpoints.
-- Consider moving events_feed into BotService for consistent error handling.
-"""

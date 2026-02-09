@@ -66,7 +66,6 @@ def safe_heartbeat(api: UStockAPI, **kwargs: Any) -> None:
 
     uid = str(kwargs.get("user_id") or "").strip()
     if not uid:
-        # Backend enforces user_id; avoid noisy 400s.
         return
 
     try:
@@ -77,7 +76,7 @@ def safe_heartbeat(api: UStockAPI, **kwargs: Any) -> None:
         return
 
 
-def send_paused(
+def send_stopped(
     api: UStockAPI,
     state: HeartbeatState,
     *,
@@ -90,17 +89,17 @@ def send_paused(
         return
 
     now = now_epoch()
-    sig = f"paused|{status_mode}|intent_paused"
+    sig = f"stopped|{status_mode}|intent_stopped"
     if should_heartbeat(state, sig, now=now):
         safe_heartbeat(
             api,
             user_id=uid,
             bot_id=bot_id,
-            intent="paused",
-            effective_state="paused",
+            intent="stopped",
+            effective_state="stopped",
             mode=status_mode,
-            reason_code="intent_paused",
-            message="Paused by user.",
+            reason_code="intent_stopped",
+            message="Stopped by user.",
             last_error=None,
             last_tick=now,
         )
@@ -122,7 +121,7 @@ def gate_market_hours(
     Raises MarketClosed if market is closed (and emits a heartbeat).
     Fail-open if endpoint fails (local dev friendly).
     """
-    sess = api_client.market_session(api, bot_id)  # ✅ requires bot_id
+    sess = api_client.market_session(api, bot_id)
     is_open = bool(sess.get("is_open")) if sess.get("ok") else True
     if is_open:
         return
