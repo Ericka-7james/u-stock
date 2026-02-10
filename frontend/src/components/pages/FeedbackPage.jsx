@@ -7,6 +7,8 @@ import { API_BASE, API_PREFIX } from "../../config/config";
 import { useAuth } from "../../context/AuthContext";
 import PageHeaderCard from "../common/PageHeaderCard";
 
+import { FEEDBACK_PAGE_COPY } from "../../content/feedbackpage.content";
+
 const SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY;
 
 // word count UI + validation
@@ -27,6 +29,7 @@ function countWords(s) {
 
 export default function FeedbackPage() {
   const { user, isAuthed, refreshSession } = useAuth();
+  const copy = FEEDBACK_PAGE_COPY;
 
   const [honeypot, setHoneypot] = useState("");
 
@@ -81,24 +84,24 @@ export default function FeedbackPage() {
     setStatus("");
 
     if (honeypot.trim()) {
-      setStatus("Sent! Thank you.");
+      setStatus(copy.status.sent);
       return;
     }
     if (wordCount < MIN_WORDS) {
-      setStatus(`Please enter at least ${MIN_WORDS} words.`);
+      setStatus(`${copy.status.minWordsPrefix}${MIN_WORDS}${copy.status.minWordsSuffix}`);
       return;
     }
     if (overLimit) {
-      setStatus(`Please keep your message under ${WORD_LIMIT} words.`);
+      setStatus(`${copy.status.maxWordsPrefix}${WORD_LIMIT}${copy.status.maxWordsSuffix}`);
       return;
     }
 
     if (captchaRequired && SITE_KEY && !token) {
-      setStatus("Please complete the captcha.");
+      setStatus(copy.status.captchaIncomplete);
       return;
     }
     if (captchaRequired && !SITE_KEY) {
-      setStatus("Captcha is required in production but VITE_TURNSTILE_SITE_KEY is missing.");
+      setStatus(copy.status.captchaMissingKey);
       return;
     }
 
@@ -127,16 +130,16 @@ export default function FeedbackPage() {
 
       const data = await safeJson(res);
       if (!res.ok) {
-        setStatus(data?.detail || "Failed to send feedback.");
+        setStatus(data?.detail || copy.status.failed);
         return;
       }
 
-      setStatus("Sent! Thank you.");
+      setStatus(copy.status.sent);
       setMessage("");
       setToken(null);
     } catch (err) {
-      if (err?.name === "AbortError") setStatus("Request timed out. Backend didn’t respond.");
-      else setStatus(err?.message || "Failed to send feedback.");
+      if (err?.name === "AbortError") setStatus(copy.status.timeout);
+      else setStatus(err?.message || copy.status.failed);
     } finally {
       if (timeoutId) clearTimeout(timeoutId);
       setSubmitting(false);
@@ -145,17 +148,13 @@ export default function FeedbackPage() {
 
   return (
     <AppShell>
-      <div className="app-page feedback-page">
-        {/* ✅ Swapped to shared header card */}
-        <PageHeaderCard
-          title="Feedback"
-          subtitle="Share ideas, report issues, or ask questions about how U-Stock works. Messages here will be routed straight to my inbox."
-        >
+      <div className="feedback-page">
+        <PageHeaderCard title={copy.header.title} subtitle={copy.header.subtitle}>
           <form className="feedback-auth-form" onSubmit={onSubmit}>
             {/* Honeypot */}
             <div className="feedback-honeypot" aria-hidden="true">
               <label>
-                Do not fill this out:
+                {copy.fields.honeypotLabel}
                 <input
                   value={honeypot}
                   onChange={(e) => setHoneypot(e.target.value)}
@@ -168,13 +167,13 @@ export default function FeedbackPage() {
             {/* Name */}
             <div className="feedback-field">
               <label className="feedback-label" htmlFor="name">
-                Name
+                {copy.fields.name.label}
               </label>
               <input
                 id="name"
                 type="text"
                 className="feedback-input"
-                placeholder="Your name"
+                placeholder={copy.fields.name.placeholder}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 autoComplete="name"
@@ -184,24 +183,24 @@ export default function FeedbackPage() {
             {/* Email */}
             <div className="feedback-field">
               <label className="feedback-label" htmlFor="email">
-                Contact email
+                {copy.fields.email.label}
               </label>
               <input
                 id="email"
                 type="email"
                 className="feedback-input"
-                placeholder="you@example.com"
+                placeholder={copy.fields.email.placeholder}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 autoComplete="email"
               />
-              <p className="feedback-hint">I&apos;ll use this if I need to follow up about your feedback.</p>
+              <p className="feedback-hint">{copy.fields.email.hint}</p>
             </div>
 
             {/* Type */}
             <div className="feedback-field">
               <label className="feedback-label" htmlFor="feedbackType">
-                Feedback type
+                {copy.fields.type.label}
               </label>
               <select
                 id="feedbackType"
@@ -209,10 +208,10 @@ export default function FeedbackPage() {
                 value={feedbackType}
                 onChange={(e) => setFeedbackType(e.target.value)}
               >
-                <option value="feature">Feature idea</option>
-                <option value="bug">Bug report</option>
-                <option value="question">Question</option>
-                <option value="other">Something else</option>
+                <option value="feature">{copy.fields.type.options.feature}</option>
+                <option value="bug">{copy.fields.type.options.bug}</option>
+                <option value="question">{copy.fields.type.options.question}</option>
+                <option value="other">{copy.fields.type.options.other}</option>
               </select>
             </div>
 
@@ -220,7 +219,7 @@ export default function FeedbackPage() {
             <div className="feedback-field">
               <div className="feedback-message-row">
                 <label className="feedback-label" htmlFor="message">
-                  Message
+                  {copy.fields.message.label}
                 </label>
                 <div className={`feedback-counter ${overLimit ? "is-over" : ""}`}>
                   {wordCount}/{WORD_LIMIT} words
@@ -230,25 +229,29 @@ export default function FeedbackPage() {
               <textarea
                 id="message"
                 className="feedback-textarea"
-                placeholder="Tell me what you’d like to learn, improve, or fix in U-Stock."
+                placeholder={copy.fields.message.placeholder}
                 rows={6}
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
               />
 
               {underMin ? (
-                <p className="feedback-hint feedback-hint--warn">Add a bit more detail (min {MIN_WORDS} words).</p>
+                <p className="feedback-hint feedback-hint--warn">
+                  {copy.fields.message.minWarnPrefix}
+                  {MIN_WORDS}
+                  {copy.fields.message.minWarnSuffix}
+                </p>
               ) : null}
               {overLimit ? (
                 <p className="feedback-hint feedback-hint--warn">
-                  Please shorten your message (max {WORD_LIMIT} words).
+                  {copy.fields.message.maxWarnPrefix}
+                  {WORD_LIMIT}
+                  {copy.fields.message.maxWarnSuffix}
                 </p>
               ) : null}
             </div>
 
-            <p className="feedback-footer-hint">
-              Think of this as your suggestion box. I use these notes to decide what to build next.
-            </p>
+            <p className="feedback-footer-hint">{copy.fields.message.footerHint}</p>
 
             {/* Captcha (prod only) */}
             {captchaRequired ? (
@@ -262,7 +265,8 @@ export default function FeedbackPage() {
                   />
                 ) : (
                   <p className="feedback-hint feedback-hint--warn">
-                    Captcha is required in production but <code>VITE_TURNSTILE_SITE_KEY</code> is missing.
+                    {copy.status.captchaMissingKey.replace("VITE_TURNSTILE_SITE_KEY", "")}
+                    <code>VITE_TURNSTILE_SITE_KEY</code> is missing.
                   </p>
                 )}
               </div>
@@ -280,16 +284,11 @@ export default function FeedbackPage() {
 
             <div className="feedback-actions">
               <button type="submit" className="feedback-btn feedback-btn--primary" disabled={!canSubmit}>
-                {submitting ? "Sending..." : "Send feedback"}
+                {submitting ? copy.buttons.submitLoading : copy.buttons.submitIdle}
               </button>
 
-              <button
-                type="button"
-                className="feedback-btn feedback-btn--ghost"
-                onClick={resetForm}
-                disabled={submitting}
-              >
-                Clear
+              <button type="button" className="feedback-btn feedback-btn--ghost" onClick={resetForm} disabled={submitting}>
+                {copy.buttons.clear}
               </button>
             </div>
           </form>

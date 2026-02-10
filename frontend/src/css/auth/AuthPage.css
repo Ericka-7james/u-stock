@@ -58,6 +58,10 @@
   font-weight: 700;
   color: var(--ustock-text-strong);
   margin-bottom: 28px;
+
+  /* ensure typography consistency */
+  font-family: inherit;
+  line-height: 1.05;
 }
 
 /* Inputs */
@@ -91,6 +95,7 @@
   background: transparent;
   font-size: 14px;
   color: var(--ustock-text-main);
+  font-family: inherit;
 }
 
 .auth-field input::placeholder {
@@ -118,6 +123,7 @@
   color: white;
   font-size: 14px;
   font-weight: 600;
+  font-family: inherit;
   cursor: pointer;
   transition: 0.15s ease;
   box-shadow: 0 12px 30px rgba(15, 118, 110, 0.35);
@@ -176,17 +182,22 @@
   text-align: center;
 }
 
+/* ✅ MATCH LEFT HEADER HEIGHT/LOOK */
 .auth-right-title {
-  font-size: 26px;
+  font-size: 26px;     /* keep if you want same size; if you bump left later, bump this too */
   font-weight: 700;
   color: #ffffff;
-  margin-bottom: 12px;
+
+  margin: 0 0 28px;    /* ✅ match left spacing */
+  font-family: inherit;
+  line-height: 1.05;   /* ✅ match left */
 }
 
 .auth-right-text {
   font-size: 14px;
   color: #e5e7eb;
   margin-bottom: 24px;
+  font-family: inherit;
 }
 
 /* White signup button */
@@ -198,6 +209,7 @@
   background: white;
   color: var(--ustock-green-main);
   font-weight: 600;
+  font-family: inherit;
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.25);
 }
 
@@ -208,6 +220,7 @@
 .auth-error {
   color: #b91c1c;
   font-size: 12px;
+  font-family: inherit;
 }
 
 /* ================= DESKTOP TWEAKS (≥ 769px) ======================= */
@@ -295,6 +308,7 @@
     margin-top: 16px;
     text-align: center;
     font-size: 13px;
+    font-family: inherit;
   }
 
   .auth-link-btn {
@@ -303,6 +317,7 @@
     color: var(--ustock-green-main);
     cursor: pointer;
     font-weight: 600;
+    font-family: inherit;
   }
 
   .auth-link-btn:disabled {

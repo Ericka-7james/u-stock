@@ -1,61 +1,110 @@
 // src/components/auth/AuthPage.jsx
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "../../context/AuthContext";
-import "../../css/auth/AuthPage.css";
-import AppShell from "../layout/AppShell";
 
-function getErrorMessage(err) {
-  if (!err) return "Unable to sign in";
-  if (typeof err === "string") return err;
-  if (typeof err === "object" && "message" in err && err.message) return String(err.message);
-  return "Unable to sign in";
+import AppShell from "../layout/AppShell";
+import ErrorModal from "../common/ErrorMessages";
+
+import { useAuth } from "../../context/AuthContext";
+import { explainAnyError } from "../../lib/errorMessages";
+
+import { AUTH_PAGE_COPY } from "../../content/landing/authPage.content";
+
+import "../../css/auth/AuthPage.css";
+
+function normalizeEmail(input) {
+  return String(input || "").trim().toLowerCase();
 }
 
 export default function AuthPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
 
+  const COPY = AUTH_PAGE_COPY;
+
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
-  const [loginError, setLoginError] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
+
+  // Centralized modal error (same as signup)
+  const [errModalOpen, setErrModalOpen] = useState(false);
+  const [errModal, setErrModal] = useState(null);
+
+  const closeErrorModal = useCallback(() => {
+    setErrModalOpen(false);
+    setErrModal(null);
+  }, []);
+
+  const openErrorModal = useCallback((anyErr, { feature = "login" } = {}) => {
+    const friendly = explainAnyError(anyErr, { feature });
+
+    setErrModal({
+      title: friendly?.title || "Error",
+      body: friendly?.body || COPY?.errors?.fallback || "Something went wrong.",
+      subtitle: friendly?.subtitle || "",
+      image: friendly?.image || null,
+      action: friendly?.action || null,
+    });
+
+    setErrModalOpen(true);
+  }, [COPY?.errors?.fallback]);
+
+  const handleErrorAction = useCallback(
+    (action) => {
+      if (!action?.href) return;
+      closeErrorModal();
+      navigate(action.href);
+    },
+    [navigate, closeErrorModal]
+  );
 
   const canSubmit = useMemo(() => {
     return !!loginEmail.trim() && !!loginPassword && !loginLoading;
   }, [loginEmail, loginPassword, loginLoading]);
 
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    if (loginLoading) return;
+  const handleLogin = useCallback(
+    async (e) => {
+      e.preventDefault();
+      if (loginLoading) return;
 
-    setLoginError("");
-    setLoginLoading(true);
-    try {
-      await login(loginEmail.trim(), loginPassword);
-      // AuthGate / routes will take user to dashboard
-    } catch (err) {
-      setLoginError(getErrorMessage(err));
-    } finally {
-      setLoginLoading(false);
-    }
-  };
+      const email = normalizeEmail(loginEmail);
+      const password = loginPassword;
 
-  const goToSignup = () => {
+      if (!email || !password) return;
+
+      setLoginLoading(true);
+      try {
+        await login(email, password);
+        // AuthGate / routes will take user to dashboard
+      } catch (err) {
+        openErrorModal(err, { feature: "login" });
+      } finally {
+        setLoginLoading(false);
+      }
+    },
+    [loginLoading, loginEmail, loginPassword, login, openErrorModal]
+  );
+
+  const goToSignup = useCallback(() => {
     navigate("/auth/signup");
-  };
-
-  const errId = "auth-login-error";
+  }, [navigate]);
 
   return (
     <AppShell>
+      <ErrorModal
+        open={errModalOpen}
+        error={errModal}
+        onClose={closeErrorModal}
+        onAction={handleErrorAction}
+      />
+
       <div className="auth-page">
         <div className="auth-lane">
           <div className="auth-page-inner">
             {/* LEFT: Sign in */}
             <section className="auth-left">
               <div className="auth-left-inner">
-                <h1 className="auth-title">Welcome back</h1>
+                <h1 className="auth-title">{COPY.left.title}</h1>
 
                 <form className="auth-form" onSubmit={handleLogin} noValidate>
                   <label className="auth-field">
@@ -65,14 +114,13 @@ export default function AuthPage() {
                     <input
                       type="email"
                       name="email"
-                      placeholder="Email"
+                      placeholder={COPY.left.fields.emailPlaceholder}
                       value={loginEmail}
                       onChange={(e) => setLoginEmail(e.target.value)}
                       required
                       autoComplete="username"
                       disabled={loginLoading}
-                      aria-invalid={!!loginError}
-                      aria-describedby={loginError ? errId : undefined}
+                      aria-invalid={false}
                     />
                   </label>
 
@@ -84,36 +132,29 @@ export default function AuthPage() {
                       type="password"
                       name="password"
                       autoComplete="current-password"
-                      placeholder="Password"
+                      placeholder={COPY.left.fields.passwordPlaceholder}
                       value={loginPassword}
                       onChange={(e) => setLoginPassword(e.target.value)}
                       required
                       disabled={loginLoading}
-                      aria-invalid={!!loginError}
-                      aria-describedby={loginError ? errId : undefined}
+                      aria-invalid={false}
                     />
                   </label>
 
-                  {loginError && (
-                    <p className="auth-error" id={errId} role="alert" aria-live="polite">
-                      {loginError}
-                    </p>
-                  )}
-
                   <button type="submit" className="auth-primary-btn" disabled={!canSubmit}>
-                    {loginLoading ? "Signing in…" : "Sign In →"}
+                    {loginLoading ? COPY.left.submit.loading : COPY.left.submit.idle}
                   </button>
                 </form>
 
                 <div className="auth-alt">
-                  <span>New here? </span>
+                  <span>{COPY.left.alt.prefix}</span>
                   <button
                     type="button"
                     onClick={goToSignup}
                     disabled={loginLoading}
                     className="auth-link-btn"
                   >
-                    Create an account →
+                    {COPY.left.alt.cta}
                   </button>
                 </div>
               </div>
@@ -122,13 +163,16 @@ export default function AuthPage() {
             {/* RIGHT: green panel */}
             <section className="auth-right">
               <div className="auth-right-inner">
-                <h2 className="auth-right-title">U-Stock Radar Suite</h2>
-                <p className="auth-right-text">
-                  Log in to see your market dashboard, signals, and sentiment in one place.
-                </p>
+                <h2 className="auth-right-title">{COPY.right.title}</h2>
+                <p className="auth-right-text">{COPY.right.description}</p>
 
-                <button type="button" className="auth-secondary-btn" onClick={goToSignup} disabled={loginLoading}>
-                  Sign Up
+                <button
+                  type="button"
+                  className="auth-secondary-btn"
+                  onClick={goToSignup}
+                  disabled={loginLoading}
+                >
+                  {COPY.right.cta}
                 </button>
               </div>
             </section>

@@ -5,7 +5,7 @@ import "../../css/apps/ConnectedAppsPage.css";
 import { useAuth } from "../../context/AuthContext";
 import ConnectProviderModal from "./ConnectProviderModal";
 import { useNavigate } from "react-router-dom";
-import { explainResponseError } from "../common/errorMessages";
+import { explainResponseError } from "../../lib/errorMessages";
 
 import lucentLogo from "../../assets/images/companyLogo-logoOnly.png";
 import TermsModal from "../common/TermsModal";

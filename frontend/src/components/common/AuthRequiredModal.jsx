@@ -1,6 +1,6 @@
 // src/components/common/AuthRequiredModal.jsx
 import "../../css/common/AuthRequiredModal.css";
-import errorSquirrel from "../../assets/images/ErrorSquirrel.png";
+import errorSquirrel from "../../assets/modal/ErrorSquirrel.png";
 
 export default function AuthRequiredModal({
   open,

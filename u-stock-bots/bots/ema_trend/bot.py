@@ -1,333 +1,220 @@
-# backend/api/routes/bots.py
+# bots/ema_trend/bot.py
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
-from fastapi import APIRouter, Depends, Query, Request, Response
-from fastapi.responses import JSONResponse
+from bots._shared.data.bars import extract_ohlc
+from bots._shared.indicators.ema import ema
 
-from api.deps import require_user
-from api.security.bot_runner_dep import require_bot_runner
-from api.core.bots.validators import clean_bot_id, normalize_mode, parse_ts_to_epoch_seconds
-from api.core.bots.service import BotService
-from api.db import get_supabase_service
-
-router = APIRouter(prefix="/api/bots", tags=["bots"])
+from bots.ema_trend.config import EMATrendConfig
+from bots.ema_trend.signal import compute_signal
+from bots.ema_trend import reason_codes as R
 
 
-def get_bot_service() -> BotService:
-    # Lazily construct so env is loaded first (and avoids import-time DB calls)
-    return BotService()
+def _s(x: Any) -> str:
+    return str(x or "").strip()
 
 
-@router.get("/available")
-def available(svc: BotService = Depends(get_bot_service)):
-    return svc.available()
+def _i(x: Any, default: int) -> int:
+    try:
+        return int(x)
+    except Exception:
+        return int(default)
 
 
-@router.get("/status")
-def status(
-    request: Request,
-    response: Response,
-    bot_id: str = Query(...),
-    svc: BotService = Depends(get_bot_service),
-):
-    u = require_user(request, response)
-    user_id = u["id"]
-
-    bid = clean_bot_id(bot_id)
-    if not bid:
-        return JSONResponse(status_code=400, content={"detail": "bot_id required"})
-
-    return svc.status(user_id, bid)
+def _f(x: Any, default: float) -> float:
+    try:
+        return float(x)
+    except Exception:
+        return float(default)
 
 
-@router.get("/log")
-def log(
-    request: Request,
-    response: Response,
-    bot_id: str = Query(...),
-    limit: int = Query(50, ge=1, le=300),
+def _pick_symbols(cfg: Dict[str, Any]) -> List[str]:
+    # Prefer scanner injected symbols
+    scanner = cfg.get("scanner") if isinstance(cfg.get("scanner"), dict) else None
+    if isinstance(scanner, dict):
+        syms = scanner.get("symbols")
+        if isinstance(syms, list):
+            out = []
+            for x in syms:
+                sx = _s(x).upper()
+                if sx:
+                    out.append(sx)
+            if out:
+                return out
 
-    # ✅ NEW: timeframe filtering (epoch seconds, inclusive bounds)
-    start_ts: int = Query(0, ge=0, description="Epoch seconds (inclusive). 0 = no lower bound."),
-    end_ts: int = Query(0, ge=0, description="Epoch seconds (inclusive). 0 = no upper bound."),
+    # fallbacks
+    if isinstance(cfg.get("symbols"), list):
+        out = []
+        for x in cfg["symbols"]:
+            sx = _s(x).upper()
+            if sx:
+                out.append(sx)
+        if out:
+            return out
 
-    svc: BotService = Depends(get_bot_service),
-):
+    sym = _s(cfg.get("symbol") or cfg.get("primary_symbol") or "").upper()
+    return [sym] if sym else []
+
+
+def _fetch_bars(api: Any, *, symbol: str, tf: str, limit: int, feed: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """
-    UI endpoint: bot logs (cookie auth)
+    Defensive wrapper around your backend bars endpoint.
+    Adjust the path/params if your backend differs.
 
-    New behavior:
-      - If start_ts/end_ts are provided, logs are filtered server-side.
-      - Still returns newest `limit` rows within the range.
+    Expected: dict with enough shape for extract_ohlc() to work.
     """
-    u = require_user(request, response)
-    user_id = u["id"]
+    params: Dict[str, Any] = {"symbol": symbol, "tf": tf, "limit": int(limit)}
+    if feed:
+        params["feed"] = feed
+    try:
+        data = api.get("/api/market/bars", params=params)
+        return data if isinstance(data, dict) else None
+    except Exception:
+        return None
 
-    bid = clean_bot_id(bot_id)
-    if not bid:
-        return JSONResponse(status_code=400, content={"detail": "bot_id required"})
 
-    return svc.get_log(
-        user_id,
-        bid,
-        limit=int(limit),
-        start_ts=int(start_ts or 0),
-        end_ts=int(end_ts or 0),
+def _compute_bias(bars_bias: Dict[str, Any], cfg: EMATrendConfig) -> Tuple[str, List[str], float]:
+    """
+    Bias using EMA(cfg.ema_bias) on tf_bias and slope over cfg.bias_slope_lookback bars.
+    Returns (bias: 'up'|'down'|'none', reasons, score 0..1)
+    """
+    ohlc = extract_ohlc(bars_bias)
+    if ohlc is None:
+        return "none", [], 0.0
+
+    _o, _h, _l, c = ohlc
+    e = ema(c, int(cfg.ema_bias))
+    if not e or len(e) < int(cfg.bias_slope_lookback) + 1:
+        return "none", [], 0.0
+
+    n = int(cfg.bias_slope_lookback)
+    recent = float(e[-1])
+    past = float(e[-(n + 1)])
+    slope = recent - past
+
+    # Normalize slope relative to price (very small number => no bias)
+    px = float(c[-1]) if c and c[-1] else 0.0
+    if px <= 0:
+        return "none", [], 0.0
+
+    slope_pct = abs(slope) / max(1e-9, px) * 100.0
+
+    # Simple confidence component: stronger slope => higher score
+    score = min(1.0, slope_pct / max(1e-9, float(cfg.min_slope_pct)))
+
+    if slope > 0:
+        return "up", [R.BIAS_UP], float(score)
+    if slope < 0:
+        return "down", [R.BIAS_DN], float(score)
+    return "none", [], 0.0
+
+
+def compute(api: Any, bot_id: str, cfg_dict: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    EMA Trend main entrypoint.
+
+    Output contract:
+      {"intents": [...], "events": [...]}
+
+    Quiet policy:
+      - If no actionable intent, return no events (prevents log spam).
+      - Only emit events when we produce an intent.
+    """
+    cfg = EMATrendConfig(
+        bot_id=_s(cfg_dict.get("bot_id") or "ema_trend") or "ema_trend",
+        tf_bias=_s(cfg_dict.get("tf_bias") or "15Min") or "15Min",
+        tf_setup=_s(cfg_dict.get("tf_setup") or "5Min") or "5Min",
+        tf_entry=_s(cfg_dict.get("tf_entry") or "1Min") or "1Min",
+        ema_fast=_i(cfg_dict.get("ema_fast") or 9, 9),
+        ema_slow=_i(cfg_dict.get("ema_slow") or 21, 21),
+        ema_bias=_i(cfg_dict.get("ema_bias") or 50, 50),
+        bias_slope_lookback=_i(cfg_dict.get("bias_slope_lookback") or 4, 4),
+        atr_n=_i(cfg_dict.get("atr_n") or 14, 14),
+        min_atr_pct=_f(cfg_dict.get("min_atr_pct") or 0.25, 0.25),
+        min_sep_pct=_f(cfg_dict.get("min_sep_pct") or 0.10, 0.10),
+        min_slope_pct=_f(cfg_dict.get("min_slope_pct") or 0.03, 0.03),
+        require_confirm_candle=bool(cfg_dict.get("require_confirm_candle", True)),
+        rr_multiple=_f(cfg_dict.get("rr_multiple") or 1.5, 1.5),
+        stop_atr_pad=_f(cfg_dict.get("stop_atr_pad") or 0.15, 0.15),
+        min_stop_pct=_f(cfg_dict.get("min_stop_pct") or 0.08, 0.08),
+        max_stop_pct=_f(cfg_dict.get("max_stop_pct") or 1.20, 1.20),
+        min_confidence=_f(cfg_dict.get("min_confidence") or 0.62, 0.62),
+        max_intents_per_run=_i(cfg_dict.get("max_intents_per_run") or 3, 3),
+        feed=_s(cfg_dict.get("feed")) or None,
     )
 
+    symbols = _pick_symbols(cfg_dict)
+    if not symbols:
+        return {"intents": [], "events": []}
 
-@router.post("/start")
-def start(
-    request: Request,
-    response: Response,
-    payload: Dict[str, Any],
-    svc: BotService = Depends(get_bot_service),
-):
-    u = require_user(request, response)
-    user_id = u["id"]
+    qty = _i(cfg_dict.get("qty") or cfg_dict.get("default_qty") or 1, 1)
+    if qty <= 0:
+        return {"intents": [], "events": []}
 
-    bid = clean_bot_id(payload.get("bot_id"))
-    if not bid:
-        return JSONResponse(status_code=400, content={"detail": "bot_id required"})
+    max_intents = max(1, int(cfg.max_intents_per_run))
 
-    mode = normalize_mode(payload.get("mode"))
-    return svc.start(user_id, bid, mode)
+    intents: List[Dict[str, Any]] = []
+    events: List[Dict[str, Any]] = []
 
+    for sym in symbols:
+        if len(intents) >= max_intents:
+            break
 
-@router.post("/stop")
-def stop(
-    request: Request,
-    response: Response,
-    payload: Optional[Dict[str, Any]] = None,
-    bot_id: Optional[str] = Query(None),
-    svc: BotService = Depends(get_bot_service),
-):
-    u = require_user(request, response)
-    user_id = u["id"]
+        bars_bias = _fetch_bars(api, symbol=sym, tf=cfg.tf_bias, limit=220, feed=cfg.feed)
+        bars_entry = _fetch_bars(api, symbol=sym, tf=cfg.tf_entry, limit=300, feed=cfg.feed)
+        if not bars_bias or not bars_entry:
+            continue
 
-    raw = bot_id or (payload or {}).get("bot_id")
-    bid = clean_bot_id(raw)
-    if not bid:
-        return JSONResponse(status_code=400, content={"detail": "bot_id required"})
+        bias, bias_reasons, bias_score = _compute_bias(bars_bias, cfg)
+        if bias == "none":
+            continue
 
-    return svc.stop(user_id, bid)
+        triple, reasons, conf = compute_signal(bars_entry, cfg, bias=bias)
+        if triple is None:
+            continue
 
+        # Final confidence gate
+        if float(conf) < float(cfg.min_confidence):
+            continue
 
-# -------------------------
-# NEW: UI read endpoints (cookie auth)
-# -------------------------
+        entry, stop, take_profit = triple
+        side = "buy" if bias == "up" else "sell"
 
-@router.get("/intents")
-def intents_snapshot(
-    request: Request,
-    response: Response,
-    bot_id: str = Query(...),
-    limit: int = Query(10, ge=1, le=10),
-    svc: BotService = Depends(get_bot_service),
-):
-    u = require_user(request, response)
-    user_id = u["id"]
-
-    bid = clean_bot_id(bot_id)
-    if not bid:
-        return JSONResponse(status_code=400, content={"detail": "bot_id required"})
-
-    st = svc.status(user_id, bid)
-    items = (st.get("lastIntentsPreview") or [])
-    if not isinstance(items, list):
-        items = []
-
-    return {
-        "ok": True,
-        "bot_id": bid,
-        "count": int(st.get("lastIntents") or 0),
-        "ts": int(st.get("lastIntentsAt") or 0),
-        "items": items[: int(limit)],
-    }
-
-
-@router.get("/events")
-def events_feed(
-    request: Request,
-    response: Response,
-    bot_id: str = Query(...),
-    mode: str = Query("paper"),
-    limit: int = Query(60, ge=1, le=300),
-
-    # existing cursor
-    before_ts: int = Query(0, ge=0),
-
-    # ✅ NEW: timeframe range filtering in addition to cursor
-    start_ts: int = Query(0, ge=0, description="Epoch seconds (inclusive). 0 = no lower bound."),
-    end_ts: int = Query(0, ge=0, description="Epoch seconds (inclusive). 0 = no upper bound."),
-):
-    """
-    UI endpoint: read merged strategy+execution events from Supabase bot_events.
-
-    Now supports BOTH:
-      - cursor pagination via before_ts
-      - timeframe bounding via start_ts/end_ts
-    """
-    u = require_user(request, response)
-    user_id = str(u.get("id") or "").strip()
-
-    bid = clean_bot_id(bot_id)
-    if not bid:
-        return JSONResponse(status_code=400, content={"detail": "bot_id required"})
-
-    m = normalize_mode(mode)
-    svc = get_supabase_service()
-
-    def _epoch_to_iso_z(ep: int) -> str:
-        import time as _t
-        return _t.strftime("%Y-%m-%dT%H:%M:%SZ", _t.gmtime(int(ep)))
-
-    try:
-        q = (
-            svc.table("bot_events")
-            .select("ts,level,event_type,symbol,payload,event_id,bot_id,mode")
-            .eq("user_id", user_id)
-            .eq("bot_id", bid)
-            .eq("mode", m)
-            .order("ts", desc=True)
-            .limit(int(limit))
+        intents.append(
+            {
+                "symbol": sym,
+                "side": side,
+                "qty": qty,
+                "confidence": float(conf),
+                "entry": float(entry),
+                "stop": float(stop),
+                "take_profit": float(take_profit),
+                "reasons": bias_reasons + reasons,
+                "strategy": cfg.bot_id,
+            }
         )
 
-        # cursor
-        if int(before_ts or 0) > 0:
-            q = q.lt("ts", _epoch_to_iso_z(int(before_ts)))
+        # Only emit event when we actually have an intent
+        events.append(
+            {
+                "event_type": "signal",
+                "level": "info",
+                "symbol": sym,
+                "payload": {
+                    "strategy": cfg.bot_id,
+                    "side": side,
+                    "qty": qty,
+                    "confidence": float(conf),
+                    "entry": float(entry),
+                    "stop": float(stop),
+                    "take_profit": float(take_profit),
+                    "reasons": bias_reasons + reasons,
+                    "bias_score": float(bias_score),
+                    "tf_bias": cfg.tf_bias,
+                    "tf_entry": cfg.tf_entry,
+                },
+            }
+        )
 
-        # timeframe bounds (inclusive)
-        if int(end_ts or 0) > 0:
-            # Supabase filters are strict; use <= by bumping +1 second via lt(end+1)
-            q = q.lt("ts", _epoch_to_iso_z(int(end_ts) + 1))
-        if int(start_ts or 0) > 0:
-            q = q.gte("ts", _epoch_to_iso_z(int(start_ts)))
-
-        res = q.execute()
-        rows = res.data if hasattr(res, "data") else (res.get("data") if isinstance(res, dict) else None)
-        if not isinstance(rows, list):
-            rows = []
-
-        items: List[Dict[str, Any]] = []
-        for r in rows:
-            if not isinstance(r, dict):
-                continue
-            payload = r.get("payload")
-            if not isinstance(payload, dict):
-                payload = {"raw": payload}
-
-            items.append(
-                {
-                    "ts": parse_ts_to_epoch_seconds(r.get("ts")),
-                    "level": str(r.get("level") or "info").strip().lower(),
-                    "event_type": str(r.get("event_type") or "").strip(),
-                    "symbol": (str(r.get("symbol") or "").strip().upper() or None),
-                    "event_id": str(r.get("event_id") or "").strip() or None,
-                    "payload": payload,
-                }
-            )
-
-        next_before = 0
-        if items:
-            next_before = int(items[-1].get("ts") or 0)
-
-        return {"ok": True, "bot_id": bid, "mode": m, "items": items, "next_before_ts": next_before}
-
-    except Exception as e:
-        return {"ok": False, "bot_id": bid, "mode": m, "items": [], "error": f"{type(e).__name__}"}
-
-
-# -------------------------
-# Runner-only endpoints (Bearer token)
-# -------------------------
-
-@router.post("/heartbeat")
-def heartbeat(
-    payload: Dict[str, Any],
-    runner_user_id: str = Depends(require_bot_runner),
-    svc: BotService = Depends(get_bot_service),
-):
-    bid = clean_bot_id(payload.get("bot_id"))
-    if not bid:
-        return JSONResponse(status_code=400, content={"detail": "bot_id required"})
-
-    payload = dict(payload)
-    payload["bot_id"] = bid
-    return svc.heartbeat(runner_user_id, payload)
-
-
-@router.get("/status_runner")
-def status_runner(
-    bot_id: str = Query(...),
-    runner_user_id: str = Depends(require_bot_runner),
-    svc: BotService = Depends(get_bot_service),
-):
-    bid = clean_bot_id(bot_id)
-    if not bid:
-        return JSONResponse(status_code=400, content={"detail": "bot_id required"})
-
-    return svc.status(runner_user_id, bid)
-
-
-@router.post("/submit-intents")
-def submit_intents(
-    payload: Dict[str, Any],
-    runner_user_id: str = Depends(require_bot_runner),
-    svc: BotService = Depends(get_bot_service),
-):
-    bid = clean_bot_id(payload.get("bot_id"))
-    if not bid:
-        return JSONResponse(status_code=400, content={"detail": "bot_id required"})
-
-    ts = payload.get("ts")
-    try:
-        ts_int = int(ts) if ts is not None else 0
-    except Exception:
-        ts_int = 0
-
-    items = payload.get("items") or []
-    if not isinstance(items, list):
-        return JSONResponse(status_code=400, content={"detail": "items must be a list"})
-
-    return svc.submit_intents(runner_user_id, bid, ts_int, items)
-
-
-@router.get("/config")
-def get_config(
-    request: Request,
-    response: Response,
-    bot_id: str = Query(...),
-    svc: BotService = Depends(get_bot_service),
-):
-    u = require_user(request, response)
-    user_id = u["id"]
-
-    bid = clean_bot_id(bot_id)
-    if not bid:
-        return JSONResponse(status_code=400, content={"detail": "bot_id required"})
-
-    return svc.get_config(user_id, bid)
-
-
-@router.post("/config")
-def set_config(
-    request: Request,
-    response: Response,
-    payload: Dict[str, Any],
-    svc: BotService = Depends(get_bot_service),
-):
-    u = require_user(request, response)
-    user_id = u["id"]
-
-    bid = clean_bot_id(payload.get("bot_id"))
-    config = payload.get("config")
-
-    if not bid:
-        return JSONResponse(status_code=400, content={"detail": "bot_id required"})
-    if not isinstance(config, dict):
-        return JSONResponse(status_code=400, content={"detail": "config must be an object"})
-
-    return svc.set_config(user_id, bid, config)
+    return {"intents": intents, "events": events}

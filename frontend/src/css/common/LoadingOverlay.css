@@ -63,3 +63,8 @@
   }
 }
 
+/* src/css/common/LoadingOverlay.css */
+.loading-overlay.loading-overlay--scoped {
+  position: absolute;
+  inset: 0;
+}

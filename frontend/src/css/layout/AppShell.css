@@ -39,13 +39,23 @@ body {
 
 /* ========= APP SHELL LAYOUT ======================================== */
 
+/* ========= APP SHELL LAYOUT ======================================== */
+
 .app-shell {
   min-height: 100vh;
   background: var(--ustock-bg-page);
   display: flex;
   position: relative;
-  overflow-x: clip;  /* better than hidden for layout */
+
+  /* ✅ IMPORTANT: do NOT clip on X — it causes right-side cutoffs on tiny widths */
+  overflow-x: auto;     /* allow scroll if something exceeds viewport */
   overflow-y: visible;
+
+  /* Helps prevent rubber-banding sideways on mobile while still allowing scroll when needed */
+  overscroll-behavior-x: contain;
+
+  /* Smooth scroll on iOS */
+  -webkit-overflow-scrolling: touch;
 }
 
 /* when navOpen = true, margin-left is added to content (desktop only) */
@@ -111,6 +121,13 @@ body {
     margin: 0;                /* no auto-centering margins */
     padding: 16px 16px 32px;  /* symmetric side padding */
     box-sizing: border-box;
+  }
+}
+
+/* ✅ Universal cutoff: below 320px, stop shrinking the layout */
+@media (max-width: 319px) {
+  .app-page {
+    min-width: 320px; /* forces overflow instead of crushing cards */
   }
 }
 

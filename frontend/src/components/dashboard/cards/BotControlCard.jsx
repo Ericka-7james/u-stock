@@ -1,117 +1,120 @@
 // frontend/src/components/dashboard/cards/BotControlCard.jsx
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
 import HelpTooltip from "../../common/HelpTooltip.jsx";
 import Modal from "../../common/Modal.jsx";
+import LoadingOverlay from "../../common/LoadingOverlay.jsx";
+import ErrorModal from "../../common/ErrorMessages.jsx";
+
+import { explainAnyError } from "../../../lib/errorMessages.jsx";
+import { BOT_CONTROL_CARD_CONTENT as COPY } from "../../../content/dashboard/botControlCard.content.js";
+
+// ✅ Reuse BotLogsCard styling for the log modal rows
+import "../../../css/dashboard/cards/BotLogsCard.css";
+
+import { apiGet, apiPost } from "../../../lib/api/botApi.js";
+import { safeStr, n, fmtTime, fmtAge, pillTone, normalizeEff, normalizeIntent } from "../../../lib/format/botFormat.js";
+
+import useInterval from "../../../hooks/useInterval.js";
+
 import "../../../css/dashboard/cards/BotControlCard.css";
 
-/**
- * Fetch helpers (cookies included).
- */
-async function apiGet(url, { signal } = {}) {
-  const res = await fetch(url, { credentials: "include", signal });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data?.detail || "Request failed");
-  return data;
+/* ----------------------------
+   Risk validation (UI-only)
+---------------------------- */
+
+function isStrictNumericString(v) {
+  const s = String(v ?? "").trim();
+  if (!s) return false;
+  return /^\d+(\.\d+)?$/.test(s);
 }
 
-async function apiPost(url, body, { signal } = {}) {
-  const res = await fetch(url, {
-    method: "POST",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
-    body: body ? JSON.stringify(body) : undefined,
-    signal,
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data?.detail || "Request failed");
-  return data;
+function validateRiskDraft(draft) {
+  const errors = {};
+
+  const rpt = String(draft?.risk_per_trade ?? "").trim();
+  const mtd = String(draft?.max_trades_per_day ?? "").trim();
+  const mc = String(draft?.min_confidence ?? "").trim();
+
+  if (!isStrictNumericString(rpt)) {
+    errors.risk_per_trade = COPY?.modals?.risk?.errors?.risk_per_trade_format || "Enter a number like 0.005";
+  } else {
+    const val = Number(rpt);
+    if (!(val > 0 && val < 1)) {
+      errors.risk_per_trade =
+        COPY?.modals?.risk?.errors?.risk_per_trade_range || "Must be > 0 and < 1 (example: 0.005)";
+    }
+  }
+
+  if (!isStrictNumericString(mtd)) {
+    errors.max_trades_per_day = COPY?.modals?.risk?.errors?.max_trades_per_day_format || "Enter an integer like 3";
+  } else {
+    const val = Number(mtd);
+    const isInt = Number.isInteger(val);
+    if (!isInt || val < 0) {
+      errors.max_trades_per_day =
+        COPY?.modals?.risk?.errors?.max_trades_per_day_range || "Must be a whole number ≥ 0";
+    }
+  }
+
+  if (!isStrictNumericString(mc)) {
+    errors.min_confidence = COPY?.modals?.risk?.errors?.min_confidence_format || "Enter a number like 0.62";
+  } else {
+    const val = Number(mc);
+    if (!(val >= 0 && val <= 1)) {
+      errors.min_confidence =
+        COPY?.modals?.risk?.errors?.min_confidence_range || "Must be between 0 and 1 (example: 0.62)";
+    }
+  }
+
+  return errors;
 }
 
-function safeStr(x, fallback = "") {
-  const s = String(x ?? "").trim();
-  return s || fallback;
-}
+/* ----------------------------
+   ✅ Log helpers (match BotLogsCard modal vibe)
+---------------------------- */
 
-function n(x, fallback = 0) {
-  const v = Number(x);
-  return Number.isFinite(v) ? v : fallback;
-}
-
-function fmtTime(epochSec) {
-  const t = Number(epochSec);
-  if (!Number.isFinite(t) || t <= 0) return "—";
+function safeJson(x) {
   try {
-    return new Date(t * 1000).toLocaleString();
+    return JSON.stringify(x, null, 2);
   } catch {
-    return "—";
+    return String(x ?? "");
   }
 }
 
-function fmtAge(sec) {
-  const s = Number(sec);
-  if (!Number.isFinite(s) || s < 0) return "—";
-  if (s < 60) return `${Math.floor(s)}s`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h`;
-  const d = Math.floor(h / 24);
-  const remH = h % 24;
-  return remH ? `${d}d ${remH}h` : `${d}`;
+function logSeverity(it) {
+  const lvl = String(it?.level || "info").toLowerCase();
+  if (lvl === "error") return "error";
+  if (lvl === "warn" || lvl === "warning") return "warn";
+  return "info";
 }
 
-function pillTone(kind) {
-  if (kind === "pos") return "pos";
-  if (kind === "warn") return "warn";
-  return "neg";
-}
-
-function normalizeEff(x) {
-  const v = String(x || "").trim().toLowerCase();
-  const ok = new Set([
-    "running",
-    "waiting_for_market",
-    "starting",
-    "paused",
-    "stopped",
-    "offline",
-    "error",
-    "degraded",
-    "idle",
-    "armed",
-    "disarmed",
-  ]);
-  return ok.has(v) ? v : v || "stopped";
-}
-
-function normalizeIntent(x) {
-  const v = String(x || "").trim().toLowerCase();
-  return v || "";
+function toneClass(sev) {
+  if (sev === "error") return "blog-evt blog-evt--error";
+  if (sev === "warn") return "blog-evt blog-evt--warn";
+  return "blog-evt";
 }
 
 export default function BotControlCard({ activeBotId, onActiveBotChange, onStartBot, onStopBot }) {
   const [available, setAvailable] = useState([]);
-  const [selected, setSelected] = useState(() => safeStr(activeBotId, "ema_trend"));
+  const [selected, setSelected] = useState(() => safeStr(activeBotId, ""));
 
   const [status, setStatus] = useState(null);
   const [market, setMarket] = useState(null);
   const [config, setConfig] = useState(null);
 
   const [busy, setBusy] = useState(false);
-  const [uiError, setUiError] = useState("");
 
-  // confirm start
+  const [snapshotLoading, setSnapshotLoading] = useState(false);
+  const snapshotRef = useRef({ botId: "", status: false, config: false });
+
   const [startConfirmOpen, setStartConfirmOpen] = useState(false);
-
-  // ✅ NEW: confirm arm
   const [armConfirmOpen, setArmConfirmOpen] = useState(false);
 
-  // View log modal
   const [logOpen, setLogOpen] = useState(false);
   const [logItems, setLogItems] = useState([]);
   const [logBusy, setLogBusy] = useState(false);
 
-  // Risk Controls modal
   const [riskOpen, setRiskOpen] = useState(false);
   const [riskBusy, setRiskBusy] = useState(false);
   const [riskDraft, setRiskDraft] = useState({
@@ -120,10 +123,38 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
     min_confidence: "",
   });
 
-  // mode (paper-only for now)
+  const [riskErrors, setRiskErrors] = useState({});
+  const [riskTouched, setRiskTouched] = useState({
+    risk_per_trade: false,
+    max_trades_per_day: false,
+    min_confidence: false,
+  });
+
   const [mode, setMode] = useState("paper");
 
-  // Refs to avoid “mode/config changed → callback recreated → effect reruns → abort → canceled”
+  const [errModalOpen, setErrModalOpen] = useState(false);
+  const [errModal, setErrModal] = useState(null);
+
+  const closeErrorModal = useCallback(() => {
+    setErrModalOpen(false);
+    setErrModal(null);
+  }, []);
+
+  const openErrorModal = useCallback((anyErr, { feature = "bot_control" } = {}) => {
+    const friendly = explainAnyError(anyErr, { feature });
+    setErrModal({
+      title: friendly?.title || "Error",
+      body: friendly?.body || "Something went wrong.",
+      subtitle: friendly?.subtitle || "",
+      image: friendly?.image || null,
+      action: friendly?.action || null,
+    });
+    setErrModalOpen(true);
+  }, []);
+
+  const aliveRef = useRef(true);
+  const inflightRef = useRef({ available: null, status: null, market: null, config: null, action: null });
+  const selectedRef = useRef(safeStr(activeBotId, ""));
   const modeRef = useRef("paper");
   const configModeRef = useRef("");
 
@@ -135,20 +166,17 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
     configModeRef.current = safeStr(config?.mode, "");
   }, [config?.mode, config]);
 
-  const aliveRef = useRef(true);
-  const inflightRef = useRef({ available: null, status: null, market: null, config: null, action: null });
-  const timersRef = useRef({ statusPoll: null, marketPoll: null });
-
   function abortInflight(key) {
     const cur = inflightRef.current?.[key];
     if (cur) cur.abort();
     inflightRef.current[key] = null;
   }
 
-  function clearTimer(t) {
-    if (!t) return;
-    clearInterval(t);
-    clearTimeout(t);
+  function maybeStopSnapshotLoading(botId) {
+    const id = safeStr(botId, "");
+    const s = snapshotRef.current;
+    if (s.botId !== id) return;
+    if (!s.status && !s.config) setSnapshotLoading(false);
   }
 
   useEffect(() => {
@@ -156,21 +184,18 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
     return () => {
       aliveRef.current = false;
       Object.keys(inflightRef.current || {}).forEach((k) => abortInflight(k));
-      Object.values(timersRef.current || {}).forEach((t) => clearTimer(t));
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // sync selected with parent (only when parent provides a real id)
   useEffect(() => {
     const next = safeStr(activeBotId, "");
-    if (!next) return;
+    selectedRef.current = next;
     setSelected((prev) => (prev === next ? prev : next));
     setStartConfirmOpen(false);
     setArmConfirmOpen(false);
   }, [activeBotId]);
 
-  // load bots list (ONCE)
   useEffect(() => {
     abortInflight("available");
     const ac = new AbortController();
@@ -180,26 +205,17 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
       try {
         const data = await apiGet("/api/bots/available", { signal: ac.signal });
         if (!aliveRef.current || ac.signal.aborted) return;
-
-        const bots = Array.isArray(data?.bots) ? data.bots : [];
-        setAvailable(bots);
-
-        setSelected((prev) => {
-          const cur = safeStr(prev, "");
-          if (cur) return cur;
-          return safeStr(activeBotId, bots?.[0]?.id || "ema_trend");
-        });
+        setAvailable(Array.isArray(data?.bots) ? data.bots : []);
       } catch (e) {
         if (!aliveRef.current || ac.signal.aborted) return;
-        setUiError(String(e?.message || e));
+        openErrorModal(e, { feature: "bots_available" });
       } finally {
         if (inflightRef.current.available === ac) inflightRef.current.available = null;
       }
     })();
 
     return () => ac.abort();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [openErrorModal]);
 
   const refreshMarket = useCallback(async () => {
     if (inflightRef.current.market) return;
@@ -217,38 +233,49 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
     }
   }, []);
 
-  const refreshConfig = useCallback(async (botId) => {
-    const id = safeStr(botId);
-    if (!id || inflightRef.current.config) return;
+  const refreshConfig = useCallback(
+    async (botId) => {
+      const id = safeStr(botId, "");
+      if (!id || inflightRef.current.config) return;
 
-    const ac = new AbortController();
-    inflightRef.current.config = ac;
+      const ac = new AbortController();
+      inflightRef.current.config = ac;
 
-    try {
-      const data = await apiGet(`/api/bots/config?bot_id=${encodeURIComponent(id)}`, { signal: ac.signal });
-      if (!aliveRef.current || ac.signal.aborted) return;
+      try {
+        const data = await apiGet(`/api/bots/config?bot_id=${encodeURIComponent(id)}`, { signal: ac.signal });
+        if (!aliveRef.current || ac.signal.aborted) return;
+        if (selectedRef.current !== id) return;
 
-      const cfg = data?.config && typeof data.config === "object" ? data.config : null;
-      setConfig(cfg);
+        const cfg = data?.config && typeof data.config === "object" ? data.config : null;
+        setConfig(cfg);
 
-      const m = safeStr(cfg?.mode, "paper");
-      setMode(m === "live" ? "paper" : m);
+        const m = safeStr(cfg?.mode, "paper");
+        setMode(m === "live" ? "paper" : m);
 
-      setRiskDraft({
-        risk_per_trade: cfg?.risk_per_trade ?? "",
-        max_trades_per_day: cfg?.max_trades_per_day ?? "",
-        min_confidence: cfg?.min_confidence ?? "",
-      });
-    } catch {
-      // ignore
-    } finally {
-      if (inflightRef.current.config === ac) inflightRef.current.config = null;
-    }
-  }, []);
+        const nextDraft = {
+          risk_per_trade: cfg?.risk_per_trade ?? "",
+          max_trades_per_day: cfg?.max_trades_per_day ?? "",
+          min_confidence: cfg?.min_confidence ?? "",
+        };
 
-  // ✅ STABLE — avoids rerun/abort loop
+        setRiskDraft(nextDraft);
+        setRiskErrors(validateRiskDraft(nextDraft));
+        setRiskTouched({ risk_per_trade: false, max_trades_per_day: false, min_confidence: false });
+      } catch (e) {
+        if (aliveRef.current && !ac.signal.aborted) openErrorModal(e, { feature: "bot_config" });
+      } finally {
+        if (snapshotRef.current.botId === id) {
+          snapshotRef.current.config = false;
+          maybeStopSnapshotLoading(id);
+        }
+        if (inflightRef.current.config === ac) inflightRef.current.config = null;
+      }
+    },
+    [openErrorModal]
+  );
+
   const refreshStatus = useCallback(async (botId) => {
-    const id = safeStr(botId);
+    const id = safeStr(botId, "");
     if (!id || inflightRef.current.status) return;
 
     const ac = new AbortController();
@@ -257,6 +284,7 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
     try {
       const data = await apiGet(`/api/bots/status?bot_id=${encodeURIComponent(id)}`, { signal: ac.signal });
       if (!aliveRef.current || ac.signal.aborted) return;
+      if (selectedRef.current !== id) return;
 
       setStatus(data);
 
@@ -265,58 +293,72 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
       const nextMode = safeStr(data?.mode, cfgMode || currentMode);
       setMode(nextMode === "live" ? "paper" : nextMode);
     } catch {
-      // ignore
+      // fail-open
     } finally {
+      if (snapshotRef.current.botId === id) {
+        snapshotRef.current.status = false;
+        maybeStopSnapshotLoading(id);
+      }
       if (inflightRef.current.status === ac) inflightRef.current.status = null;
     }
   }, []);
 
-  // polling on selected
   useEffect(() => {
     const id = safeStr(selected, "");
-    if (!id) return;
+    selectedRef.current = id;
 
-    setUiError("");
+    if (!id) {
+      setStatus(null);
+      setConfig(null);
+      setStartConfirmOpen(false);
+      setArmConfirmOpen(false);
+      snapshotRef.current = { botId: "", status: false, config: false };
+      setSnapshotLoading(false);
+      return;
+    }
+
+    snapshotRef.current = { botId: id, status: true, config: true };
+    setSnapshotLoading(true);
 
     refreshConfig(id);
     refreshStatus(id);
+  }, [selected, refreshConfig, refreshStatus]);
+
+  useInterval(() => refreshMarket(), 30_000);
+  useInterval(() => {
+    const id = selectedRef.current;
+    if (id) refreshStatus(id);
+  }, selected ? 4_000 : null);
+
+  useEffect(() => {
     refreshMarket();
+  }, [refreshMarket]);
 
-    clearTimer(timersRef.current.marketPoll);
-    timersRef.current.marketPoll = setInterval(() => refreshMarket(), 30_000);
-
-    clearTimer(timersRef.current.statusPoll);
-    timersRef.current.statusPoll = setInterval(() => refreshStatus(id), 4_000);
-
-    return () => {
-      clearTimer(timersRef.current.marketPoll);
-      clearTimer(timersRef.current.statusPoll);
-    };
-  }, [selected, refreshStatus, refreshMarket, refreshConfig]);
-
-  function onSelect(e) {
-    const id = e.target.value;
-    setSelected(id);
-    onActiveBotChange?.(id);
-    setStartConfirmOpen(false);
-    setArmConfirmOpen(false);
-  }
+  const onSelect = useCallback(
+    (e) => {
+      const id = safeStr(e.target.value, "");
+      setSelected(id);
+      selectedRef.current = id;
+      onActiveBotChange?.(id);
+      setStartConfirmOpen(false);
+      setArmConfirmOpen(false);
+    },
+    [onActiveBotChange]
+  );
 
   /* ----------------------------
-     Derived state (canonical)
+     Derived state
   ---------------------------- */
 
-  const intent = normalizeIntent(status?.intent);
-  const eff = normalizeEff(status?.effective_state);
+  const hasSelection = Boolean(safeStr(selected, ""));
+  const intent = normalizeIntent(status?.intent); // running|stopped
+  const eff = normalizeEff(status?.effective_state); // may include offline/error/waiting
 
   const desiredState = safeStr(status?.desired_state, "");
-  const isArmed = desiredState === "armed"; // ✅ persisted arming
-  const isDesiredRunning = desiredState === "running";
-
+  const isArmed = Boolean(status?.armed) || desiredState === "armed";
   const hbAge = Number.isFinite(Number(status?.heartbeatAgeSec)) ? Number(status.heartbeatAgeSec) : null;
 
   const lastError = safeStr(status?.lastError, "");
-  const pausedReason = safeStr(status?.pausedReason, "");
   const message = safeStr(status?.message, "");
 
   const marketOk = market && typeof market === "object" && market.ok === true;
@@ -329,16 +371,21 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
       ? n(market.next_open)
       : 0;
 
-  const isOffline = eff === "offline";
-  const isErr = eff === "error" || Boolean(lastError);
+  const isOffline = hasSelection && eff === "offline";
+  const isErr = hasSelection && (eff === "error" || Boolean(lastError));
 
-  const isWaiting = eff === "waiting_for_market";
-  const isStarting = eff === "starting";
-  const isRunningEff = eff === "running" || eff === "degraded";
-  const isPaused = !isOffline && (eff === "paused" || intent === "paused");
-  const isDisarmed = !isArmed && !isDesiredRunning && (eff === "disarmed" || intent === "disarmed");
+  const isWaiting = hasSelection && eff === "waiting_for_market";
+  const isStarting = hasSelection && eff === "starting";
+  const isRunningEff = hasSelection && (eff === "running" || eff === "degraded");
 
-  const runtimeLabel = isOffline
+  const isStopped =
+    hasSelection && !isOffline && !isErr && !isRunningEff && !isWaiting && !isStarting && intent === "stopped";
+
+  const isDisarmed = hasSelection && !isArmed && !isRunningEff && !isWaiting && !isStarting;
+
+  const runtimeLabel = !hasSelection
+    ? "—"
+    : isOffline
     ? "OFFLINE"
     : isErr
     ? "ERROR"
@@ -347,210 +394,272 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
     : isStarting
     ? "STARTING"
     : isRunningEff
-    ? "LIVE"
-    : isPaused
-    ? "PAUSED"
+    ? mode === "paper"
+      ? "RUNNING"
+      : "LIVE"
     : isArmed
     ? "ARMED"
     : isDisarmed
     ? "DISARMED"
+    : isStopped
+    ? "STOPPED"
     : "IDLE";
 
-  const runtimeTone = isErr || isOffline ? "neg" : isRunningEff ? "pos" : isWaiting || isStarting ? "pos" : "warn";
+  const runtimeTone = !hasSelection ? "warn" : isErr || isOffline ? "neg" : isRunningEff ? "pos" : isWaiting || isStarting ? "pos" : "warn";
 
-  const statusLine = isErr
-    ? `Error: ${lastError || "unknown"}`
+  const statusLine = !hasSelection
+    ? COPY.status.noneSelected
+    : isErr
+    ? `${COPY.status.errorPrefix}${lastError || "unknown"}`
     : isOffline
     ? hbAge != null
-      ? `Offline · ${fmtAge(hbAge)} since heartbeat`
-      : "Offline · no heartbeat"
+      ? `${COPY.status.offlinePrefix}${fmtAge(hbAge)}${COPY.status.offlineSuffix}`
+      : COPY.status.offlineNoHeartbeat
     : isWaiting
-    ? "Waiting for market open"
+    ? COPY.status.waitingForOpen
     : isStarting
-    ? "Starting…"
+    ? COPY.status.starting
     : isRunningEff
     ? isOpen === false
-      ? "Running (market closed)"
-      : "Running"
+      ? COPY.status.runningMarketClosed
+      : COPY.status.running
     : isArmed
-    ? "Armed (persisted) · Ready to start"
-    : isPaused
-    ? pausedReason || message || "Paused"
-    : message || "Idle";
+    ? COPY.status.armedReady
+    : isDisarmed
+    ? COPY.status.disarmed || "Disarmed."
+    : isStopped
+    ? message || COPY.status.stopped || "Stopped."
+    : message || COPY.status.idle;
 
-  const canArm = !busy && !isRunningEff && !isWaiting && !isStarting && !isArmed;
-  const canDisarm = !busy && isArmed && !isRunningEff && !isWaiting && !isStarting;
+  const canArm = hasSelection && !busy && !isRunningEff && !isWaiting && !isStarting && !isArmed;
+  const canDisarm = hasSelection && !busy && isArmed && !isRunningEff && !isWaiting && !isStarting;
 
-  // ✅ Start only allowed if persisted-arm is present
-  const canStart = !busy && !isRunningEff && !isWaiting && !isStarting && isArmed;
-  const canPause = !busy && (isRunningEff || isWaiting || isStarting);
+  const marketClosedBlocksStart = hasSelection && marketOk && isOpen === false;
 
-  async function doArm() {
-    setUiError("");
-    setBusy(true);
-    abortInflight("action");
-    const ac = new AbortController();
-    inflightRef.current.action = ac;
+  const canStart = hasSelection && !busy && !isRunningEff && !isWaiting && !isStarting && isArmed && !marketClosedBlocksStart;
+  const canPause = hasSelection && !busy && (isRunningEff || isWaiting || isStarting);
 
-    try {
-      await apiPost("/api/bots/arm", { bot_id: selected, mode }, { signal: ac.signal });
-      await refreshStatus(selected);
-    } catch (e) {
-      if (!aliveRef.current || ac.signal.aborted) return;
-      setUiError(String(e?.message || e));
-    } finally {
-      if (inflightRef.current.action === ac) inflightRef.current.action = null;
-      if (aliveRef.current) setBusy(false);
-    }
-  }
+  /* ----------------------------
+     Actions
+  ---------------------------- */
 
-  async function doDisarm() {
-    setUiError("");
-    setBusy(true);
-    abortInflight("action");
-    const ac = new AbortController();
-    inflightRef.current.action = ac;
+  const runAction = useCallback(
+    async (fn, feature) => {
+      setBusy(true);
+      abortInflight("action");
+      const ac = new AbortController();
+      inflightRef.current.action = ac;
 
-    try {
-      await apiPost("/api/bots/disarm", { bot_id: selected }, { signal: ac.signal });
-      await refreshStatus(selected);
-    } catch (e) {
-      if (!aliveRef.current || ac.signal.aborted) return;
-      setUiError(String(e?.message || e));
-    } finally {
-      if (inflightRef.current.action === ac) inflightRef.current.action = null;
-      if (aliveRef.current) setBusy(false);
-    }
-  }
-
-  async function doStart() {
-    setUiError("");
-    setBusy(true);
-    abortInflight("action");
-    const ac = new AbortController();
-    inflightRef.current.action = ac;
-
-    try {
-      if (typeof onStartBot === "function") {
-        await onStartBot({ bot_id: selected, mode });
-      } else {
-        await apiPost("/api/bots/start", { bot_id: selected, mode }, { signal: ac.signal });
+      try {
+        await fn(ac);
+      } catch (e) {
+        if (!aliveRef.current || ac.signal.aborted) return;
+        openErrorModal(e, { feature });
+      } finally {
+        if (inflightRef.current.action === ac) inflightRef.current.action = null;
+        if (aliveRef.current) setBusy(false);
       }
-      await refreshStatus(selected);
-    } catch (e) {
-      if (!aliveRef.current || ac.signal.aborted) return;
-      setUiError(String(e?.message || e));
-    } finally {
-      if (inflightRef.current.action === ac) inflightRef.current.action = null;
-      if (aliveRef.current) setBusy(false);
-    }
-  }
+    },
+    [openErrorModal]
+  );
 
-  async function doPause() {
-    setUiError("");
-    setBusy(true);
-    abortInflight("action");
-    const ac = new AbortController();
-    inflightRef.current.action = ac;
+  const doArm = useCallback(async () => {
+    if (!hasSelection) return;
+    await runAction(
+      async (ac) => {
+        await apiPost("/api/bots/arm", { bot_id: selected, mode }, { signal: ac.signal });
+        await refreshStatus(selected);
+      },
+      "bot_arm"
+    );
+  }, [hasSelection, runAction, selected, mode, refreshStatus]);
 
-    try {
-      if (typeof onStopBot === "function") {
-        await onStopBot({ bot_id: selected });
-      } else {
-        await apiPost("/api/bots/stop", { bot_id: selected, paused_reason: "manual_pause" }, { signal: ac.signal });
-      }
-      await refreshStatus(selected);
-    } catch (e) {
-      if (!aliveRef.current || ac.signal.aborted) return;
-      setUiError(String(e?.message || e));
-    } finally {
-      if (inflightRef.current.action === ac) inflightRef.current.action = null;
-      if (aliveRef.current) setBusy(false);
-    }
-  }
+  const doDisarm = useCallback(async () => {
+    if (!hasSelection) return;
+    await runAction(
+      async (ac) => {
+        await apiPost("/api/bots/disarm", { bot_id: selected }, { signal: ac.signal });
+        await refreshStatus(selected);
+      },
+      "bot_disarm"
+    );
+  }, [hasSelection, runAction, selected, refreshStatus]);
 
-  function requestStart() {
+  const doStart = useCallback(async () => {
+    if (!hasSelection) return;
+    await runAction(
+      async (ac) => {
+        if (typeof onStartBot === "function") {
+          await onStartBot({ bot_id: selected, mode });
+        } else {
+          await apiPost("/api/bots/start", { bot_id: selected, mode }, { signal: ac.signal });
+        }
+        await refreshStatus(selected);
+      },
+      "bot_start"
+    );
+  }, [hasSelection, runAction, selected, mode, onStartBot, refreshStatus]);
+
+  const doPause = useCallback(async () => {
+    if (!hasSelection) return;
+    await runAction(
+      async (ac) => {
+        if (typeof onStopBot === "function") {
+          await onStopBot({ bot_id: selected });
+        } else {
+          await apiPost("/api/bots/stop", { bot_id: selected }, { signal: ac.signal });
+        }
+        await refreshStatus(selected);
+      },
+      "bot_stop"
+    );
+  }, [hasSelection, runAction, selected, onStopBot, refreshStatus]);
+
+  const requestStart = useCallback(() => {
+    if (!hasSelection) return;
+    if (!isArmed) return;
+    if (marketClosedBlocksStart) return;
     if (!canStart) return;
     setStartConfirmOpen(true);
-  }
+  }, [hasSelection, isArmed, marketClosedBlocksStart, canStart]);
 
-  async function confirmStart() {
+  const confirmStart = useCallback(async () => {
     setStartConfirmOpen(false);
     await doStart();
-  }
+  }, [doStart]);
 
-  function requestArm() {
+  const requestArm = useCallback(() => {
     if (!canArm) return;
     setArmConfirmOpen(true);
-  }
+  }, [canArm]);
 
-  async function confirmArm() {
+  const confirmArm = useCallback(async () => {
     setArmConfirmOpen(false);
     await doArm();
-  }
+  }, [doArm]);
 
-  async function openLog() {
-    setUiError("");
+  const openLog = useCallback(async () => {
+    if (!hasSelection) return;
     setLogOpen(true);
     setLogBusy(true);
     try {
       const data = await apiGet(`/api/bots/log?bot_id=${encodeURIComponent(selected)}&limit=50`);
-      const items = Array.isArray(data?.items) ? data.items : [];
-      setLogItems(items);
+      setLogItems(Array.isArray(data?.items) ? data.items : []);
     } catch (e) {
       setLogItems([]);
-      setUiError(String(e?.message || e));
+      openErrorModal(e, { feature: "bot_log" });
     } finally {
       setLogBusy(false);
     }
-  }
+  }, [hasSelection, selected, openErrorModal]);
 
-  function openRisk() {
-    setUiError("");
+  const openRisk = useCallback(() => {
+    if (!hasSelection) return;
+    setRiskErrors(validateRiskDraft(riskDraft));
+    setRiskTouched({ risk_per_trade: false, max_trades_per_day: false, min_confidence: false });
     setRiskOpen(true);
-  }
+  }, [hasSelection, riskDraft]);
 
-  async function saveRisk() {
-    setUiError("");
+  const onRiskChange = useCallback((key, value) => {
+    setRiskDraft((d) => {
+      const next = { ...d, [key]: value };
+      setRiskErrors(validateRiskDraft(next));
+      return next;
+    });
+  }, []);
+
+  const onRiskBlur = useCallback((key) => {
+    setRiskTouched((t) => ({ ...t, [key]: true }));
+  }, []);
+
+  const saveRisk = useCallback(async () => {
+    if (!hasSelection) return;
+
+    const errs = validateRiskDraft(riskDraft);
+    setRiskErrors(errs);
+    setRiskTouched({ risk_per_trade: true, max_trades_per_day: true, min_confidence: true });
+
+    if (Object.keys(errs).length > 0) return;
+
     setRiskBusy(true);
     try {
-      const payload = {
+      await apiPost("/api/bots/config", {
         bot_id: selected,
         config: {
           risk_per_trade: riskDraft.risk_per_trade,
           max_trades_per_day: riskDraft.max_trades_per_day,
           min_confidence: riskDraft.min_confidence,
         },
-      };
-      await apiPost("/api/bots/config", payload);
+      });
+
       await refreshConfig(selected);
       setRiskOpen(false);
     } catch (e) {
-      setUiError(String(e?.message || e));
+      openErrorModal(e, { feature: "bot_risk_save" });
     } finally {
       setRiskBusy(false);
     }
-  }
+  }, [hasSelection, selected, riskDraft, refreshConfig, openErrorModal]);
+
+  const selectedMeta = useMemo(() => {
+    const id = safeStr(selected, "");
+    if (!id) return null;
+    return (available || []).find((b) => safeStr(b?.id, "") === id) || null;
+  }, [available, selected]);
+
+  const handleErrorAction = useCallback(
+    (action) => {
+      if (!action?.href) return;
+      closeErrorModal();
+      window.location.assign(action.href);
+    },
+    [closeErrorModal]
+  );
+
+  const startBlockedReason = useMemo(() => {
+    if (!hasSelection) return "";
+    if (!marketOk) return "";
+    if (isOpen === false) return COPY.actions.startBlockedMarketClosed;
+    return "";
+  }, [hasSelection, marketOk, isOpen]);
+
+  const showMarketClosedNote = Boolean(startBlockedReason);
+
+  // UPDATED: log message extraction (matches service.py contract)
+  const logMessageFor = useCallback((it) => {
+    const p = it?.payload && typeof it.payload === "object" ? it.payload : null;
+    return safeStr(p?.message, "") || safeStr(p?.paused_reason, "") || safeStr(p?.last_error, "") || safeStr(it?.event_type, "");
+  }, []);
 
   return (
     <>
-      <div className="botCard">
+      <ErrorModal open={errModalOpen} error={errModal} onClose={closeErrorModal} onAction={handleErrorAction} />
+
+      <LoadingOverlay open={snapshotLoading} label={COPY.loading.overlayLabel} subtitle={COPY.loading.overlaySubtitle} />
+
+      <div className="botCard" aria-busy={snapshotLoading}>
         <div className="botCardHead">
           <div className="botCardTitleRow">
-            <div className="botCardTitle">Bot Control</div>
-            <HelpTooltip text="Arm → Start. Pause anytime. Arm is persisted server-side (survives logout) until you Disarm." />
+            <div className="botCardTitle">{COPY.title}</div>
+            <HelpTooltip text={COPY.help} />
           </div>
 
           <div className="botPillRow">
-            <div className="botCardStatePill mode" title="Paper trading only (live soon).">
-              {mode === "paper" ? "PAPER" : "PAPER"}
+            <div className="botCardStatePill mode" title={COPY.pills.paper.title}>
+              {COPY.pills.paper.label}
             </div>
 
             <div
-              className={`botCardStatePill ${isArmed ? "warn" : "neg"}`}
-              title={isArmed ? "Armed (persisted). Start enabled." : "Arm to enable Start."}
+              className={`botCardStatePill arm ${hasSelection && isArmed ? "warn" : "neg"}`}
+              title={
+                !hasSelection
+                  ? COPY.pills.armed.titleNone
+                  : isArmed
+                  ? COPY.pills.armed.titleArmed
+                  : COPY.pills.armed.titleDisarmed
+              }
             >
-              {isArmed ? "ARMED" : "DISARMED"}
+              {!hasSelection ? COPY.pills.armed.none : isArmed ? COPY.pills.armed.armed : COPY.pills.armed.disarmed}
             </div>
 
             <div className={`botCardStatePill status ${pillTone(runtimeTone)}`}>{runtimeLabel}</div>
@@ -560,43 +669,44 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
         <div className="botCardBody">
           <div className="botCardTopRow">
             <div className="botSelectWrap">
-              <label className="botLabel">Bot</label>
+              <label className="botLabel">{COPY.select.label}</label>
 
-              <select className="botSelect" value={selected} onChange={onSelect} disabled={busy}>
-                {(available.length ? available : [{ id: "ema_trend", name: "EMA Trend Bot" }]).map((b) => (
+              <select className="botSelect" value={safeStr(selected, "")} onChange={onSelect} disabled={busy}>
+                <option value="">{COPY.select.placeholder}</option>
+                {(available || []).map((b) => (
                   <option key={b.id} value={b.id}>
                     {b.name || b.id}
                   </option>
                 ))}
               </select>
 
-              <div className="botHint">{safeStr(available.find((b) => b.id === selected)?.description, "")}</div>
+              <div className="botHint">{safeStr(selectedMeta?.description, hasSelection ? "" : COPY.select.hintNone)}</div>
             </div>
 
             <div className="botActions">
-              <button className="botBtn" type="button" onClick={openLog} disabled={busy} aria-label="View log">
-                View log
+              <button className="botBtn" type="button" onClick={openLog} disabled={busy || !hasSelection}>
+                {COPY.actions.viewLog}
               </button>
 
-              <button className="botBtn" type="button" onClick={openRisk} disabled={busy} aria-label="Risk controls">
-                Risk Controls
+              <button className="botBtn" type="button" onClick={openRisk} disabled={busy || !hasSelection}>
+                {COPY.actions.risk}
               </button>
 
               {!isRunningEff && !isWaiting && !isStarting ? (
                 isArmed ? (
                   <button className="botBtn" type="button" onClick={doDisarm} disabled={!canDisarm}>
-                    Disarm
+                    {COPY.actions.disarm}
                   </button>
                 ) : (
                   <button className="botBtn" type="button" onClick={requestArm} disabled={!canArm}>
-                    Arm
+                    {COPY.actions.arm}
                   </button>
                 )
               ) : null}
 
               {isRunningEff || isWaiting || isStarting ? (
                 <button className="botBtn stop" type="button" onClick={doPause} disabled={!canPause}>
-                  Pause
+                  {COPY.actions.pause}
                 </button>
               ) : (
                 <button
@@ -604,187 +714,268 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
                   type="button"
                   onClick={requestStart}
                   disabled={!canStart}
-                  title={!isArmed ? "Arm first." : "Start bot"}
+                  title={
+                    !hasSelection
+                      ? COPY.actions.startTitleNone
+                      : !isArmed
+                      ? COPY.actions.startTitleNotArmed
+                      : marketClosedBlocksStart
+                      ? COPY.actions.startTitleMarketClosed
+                      : COPY.actions.startTitleOk
+                  }
                 >
-                  Start
+                  {COPY.actions.start}
                 </button>
               )}
+
+              {showMarketClosedNote ? (
+                <div className="botInlineNote" role="status" aria-live="polite">
+                  {startBlockedReason}
+                  {nextOpenEpoch ? (
+                    <span className="botInlineNoteSub">
+                      {COPY.actions.nextOpenPrefix}
+                      <span className="mono">{fmtTime(nextOpenEpoch)}</span>
+                    </span>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           </div>
 
           <div className="botGrid">
             <div className="botTile">
-              <div className="botTileLabel">Intent</div>
-              <div className="botTileValue">{intent || "—"}</div>
+              <div className="botTileLabel">{COPY.tiles.intent}</div>
+              <div className="botTileValue">{hasSelection ? intent || "—" : "—"}</div>
             </div>
 
             <div className="botTile">
-              <div className="botTileLabel">Effective</div>
-              <div className="botTileValue">{eff || "—"}</div>
+              <div className="botTileLabel">{COPY.tiles.effective}</div>
+              <div className="botTileValue">{hasSelection ? eff || "—" : "—"}</div>
             </div>
 
             <div className="botTile">
-              <div className="botTileLabel">Desired</div>
-              <div className="botTileValue">{desiredState || "—"}</div>
+              <div className="botTileLabel">{COPY.tiles.desired}</div>
+              <div className="botTileValue">{hasSelection ? desiredState || "—" : "—"}</div>
             </div>
 
             <div className="botTile">
-              <div className="botTileLabel">Heartbeat</div>
-              <div className="botTileValue">{hbAge == null ? "—" : `${fmtAge(hbAge)} ago`}</div>
+              <div className="botTileLabel">{COPY.tiles.heartbeat}</div>
+              <div className="botTileValue">{!hasSelection ? "—" : hbAge == null ? "—" : `${fmtAge(hbAge)} ago`}</div>
             </div>
 
             <div className="botTile">
-              <div className="botTileLabel">Next open</div>
-              <div className="botTileValue">{nextOpenEpoch ? fmtTime(nextOpenEpoch) : "—"}</div>
+              <div className="botTileLabel">{isOpen ? COPY.tiles.market : COPY.tiles.nextOpen}</div>
+              <div className="botTileValue">{isOpen ? COPY.market.openNow : nextOpenEpoch ? fmtTime(nextOpenEpoch) : "—"}</div>
             </div>
 
-            <div className="botTile" style={{ gridColumn: "1 / -1" }}>
-              <div className="botTileLabel">Status</div>
+            <div className="botTile botTileFull">
+              <div className="botTileLabel">{COPY.tiles.status}</div>
               <div className="botTileValue">{statusLine}</div>
-              {message ? (
-                <div style={{ fontSize: 12, opacity: 0.75, fontWeight: 800, marginTop: 4 }}>{message}</div>
-              ) : null}
+              {hasSelection && message ? <div className="botPausedLine">{message}</div> : null}
             </div>
           </div>
-
-          {uiError ? <div className="botError">{uiError}</div> : null}
         </div>
       </div>
 
-      {/* ✅ NEW: Arm confirm modal */}
       <Modal
         open={armConfirmOpen}
-        title="Arm this bot?"
+        title={COPY.modals.arm.title}
         onClose={() => setArmConfirmOpen(false)}
         footer={
           <>
             <button className="mBtn" type="button" onClick={() => setArmConfirmOpen(false)} disabled={busy}>
-              Cancel
+              {COPY.modals.arm.cancel}
             </button>
             <button className="mBtn mBtnPrimary" type="button" onClick={confirmArm} disabled={busy}>
-              Confirm arm
+              {COPY.modals.arm.confirm}
             </button>
           </>
         }
       >
-        <div style={{ display: "grid", gap: 10 }}>
-          <div style={{ fontWeight: 900 }}>
-            Arm: <span className="mono">{selected}</span>
+        <div className="botModalStack">
+          <div className="botModalRow">
+            <span className="botModalLabel">{COPY.modals.arm.botLabel}</span>
+            <span className="mono">{safeStr(selected, "—")}</span>
           </div>
-          <div style={{ fontSize: 12, opacity: 0.8, fontWeight: 800 }}>
-            This persists server-side (survives logout) until you Disarm.
-          </div>
-          <div style={{ fontSize: 12, opacity: 0.8, fontWeight: 800 }}>
-            Mode: <span className="mono">{mode}</span>
+          <div className="botModalHelper">{COPY.modals.arm.helper}</div>
+          <div className="botModalRow">
+            <span className="botModalLabel">{COPY.modals.arm.modeLabel}</span>
+            <span className="mono">{mode}</span>
           </div>
         </div>
       </Modal>
 
       <Modal
         open={startConfirmOpen}
-        title="Start this bot?"
+        title={COPY.modals.start.title}
         onClose={() => setStartConfirmOpen(false)}
         footer={
           <>
             <button className="mBtn" type="button" onClick={() => setStartConfirmOpen(false)} disabled={busy}>
-              Cancel
+              {COPY.modals.start.cancel}
             </button>
             <button className="mBtn mBtnPrimary" type="button" onClick={confirmStart} disabled={busy}>
-              Confirm start
+              {COPY.modals.start.confirm}
             </button>
           </>
         }
       >
-        <div style={{ display: "grid", gap: 10 }}>
-          <div style={{ fontWeight: 900 }}>
-            Start: <span className="mono">{selected}</span>
+        <div className="botModalStack">
+          <div className="botModalRow">
+            <span className="botModalLabel">{COPY.modals.start.botLabel}</span>
+            <span className="mono">{safeStr(selected, "—")}</span>
           </div>
-          <div style={{ fontSize: 12, opacity: 0.8, fontWeight: 800 }}>
-            Mode: <span className="mono">{mode}</span> · You can Pause anytime.
+
+          <div className="botModalHelper">
+            {COPY.modals.start.modePrefix} <span className="mono">{mode}</span> · {COPY.modals.start.helper}
           </div>
-          {!isArmed ? (
-            <div style={{ fontSize: 12, fontWeight: 900, color: "#b91c1c" }}>
-              Not armed. Close and Arm first.
-            </div>
-          ) : null}
+
+          {!isArmed ? <div className="botModalDanger">{COPY.modals.start.notArmed}</div> : null}
+          {marketClosedBlocksStart ? <div className="botModalWarn">{COPY.modals.start.marketClosed}</div> : null}
         </div>
       </Modal>
 
+      {/* ✅ UPDATED log modal: same event-row look as BotLogsCard "View all" */}
       <Modal
         open={logOpen}
-        title="Bot log"
+        title={COPY.modals.log.title}
         onClose={() => setLogOpen(false)}
         footer={
           <button className="mBtn" type="button" onClick={() => setLogOpen(false)} disabled={logBusy}>
-            Close
+            {COPY.modals.log.close}
           </button>
         }
       >
         {logBusy ? (
-          <div style={{ fontWeight: 800, opacity: 0.8 }}>Loading…</div>
+          <div className="botModalLoading">{COPY.modals.log.loading}</div>
+        ) : logItems.length === 0 ? (
+          <div className="botModalLoading">{COPY.modals.log.empty}</div>
         ) : (
-          <div style={{ display: "grid", gap: 8 }}>
-            {logItems.length === 0 ? (
-              <div style={{ fontWeight: 800, opacity: 0.8 }}>No log entries.</div>
-            ) : (
-              logItems.map((it, idx) => (
-                <div key={idx} style={{ border: "1px solid rgba(148,163,184,0.25)", borderRadius: 12, padding: 10 }}>
-                  <div style={{ fontWeight: 900, fontSize: 12, opacity: 0.85 }}>
-                    {safeStr(it.level, "info").toUpperCase()} · {it.ts ? fmtTime(it.ts) : "—"}
+          <div style={{ display: "grid", gap: 10, maxHeight: "62vh", overflow: "auto", paddingRight: 6 }}>
+            {logItems.map((it, idx) => {
+              const sev = logSeverity(it);
+              const headline = logMessageFor(it) || "Update";
+              const action = safeStr(it?.event_type, "").replaceAll("_", " ") || "Event";
+
+              return (
+                <div key={idx} className={toneClass(sev)}>
+                  <div className="blog-evtTop">
+                    <div className="blog-evtLeft">
+                      <div className="blog-evtTitle">{headline}</div>
+
+                      <div className="blog-evtSub">
+                        <span className="blog-evtChip">System</span>
+                        <span className="blog-evtDot">•</span>
+                        <span className="blog-evtChip blog-evtChip--soft">{action}</span>
+                        <span className="blog-evtDot">•</span>
+                        <span className="mMono">{it?.ts ? fmtTime(it.ts) : "—"}</span>
+                      </div>
+                    </div>
+
+                    <div className="blog-evtRight">
+                      <span className={`blog-level blog-level--${sev}`}>
+                        {sev === "info" ? "OK" : sev === "warn" ? "WARN" : "ERROR"}
+                      </span>
+                    </div>
                   </div>
-                  <div style={{ fontWeight: 800, marginTop: 6 }}>{safeStr(it.message, "")}</div>
+
+                  <div className="blog-evtDetails">
+                    <details>
+                      <summary>Raw log</summary>
+                      <div className="blog-rawGrid">
+                        <div className="blog-rawLabel">Level</div>
+                        <div className="mMono">{safeStr(it?.level, "info").toUpperCase()}</div>
+
+                        <div className="blog-rawLabel">Event</div>
+                        <div className="mMono">{safeStr(it?.event_type, "—")}</div>
+
+                        <div className="blog-rawLabel">Message</div>
+                        <div>{headline}</div>
+
+                        <div className="blog-rawLabel">Payload</div>
+                        <pre className="mMono blog-pre">{it?.payload ? safeJson(it.payload) : "—"}</pre>
+                      </div>
+                    </details>
+                  </div>
                 </div>
-              ))
-            )}
+              );
+            })}
           </div>
         )}
       </Modal>
 
       <Modal
         open={riskOpen}
-        title="Risk Controls"
+        title={COPY.modals.risk.title}
         onClose={() => setRiskOpen(false)}
         footer={
           <>
             <button className="mBtn" type="button" onClick={() => setRiskOpen(false)} disabled={riskBusy}>
-              Cancel
+              {COPY.modals.risk.cancel}
             </button>
             <button className="mBtn mBtnPrimary" type="button" onClick={saveRisk} disabled={riskBusy}>
-              Save
+              {COPY.modals.risk.save}
             </button>
           </>
         }
       >
-        <div style={{ display: "grid", gap: 10 }}>
-          <label style={{ display: "grid", gap: 6 }}>
-            <div style={{ fontWeight: 900, fontSize: 12, opacity: 0.85 }}>risk_per_trade</div>
+        <div className="botRiskGrid">
+          <label className="botRiskField">
+            <div className="botRiskLabel">{COPY.modals.risk.fields.risk_per_trade.label}</div>
             <input
-              className="botInput"
+              className={`botInput ${riskTouched.risk_per_trade && riskErrors.risk_per_trade ? "botInputError" : ""}`}
               value={riskDraft.risk_per_trade}
-              onChange={(e) => setRiskDraft((d) => ({ ...d, risk_per_trade: e.target.value }))}
-              placeholder="0.005"
+              onChange={(e) => onRiskChange("risk_per_trade", e.target.value)}
+              onBlur={() => onRiskBlur("risk_per_trade")}
+              placeholder={COPY.modals.risk.fields.risk_per_trade.placeholder}
+              inputMode="decimal"
             />
+            {riskTouched.risk_per_trade && riskErrors.risk_per_trade ? (
+              <div className="botFieldError" role="alert">
+                {riskErrors.risk_per_trade}
+              </div>
+            ) : null}
           </label>
 
-          <label style={{ display: "grid", gap: 6 }}>
-            <div style={{ fontWeight: 900, fontSize: 12, opacity: 0.85 }}>max_trades_per_day</div>
+          <label className="botRiskField">
+            <div className="botRiskLabel">{COPY.modals.risk.fields.max_trades_per_day.label}</div>
             <input
-              className="botInput"
+              className={`botInput ${riskTouched.max_trades_per_day && riskErrors.max_trades_per_day ? "botInputError" : ""}`}
               value={riskDraft.max_trades_per_day}
-              onChange={(e) => setRiskDraft((d) => ({ ...d, max_trades_per_day: e.target.value }))}
-              placeholder="3"
+              onChange={(e) => onRiskChange("max_trades_per_day", e.target.value)}
+              onBlur={() => onRiskBlur("max_trades_per_day")}
+              placeholder={COPY.modals.risk.fields.max_trades_per_day.placeholder}
+              inputMode="numeric"
             />
+            {riskTouched.max_trades_per_day && riskErrors.max_trades_per_day ? (
+              <div className="botFieldError" role="alert">
+                {riskErrors.max_trades_per_day}
+              </div>
+            ) : null}
           </label>
 
-          <label style={{ display: "grid", gap: 6 }}>
-            <div style={{ fontWeight: 900, fontSize: 12, opacity: 0.85 }}>min_confidence</div>
+          <label className="botRiskField">
+            <div className="botRiskLabel">{COPY.modals.risk.fields.min_confidence.label}</div>
             <input
-              className="botInput"
+              className={`botInput ${riskTouched.min_confidence && riskErrors.min_confidence ? "botInputError" : ""}`}
               value={riskDraft.min_confidence}
-              onChange={(e) => setRiskDraft((d) => ({ ...d, min_confidence: e.target.value }))}
-              placeholder="0.62"
+              onChange={(e) => onRiskChange("min_confidence", e.target.value)}
+              onBlur={() => onRiskBlur("min_confidence")}
+              placeholder={COPY.modals.risk.fields.min_confidence.placeholder}
+              inputMode="decimal"
             />
+            {riskTouched.min_confidence && riskErrors.min_confidence ? (
+              <div className="botFieldError" role="alert">
+                {riskErrors.min_confidence}
+              </div>
+            ) : null}
           </label>
+
+          {Object.keys(riskErrors || {}).length > 0 ? (
+            <div className="botRiskHint" role="status" aria-live="polite">
+              {COPY.modals.risk.validationHint}
+            </div>
+          ) : null}
         </div>
       </Modal>
     </>

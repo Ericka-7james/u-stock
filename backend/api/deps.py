@@ -1,4 +1,3 @@
-# backend/api/deps.py
 from __future__ import annotations
 
 import os
@@ -11,17 +10,26 @@ from api.db import get_supabase_anon
 
 RUNNER_SECRET_ENV = "BOT_RUNNER_SECRET"
 
-# Header names (accept both, but we will SEND the first one)
+# Header names
 RUNNER_SECRET_HEADER = "X-Bot-Runner-Secret"
 RUNNER_USER_ID_HEADER = "X-Runner-User-Id"
-RUNNER_USER_ID_HEADER_ALT = "X-Bot-Runner-User-Id"  # tolerate older name
+RUNNER_USER_ID_HEADER_ALT = "X-Bot-Runner-User-Id"
 
+
+# -----------------------------
+# Token extraction
+# -----------------------------
 
 def _get_bearer_token_from_cookie(request: Request) -> Optional[str]:
+    """
+    Supports Supabase + custom cookie names.
+    """
     for name in ("access_token", "sb-access-token", "USTOCK_ACCESS_TOKEN"):
         v = request.cookies.get(name)
         if v:
-            return str(v).strip() or None
+            token = str(v).strip()
+            if token:
+                return token
     return None
 
 
@@ -36,20 +44,22 @@ def _get_bearer_token_from_auth_header(request: Request) -> Optional[str]:
     return None
 
 
+# -----------------------------
+# Supabase user normalization
+# -----------------------------
+
 def _extract_user_obj(ures: Any) -> Any:
     """
-    Supabase python clients have returned different shapes across versions.
-    Normalize into a "user" object/dict when possible.
+    Supabase client versions return different shapes.
+    Normalize to a user object or dict.
     """
     if ures is None:
         return None
 
-    # common: ures.user
     user = getattr(ures, "user", None)
     if user is not None:
         return user
 
-    # sometimes dict: {"user": {...}}
     if isinstance(ures, dict):
         return ures.get("user")
 
@@ -57,20 +67,39 @@ def _extract_user_obj(ures: Any) -> Any:
 
 
 def _extract_user_fields(user: Any) -> tuple[Optional[str], Optional[str]]:
+    """
+    Extract user_id and email safely.
+    """
     if user is None:
         return (None, None)
 
-    user_id = getattr(user, "id", None) if not isinstance(user, dict) else user.get("id")
-    email = getattr(user, "email", None) if not isinstance(user, dict) else user.get("email")
+    if isinstance(user, dict):
+        uid = user.get("id")
+        email = user.get("email")
+    else:
+        uid = getattr(user, "id", None)
+        email = getattr(user, "email", None)
 
-    uid = str(user_id).strip() if user_id is not None else None
-    em = str(email).strip() if email is not None else None
+    uid = str(uid).strip() if uid else None
+    email = str(email).strip() if email else None
 
-    return (uid or None, em or None)
+    return (uid or None, email or None)
 
+
+# -----------------------------
+# Auth dependencies
+# -----------------------------
 
 def require_user(request: Request, response: Response) -> Dict[str, Any]:
-    token = _get_bearer_token_from_auth_header(request) or _get_bearer_token_from_cookie(request)
+    """
+    Cookie or Bearer-based user auth.
+    Used by all UI endpoints.
+    """
+    token = (
+        _get_bearer_token_from_auth_header(request)
+        or _get_bearer_token_from_cookie(request)
+    )
+
     if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
@@ -79,7 +108,6 @@ def require_user(request: Request, response: Response) -> Dict[str, Any]:
     try:
         ures = sb.auth.get_user(token)
     except Exception:
-        # Don’t leak internal details to clients
         raise HTTPException(status_code=401, detail="Invalid session token")
 
     user = _extract_user_obj(ures)
@@ -92,28 +120,37 @@ def require_user(request: Request, response: Response) -> Dict[str, Any]:
 
 
 def require_runner(request: Request, response: Response) -> Dict[str, Any]:
+    """
+    Runner-only authentication.
+    Used by heartbeat + status_runner endpoints.
+    """
     expected = (os.getenv(RUNNER_SECRET_ENV) or "").strip()
     if not expected:
-        raise HTTPException(status_code=500, detail="BOT_RUNNER_SECRET not configured on server")
+        raise HTTPException(status_code=500, detail="BOT_RUNNER_SECRET not configured")
 
     got = (request.headers.get(RUNNER_SECRET_HEADER) or "").strip()
     if not got or got != expected:
         raise HTTPException(status_code=401, detail="Runner not authenticated")
 
-    # Accept either header name for user id
+    # Accept either header name for user_id
     user_id = (
-        (request.headers.get(RUNNER_USER_ID_HEADER) or "")
-        or (request.headers.get(RUNNER_USER_ID_HEADER_ALT) or "")
+        request.headers.get(RUNNER_USER_ID_HEADER)
+        or request.headers.get(RUNNER_USER_ID_HEADER_ALT)
+        or ""
     ).strip()
 
     if not user_id:
-        raise HTTPException(status_code=401, detail="Runner missing X-Runner-User-Id")
+        raise HTTPException(status_code=401, detail="Runner missing user_id header")
 
     return {"id": user_id, "email": None, "auth": "runner"}
 
 
 def require_user_or_runner(request: Request, response: Response) -> Dict[str, Any]:
-    # If runner secret header exists, treat it as runner auth
+    """
+    Hybrid auth:
+    - Runner secret present → runner
+    - Else → user
+    """
     if request.headers.get(RUNNER_SECRET_HEADER):
         return require_runner(request, response)
     return require_user(request, response)

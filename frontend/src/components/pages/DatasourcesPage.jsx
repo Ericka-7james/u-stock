@@ -13,6 +13,8 @@ import DatasourcesSquirrel from "../../assets/images/DatasourcesSquirrel.png";
 import "../../css/pages/DatasourcesPage.css";
 import "../../css/dashboard/cards/CardShared.css";
 
+import { DATASOURCES_PAGE_COPY } from "../../content/datasources.content";
+
 // -------- Small in-memory cache (stale-while-revalidate) --------
 const CACHE_TTL_MS = 60_000;
 
@@ -114,73 +116,75 @@ export default function DatasourcesPage() {
   const navigate = useNavigate();
   const { items: leaders, meta: leadersMeta, loading: leadersLoading } = useMarketLeaders();
 
+  const c = DATASOURCES_PAGE_COPY;
+
   return (
     <AppShell>
       <div className="app-page datasources-page">
-        {/* Header: relies on PageHeaderCard lane behavior, just like IndexFunds */}
-        <div className="page-header-wrap">
-          <PageHeaderCard
-            title="Data Sources"
-            subtitle={
-              <>
-                This page is for <strong>market context + observability</strong> — view today’s top movers and filter bot
-                logs to validate behavior. (Start/Stop controls live on the Dashboard.)
-              </>
-            }
-            actions={
-              <>
-                <Link to="/" className="back-link-pill">
-                  ← Back to dashboard
-                </Link>
-                <Link to="/connected-apps" className="back-link-pill">
-                  Connected apps →
-                </Link>
-              </>
-            }
-            rightMedia={
-              <img
-                src={DatasourcesSquirrel}
-                alt="DatasourcesSquirrel"
-                className="datasources-hero-logo"
-              />
-            }
-          />
-        </div>
+        <PageHeaderCard
+          title={c.header.title}
+          subtitle={
+            <>
+              {c.header.subtitle.split("market context + observability").map((part, i, arr) =>
+                i < arr.length - 1 ? (
+                  <span key={i}>
+                    {part}
+                    <strong>market context + observability</strong>
+                  </span>
+                ) : (
+                  <span key={i}>{part}</span>
+                )
+              )}
+            </>
+          }
+          right={<img src={DatasourcesSquirrel} alt="DatasourcesSquirrel" className="datasources-hero-logo" />}
+        >
+          <div className="ds-header-actions">
+            <Link to="/" className="back-link-pill">
+              {c.header.actions.backToDashboardLabel}
+            </Link>
+            <Link to="/connected-apps" className="back-link-pill">
+              {c.header.actions.connectedAppsLabel}
+            </Link>
+          </div>
+        </PageHeaderCard>
 
-        <main className="ds-main">
-          <div className="ds-left">
-            <div className="ds-cardClamp">
-              <MarketLeadersCard
-                title="Market leaders"
-                subtitle="Top movers (today). Click a ticker to load it on the dashboard chart."
-                items={leaders}
-                meta={leadersMeta}
-                loading={leadersLoading}
-                onSelectSymbol={(sym) => {
-                  const clean = normalizeSymbol(sym);
-                  if (!clean) return;
-                  if (!isTvSafe(clean)) return;
+        <div className="ds-page-wrap">
+          <main className="ds-main">
+            <div className="ds-left">
+              <div className="ds-cardClamp">
+                <MarketLeadersCard
+                  title={c.cards.marketLeaders.title}
+                  subtitle={c.cards.marketLeaders.subtitle}
+                  items={leaders}
+                  meta={leadersMeta}
+                  loading={leadersLoading}
+                  onSelectSymbol={(sym) => {
+                    const clean = normalizeSymbol(sym);
+                    if (!clean) return;
+                    if (!isTvSafe(clean)) return;
 
-                  try {
-                    localStorage.setItem("ustock:last_ticker", clean);
-                  } catch {}
+                    try {
+                      localStorage.setItem("ustock:last_ticker", clean);
+                    } catch {}
 
-                  navigate(`/?ticker=${encodeURIComponent(clean)}`);
-                }}
+                    navigate(`/?ticker=${encodeURIComponent(clean)}`);
+                  }}
+                />
+              </div>
+            </div>
+
+            <div className="ds-right">
+              <BotLogsCard
+                defaultBotId={c.cards.botLogs.defaultBotId}
+                maxPreview={c.cards.botLogs.maxPreview}
+                title={c.cards.botLogs.title}
+                subtitle={c.cards.botLogs.subtitle}
+                showQuickLink={c.cards.botLogs.showQuickLink}
               />
             </div>
-          </div>
-
-          <div className="ds-right">
-            <BotLogsCard
-              defaultBotId="ema_trend"
-              maxPreview={3}
-              title="Bot logs"
-              subtitle="Filter by day, status, and search terms. Use logs to debug decisions + runner health."
-              showQuickLink={true}
-            />
-          </div>
-        </main>
+          </main>
+        </div>
       </div>
     </AppShell>
   );

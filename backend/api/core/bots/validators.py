@@ -1,3 +1,4 @@
+# backend/api/core/bots/validators.py
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -20,7 +21,7 @@ def normalize_mode(x: Any) -> str:
     return m if m in ("paper", "live") else "paper"
 
 
-def normalize_intent(x: Any, default: str = "paused") -> str:
+def normalize_intent(x: Any, default: str = "stopped") -> str:
     v = str(x or "").strip().lower()
     return v if v in INTENTS else default
 
@@ -35,19 +36,19 @@ def iso_now() -> str:
 
 
 def parse_ts_to_epoch_seconds(ts_val: Any) -> int:
-    """
-    Supabase returns timestamptz as ISO strings.
-    Convert to epoch seconds.
-    """
     if not ts_val:
         return 0
+
     if isinstance(ts_val, (int, float)):
         return int(ts_val)
+
     s = str(ts_val).strip()
     if not s:
         return 0
+
     if s.endswith("Z"):
         s = s[:-1] + "+00:00"
+
     try:
         dt = datetime.fromisoformat(s)
         if dt.tzinfo is None:

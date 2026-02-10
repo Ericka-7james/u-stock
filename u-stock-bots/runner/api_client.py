@@ -1,316 +1,356 @@
-# backend/api/security/bot_runner_token.py
+# u-stock-bots/runner/api_client.py
 from __future__ import annotations
 
-import hashlib
 import os
-import secrets
 import time
-from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
-import jwt
-from fastapi import HTTPException
+from bots._shared.ustock_http import UStockAPI
 
-from api.db import get_supabase_service
+
+def now_epoch() -> int:
+    return int(time.time())
 
 
 def _env(name: str, default: str = "") -> str:
     return str(os.getenv(name, default) or "").strip()
 
 
-def _now_epoch() -> int:
-    return int(time.time())
+def _as_dict(x: Any) -> Dict[str, Any]:
+    return x if isinstance(x, dict) else {}
 
 
-def _now_iso() -> str:
-    # keep simple (Supabase accepts ISO)
-    from datetime import datetime, timezone
-
-    return datetime.now(timezone.utc).isoformat()
-
-
-def _sha256_hex(s: str) -> str:
-    return hashlib.sha256(s.encode("utf-8")).hexdigest()
+def _as_list_of_dicts(x: Any) -> List[Dict[str, Any]]:
+    if not isinstance(x, list):
+        return []
+    return [it for it in x if isinstance(it, dict)]
 
 
-@dataclass(frozen=True)
-class BotRunnerConfig:
-    jwt_secret: str
-    issuer: str
-    audience: str
-    access_ttl_seconds: int
-    refresh_pepper: str
-    pair_code_ttl_seconds: int
-    refresh_ttl_seconds: int  # optional expiry for refresh tokens (0 = no expiry)
+def _is_jwt(s: str) -> bool:
+    return str(s or "").count(".") == 2
 
 
-def load_bot_runner_config() -> BotRunnerConfig:
-    jwt_secret = _env("BOT_RUNNER_JWT_SECRET")
-    if not jwt_secret:
-        raise HTTPException(status_code=500, detail="BOT_RUNNER_JWT_SECRET missing")
+def _runner_id_for_mint(bot_id: str) -> str:
+    return _env("RUNNER_ID") or _env("RUNNER_DEVICE_ID") or str(bot_id or "").strip() or "local-runner"
 
-    pepper = _env("RUNNER_REFRESH_PEPPER")
-    if not pepper:
-        raise HTTPException(status_code=500, detail="RUNNER_REFRESH_PEPPER missing")
 
-    issuer = _env("BOT_RUNNER_ISSUER", "u-stock")
-    audience = _env("BOT_RUNNER_AUDIENCE", "runner")
+def _runner_user_id() -> str:
+    """
+    Runner MUST know which user it is operating for.
+    Keep this required for status_runner + heartbeat + submit_intents.
+    """
+    return _env("RUNNER_USER_ID") or _env("USTOCK_USER_ID")
 
+
+def _mint_runner_token(api: UStockAPI, *, bot_id: str) -> Tuple[str, int]:
+    """
+    Calls backend POST /api/runner/token using shared secret to mint a JWT.
+    Returns (token, expires_in_seconds).
+    """
+    shared = _env("RUNNER_SHARED_SECRET")
+    if not shared:
+        raise RuntimeError(
+            "RUNNER_SHARED_SECRET missing. Set it in u-stock-bots env to mint a token via /api/runner/token."
+        )
+
+    runner_id = _runner_id_for_mint(bot_id)
+    headers = {"X-Runner-Secret": shared}
+
+    # Optional: embed uid claim in token (if backend supports it)
+    uid = _runner_user_id()
+    if uid:
+        headers["X-Runner-User-Id"] = uid
+
+    res = api.post(
+        "/api/runner/token",
+        json={"runner_id": runner_id},
+        headers=headers,
+    )
+    data = _as_dict(res)
+    token = str(data.get("token") or "").strip()
+    expires_in = int(data.get("expires_in") or 0)
+
+    if not _is_jwt(token):
+        raise RuntimeError("Minted runner token is not a JWT (unexpected response).")
+
+    return token, max(30, expires_in)
+
+
+class _TokenCache:
+    def __init__(self) -> None:
+        self.token: str = ""
+        self.exp_epoch: int = 0
+
+    def valid(self) -> bool:
+        # refresh a bit early
+        return bool(self.token) and _is_jwt(self.token) and (now_epoch() + 20) < int(self.exp_epoch or 0)
+
+
+_CACHE = _TokenCache()
+
+
+def _is_token_expired_401(err: Exception) -> bool:
+    s = str(err or "")
+    return ("401" in s) and ("expired" in s.lower() or "token expired" in s.lower())
+
+
+def _invalidate_token_cache() -> None:
+    _CACHE.token = ""
+    _CACHE.exp_epoch = 0
+
+
+def _dev_token_from_env() -> str:
+    """
+    DEV fallback tokens (optional):
+      - BOT_RUNNER_TOKEN
+      - RUNNER_TOKEN
+    """
+    return (os.getenv("BOT_RUNNER_TOKEN") or os.getenv("RUNNER_TOKEN") or "").strip()
+
+
+def _auth_headers_for_bot(api: UStockAPI, *, bot_id: str) -> Dict[str, str]:
+    """
+    Auth priority:
+      1) Mint JWT via /api/runner/token (RUNNER_SHARED_SECRET)
+      2) DEV env token (BOT_RUNNER_TOKEN / RUNNER_TOKEN)
+      3) Empty -> backend will 401
+    """
+    bid = str(bot_id or "").strip()
+
+    # 1) mint token via shared secret
+    if _env("RUNNER_SHARED_SECRET"):
+        if not _CACHE.valid():
+            tok, ttl = _mint_runner_token(api, bot_id=bid)
+            _CACHE.token = tok
+            _CACHE.exp_epoch = now_epoch() + ttl
+        return {"Authorization": f"Bearer {_CACHE.token}"}
+
+    # 2) dev env token
+    tok = _dev_token_from_env()
+    if not tok:
+        return {}
+
+    if not _is_jwt(tok):
+        raise RuntimeError(
+            "RUNNER_TOKEN/BOT_RUNNER_TOKEN is not a JWT. "
+            "Preferred: set RUNNER_SHARED_SECRET so the runner can mint a valid JWT from /api/runner/token."
+        )
+
+    return {"Authorization": f"Bearer {tok}"}
+
+
+def _post_with_auth_retry(api: UStockAPI, path: str, *, bot_id: str, json: Dict[str, Any]) -> Any:
+    bid = str(bot_id or "").strip()
     try:
-        access_ttl = int(_env("BOT_RUNNER_JWT_TTL_SECONDS", "900") or 900)
-    except Exception:
-        access_ttl = 900
+        return api.post(path, json=json, headers=_auth_headers_for_bot(api, bot_id=bid))
+    except Exception as e:
+        if _env("RUNNER_SHARED_SECRET") and _is_token_expired_401(e):
+            _invalidate_token_cache()
+            return api.post(path, json=json, headers=_auth_headers_for_bot(api, bot_id=bid))
+        raise
 
+
+def _get_with_auth_retry(api: UStockAPI, path: str, *, bot_id: str, params: Optional[Dict[str, Any]] = None) -> Any:
+    bid = str(bot_id or "").strip()
     try:
-        pair_ttl = int(_env("RUNNER_PAIR_CODE_TTL_SECONDS", "600") or 600)
-    except Exception:
-        pair_ttl = 600
+        return api.get(path, params=params or {}, headers=_auth_headers_for_bot(api, bot_id=bid))
+    except Exception as e:
+        if _env("RUNNER_SHARED_SECRET") and _is_token_expired_401(e):
+            _invalidate_token_cache()
+            return api.get(path, params=params or {}, headers=_auth_headers_for_bot(api, bot_id=bid))
+        raise
 
-    # Refresh token expiry is optional; default 0 = never expires (revocation handles security)
-    try:
-        refresh_ttl = int(_env("RUNNER_REFRESH_TTL_SECONDS", "0") or 0)
-    except Exception:
-        refresh_ttl = 0
 
-    return BotRunnerConfig(
-        jwt_secret=jwt_secret,
-        issuer=issuer,
-        audience=audience,
-        access_ttl_seconds=max(60, access_ttl),
-        refresh_pepper=pepper,
-        pair_code_ttl_seconds=max(60, pair_ttl),
-        refresh_ttl_seconds=max(0, refresh_ttl),
+def _s(x: Any) -> Optional[str]:
+    if x is None:
+        return None
+    s = str(x).strip()
+    return s if s else None
+
+
+def _require_runner_user_id(where: str) -> str:
+    uid = (_runner_user_id() or "").strip()
+    if not uid:
+        raise RuntimeError(
+            f"Runner missing user_id for {where}. Set RUNNER_USER_ID in u-stock-bots env "
+            f"(or USTOCK_USER_ID). This is REQUIRED for status_runner + heartbeat + submit-intents."
+        )
+    return uid
+
+
+# -------------------------
+# API methods
+# -------------------------
+def heartbeat_tick(
+    api: UStockAPI,
+    *,
+    bot_id: str,
+    intent: str,
+    effective_state: str,
+    mode: str,
+    message: Optional[str] = None,
+    paused_reason: Optional[str] = None,
+    next_open_epoch: Optional[int] = None,
+    last_error: Optional[str] = None,
+) -> None:
+    """
+    Convenience: uses RUNNER_USER_ID from env and posts heartbeat.
+    """
+    uid = (_runner_user_id() or "").strip()
+    if not uid:
+        # keep soft: runner can still run locally, but won't report state
+        return
+
+    post_heartbeat(
+        api,
+        user_id=uid,
+        bot_id=bot_id,
+        intent=intent,
+        effective_state=effective_state,
+        mode=mode,
+        message=message,
+        paused_reason=paused_reason,
+        next_open_epoch=next_open_epoch,
+        last_error=last_error,
+        last_tick=now_epoch(),
     )
 
 
-# ---------------------------------------------------------------------
-# Access JWT (runner -> backend)
-# ---------------------------------------------------------------------
-def mint_access_jwt(*, user_id: str, device_id: str, bot_id: str, cfg: BotRunnerConfig) -> Dict[str, Any]:
-    now = _now_epoch()
-    exp = now + int(cfg.access_ttl_seconds)
+def get_status(
+    api: UStockAPI,
+    bot_id: str,
+    *,
+    user_id: Optional[str] = None,
+    **_ignore: Any,  # <-- swallow unexpected kwargs safely
+) -> Dict[str, Any]:
+    """
+    Calls /api/bots/status_runner.
+
+    We accept **kwargs so older callers that pass user_id= won't crash.
+    user_id is REQUIRED for logging + current backend contract.
+    """
+    bid = str(bot_id or "").strip()
+
+    uid = (str(user_id or "").strip() or _runner_user_id() or "").strip()
+    if not uid:
+        raise RuntimeError(
+            "Runner missing user_id for get_status. Set RUNNER_USER_ID (or USTOCK_USER_ID) in runner env."
+        )
+
+    data = _get_with_auth_retry(
+        api,
+        "/api/bots/status_runner",
+        bot_id=bid,
+        params={"bot_id": bid, "user_id": uid},
+    )
+    return _as_dict(data)
+
+
+def submit_intents(api: UStockAPI, bot_id: str, intents: List[Dict[str, Any]], *, user_id: Optional[str] = None) -> None:
+    """
+    Backend /api/bots/submit-intents requires user_id in the JSON body.
+    """
+    bid = str(bot_id or "").strip()
+    uid = (str(user_id or "").strip() or _runner_user_id() or "").strip()
+    if not uid:
+        return
 
     payload = {
-        "sub": str(user_id),
-        "did": str(device_id),
-        "bot_id": str(bot_id),
-        "iat": now,
-        "exp": exp,
-        "iss": cfg.issuer,
-        "aud": cfg.audience,
+        "user_id": uid,
+        "bot_id": bid,
+        "ts": now_epoch(),
+        "items": _as_list_of_dicts(intents),
     }
 
-    token = jwt.encode(payload, cfg.jwt_secret, algorithm="HS256")
-    return {"ok": True, "token": token, "expires_in": int(cfg.access_ttl_seconds), "exp": exp}
-
-
-def verify_bot_runner_token(token: str, cfg: BotRunnerConfig) -> Dict[str, Any]:
-    # Raises jwt.InvalidTokenError / ExpiredSignatureError for caller to map
-    payload = jwt.decode(
-        token,
-        cfg.jwt_secret,
-        algorithms=["HS256"],
-        audience=cfg.audience,
-        issuer=cfg.issuer,
-        options={"require": ["exp", "iat", "sub"]},
+    _post_with_auth_retry(
+        api,
+        "/api/bots/submit-intents",
+        bot_id=bid,
+        json=payload,
     )
-    if not isinstance(payload, dict):
-        raise jwt.InvalidTokenError("payload not a dict")
-    return payload
 
 
-# ---------------------------------------------------------------------
-# DEV helper (cookie-auth) — short-lived runner token for local tests
-# ---------------------------------------------------------------------
-def mint_bot_runner_token(user_id: str, cfg: BotRunnerConfig) -> Dict[str, Any]:
+def market_session(api: UStockAPI, bot_id: str) -> Dict[str, Any]:
     """
-    Back-compat helper: mint a short-lived Bearer token for the currently logged-in user.
-    This is NOT the production device auth path, but useful for quick dev testing.
+    Market session does not need runner auth, but it's fine if present.
+    Fail-open shape on error.
     """
-    # device_id is "dev" here; prod uses real device_id
-    return mint_access_jwt(user_id=user_id, device_id="dev", bot_id="*", cfg=cfg)
-
-
-# ---------------------------------------------------------------------
-# Production device auth: pairing + refresh token
-# ---------------------------------------------------------------------
-def _peppered_refresh_hash(refresh_token: str, *, pepper: str) -> str:
-    # peppered hash so DB leak doesn't give tokens
-    return _sha256_hex(f"{pepper}|{refresh_token}")
-
-
-def _pair_code_hash(pair_code: str, *, pepper: str) -> str:
-    # also pepper the pairing code hash
-    return _sha256_hex(f"{pepper}|PAIR|{pair_code}")
-
-
-def start_pairing(*, user_id: str, device_id: str, bot_id: str, display_name: Optional[str], cfg: BotRunnerConfig) -> Dict[str, Any]:
-    """
-    Cookie-auth endpoint: create/update runner_devices row and set a short-lived pairing code hash.
-    Returns the *raw* pairing code once (user will type it on the runner machine).
-    """
-    did = str(device_id or "").strip()
-    if not did:
-        raise HTTPException(status_code=400, detail="device_id required")
-
-    bid = str(bot_id or "").strip() or "ema_trend"
-
-    pair_code = secrets.token_urlsafe(9)  # human-typable enough
-    pair_hash = _pair_code_hash(pair_code, pepper=cfg.refresh_pepper)
-
-    sb = get_supabase_service()
-    # upsert device row (unique device_id)
-    row = {
-        "user_id": str(user_id),
-        "device_id": did,
-        "display_name": (str(display_name).strip() if display_name else None),
-        "pending_bot_id": bid,
-        "pair_code_hash": pair_hash,
-        "pair_code_expires_at": _epoch_to_iso(_now_epoch() + int(cfg.pair_code_ttl_seconds)),
-        "updated_at": _now_iso(),
-        "revoked_at": None,
-    }
-    sb.table("runner_devices").upsert(row, on_conflict="device_id").execute()
-
-    return {"ok": True, "device_id": did, "bot_id": bid, "pair_code": pair_code, "expires_in": int(cfg.pair_code_ttl_seconds)}
-
-
-def complete_pairing(*, device_id: str, pair_code: str, cfg: BotRunnerConfig) -> Dict[str, Any]:
-    """
-    No-cookie endpoint: runner machine posts device_id + pair_code.
-    If valid: mint refresh token (returned once) and store ONLY hash in DB.
-    """
-    did = str(device_id or "").strip()
-    code = str(pair_code or "").strip()
-    if not did or not code:
-        raise HTTPException(status_code=400, detail="device_id and pair_code required")
-
-    sb = get_supabase_service()
-
-    res = sb.table("runner_devices").select("*").eq("device_id", did).maybe_single().execute()
-    dev = getattr(res, "data", None) or {}
-    if not dev or dev.get("revoked_at"):
-        raise HTTPException(status_code=401, detail="Device not found or revoked")
-
-    exp = dev.get("pair_code_expires_at")
-    if not exp:
-        raise HTTPException(status_code=401, detail="No active pairing code")
-
-    if _iso_to_epoch(exp) < _now_epoch():
-        raise HTTPException(status_code=401, detail="Pairing code expired")
-
-    expected_hash = str(dev.get("pair_code_hash") or "")
-    if not expected_hash:
-        raise HTTPException(status_code=401, detail="No active pairing code")
-
-    got_hash = _pair_code_hash(code, pepper=cfg.refresh_pepper)
-    if got_hash != expected_hash:
-        raise HTTPException(status_code=401, detail="Invalid pairing code")
-
-    user_id = str(dev.get("user_id") or "").strip()
-    pending_bot_id = str(dev.get("pending_bot_id") or "ema_trend").strip()
-
-    # mint refresh token (raw returned once)
-    refresh_token = secrets.token_urlsafe(48)
-    token_hash = _peppered_refresh_hash(refresh_token, pepper=cfg.refresh_pepper)
-
-    expires_at = None
-    if int(cfg.refresh_ttl_seconds) > 0:
-        expires_at = _epoch_to_iso(_now_epoch() + int(cfg.refresh_ttl_seconds))
-
-    sb.table("runner_refresh_tokens").insert(
-        {
-            "user_id": user_id,
-            "device_id": did,
-            "token_hash": token_hash,
-            "created_at": _now_iso(),
-            "updated_at": _now_iso(),
-            "expires_at": expires_at,
-            "revoked_at": None,
-        }
-    ).execute()
-
-    # clear pairing code so it cannot be reused
-    sb.table("runner_devices").update(
-        {"pair_code_hash": None, "pair_code_expires_at": None, "updated_at": _now_iso()}
-    ).eq("device_id", did).execute()
-
-    return {
-        "ok": True,
-        "device_id": did,
-        "bot_id": pending_bot_id,
-        "refresh_token": refresh_token,
-    }
-
-
-def mint_access_from_refresh(*, refresh_token: str, device_id: str, bot_id: str, cfg: BotRunnerConfig) -> Dict[str, Any]:
-    """
-    No-cookie endpoint: runner machine exchanges refresh token for short-lived access JWT.
-    """
-    did = str(device_id or "").strip()
-    bid = str(bot_id or "").strip() or "ema_trend"
-    rt = str(refresh_token or "").strip()
-    if not did or not rt:
-        raise HTTPException(status_code=401, detail="Missing runner refresh token")
-
-    sb = get_supabase_service()
-
-    # device must exist and not be revoked
-    dres = sb.table("runner_devices").select("user_id,revoked_at").eq("device_id", did).maybe_single().execute()
-    dev = getattr(dres, "data", None) or {}
-    if not dev or dev.get("revoked_at"):
-        raise HTTPException(status_code=401, detail="Device revoked or unknown")
-
-    user_id = str(dev.get("user_id") or "").strip()
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Device missing user_id")
-
-    token_hash = _peppered_refresh_hash(rt, pepper=cfg.refresh_pepper)
-
-    q = (
-        sb.table("runner_refresh_tokens")
-        .select("*")
-        .eq("device_id", did)
-        .eq("token_hash", token_hash)
-        .maybe_single()
-        .execute()
-    )
-    row = getattr(q, "data", None) or {}
-    if not row or row.get("revoked_at"):
-        raise HTTPException(status_code=401, detail="Invalid refresh token")
-
-    exp = row.get("expires_at")
-    if exp and _iso_to_epoch(exp) < _now_epoch():
-        raise HTTPException(status_code=401, detail="Refresh token expired")
-
-    # update last_used + device last_seen
-    sb.table("runner_refresh_tokens").update({"last_used_at": _now_iso(), "updated_at": _now_iso()}).eq("id", row["id"]).execute()
-    sb.table("runner_devices").update({"last_seen_at": _now_iso(), "updated_at": _now_iso()}).eq("device_id", did).execute()
-
-    return mint_access_jwt(user_id=user_id, device_id=did, bot_id=bid, cfg=cfg)
-
-
-# ---------------------------------------------------------------------
-# Small helpers for timestamptz (avoid bringing more deps)
-# ---------------------------------------------------------------------
-def _epoch_to_iso(ep: int) -> str:
-    from datetime import datetime, timezone
-
-    return datetime.fromtimestamp(int(ep), tz=timezone.utc).isoformat()
-
-
-def _iso_to_epoch(s: str) -> int:
-    from datetime import datetime, timezone
-
-    if not s:
-        return 0
-    txt = str(s).strip()
-    if txt.endswith("Z"):
-        txt = txt[:-1] + "+00:00"
     try:
-        dt = datetime.fromisoformat(txt)
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        return int(dt.timestamp())
+        data = _get_with_auth_retry(
+            api,
+            "/api/market/us/session",
+            bot_id=str(bot_id or "").strip(),
+            params=None,
+        )
+        d = _as_dict(data)
+        if "ok" not in d:
+            d["ok"] = False
+        return d
     except Exception:
-        return 0
+        return {"ok": False}
+
+
+def sync_trade_fills(api: UStockAPI, *, bot_id: str, mode: str, user_id: Optional[str] = None) -> None:
+    bid = str(bot_id or "").strip()
+    payload = {"bot_id": bid, "mode": str(mode or "paper").strip().lower()}
+
+    _post_with_auth_retry(
+        api,
+        "/api/trade_fills/sync_runner",
+        bot_id=bid,
+        json=payload,
+    )
+
+
+def post_heartbeat(
+    api: UStockAPI,
+    *,
+    user_id: str,
+    bot_id: str,
+    intent: str,
+    effective_state: str,
+    mode: str,
+    message: Optional[str] = None,
+    reason_code: Optional[str] = None,
+    paused_reason: Optional[str] = None,
+    next_open_epoch: Optional[int] = None,
+    last_error: Optional[str] = None,
+    last_tick: Optional[int] = None,
+) -> None:
+    """
+    Backend /api/bots/heartbeat requires:
+      - bot_id
+      - user_id
+    """
+    now = now_epoch()
+
+    uid = str(user_id or "").strip()
+    if not uid:
+        return
+
+    # IMPORTANT: We intentionally send "" to CLEAR stale errors in storage.
+    # Many backends treat null/None as "do not overwrite", which would keep old last_error forever.
+    last_error_str = str(last_error or "").strip()
+
+    payload: Dict[str, Any] = {
+        "user_id": uid,
+        "bot_id": _s(bot_id) or "unknown",
+        "intent": (_s(intent) or "paused").lower(),
+        "effective_state": _s(effective_state) or "unknown",
+        "mode": (_s(mode) or "paper").lower(),
+        "heartbeat_at": now,
+        "last_run": now,
+        "last_tick": int(last_tick or now),
+        "reason_code": _s(reason_code),
+        "message": _s(message),
+        "paused_reason": _s(paused_reason),
+        "next_open_epoch": int(next_open_epoch) if isinstance(next_open_epoch, (int, float)) else None,
+        "last_error": last_error_str,
+    }
+
+    _post_with_auth_retry(
+        api,
+        "/api/bots/heartbeat",
+        bot_id=str(bot_id or "").strip(),
+        json=payload,
+    )

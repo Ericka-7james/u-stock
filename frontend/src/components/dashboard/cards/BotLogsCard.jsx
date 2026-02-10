@@ -111,6 +111,52 @@ function statusPill(effective) {
   return { label: "Unknown", cls: "blog-pill blog-pill--soft" };
 }
 
+/**
+ * ✅ Normalize backend rows into a unified shape for classifyLog().
+ *
+ * Backend /api/bots/log returns items like:
+ *   { ts, level, event_type, symbol, event_id, payload }
+ * There is NOT necessarily a row.message or row.meta.
+ *
+ * We synthesize:
+ *   message: best-effort from payload.message / payload.last_error / event_type
+ *   meta: payload (or relevant subset)
+ */
+function normalizeLogRow(row) {
+  const ts = Number(row?.ts) || 0;
+  const level = safeStr(row?.level, "info").toLowerCase();
+
+  const eventType = safeStr(row?.event_type, "");
+  const payload = row?.payload && typeof row.payload === "object" ? row.payload : null;
+
+  const pMessage = payload ? safeStr(payload.message, "") : "";
+  const pErr = payload ? safeStr(payload.last_error, "") : "";
+  const pReason = payload ? safeStr(payload.reason_code, "") : "";
+  const pPausedReason = payload ? safeStr(payload.paused_reason, "") : "";
+  const pNextOpen = payload ? payload.next_open_epoch ?? payload.nextOpenEpoch : null;
+
+  // Create a stable “message” string for your classifier
+  let message = pMessage;
+  if (!message && pPausedReason) message = pPausedReason;
+  if (!message && pReason) message = pReason;
+  if (!message && pErr) message = pErr;
+  if (!message && eventType) message = eventType;
+  if (!message) message = "Update";
+
+  // Provide meta for details view
+  const meta = payload
+    ? {
+        ...payload,
+        event_type: eventType || undefined,
+        next_open_epoch: pNextOpen ?? payload.next_open_epoch ?? undefined,
+      }
+    : eventType
+    ? { event_type: eventType }
+    : null;
+
+  return { ts, level, message, meta };
+}
+
 function classifyLog(row) {
   const levelRaw = String(row?.level || "info").toLowerCase();
   const isFail = isFailishLevel(levelRaw);
@@ -132,7 +178,11 @@ function classifyLog(row) {
   let detail = "";
   let action = "Update";
 
-  if (hasAny("waiting_for_market", "waiting for market")) {
+  // ✅ Pull “waiting for market” signal from meta too
+  const metaStr = meta ? safeJson(meta).toLowerCase() : "";
+  const hasMetaAny = (...needles) => needles.some((n) => metaStr.includes(String(n).toLowerCase()));
+
+  if (hasAny("waiting_for_market", "waiting for market") || hasMetaAny("waiting_for_market", "market_closed")) {
     action = "Waiting";
     headline = "Market is closed — bot is waiting";
     detail = "No trades will be placed until the next open.";
@@ -146,7 +196,7 @@ function classifyLog(row) {
     action = "Running";
     headline = "Bot is running";
     detail = "Scanning for setups and evaluating signals.";
-  } else if (hasAny("paused", "manual_pause")) {
+  } else if (hasAny("paused", "manual_pause", "intent_paused")) {
     action = "Paused";
     headline = "Bot is paused";
     detail = "Start the bot from the Dashboard to resume.";
@@ -173,7 +223,7 @@ function classifyLog(row) {
     headline = "Order rejected";
     detail = meta ? safeJson(meta) : "";
     category = "Orders";
-  } else if (hasAny("risk") && hasAny("block", "blocked", "halt")) {
+  } else if (hasAny("risk") && hasAny("block", "blocked", "halt", "gate")) {
     action = "Blocked";
     headline = "Risk controls blocked an action";
     detail = meta ? safeJson(meta) : "";
@@ -209,10 +259,18 @@ function classifyLog(row) {
 
 function effectiveExplainer(eff, nextOpenEpoch) {
   if (eff === "running") {
-    return { tone: "ok", title: "Live: scanning for trades", body: "The bot is online and evaluating signals. Orders may be placed if risk checks pass." };
+    return {
+      tone: "ok",
+      title: "Live: scanning for trades",
+      body: "The bot is online and evaluating signals. Orders may be placed if risk checks pass.",
+    };
   }
   if (eff === "waiting_for_market") {
-    return { tone: "warn", title: "Waiting for market open", body: `The market is closed, so the bot is idle. Next open: ${nextOpenEpoch ? fmtTime(nextOpenEpoch) : "—"}.` };
+    return {
+      tone: "warn",
+      title: "Waiting for market open",
+      body: `The market is closed, so the bot is idle. Next open: ${nextOpenEpoch ? fmtTime(nextOpenEpoch) : "—"}.`,
+    };
   }
   if (eff === "paused") {
     return { tone: "neutral", title: "Paused", body: "The bot is not trading right now. Start it from the Dashboard when you’re ready." };
@@ -232,14 +290,18 @@ function effectiveExplainer(eff, nextOpenEpoch) {
   return { tone: "neutral", title: "Status unknown", body: "The bot status couldn’t be determined. Refresh and verify the runner is online." };
 }
 
-// ✅ helper: YYYY-MM-DD -> epoch sec at local midnight (start) / end-of-day (end)
+// YYYY-MM-DD -> epoch sec at local midnight (start) / end-of-day (end)
 function dateStrToEpochSec(dateStr, { endOfDay = false } = {}) {
   const s = String(dateStr || "").trim();
   if (!s) return 0;
+
+  // NOTE: this assumes the browser local timezone. That’s okay for UI filtering.
+  // TODO: if you want strict UTC ranges, build Date via Date.UTC instead.
   const d = new Date(`${s}T00:00:00`);
   if (Number.isNaN(d.getTime())) return 0;
+
   if (!endOfDay) return Math.floor(d.getTime() / 1000);
-  // end of day = 23:59:59 local
+
   d.setHours(23, 59, 59, 999);
   return Math.floor(d.getTime() / 1000);
 }
@@ -251,8 +313,10 @@ export default function BotLogsCard({
   maxPreview = 4,
   showQuickLink = true,
 
-  // ✅ NEW: timeframe from TimeframeCard (optional)
   timeframe = null,
+
+  // ✅ NEW: mode (paper/live). If not provided, default to paper.
+  mode = "paper",
 }) {
   const [botId, setBotId] = useState(defaultBotId);
   const [limit, setLimit] = useState(240);
@@ -269,11 +333,13 @@ export default function BotLogsCard({
 
   const [open, setOpen] = useState(false);
 
+  const modeNorm = String(mode || "paper").toLowerCase() === "live" ? "live" : "paper";
+
   // timeframe -> epoch bounds
   const startTs = useMemo(() => dateStrToEpochSec(timeframe?.start || "", { endOfDay: false }), [timeframe]);
   const endTs = useMemo(() => dateStrToEpochSec(timeframe?.end || "", { endOfDay: true }), [timeframe]);
 
-  const cacheKey = `${botId}|${limit}|${startTs}|${endTs}`;
+  const cacheKey = `${botId}|${modeNorm}|${limit}|${startTs}|${endTs}`;
 
   const aliveRef = useRef(true);
   const inflightRef = useRef({ log: null, status: null });
@@ -304,6 +370,7 @@ export default function BotLogsCard({
     try {
       const url =
         `/api/bots/log?bot_id=${encodeURIComponent(safeStr(botId, "ema_trend"))}` +
+        `&mode=${encodeURIComponent(modeNorm)}` +
         `&limit=${encodeURIComponent(String(limit || 120))}` +
         (startTs ? `&start_ts=${encodeURIComponent(String(startTs))}` : "") +
         (endTs ? `&end_ts=${encodeURIComponent(String(endTs))}` : "");
@@ -312,14 +379,21 @@ export default function BotLogsCard({
       if (!aliveRef.current || ac.signal.aborted) return;
 
       const raw = Array.isArray(data?.items) ? data.items : [];
-      const ordered = raw.slice(); // already chronological from service
-      setItems(ordered);
+
+      // ✅ Normalize backend rows into {ts, level, message, meta}
+      const normalized = raw
+        .filter((x) => x && typeof x === "object")
+        .map(normalizeLogRow)
+        .filter((x) => Number(x.ts) > 0);
+
+      // service returns descending; we keep it as-is (newest last in preview)
+      setItems(normalized);
 
       logsCache.ts = Date.now();
       logsCache.key = cacheKey;
-      logsCache.items = ordered;
+      logsCache.items = normalized;
 
-      const dayList = ordered.map((r) => dayKey(r?.ts)).filter(Boolean);
+      const dayList = normalized.map((r) => dayKey(r?.ts)).filter(Boolean);
       const uniq = Array.from(new Set(dayList)).sort();
       if (!selectedDay && uniq.length) setSelectedDay(uniq[uniq.length - 1]);
     } catch (e) {
@@ -358,7 +432,7 @@ export default function BotLogsCard({
 
     refreshStatus();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [botId, limit, startTs, endTs]);
+  }, [botId, modeNorm, limit, startTs, endTs]);
 
   const availableDays = useMemo(() => {
     const dayList = (Array.isArray(items) ? items : []).map((r) => dayKey(r?.ts)).filter(Boolean);
@@ -403,8 +477,9 @@ export default function BotLogsCard({
 
   const eff = normalizeEffective(botStatus?.effective_state || botStatus?.state);
   const pill = statusPill(eff);
-  const nextOpen = botStatus?.nextOpenEpoch || botStatus?.next_open_epoch || null;
 
+  // next open can exist in status OR inside recent heartbeat payloads
+  const nextOpen = botStatus?.nextOpenEpoch || botStatus?.next_open_epoch || null;
   const explain = effectiveExplainer(eff, nextOpen);
 
   const counts = useMemo(() => {
@@ -461,7 +536,9 @@ export default function BotLogsCard({
         <div className={`blog-statusBanner blog-statusBanner--${explain.tone}`}>
           <div className="blog-statusTitle">{explain.title}</div>
           <div className="blog-statusBody">{explain.body}</div>
-          {eff === "waiting_for_market" && nextOpen ? <div className="blog-statusMeta">Next open: {fmtTime(nextOpen)}</div> : null}
+          {eff === "waiting_for_market" && nextOpen ? (
+            <div className="blog-statusMeta">Next open: {fmtTime(nextOpen)}</div>
+          ) : null}
         </div>
 
         <div className="blog-controls">
@@ -482,7 +559,12 @@ export default function BotLogsCard({
 
           <label className="blog-field">
             <span className="blog-label">Day</span>
-            <select value={selectedDay || ""} onChange={(e) => setSelectedDay(e.target.value)} className="blog-input" disabled={busy}>
+            <select
+              value={selectedDay || ""}
+              onChange={(e) => setSelectedDay(e.target.value)}
+              className="blog-input"
+              disabled={busy}
+            >
               {availableDays.length ? (
                 availableDays.map((d) => (
                   <option key={d} value={d}>
@@ -517,7 +599,12 @@ export default function BotLogsCard({
 
           <label className="blog-field">
             <span className="blog-label">Limit</span>
-            <select value={String(limit)} onChange={(e) => setLimit(Number(e.target.value))} className="blog-input" disabled={busy}>
+            <select
+              value={String(limit)}
+              onChange={(e) => setLimit(Number(e.target.value))}
+              className="blog-input"
+              disabled={busy}
+            >
               <option value="120">120</option>
               <option value="240">240</option>
               <option value="480">480</option>
@@ -537,7 +624,12 @@ export default function BotLogsCard({
               {busy ? "Refreshing…" : "Refresh"}
             </button>
 
-            <button type="button" className="mBtn" onClick={() => setOpen(true)} disabled={busy || (!filtered?.length && !items?.length)}>
+            <button
+              type="button"
+              className="mBtn"
+              onClick={() => setOpen(true)}
+              disabled={busy || (!filtered?.length && !items?.length)}
+            >
               View all
             </button>
           </div>
@@ -651,3 +743,10 @@ export default function BotLogsCard({
     </>
   );
 }
+
+/**
+ * TODOs / breakpoints:
+ * - If backend changes bot_events schema, update normalizeLogRow() only (everything else stays stable).
+ * - If you want strict UTC day buckets, compute dayKey() via UTC methods.
+ * - If large accounts produce huge logs, add pagination via before_ts (like /events endpoint).
+ */
