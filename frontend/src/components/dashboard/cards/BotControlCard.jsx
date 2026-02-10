@@ -9,16 +9,11 @@ import ErrorModal from "../../common/ErrorMessages.jsx";
 import { explainAnyError } from "../../../lib/errorMessages.jsx";
 import { BOT_CONTROL_CARD_CONTENT as COPY } from "../../../content/dashboard/botControlCard.content.js";
 
+// ✅ Reuse BotLogsCard styling for the log modal rows
+import "../../../css/dashboard/cards/BotLogsCard.css";
+
 import { apiGet, apiPost } from "../../../lib/api/botApi.js";
-import {
-  safeStr,
-  n,
-  fmtTime,
-  fmtAge,
-  pillTone,
-  normalizeEff,
-  normalizeIntent,
-} from "../../../lib/format/botFormat.js";
+import { safeStr, n, fmtTime, fmtAge, pillTone, normalizeEff, normalizeIntent } from "../../../lib/format/botFormat.js";
 
 import useInterval from "../../../hooks/useInterval.js";
 
@@ -73,6 +68,31 @@ function validateRiskDraft(draft) {
   }
 
   return errors;
+}
+
+/* ----------------------------
+   ✅ Log helpers (match BotLogsCard modal vibe)
+---------------------------- */
+
+function safeJson(x) {
+  try {
+    return JSON.stringify(x, null, 2);
+  } catch {
+    return String(x ?? "");
+  }
+}
+
+function logSeverity(it) {
+  const lvl = String(it?.level || "info").toLowerCase();
+  if (lvl === "error") return "error";
+  if (lvl === "warn" || lvl === "warning") return "warn";
+  return "info";
+}
+
+function toneClass(sev) {
+  if (sev === "error") return "blog-evt blog-evt--error";
+  if (sev === "warn") return "blog-evt blog-evt--warn";
+  return "blog-evt";
 }
 
 export default function BotControlCard({ activeBotId, onActiveBotChange, onStartBot, onStopBot }) {
@@ -339,7 +359,6 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
   const hbAge = Number.isFinite(Number(status?.heartbeatAgeSec)) ? Number(status.heartbeatAgeSec) : null;
 
   const lastError = safeStr(status?.lastError, "");
-  const pausedReason = safeStr(status?.pausedReason, "");
   const message = safeStr(status?.message, "");
 
   const marketOk = market && typeof market === "object" && market.ok === true;
@@ -359,10 +378,9 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
   const isStarting = hasSelection && eff === "starting";
   const isRunningEff = hasSelection && (eff === "running" || eff === "degraded");
 
-  // UPDATED: stopped is the only non-running lifecycle state
-  const isStopped = hasSelection && !isOffline && !isErr && !isRunningEff && !isWaiting && !isStarting && intent === "stopped";
+  const isStopped =
+    hasSelection && !isOffline && !isErr && !isRunningEff && !isWaiting && !isStarting && intent === "stopped";
 
-  // UPDATED: disarmed = not armed (regardless of intent), and not currently running/waiting/starting
   const isDisarmed = hasSelection && !isArmed && !isRunningEff && !isWaiting && !isStarting;
 
   const runtimeLabel = !hasSelection
@@ -387,15 +405,7 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
     ? "STOPPED"
     : "IDLE";
 
-  const runtimeTone = !hasSelection
-    ? "warn"
-    : isErr || isOffline
-    ? "neg"
-    : isRunningEff
-    ? "pos"
-    : isWaiting || isStarting
-    ? "pos"
-    : "warn";
+  const runtimeTone = !hasSelection ? "warn" : isErr || isOffline ? "neg" : isRunningEff ? "pos" : isWaiting || isStarting ? "pos" : "warn";
 
   const statusLine = !hasSelection
     ? COPY.status.noneSelected
@@ -418,7 +428,7 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
     : isDisarmed
     ? COPY.status.disarmed || "Disarmed."
     : isStopped
-    ? (message || COPY.status.stopped || "Stopped.")
+    ? message || COPY.status.stopped || "Stopped."
     : message || COPY.status.idle;
 
   const canArm = hasSelection && !busy && !isRunningEff && !isWaiting && !isStarting && !isArmed;
@@ -426,9 +436,7 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
 
   const marketClosedBlocksStart = hasSelection && marketOk && isOpen === false;
 
-  const canStart =
-    hasSelection && !busy && !isRunningEff && !isWaiting && !isStarting && isArmed && !marketClosedBlocksStart;
-
+  const canStart = hasSelection && !busy && !isRunningEff && !isWaiting && !isStarting && isArmed && !marketClosedBlocksStart;
   const canPause = hasSelection && !busy && (isRunningEff || isWaiting || isStarting);
 
   /* ----------------------------
@@ -499,7 +507,6 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
         if (typeof onStopBot === "function") {
           await onStopBot({ bot_id: selected });
         } else {
-          // backend stop should mean intent=stopped now
           await apiPost("/api/bots/stop", { bot_id: selected }, { signal: ac.signal });
         }
         await refreshStatus(selected);
@@ -621,12 +628,7 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
   // UPDATED: log message extraction (matches service.py contract)
   const logMessageFor = useCallback((it) => {
     const p = it?.payload && typeof it.payload === "object" ? it.payload : null;
-    return (
-      safeStr(p?.message, "") ||
-      safeStr(p?.paused_reason, "") ||
-      safeStr(p?.last_error, "") ||
-      safeStr(it?.event_type, "")
-    );
+    return safeStr(p?.message, "") || safeStr(p?.paused_reason, "") || safeStr(p?.last_error, "") || safeStr(it?.event_type, "");
   }, []);
 
   return (
@@ -763,9 +765,7 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
 
             <div className="botTile">
               <div className="botTileLabel">{isOpen ? COPY.tiles.market : COPY.tiles.nextOpen}</div>
-              <div className="botTileValue">
-                {isOpen ? COPY.market.openNow : nextOpenEpoch ? fmtTime(nextOpenEpoch) : "—"}
-              </div>
+              <div className="botTileValue">{isOpen ? COPY.market.openNow : nextOpenEpoch ? fmtTime(nextOpenEpoch) : "—"}</div>
             </div>
 
             <div className="botTile botTileFull">
@@ -835,6 +835,7 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
         </div>
       </Modal>
 
+      {/* ✅ UPDATED log modal: same event-row look as BotLogsCard "View all" */}
       <Modal
         open={logOpen}
         title={COPY.modals.log.title}
@@ -847,20 +848,58 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
       >
         {logBusy ? (
           <div className="botModalLoading">{COPY.modals.log.loading}</div>
+        ) : logItems.length === 0 ? (
+          <div className="botModalLoading">{COPY.modals.log.empty}</div>
         ) : (
-          <div className="botLogList">
-            {logItems.length === 0 ? (
-              <div className="botModalLoading">{COPY.modals.log.empty}</div>
-            ) : (
-              logItems.map((it, idx) => (
-                <div key={idx} className="botLogItem">
-                  <div className="botLogMeta">
-                    {safeStr(it.level, "info").toUpperCase()} · {it.ts ? fmtTime(it.ts) : "—"}
+          <div style={{ display: "grid", gap: 10, maxHeight: "62vh", overflow: "auto", paddingRight: 6 }}>
+            {logItems.map((it, idx) => {
+              const sev = logSeverity(it);
+              const headline = logMessageFor(it) || "Update";
+              const action = safeStr(it?.event_type, "").replaceAll("_", " ") || "Event";
+
+              return (
+                <div key={idx} className={toneClass(sev)}>
+                  <div className="blog-evtTop">
+                    <div className="blog-evtLeft">
+                      <div className="blog-evtTitle">{headline}</div>
+
+                      <div className="blog-evtSub">
+                        <span className="blog-evtChip">System</span>
+                        <span className="blog-evtDot">•</span>
+                        <span className="blog-evtChip blog-evtChip--soft">{action}</span>
+                        <span className="blog-evtDot">•</span>
+                        <span className="mMono">{it?.ts ? fmtTime(it.ts) : "—"}</span>
+                      </div>
+                    </div>
+
+                    <div className="blog-evtRight">
+                      <span className={`blog-level blog-level--${sev}`}>
+                        {sev === "info" ? "OK" : sev === "warn" ? "WARN" : "ERROR"}
+                      </span>
+                    </div>
                   </div>
-                  <div className="botLogMsg">{logMessageFor(it)}</div>
+
+                  <div className="blog-evtDetails">
+                    <details>
+                      <summary>Raw log</summary>
+                      <div className="blog-rawGrid">
+                        <div className="blog-rawLabel">Level</div>
+                        <div className="mMono">{safeStr(it?.level, "info").toUpperCase()}</div>
+
+                        <div className="blog-rawLabel">Event</div>
+                        <div className="mMono">{safeStr(it?.event_type, "—")}</div>
+
+                        <div className="blog-rawLabel">Message</div>
+                        <div>{headline}</div>
+
+                        <div className="blog-rawLabel">Payload</div>
+                        <pre className="mMono blog-pre">{it?.payload ? safeJson(it.payload) : "—"}</pre>
+                      </div>
+                    </details>
+                  </div>
                 </div>
-              ))
-            )}
+              );
+            })}
           </div>
         )}
       </Modal>
@@ -901,9 +940,7 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
           <label className="botRiskField">
             <div className="botRiskLabel">{COPY.modals.risk.fields.max_trades_per_day.label}</div>
             <input
-              className={`botInput ${
-                riskTouched.max_trades_per_day && riskErrors.max_trades_per_day ? "botInputError" : ""
-              }`}
+              className={`botInput ${riskTouched.max_trades_per_day && riskErrors.max_trades_per_day ? "botInputError" : ""}`}
               value={riskDraft.max_trades_per_day}
               onChange={(e) => onRiskChange("max_trades_per_day", e.target.value)}
               onBlur={() => onRiskBlur("max_trades_per_day")}

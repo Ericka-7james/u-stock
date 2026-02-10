@@ -207,6 +207,7 @@ function safeSym(it) {
 function normalizeEffectiveState(x) {
   const v = String(x || "").trim().toLowerCase();
 
+  // NOTE: removed "degraded" (not part of your backend contract)
   const ok = new Set([
     "running",
     "waiting_for_market",
@@ -215,7 +216,6 @@ function normalizeEffectiveState(x) {
     "stopped",
     "offline",
     "error",
-    "degraded",
     "idle",
     "armed",
     "disarmed",
@@ -242,6 +242,11 @@ function readIntent(s) {
   return String(s.intent ?? s.target_intent ?? s.desired_intent ?? "").trim().toLowerCase();
 }
 
+function hasAnyKeys(obj) {
+  if (!obj || typeof obj !== "object") return false;
+  return Object.keys(obj).length > 0;
+}
+
 function readRunnerOnline(s) {
   // If backend explicitly says offline, trust it
   const eff = readEffectiveState(s);
@@ -255,14 +260,16 @@ function readRunnerOnline(s) {
     s?.heartbeatAge ??
     null;
 
-  // IMPORTANT: null/undefined means “no heartbeat yet”
-  if (raw === null || raw === undefined) return false;
+  // ✅ FIX: "no heartbeat yet" is only a problem if bot is supposed to be active
+  if (raw === null || raw === undefined) {
+    const activeish = eff === "running" || eff === "waiting_for_market" || eff === "starting";
+    return !activeish; // stopped-ish => OK, active-ish => not OK
+  }
 
   const age = Number(raw);
   if (!Number.isFinite(age)) return false;
 
-  // stale threshold should match backend “offline” (90s) plus buffer
-  return age >= 0 && age <= 180;
+  return age >= 0 && age <= 180; // backend offline at 90s, UI buffer to 180s
 }
 
 function deriveBotUiState(botId, botStatuses) {
@@ -271,7 +278,14 @@ function deriveBotUiState(botId, botStatuses) {
     return { kind: "no_bot", runnerOnline: false, intent: "", eff: "stopped" };
   }
 
-  const s = botStatuses?.[id] || {};
+  const map = botStatuses && typeof botStatuses === "object" ? botStatuses : null;
+  const s = map?.[id];
+
+  // ✅ If we don't have a status payload yet, don't call it OFFLINE
+  if (!hasAnyKeys(s)) {
+    return { kind: "unknown", runnerOnline: null, intent: "", eff: "stopped" };
+  }
+
   const eff = readEffectiveState(s);
   const intent = readIntent(s);
   const runnerOnline = readRunnerOnline(s);
@@ -279,6 +293,9 @@ function deriveBotUiState(botId, botStatuses) {
   if (!runnerOnline || eff === "offline") {
     return { kind: "offline", runnerOnline: false, intent, eff };
   }
+
+  // explicit STOPPED state (so UI says STOPPED, not IDLE)
+  if (intent === "stopped" || eff === "stopped") return { kind: "stopped", runnerOnline, intent, eff };
 
   if (intent === "paused" || eff === "paused") return { kind: "paused", runnerOnline, intent, eff };
   if (intent === "running" || eff === "running") return { kind: "running", runnerOnline, intent, eff };
@@ -294,7 +311,8 @@ function isBotActiveForUi(ui) {
   if (!ui) return false;
   if (ui.kind === "no_bot") return false;
   if (ui.kind === "offline") return false;
-  return true; // paused still counts (show last snapshots)
+  if (ui.kind === "unknown") return false;
+  return true;
 }
 
 function BotIntentsCard({ botUi, botId, onPickSymbol }) {
@@ -323,7 +341,6 @@ function BotIntentsCard({ botUi, botId, onPickSymbol }) {
       setTs(Number(data?.ts) || 0);
     } catch (e) {
       setErr(String(e?.message || e));
-      // Keep last snapshot if any (don’t hard-wipe)
     } finally {
       setBusy(false);
     }
@@ -360,11 +377,13 @@ function BotIntentsCard({ botUi, botId, onPickSymbol }) {
   const headerLine = useMemo(() => {
     if (!botId) return "Select a bot to view intents.";
     if (!botUi || botUi.kind === "no_bot") return "Select a bot to view intents.";
+    if (botUi.kind === "unknown") return `Loading bot status… showing last known intents for ${botId}.`;
     if (botUi.kind === "offline") return `Runner offline — showing last known intents for ${botId}.`;
     if (botUi.kind === "paused") return `Bot paused — showing last intents for ${botId}.`;
     if (botUi.kind === "waiting") return `Waiting for market — latest intents for ${botId}.`;
     if (botUi.kind === "starting") return `Starting — latest intents for ${botId}.`;
     if (botUi.kind === "disarmed") return `Bot disarmed — last intents (if any) for ${botId}.`;
+    if (botUi.kind === "stopped") return `Bot stopped — last intents (if any) for ${botId}.`;
     return `Showing latest 10 from ${botId}.`;
   }, [botId, botUi]);
 
@@ -572,6 +591,8 @@ export default function TradePerformancePanel({
   const botStatusValue =
     botUi.kind === "no_bot"
       ? "—"
+      : botUi.kind === "unknown"
+      ? "—"
       : botUi.kind === "offline"
       ? "OFFLINE"
       : botUi.kind === "paused"
@@ -586,11 +607,15 @@ export default function TradePerformancePanel({
       ? "DISARMED"
       : botUi.kind === "armed"
       ? "ARMED"
+      : botUi.kind === "stopped"
+      ? "STOPPED"
       : "IDLE";
 
   const botStatusSub =
     botUi.kind === "no_bot"
       ? "Select a bot to enable bot-aligned picks."
+      : botUi.kind === "unknown"
+      ? "Loading status…"
       : botUi.kind === "offline"
       ? "Runner offline — no heartbeat."
       : botUi.kind === "paused"
@@ -605,6 +630,8 @@ export default function TradePerformancePanel({
       ? "Bot disabled"
       : botUi.kind === "armed"
       ? "Ready to run"
+      : botUi.kind === "stopped"
+      ? "Bot stopped."
       : "Standing by";
 
   const botStatusTone =
@@ -621,7 +648,9 @@ export default function TradePerformancePanel({
     if (botUi.kind === "waiting") return `Bot waiting: ${botId}`;
     if (botUi.kind === "starting") return `Bot starting: ${botId}`;
     if (botUi.kind === "offline") return `Bot offline: ${botId}`;
+    if (botUi.kind === "unknown") return `Loading bot: ${botId}`;
     if (botUi.kind === "disarmed") return `Bot disarmed: ${botId}`;
+    if (botUi.kind === "stopped") return `Bot stopped: ${botId}`;
     return `Bot: ${botId}`;
   }, [botId, botUi.kind]);
 

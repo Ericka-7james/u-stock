@@ -26,7 +26,6 @@ from runner.heartbeat import (
     gate_market_hours,
     send_stopped,
     safe_heartbeat,
-    should_heartbeat,
     now_epoch,
 )
 from runner.risk import RiskState, filter_intents_with_gates, record_orders_placed
@@ -48,6 +47,18 @@ def _env_bool(name: str, default: bool) -> bool:
 
 
 RESPECT_MARKET_HOURS = _env_bool("RUNNER_RESPECT_MARKET_HOURS", True)
+
+# -----------------------------
+# Log / heartbeat anti-spam policy
+# -----------------------------
+# Goal:
+#  - "blocked: no valid intents" should NOT spam the UI log every loop
+#  - "loop_ok" heartbeats should NOT spam either
+# Defaults:
+#  - block event: at most every 30 minutes if unchanged
+#  - loop_ok heartbeat: at most every 30 minutes if unchanged
+IDLE_EMIT_SECONDS = int(os.getenv("RUNNER_IDLE_EMIT_SECONDS", "1800"))  # 30 min
+BLOCK_LOG_MIN_SECONDS = int(os.getenv("RUNNER_BLOCK_LOG_MIN_SECONDS", str(IDLE_EMIT_SECONDS)))
 
 
 def _sleep_smart(seconds: float, *, sleep_fn: Callable[[float], None] = time.sleep) -> None:
@@ -87,6 +98,86 @@ def _normalize_intent(raw: Any) -> str:
     return v if v in ("running", "stopped") else "stopped"
 
 
+def _bucket_gate_reason(reason: str) -> str:
+    """
+    Bucket noisy reasons so tiny string differences don't spam.
+    """
+    r = (reason or "").strip().lower()
+    if not r:
+        return ""
+    if "blocked: no valid intents" in r:
+        return "blocked_no_valid_intents"
+    if r.startswith("soft_block"):
+        return "soft_block"
+    if "symbol not in allowlist" in r:
+        return "blocked_allowlist"
+    if "kill switch" in r:
+        return "blocked_killswitch"
+    if "paper-only gate" in r:
+        return "blocked_paper_only"
+    return r
+
+
+def _should_emit_block_event(
+    hb_state: HeartbeatState,
+    *,
+    mode: str,
+    gate_reason: str,
+    now: int,
+) -> bool:
+    """
+    Anti-spam for "blocked: ..." log events.
+    Emit if:
+      - bucketed reason changes, OR
+      - enough time passed since last emission for same bucket
+    Uses extra attrs on HeartbeatState (safe in Python).
+    """
+    reason = (gate_reason or "").strip()
+    bucket = _bucket_gate_reason(reason)
+    if not bucket:
+        return False
+
+    sig = f"block_evt|{mode}|{bucket}"
+
+    last_sig = str(getattr(hb_state, "last_block_sig", "") or "")
+    last_ts = int(getattr(hb_state, "last_block_ts", 0) or 0)
+
+    # reason changed => emit immediately
+    if sig != last_sig:
+        hb_state.last_block_sig = sig  # type: ignore[attr-defined]
+        hb_state.last_block_ts = now  # type: ignore[attr-defined]
+        return True
+
+    # same reason => only emit every window
+    if now - last_ts >= int(BLOCK_LOG_MIN_SECONDS):
+        hb_state.last_block_ts = now  # type: ignore[attr-defined]
+        return True
+
+    return False
+
+
+def _should_emit_idle_heartbeat(hb_state: HeartbeatState, *, sig: str, now: int) -> bool:
+    """
+    Anti-spam for "nothing interesting" heartbeats.
+    Emit if:
+      - signature changes, OR
+      - IDLE_EMIT_SECONDS elapsed.
+    """
+    last_sig = str(getattr(hb_state, "last_idle_sig", "") or "")
+    last_ts = int(getattr(hb_state, "last_idle_ts", 0) or 0)
+
+    if sig != last_sig:
+        hb_state.last_idle_sig = sig  # type: ignore[attr-defined]
+        hb_state.last_idle_ts = now  # type: ignore[attr-defined]
+        return True
+
+    if now - last_ts >= int(IDLE_EMIT_SECONDS):
+        hb_state.last_idle_ts = now  # type: ignore[attr-defined]
+        return True
+
+    return False
+
+
 def run_once(api: UStockAPI, *, risk_state: RiskState, hb_state: HeartbeatState) -> None:
     """
     status -> market gate -> scanner -> strategy -> risk gate -> execution -> sink -> heartbeat
@@ -97,7 +188,6 @@ def run_once(api: UStockAPI, *, risk_state: RiskState, hb_state: HeartbeatState)
     intent = _normalize_intent(status.get("intent"))
     status_mode = _normalize_mode(status.get("mode") or "paper")
 
-    # If we can't resolve user_id, runner cannot function safely.
     if not user_id:
         raise RuntimeError(
             "Runner missing user_id. Set RUNNER_USER_ID in u-stock-bots env "
@@ -105,7 +195,7 @@ def run_once(api: UStockAPI, *, risk_state: RiskState, hb_state: HeartbeatState)
         )
 
     if intent != "running":
-        # Emit a stopped heartbeat + heartbeat event for UI
+        # Emit stopped heartbeat (your heartbeat.py already anti-spams)
         send_stopped(api, hb_state, bot_id=BOT_ID, status_mode=status_mode, user_id=user_id)
         return
 
@@ -149,28 +239,37 @@ def run_once(api: UStockAPI, *, risk_state: RiskState, hb_state: HeartbeatState)
     # Always report what strategy wanted (even if gated)
     api_client.submit_intents(api, BOT_ID, intents, user_id=user_id)
 
+    # -----------------------------
+    # GATED (no execution)
+    # -----------------------------
     if not gated_intents:
         combined: List[Dict[str, Any]] = []
         combined.extend(strat_events)
 
+        # ✅ STOP SPAM: only emit risk_gate_block event occasionally
         if gate_reason:
-            combined.append(
-                {
-                    "ts": now_iso(),
-                    "event_type": "risk_gate_block",
-                    "level": "info",
-                    "symbol": None,
-                    "event_id": decision_event_id,
-                    "payload": {"mode": mode, "reason": gate_reason, "bot_id": BOT_ID},
-                }
-            )
+            now = now_epoch()
+            if _should_emit_block_event(hb_state, mode=mode, gate_reason=str(gate_reason), now=now):
+                combined.append(
+                    {
+                        "ts": now_iso(),
+                        "event_type": "risk_gate_block",
+                        "level": "info",
+                        "symbol": None,
+                        "event_id": decision_event_id,
+                        "payload": {"mode": mode, "reason": gate_reason, "bot_id": BOT_ID},
+                    }
+                )
 
-        attach_event_id(combined, decision_event_id)
-        upload_transaction_events(user_id, BOT_ID, mode, combined)
+        if combined:
+            attach_event_id(combined, decision_event_id)
+            upload_transaction_events(user_id, BOT_ID, mode, combined)
 
+        # ✅ Also stop heartbeat spam while gated: only once per 30 minutes if unchanged
         now = now_epoch()
-        sig = f"running|{mode}|gated|{gate_reason}"
-        if should_heartbeat(hb_state, sig, now=now):
+        gated_bucket = _bucket_gate_reason(str(gate_reason or ""))
+        sig = f"gated|{mode}|{gated_bucket}"
+        if _should_emit_idle_heartbeat(hb_state, sig=sig, now=now):
             safe_heartbeat(
                 api,
                 user_id=user_id,
@@ -183,9 +282,12 @@ def run_once(api: UStockAPI, *, risk_state: RiskState, hb_state: HeartbeatState)
                 last_error=None,
                 last_tick=now,
             )
+
         return
 
-    # Execution
+    # -----------------------------
+    # EXECUTION
+    # -----------------------------
     engine = BotEngine(mode=mode)
     tx_events = engine.execute_intents(gated_intents)
     attach_event_id(tx_events, decision_event_id)
@@ -205,9 +307,10 @@ def run_once(api: UStockAPI, *, risk_state: RiskState, hb_state: HeartbeatState)
     except Exception:
         pass
 
+    # ✅ stop loop_ok spam: only once per 30 minutes if stable
     now = now_epoch()
-    sig = f"running|{mode}|loop_ok"
-    if should_heartbeat(hb_state, sig, now=now):
+    sig = f"loop_ok|{mode}"
+    if _should_emit_idle_heartbeat(hb_state, sig=sig, now=now):
         safe_heartbeat(
             api,
             user_id=user_id,
@@ -256,8 +359,10 @@ def main(*, max_loops: Optional[int] = None, sleep_fn: Callable[[float], None] =
                 mode = "paper"
                 uid = _runner_user_id() or None
                 now = now_epoch()
-                sig = f"error|{mode}|runner_exception|{type(e).__name__}"
-                if should_heartbeat(hb_state, sig, now=now):
+
+                # Errors should be visible quickly, but still avoid spamming identical error heartbeat every loop.
+                err_sig = f"error|{mode}|{type(e).__name__}"
+                if _should_emit_idle_heartbeat(hb_state, sig=err_sig, now=now):
                     safe_heartbeat(
                         api,
                         user_id=uid,

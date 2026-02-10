@@ -37,9 +37,8 @@ def _claims_user_id(claims: Dict[str, Any]) -> str:
 @router.get("")
 def list_bots(svc: BotService = Depends(get_bot_service)):
     """
-    Your UI calls GET /api/bots in DashboardPage's connect-bot check.
-    This endpoint did not exist earlier -> 404.
-    We return the same shape as available() for now.
+    UI calls GET /api/bots in DashboardPage.
+    Return same shape as available() for now.
     """
     return svc.available()
 
@@ -296,12 +295,10 @@ def heartbeat(
     if not bid:
         return JSONResponse(status_code=400, content={"detail": "bot_id required"})
 
-    # ✅ user_id REQUIRED for logging
     user_id = str(payload.get("user_id") or "").strip()
     if not user_id:
         return JSONResponse(status_code=400, content={"detail": "user_id required"})
 
-    # Optional hardening: enforce payload user == claims uid IF claims has uid
     uid_claims = _claims_user_id(claims)
     if uid_claims:
         enforce_runner_user(payload_user_id=user_id, claims=claims)
@@ -315,7 +312,7 @@ def heartbeat(
 @router.get("/status_runner")
 def status_runner(
     bot_id: str = Query(...),
-    user_id: str = Query(...),  # ✅ REQUIRED (runner sends it; keeps logging consistent)
+    user_id: str = Query(...),  # REQUIRED (runner sends it; keeps logging consistent)
     runner_id: str = Depends(require_bot_runner),
     claims: Dict[str, Any] = Depends(require_bot_runner_claims),
     svc: BotService = Depends(get_bot_service),
@@ -328,7 +325,6 @@ def status_runner(
     if not uid:
         return JSONResponse(status_code=400, content={"detail": "user_id required"})
 
-    # Optional hardening: enforce query user == claims uid IF claims has uid
     uid_claims = _claims_user_id(claims)
     if uid_claims:
         enforce_runner_user(payload_user_id=uid, claims=claims)
@@ -350,7 +346,6 @@ def submit_intents(
     if not bid:
         return JSONResponse(status_code=400, content={"detail": "bot_id required"})
 
-    # ✅ user_id REQUIRED for logging
     user_id = str(payload.get("user_id") or "").strip()
     if not user_id:
         return JSONResponse(status_code=400, content={"detail": "user_id required"})

@@ -87,6 +87,170 @@ def _compute_effective_state(*, row_eff: Any, intent: str, hb_age_sec: Optional[
     return "stopped"
 
 
+# -------------------------
+# Heartbeat log throttling (per-type)
+# -------------------------
+HB_5_MIN = 5 * 60
+HB_15_MIN = 15 * 60
+HB_1_HOUR = 60 * 60
+
+
+def _hb_signature(payload: Dict[str, Any]) -> str:
+    """
+    Stable signature so we can avoid spamming bot_events when nothing changes.
+    """
+    if not isinstance(payload, dict):
+        payload = {}
+
+    intent = _normalize_legacy_intent(payload.get("intent"))
+    eff = str(payload.get("effective_state") or "").strip().lower()
+    if eff == "paused":
+        eff = "stopped"
+
+    mode = normalize_mode(payload.get("mode") or "paper")
+
+    msg = str(payload.get("message") or "").strip()
+    paused_reason = str(payload.get("paused_reason") or "").strip()
+    last_error = str(payload.get("last_error") or "").strip()
+    reason_code = str(payload.get("reason_code") or "").strip()
+
+    try:
+        next_open_epoch = int(payload.get("next_open_epoch") or 0)
+    except Exception:
+        next_open_epoch = 0
+
+    return "|".join(
+        [
+            f"intent={intent}",
+            f"eff={eff}",
+            f"mode={mode}",
+            f"reason={reason_code}",
+            f"next_open={next_open_epoch}",
+            f"msg={msg}",
+            f"paused={paused_reason}",
+            f"err={last_error}",
+        ]
+    )
+
+
+def _is_blocked_no_valid_intents(payload: Dict[str, Any]) -> bool:
+    """
+    Detect your noisy case: 'blocked: no valid intents'
+    We check message + paused_reason + reason_code to be robust.
+    """
+    if not isinstance(payload, dict):
+        return False
+    msg = str(payload.get("message") or "").strip().lower()
+    pr = str(payload.get("paused_reason") or "").strip().lower()
+    rc = str(payload.get("reason_code") or "").strip().lower()
+
+    blob = " ".join([msg, pr, rc]).strip()
+    if "no valid intents" in blob:
+        return True
+    if "no_valid_intents" in blob:
+        return True
+    if rc.startswith("blocked") and ("intent" in blob or "valid" in blob):
+        return True
+    return False
+
+
+def _heartbeat_throttle_seconds(payload: Dict[str, Any]) -> int:
+    """
+    Per-type throttle policy for inserting heartbeat into bot_events.
+    Signature changes ALWAYS log immediately; this only applies when signature is unchanged.
+    """
+    if not isinstance(payload, dict):
+        return HB_1_HOUR
+
+    eff = str(payload.get("effective_state") or "").strip().lower()
+    if eff == "paused":
+        eff = "stopped"
+
+    intent = _normalize_legacy_intent(payload.get("intent"))
+    reason_code = str(payload.get("reason_code") or "").strip().lower()
+    last_error = str(payload.get("last_error") or "").strip()
+
+    # 1) Your spammy case
+    if _is_blocked_no_valid_intents(payload):
+        return HB_1_HOUR
+
+    # 2) Market waiting — useful but still noisy
+    if eff == "waiting_for_market" or reason_code == "market_closed":
+        return HB_5_MIN
+
+    # 3) Starting
+    if eff == "starting":
+        return HB_5_MIN
+
+    # 4) Error states
+    if eff == "error" or bool(last_error):
+        return HB_5_MIN
+
+    # 5) Running / degraded (less frequent)
+    if eff in ("running", "degraded") or intent == "running":
+        return HB_15_MIN
+
+    # Default: keep noise down
+    return HB_1_HOUR
+
+
+def _should_insert_heartbeat_event(
+    sb,
+    *,
+    user_id: str,
+    bot_id: str,
+    mode: str,
+    sig: str,
+    now_epoch: int,
+    throttle_seconds: int,
+) -> bool:
+    """
+    Insert heartbeat event if:
+      - no prior heartbeat log
+      - OR signature changed
+      - OR last same-signature heartbeat is older than throttle_seconds
+    Fail-open: if the check fails, we still insert.
+    """
+    try:
+        res = (
+            sb.table("bot_events")
+            .select("ts,payload")
+            .eq("user_id", user_id)
+            .eq("bot_id", bot_id)
+            .eq("mode", mode)
+            .eq("event_type", "heartbeat")
+            .order("ts", desc=True)
+            .limit(1)
+            .execute()
+        )
+        rows = getattr(res, "data", None) or []
+        if not isinstance(rows, list) or not rows:
+            return True
+
+        row0 = rows[0] if isinstance(rows[0], dict) else {}
+        last_ts_ep = parse_ts_to_epoch_seconds(row0.get("ts")) or 0
+
+        last_payload = row0.get("payload")
+        if not isinstance(last_payload, dict):
+            last_payload = {}
+
+        last_sig = _hb_signature(last_payload)
+
+        # signature changed -> always log
+        if last_sig != sig:
+            return True
+
+        # same signature -> throttle
+        if last_ts_ep <= 0:
+            return True
+
+        age = max(0, int(now_epoch) - int(last_ts_ep))
+        return age >= int(throttle_seconds)
+
+    except Exception:
+        return True
+
+
 class BotService:
     def __init__(self) -> None:
         self.sb = get_supabase_service()
@@ -126,7 +290,6 @@ class BotService:
                 cfg = {}
             return {"ok": True, "bot_id": bid, "config": cfg}
 
-        # default ok=True so UI doesn't break if configs table missing / RLS blocks
         return _safe_sb_execute(_read, default={"ok": True, "bot_id": bid, "config": {}})
 
     def set_config(self, user_id: str, bot_id: str, config: Dict[str, Any]) -> Dict[str, Any]:
@@ -156,31 +319,24 @@ class BotService:
             "ok": True,
             "user_id": uid,
             "bot_id": bid,
-            # canonical lifecycle
             "intent": "stopped",
             "mode": "paper",
             "armed": False,
             "config": {},
-            # UI contract
             "effective_state": "stopped",
             "desired_state": "stopped",
             "message": "",
             "pausedReason": "",
             "lastError": "",
-            "heartbeatAgeSec": None,  # null means “no heartbeat yet”
+            "heartbeatAgeSec": None,
             "nextOpenEpoch": 0,
             "lastTickEpoch": 0,
-            # intents snapshot fields
             "lastIntents": 0,
             "lastIntentsAt": 0,
             "lastIntentsPreview": [],
         }
 
         def _latest_hb_event_from_events() -> Optional[Dict[str, Any]]:
-            """
-            Returns latest heartbeat event {ts, payload} from bot_events.
-            We use this as source-of-truth when bot_state isn't updating.
-            """
             try:
                 res = (
                     self.sb.table("bot_events")
@@ -210,26 +366,19 @@ class BotService:
             return _heartbeat_age_or_none(ev.get("ts"))
 
         def _overlay_from_hb_payload(out: Dict[str, Any], hb_payload: Dict[str, Any]) -> None:
-            """
-            If bot_state isn't being updated (schema/RLS), still surface useful
-            state fields from the most recent heartbeat payload stored in bot_events.
-            """
             if not isinstance(hb_payload, dict) or not hb_payload:
                 return
 
-            # effective_state / intent are what UI relies on most
             hb_intent = _normalize_legacy_intent(hb_payload.get("intent"))
             hb_eff = str(hb_payload.get("effective_state") or "").strip().lower()
             if hb_eff == "paused":
                 hb_eff = "stopped"
 
-            # If UI says stopped but heartbeat says waiting/running/error/etc, show heartbeat reality
             if hb_intent in ("running", "stopped"):
                 out["intent"] = hb_intent
             if hb_eff:
                 out["effective_state"] = hb_eff
 
-            # Optional fields
             msg = str(hb_payload.get("message") or "").strip()
             if msg:
                 out["message"] = msg
@@ -242,7 +391,6 @@ class BotService:
             if le:
                 out["lastError"] = le
 
-            # last_tick / next_open_epoch
             try:
                 out["lastTickEpoch"] = int(hb_payload.get("last_tick") or 0)
             except Exception:
@@ -252,17 +400,14 @@ class BotService:
             except Exception:
                 pass
 
-            # Recompute derived desired_state if bot_state isn't present
             out["desired_state"] = _compute_desired_state(armed=bool(out.get("armed")), intent=str(out.get("intent")))
 
         def _read():
             out = dict(base)
 
-            # attach config (safe)
             cfg = self.get_config(uid, bid).get("config") or {}
             out["config"] = cfg if isinstance(cfg, dict) else {}
 
-            # Try bot_state first (newer schema)
             row: Dict[str, Any] = {}
             try:
                 res = (
@@ -279,7 +424,6 @@ class BotService:
             except Exception:
                 row = {}
 
-            # Fallback: bot_state missing/empty -> use latest heartbeat event from bot_events
             if not row:
                 hb_age = _hb_age_from_events()
                 out["heartbeatAgeSec"] = hb_age
@@ -288,7 +432,6 @@ class BotService:
                 if hb_ev and isinstance(hb_ev.get("payload"), dict):
                     _overlay_from_hb_payload(out, hb_ev["payload"])  # type: ignore[arg-type]
 
-                # Ensure desired/effective are computed even if heartbeat payload is sparse
                 out["desired_state"] = _compute_desired_state(armed=False, intent=str(out.get("intent") or "stopped"))
                 out["effective_state"] = _compute_effective_state(
                     row_eff=str(out.get("effective_state") or ""),
@@ -297,7 +440,6 @@ class BotService:
                 )
                 return out
 
-            # Normal path: bot_state present
             intent = _normalize_legacy_intent(str(row.get("intent") or out["intent"]).strip().lower())
             mode = normalize_mode(row.get("mode") or out["mode"])
             armed = bool(row.get("armed") or False)
@@ -333,22 +475,18 @@ class BotService:
             preview = row.get("last_intents_preview") or []
             out["lastIntentsPreview"] = preview if isinstance(preview, list) else []
 
-            # Persisted by heartbeat() when runner passes it
             try:
                 out["lastTickEpoch"] = int(row.get("last_tick_epoch") or 0)
             except Exception:
                 out["lastTickEpoch"] = 0
 
-            # Persisted by heartbeat() when runner is waiting_for_market
             try:
                 out["nextOpenEpoch"] = int(row.get("next_open_epoch") or 0)
             except Exception:
                 out["nextOpenEpoch"] = 0
 
-            # Extra safety: overlay heartbeat payload if bot_state is stale but events have fresher truth
             hb_ev = _latest_hb_event_from_events()
             if hb_ev and isinstance(hb_ev.get("payload"), dict):
-                # If bot_state heartbeat is missing/stale but events exist, prefer events for these fields
                 if hb_age is None or hb_age > 30:
                     _overlay_from_hb_payload(out, hb_ev["payload"])  # type: ignore[arg-type]
 
@@ -381,8 +519,6 @@ class BotService:
         bid = str(bot_id or "").strip()
 
         def _write():
-            # IMPORTANT: disarm should NOT force-stop a running bot.
-            # It only removes "ready to start" / "armed" status.
             self.sb.table("bot_state").upsert(
                 {
                     "user_id": uid,
@@ -443,12 +579,8 @@ class BotService:
     def heartbeat(self, user_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         """
         Writes:
-        - bot_events: heartbeat event (for logs + fallback truth)
-        - bot_state: last_heartbeat_at + state fields (best-effort)
-
-        IMPORTANT:
-          Heartbeat should never 500 because bot_state schema differs.
-          We ALWAYS attempt bot_events insert; bot_state upsert is best-effort.
+        - bot_events: heartbeat event (THROTTLED per type)
+        - bot_state: last_heartbeat_at + state fields (best-effort, every time)
         """
         uid = str(user_id or "").strip()
         bid = str(payload.get("bot_id") or "").strip()
@@ -477,28 +609,39 @@ class BotService:
             next_open_epoch_int = 0
 
         def _write():
-            now_iso = _epoch_to_iso_z(_now_epoch())
+            now_ep = _now_epoch()
+            now_iso = _epoch_to_iso_z(now_ep)
 
-            # 1) Always try to insert bot_events (logs + fallback truth)
+            # 1) Insert bot_events heartbeat only if signature changed OR same-signature older than throttle window
             try:
-                self.sb.table("bot_events").insert(
-                    {
-                        "user_id": uid,
-                        "bot_id": bid,
-                        "mode": mode,
-                        "ts": now_iso,
-                        "level": "info",
-                        "event_type": "heartbeat",
-                        "symbol": None,
-                        "event_id": payload.get("event_id"),
-                        "payload": payload,
-                    }
-                ).execute()
+                sig = _hb_signature(payload if isinstance(payload, dict) else {})
+                throttle_s = _heartbeat_throttle_seconds(payload if isinstance(payload, dict) else {})
+                if _should_insert_heartbeat_event(
+                    self.sb,
+                    user_id=uid,
+                    bot_id=bid,
+                    mode=mode,
+                    sig=sig,
+                    now_epoch=now_ep,
+                    throttle_seconds=throttle_s,
+                ):
+                    self.sb.table("bot_events").insert(
+                        {
+                            "user_id": uid,
+                            "bot_id": bid,
+                            "mode": mode,
+                            "ts": now_iso,
+                            "level": "info",
+                            "event_type": "heartbeat",
+                            "symbol": None,
+                            "event_id": payload.get("event_id"),
+                            "payload": payload,
+                        }
+                    ).execute()
             except Exception:
-                # If this fails, still return ok=True (runner shouldn't die)
                 pass
 
-            # 2) Best-effort bot_state patch (ignore schema mismatch/RLS)
+            # 2) ALWAYS patch bot_state (freshness + offline detection)
             patch: Dict[str, Any] = {
                 "user_id": uid,
                 "bot_id": bid,
@@ -578,7 +721,7 @@ class BotService:
                 .select("ts,level,event_type,symbol,payload,event_id")
                 .eq("user_id", uid)
                 .eq("bot_id", bid)
-                .eq("mode", m)  # ✅ critical
+                .eq("mode", m)
                 .order("ts", desc=True)
                 .limit(int(limit))
             )
