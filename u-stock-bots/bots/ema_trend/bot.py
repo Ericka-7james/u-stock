@@ -1,220 +1,344 @@
-# bots/ema_trend/bot.py
+# u-stock-bots/runner/supabase.py
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Tuple
+import hashlib
+import json
+import os
+import random
+import re
+import time
+from pathlib import Path
+from typing import Any, Dict, Iterable, List, Optional
+from urllib.parse import urljoin
 
-from bots._shared.data.bars import extract_ohlc
-from bots._shared.indicators.ema import ema
+import requests
 
-from bots.ema_trend.config import EMATrendConfig
-from bots.ema_trend.signal import compute_signal
-from bots.ema_trend import reason_codes as R
+# --------------------------------------------
+# What we store
+# --------------------------------------------
+TRANSACTION_EVENT_TYPES = {
+    "order_submitted",
+    "order_filled",
+    "order_partially_filled",
+    "order_canceled",
+    "order_rejected",
+    "order_failed",
+    "trade_closed",
+    # optional: if you want to store the risk gate event in bot_events, keep it here
+    "risk_gate_block",
+}
+
+DEFAULT_TABLE = "bot_events"
+DEFAULT_BATCH_SIZE = 100
+DEFAULT_TIMEOUT = 8
 
 
-def _s(x: Any) -> str:
-    return str(x or "").strip()
+# --------------------------------------------
+# Env helpers
+# --------------------------------------------
+def _env(name: str, default: str = "") -> str:
+    return str(os.getenv(name, default) or "").strip()
 
 
-def _i(x: Any, default: int) -> int:
+def _env_int(name: str, default: int) -> int:
+    raw = _env(name, "")
+    if raw == "":
+        return int(default)
     try:
-        return int(x)
+        return int(raw)
     except Exception:
         return int(default)
 
 
-def _f(x: Any, default: float) -> float:
+def _env_float(name: str, default: float) -> float:
+    raw = _env(name, "")
+    if raw == "":
+        return float(default)
     try:
-        return float(x)
+        return float(raw)
     except Exception:
         return float(default)
 
 
-def _pick_symbols(cfg: Dict[str, Any]) -> List[str]:
-    # Prefer scanner injected symbols
-    scanner = cfg.get("scanner") if isinstance(cfg.get("scanner"), dict) else None
-    if isinstance(scanner, dict):
-        syms = scanner.get("symbols")
-        if isinstance(syms, list):
-            out = []
-            for x in syms:
-                sx = _s(x).upper()
-                if sx:
-                    out.append(sx)
-            if out:
-                return out
-
-    # fallbacks
-    if isinstance(cfg.get("symbols"), list):
-        out = []
-        for x in cfg["symbols"]:
-            sx = _s(x).upper()
-            if sx:
-                out.append(sx)
-        if out:
-            return out
-
-    sym = _s(cfg.get("symbol") or cfg.get("primary_symbol") or "").upper()
-    return [sym] if sym else []
+def _env_bool(name: str, default: bool) -> bool:
+    raw = _env(name, "")
+    if raw == "":
+        return bool(default)
+    return raw.lower() in {"1", "true", "t", "yes", "y", "on"}
 
 
-def _fetch_bars(api: Any, *, symbol: str, tf: str, limit: int, feed: Optional[str] = None) -> Optional[Dict[str, Any]]:
+def sb_enabled() -> bool:
     """
-    Defensive wrapper around your backend bars endpoint.
-    Adjust the path/params if your backend differs.
-
-    Expected: dict with enough shape for extract_ohlc() to work.
+    Supabase upload is an optional sink.
+    We keep it fail-soft and configurable.
     """
-    params: Dict[str, Any] = {"symbol": symbol, "tf": tf, "limit": int(limit)}
-    if feed:
-        params["feed"] = feed
+    if not _env_bool("SUPABASE_EVENTS_ENABLED", True):
+        return False
+    return bool(_env("SUPABASE_URL") and _env("SUPABASE_SERVICE_ROLE_KEY"))
+
+
+# --------------------------------------------
+# Normalizers
+# --------------------------------------------
+def _normalize_mode(raw: Any) -> str:
+    m = str(raw or "paper").strip().lower()
+    return m if m in ("paper", "live") else "paper"
+
+
+def _is_tx_event(evt: Dict[str, Any]) -> bool:
+    return str(evt.get("event_type") or "").strip() in TRANSACTION_EVENT_TYPES
+
+
+def _now_iso() -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+
+def _mask(s: str) -> str:
+    s = str(s or "")
+    if not s:
+        return ""
+    if len(s) <= 4:
+        return "****"
+    return s[:2] + "****" + s[-2:]
+
+
+# --------------------------------------------
+# Deadletter (local durability)
+# --------------------------------------------
+def _deadletter_path() -> Path:
+    base = _env("RUNNER_RUNTIME_DIR", "")
+    if base:
+        root = Path(base).expanduser().resolve()
+    else:
+        # .../u-stock-bots/runner/supabase.py -> .../u-stock-bots
+        root = Path(__file__).resolve().parents[1]
+
+    p = root / "runtime" / "deadletter"
+    p.mkdir(parents=True, exist_ok=True)
+    return p / "supabase_events.jsonl"
+
+
+def _write_deadletter(rows: List[Dict[str, Any]], error: str) -> None:
+    """
+    Keep deadletters small and safe. Store only a slim preview and counts.
+    """
+    if not rows:
+        return
+
+    path = _deadletter_path()
+
+    slim_rows: List[Dict[str, Any]] = []
+    for r in rows:
+        payload = r.get("payload") if isinstance(r.get("payload"), dict) else {}
+        slim_rows.append(
+            {
+                "ts": r.get("ts"),
+                "user_id": r.get("user_id"),
+                "bot_id": r.get("bot_id"),
+                "mode": r.get("mode"),
+                "event_type": r.get("event_type"),
+                "symbol": r.get("symbol"),
+                "event_id": r.get("event_id"),
+                "order_id": str(payload.get("order_id") or payload.get("id") or "") or None,
+            }
+        )
+
+    rec = {
+        "ts": _now_iso(),
+        "error": error,
+        "count": len(rows),
+        "rows": slim_rows,
+    }
+
     try:
-        data = api.get("/api/market/bars", params=params)
-        return data if isinstance(data, dict) else None
+        with path.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
     except Exception:
-        return None
+        # deadletter is best-effort; never crash runner
+        return
 
 
-def _compute_bias(bars_bias: Dict[str, Any], cfg: EMATrendConfig) -> Tuple[str, List[str], float]:
-    """
-    Bias using EMA(cfg.ema_bias) on tf_bias and slope over cfg.bias_slope_lookback bars.
-    Returns (bias: 'up'|'down'|'none', reasons, score 0..1)
-    """
-    ohlc = extract_ohlc(bars_bias)
-    if ohlc is None:
-        return "none", [], 0.0
-
-    _o, _h, _l, c = ohlc
-    e = ema(c, int(cfg.ema_bias))
-    if not e or len(e) < int(cfg.bias_slope_lookback) + 1:
-        return "none", [], 0.0
-
-    n = int(cfg.bias_slope_lookback)
-    recent = float(e[-1])
-    past = float(e[-(n + 1)])
-    slope = recent - past
-
-    # Normalize slope relative to price (very small number => no bias)
-    px = float(c[-1]) if c and c[-1] else 0.0
-    if px <= 0:
-        return "none", [], 0.0
-
-    slope_pct = abs(slope) / max(1e-9, px) * 100.0
-
-    # Simple confidence component: stronger slope => higher score
-    score = min(1.0, slope_pct / max(1e-9, float(cfg.min_slope_pct)))
-
-    if slope > 0:
-        return "up", [R.BIAS_UP], float(score)
-    if slope < 0:
-        return "down", [R.BIAS_DN], float(score)
-    return "none", [], 0.0
+# --------------------------------------------
+# Event id (idempotency support)
+# --------------------------------------------
+def _hash_event_id(parts: List[str]) -> str:
+    h = hashlib.sha256()
+    for p in parts:
+        h.update(p.encode("utf-8", errors="ignore"))
+        h.update(b"|")
+    return h.hexdigest()
 
 
-def compute(api: Any, bot_id: str, cfg_dict: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    EMA Trend main entrypoint.
+def _event_id_for_row(row: Dict[str, Any]) -> str:
+    bot_id = str(row.get("bot_id") or "")
+    mode = str(row.get("mode") or "")
+    event_type = str(row.get("event_type") or "")
+    symbol = str(row.get("symbol") or "")
+    payload = row.get("payload") if isinstance(row.get("payload"), dict) else {}
 
-    Output contract:
-      {"intents": [...], "events": [...]}
+    order_id = str(payload.get("order_id") or payload.get("id") or "")
+    intent = payload.get("intent") if isinstance(payload.get("intent"), dict) else {}
+    entry = str(intent.get("entry") or "")
+    stop = str(intent.get("stop") or "")
+    tp = str(intent.get("take_profit") or "")
 
-    Quiet policy:
-      - If no actionable intent, return no events (prevents log spam).
-      - Only emit events when we produce an intent.
-    """
-    cfg = EMATrendConfig(
-        bot_id=_s(cfg_dict.get("bot_id") or "ema_trend") or "ema_trend",
-        tf_bias=_s(cfg_dict.get("tf_bias") or "15Min") or "15Min",
-        tf_setup=_s(cfg_dict.get("tf_setup") or "5Min") or "5Min",
-        tf_entry=_s(cfg_dict.get("tf_entry") or "1Min") or "1Min",
-        ema_fast=_i(cfg_dict.get("ema_fast") or 9, 9),
-        ema_slow=_i(cfg_dict.get("ema_slow") or 21, 21),
-        ema_bias=_i(cfg_dict.get("ema_bias") or 50, 50),
-        bias_slope_lookback=_i(cfg_dict.get("bias_slope_lookback") or 4, 4),
-        atr_n=_i(cfg_dict.get("atr_n") or 14, 14),
-        min_atr_pct=_f(cfg_dict.get("min_atr_pct") or 0.25, 0.25),
-        min_sep_pct=_f(cfg_dict.get("min_sep_pct") or 0.10, 0.10),
-        min_slope_pct=_f(cfg_dict.get("min_slope_pct") or 0.03, 0.03),
-        require_confirm_candle=bool(cfg_dict.get("require_confirm_candle", True)),
-        rr_multiple=_f(cfg_dict.get("rr_multiple") or 1.5, 1.5),
-        stop_atr_pad=_f(cfg_dict.get("stop_atr_pad") or 0.15, 0.15),
-        min_stop_pct=_f(cfg_dict.get("min_stop_pct") or 0.08, 0.08),
-        max_stop_pct=_f(cfg_dict.get("max_stop_pct") or 1.20, 1.20),
-        min_confidence=_f(cfg_dict.get("min_confidence") or 0.62, 0.62),
-        max_intents_per_run=_i(cfg_dict.get("max_intents_per_run") or 3, 3),
-        feed=_s(cfg_dict.get("feed")) or None,
-    )
+    return _hash_event_id([bot_id, mode, event_type, symbol, order_id, entry, stop, tp])
 
-    symbols = _pick_symbols(cfg_dict)
-    if not symbols:
-        return {"intents": [], "events": []}
 
-    qty = _i(cfg_dict.get("qty") or cfg_dict.get("default_qty") or 1, 1)
-    if qty <= 0:
-        return {"intents": [], "events": []}
+# --------------------------------------------
+# Row builder
+# --------------------------------------------
+def _build_rows(user_id: str, bot_id: str, mode: str, events: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    u = str(user_id or "").strip()
+    b = str(bot_id or "").strip()
+    if not u or not b:
+        return []
 
-    max_intents = max(1, int(cfg.max_intents_per_run))
+    m = _normalize_mode(mode)
+    now_iso = _now_iso()
 
-    intents: List[Dict[str, Any]] = []
-    events: List[Dict[str, Any]] = []
-
-    for sym in symbols:
-        if len(intents) >= max_intents:
-            break
-
-        bars_bias = _fetch_bars(api, symbol=sym, tf=cfg.tf_bias, limit=220, feed=cfg.feed)
-        bars_entry = _fetch_bars(api, symbol=sym, tf=cfg.tf_entry, limit=300, feed=cfg.feed)
-        if not bars_bias or not bars_entry:
+    rows: List[Dict[str, Any]] = []
+    for evt in events:
+        if not isinstance(evt, dict):
+            continue
+        if not _is_tx_event(evt):
             continue
 
-        bias, bias_reasons, bias_score = _compute_bias(bars_bias, cfg)
-        if bias == "none":
-            continue
+        payload = evt.get("payload")
+        if not isinstance(payload, dict):
+            payload = {"raw": payload}
 
-        triple, reasons, conf = compute_signal(bars_entry, cfg, bias=bias)
-        if triple is None:
-            continue
+        symbol = evt.get("symbol")
+        symbol = str(symbol).upper().strip() if symbol else None
 
-        # Final confidence gate
-        if float(conf) < float(cfg.min_confidence):
-            continue
+        row: Dict[str, Any] = {
+            "ts": evt.get("ts") or now_iso,
+            "user_id": u,
+            "bot_id": b,
+            "mode": m,
+            "level": str(evt.get("level") or "info").strip().lower(),
+            "event_type": str(evt.get("event_type") or "unknown").strip(),
+            "symbol": symbol,
+            "payload": payload,
+        }
 
-        entry, stop, take_profit = triple
-        side = "buy" if bias == "up" else "sell"
+        # Prefer explicit event_id (decision scoped) if provided.
+        row["event_id"] = evt.get("event_id") or _event_id_for_row(row)
+        rows.append(row)
 
-        intents.append(
-            {
-                "symbol": sym,
-                "side": side,
-                "qty": qty,
-                "confidence": float(conf),
-                "entry": float(entry),
-                "stop": float(stop),
-                "take_profit": float(take_profit),
-                "reasons": bias_reasons + reasons,
-                "strategy": cfg.bot_id,
-            }
-        )
+    return rows
 
-        # Only emit event when we actually have an intent
-        events.append(
-            {
-                "event_type": "signal",
-                "level": "info",
-                "symbol": sym,
-                "payload": {
-                    "strategy": cfg.bot_id,
-                    "side": side,
-                    "qty": qty,
-                    "confidence": float(conf),
-                    "entry": float(entry),
-                    "stop": float(stop),
-                    "take_profit": float(take_profit),
-                    "reasons": bias_reasons + reasons,
-                    "bias_score": float(bias_score),
-                    "tf_bias": cfg.tf_bias,
-                    "tf_entry": cfg.tf_entry,
-                },
-            }
-        )
 
-    return {"intents": intents, "events": events}
+# --------------------------------------------
+# HTTP post
+# --------------------------------------------
+_TABLE_RE = re.compile(r"^[a-zA-Z0-9_]+$")
+
+
+def _supabase_table_name() -> str:
+    table = _env("SUPABASE_EVENTS_TABLE", DEFAULT_TABLE) or DEFAULT_TABLE
+    table = table.strip()
+    # Safety: avoid weird strings making it into the URL path
+    if not _TABLE_RE.match(table):
+        return DEFAULT_TABLE
+    return table
+
+
+def _supabase_headers(service_role_key: str) -> Dict[str, str]:
+    # NOTE: service role is powerful. In production, keep it server-side or locked down
+    # to the runner host. This module assumes runner is trusted infra.
+    return {
+        "apikey": service_role_key,
+        "Authorization": f"Bearer {service_role_key}",
+        "Content-Type": "application/json",
+        # If you add a UNIQUE constraint later, this helps idempotency.
+        "Prefer": "resolution=ignore-duplicates,return=minimal",
+    }
+
+
+def _post_rows(rows: List[Dict[str, Any]]) -> None:
+    if not rows:
+        return
+    if not sb_enabled():
+        raise RuntimeError("Supabase not configured")
+
+    supabase_url = _env("SUPABASE_URL").rstrip("/") + "/"
+    key = _env("SUPABASE_SERVICE_ROLE_KEY")
+    table = _supabase_table_name()
+    timeout = _env_int("SUPABASE_TIMEOUT", DEFAULT_TIMEOUT)
+
+    url = urljoin(supabase_url, f"rest/v1/{table}")
+    headers = _supabase_headers(key)
+
+    r = requests.post(url, headers=headers, json=rows, timeout=timeout)
+
+    if 200 <= r.status_code < 300:
+        return
+
+    body = (r.text or "")[:800]
+    raise RuntimeError(f"Supabase insert failed {r.status_code}: {body}")
+
+
+def _chunk_iter(xs: List[Any], size: int) -> Iterable[List[Any]]:
+    if size <= 0:
+        size = DEFAULT_BATCH_SIZE
+    for i in range(0, len(xs), size):
+        yield xs[i : i + size]
+
+
+# --------------------------------------------
+# Public API
+# --------------------------------------------
+def upload_transaction_events(user_id: str, bot_id: str, mode: str, events: List[Dict[str, Any]]) -> None:
+    """
+    Upload ONLY transaction-like events.
+
+    Fail-soft rules:
+      - If Supabase is not enabled: no-op
+      - If a batch fails after retries: deadletter and continue
+      - Never raise to caller (runner loop safety)
+    """
+    if not events or not sb_enabled():
+        return
+
+    rows = _build_rows(user_id, bot_id, mode, events)
+    if not rows:
+        return
+
+    batch_size = _env_int("SUPABASE_BATCH_SIZE", DEFAULT_BATCH_SIZE)
+    max_attempts = _env_int("SUPABASE_MAX_ATTEMPTS", 3)
+    base_backoff = _env_float("SUPABASE_BACKOFF_SECONDS", 0.8)
+    jitter = _env_float("SUPABASE_BACKOFF_JITTER", 0.15)
+    debug = _env_bool("RUNNER_DEBUG", False)
+
+    for batch in _chunk_iter(rows, batch_size):
+        attempt = 0
+        last_err = ""
+
+        while True:
+            attempt += 1
+            try:
+                _post_rows(batch)
+                break
+            except Exception as e:
+                last_err = repr(e)
+
+                if debug:
+                    print(
+                        "[runner] supabase upload failed:",
+                        f"attempt={attempt}/{max_attempts}",
+                        f"rows={len(batch)}",
+                        f"err={last_err}",
+                        f"url={_env('SUPABASE_URL')}",
+                        f"key={_mask(_env('SUPABASE_SERVICE_ROLE_KEY'))}",
+                    )
+
+                if attempt >= max_attempts:
+                    _write_deadletter(batch, last_err)
+                    break
+
+                # exponential backoff + tiny jitter so multiple runners don't thump together
+                sleep_s = base_backoff * (2 ** (attempt - 1))
+                sleep_s = max(0.1, float(sleep_s))
+                sleep_s = sleep_s * (1.0 + random.uniform(-jitter, jitter))
+                time.sleep(max(0.05, sleep_s))

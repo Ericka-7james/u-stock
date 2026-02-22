@@ -14,17 +14,27 @@ def now_epoch() -> int:
     return int(time.time())
 
 
-def _env_int(name: str, default: int) -> int:
+def _env_int(name: str, default: int, *, min_value: int = 1) -> int:
     raw = (os.getenv(name) or "").strip()
     if raw == "":
-        return int(default)
+        return max(int(min_value), int(default))
     try:
-        return int(raw)
+        v = int(raw)
     except Exception:
-        return int(default)
+        v = int(default)
+    return max(int(min_value), int(v))
 
 
-HEARTBEAT_EVERY_SECONDS = _env_int("RUNNER_HEARTBEAT_EVERY_SECONDS", 60)
+def _env_bool(name: str, default: bool = False) -> bool:
+    raw = (os.getenv(name) or "").strip().lower()
+    if raw == "":
+        return bool(default)
+    return raw in ("1", "true", "t", "yes", "y", "on")
+
+
+def _heartbeat_every_seconds() -> int:
+    # Clamp to avoid accidental spam
+    return _env_int("RUNNER_HEARTBEAT_EVERY_SECONDS", 60, min_value=5)
 
 
 @dataclass
@@ -40,14 +50,15 @@ def should_heartbeat(state: HeartbeatState, signature: str, *, now: int) -> bool
     """
     Anti-spam policy:
       - send immediately if signature changes
-      - otherwise at most every HEARTBEAT_EVERY_SECONDS
+      - otherwise at most every RUNNER_HEARTBEAT_EVERY_SECONDS
     """
     if signature != state.last_signature:
         state.last_signature = signature
         state.last_hb_ts = now
         return True
 
-    if now - int(state.last_hb_ts) >= int(HEARTBEAT_EVERY_SECONDS):
+    every = _heartbeat_every_seconds()
+    if now - int(state.last_hb_ts) >= int(every):
         state.last_hb_ts = now
         return True
 
@@ -59,10 +70,10 @@ def safe_heartbeat(api: UStockAPI, **kwargs: Any) -> None:
     Never let heartbeat break the runner loop.
 
     IMPORTANT:
-      Your backend requires user_id. If user_id is missing/empty, skip heartbeat
+      Backend requires user_id. If user_id is missing/empty, skip heartbeat
       to avoid 400 spam.
     """
-    debug = (os.getenv("RUNNER_DEBUG") or "").strip().lower() in ("1", "true", "yes", "y", "on")
+    debug = _env_bool("RUNNER_DEBUG", False)
 
     uid = str(kwargs.get("user_id") or "").strip()
     if not uid:
@@ -73,7 +84,6 @@ def safe_heartbeat(api: UStockAPI, **kwargs: Any) -> None:
     except Exception as e:
         if debug:
             print("[runner] heartbeat failed:", repr(e))
-        return
 
 
 def send_stopped(
@@ -106,7 +116,14 @@ def send_stopped(
 
 
 class MarketClosed(Exception):
-    pass
+    """
+    Raised to short-circuit the orchestrator loop when market is closed.
+    Includes optional metadata for debugging/logging.
+    """
+    def __init__(self, *, next_open_epoch: Optional[int] = None, reason: str = "Market closed") -> None:
+        super().__init__(reason)
+        self.next_open_epoch = next_open_epoch
+        self.reason = reason
 
 
 def gate_market_hours(
@@ -121,8 +138,17 @@ def gate_market_hours(
     Raises MarketClosed if market is closed (and emits a heartbeat).
     Fail-open if endpoint fails (local dev friendly).
     """
+    debug = _env_bool("RUNNER_DEBUG", False)
+
     sess = api_client.market_session(api, bot_id)
-    is_open = bool(sess.get("is_open")) if sess.get("ok") else True
+
+    # Fail-open if endpoint fails or shape unexpected
+    if not bool(sess.get("ok")):
+        if debug:
+            print("[runner] market_session not ok; fail-open", sess)
+        return
+
+    is_open = bool(sess.get("is_open"))
     if is_open:
         return
 
@@ -131,9 +157,9 @@ def gate_market_hours(
     next_open_epoch: Optional[int] = int(next_open) if isinstance(next_open, (int, float)) else None
 
     uid = (str(user_id).strip() if user_id else "")
-
     now = now_epoch()
     sig = f"wait_market|{mode}|market_closed|{next_open_epoch}"
+
     if uid and should_heartbeat(state, sig, now=now):
         safe_heartbeat(
             api,
@@ -150,4 +176,4 @@ def gate_market_hours(
             last_tick=now,
         )
 
-    raise MarketClosed()
+    raise MarketClosed(next_open_epoch=next_open_epoch, reason=paused_reason)

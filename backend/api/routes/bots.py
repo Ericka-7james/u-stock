@@ -3,14 +3,13 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, Query, Request, Response
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 
 from api.deps import require_user
 from api.security.bot_runner_dep import (
+    enforce_runner_user,
     require_bot_runner,
     require_bot_runner_claims,
-    enforce_runner_user,
 )
 from api.core.bots.validators import clean_bot_id, normalize_mode, parse_ts_to_epoch_seconds
 from api.core.bots.service import BotService
@@ -31,8 +30,52 @@ def _claims_user_id(claims: Dict[str, Any]) -> str:
     return str(c.get("uid") or c.get("sub") or c.get("user_id") or "").strip()
 
 
+def _require_bot_id(raw: Any) -> str:
+    bid = clean_bot_id(raw)
+    if not bid:
+        raise HTTPException(status_code=400, detail="bot_id required")
+    return bid
+
+
+def _require_payload_obj(payload: Any) -> Dict[str, Any]:
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="payload must be an object")
+    return payload
+
+
+def _require_cookie_user_id(request: Request, response: Response) -> str:
+    u = require_user(request, response)
+    uid = str(u.get("id") or "").strip()
+    if not uid:
+        raise HTTPException(status_code=401, detail="unauthorized")
+    return uid
+
+
+def _runner_effective_user_id(*, claims: Dict[str, Any], fallback_user_id: Optional[str]) -> str:
+    """
+    Runner endpoints: prefer uid from claims (authoritative).
+    Use fallback only if token doesn't include uid.
+    """
+    uid_claims = _claims_user_id(claims)
+    uid_fallback = str(fallback_user_id or "").strip()
+    uid = uid_claims or uid_fallback
+    if not uid:
+        raise HTTPException(status_code=400, detail="user_id required")
+
+    # If token contains a uid, enforce it matches the requested uid
+    if uid_claims:
+        enforce_runner_user(payload_user_id=uid, claims=claims)
+
+    return uid
+
+
+def _epoch_to_iso_z(ep: int) -> str:
+    import time as _t
+    return _t.strftime("%Y-%m-%dT%H:%M:%SZ", _t.gmtime(int(ep)))
+
+
 # -----------------------------
-# Basic endpoints
+# Basic endpoints (cookie-auth)
 # -----------------------------
 @router.get("")
 def list_bots(svc: BotService = Depends(get_bot_service)):
@@ -55,13 +98,8 @@ def status(
     bot_id: str = Query(...),
     svc: BotService = Depends(get_bot_service),
 ):
-    u = require_user(request, response)
-    user_id = u["id"]
-
-    bid = clean_bot_id(bot_id)
-    if not bid:
-        return JSONResponse(status_code=400, content={"detail": "bot_id required"})
-
+    user_id = _require_cookie_user_id(request, response)
+    bid = _require_bot_id(bot_id)
     return svc.status(user_id, bid)
 
 
@@ -75,14 +113,11 @@ def arm(
     payload: Dict[str, Any],
     svc: BotService = Depends(get_bot_service),
 ):
-    u = require_user(request, response)
-    user_id = u["id"]
+    user_id = _require_cookie_user_id(request, response)
+    payload = _require_payload_obj(payload)
 
-    bid = clean_bot_id((payload or {}).get("bot_id"))
-    if not bid:
-        return JSONResponse(status_code=400, content={"detail": "bot_id required"})
-
-    mode = (payload or {}).get("mode")
+    bid = _require_bot_id(payload.get("bot_id"))
+    mode = payload.get("mode")
     mode_norm = normalize_mode(mode) if mode else None
     return svc.arm(user_id, bid, mode_norm)
 
@@ -94,13 +129,10 @@ def disarm(
     payload: Dict[str, Any],
     svc: BotService = Depends(get_bot_service),
 ):
-    u = require_user(request, response)
-    user_id = u["id"]
+    user_id = _require_cookie_user_id(request, response)
+    payload = _require_payload_obj(payload)
 
-    bid = clean_bot_id((payload or {}).get("bot_id"))
-    if not bid:
-        return JSONResponse(status_code=400, content={"detail": "bot_id required"})
-
+    bid = _require_bot_id(payload.get("bot_id"))
     return svc.disarm(user_id, bid)
 
 
@@ -111,14 +143,11 @@ def start(
     payload: Dict[str, Any],
     svc: BotService = Depends(get_bot_service),
 ):
-    u = require_user(request, response)
-    user_id = u["id"]
+    user_id = _require_cookie_user_id(request, response)
+    payload = _require_payload_obj(payload)
 
-    bid = clean_bot_id((payload or {}).get("bot_id"))
-    if not bid:
-        return JSONResponse(status_code=400, content={"detail": "bot_id required"})
-
-    mode = normalize_mode((payload or {}).get("mode"))
+    bid = _require_bot_id(payload.get("bot_id"))
+    mode = normalize_mode(payload.get("mode"))
     return svc.start(user_id, bid, mode)
 
 
@@ -130,14 +159,11 @@ def stop(
     bot_id: Optional[str] = Query(None),
     svc: BotService = Depends(get_bot_service),
 ):
-    u = require_user(request, response)
-    user_id = u["id"]
+    user_id = _require_cookie_user_id(request, response)
+    payload = payload if isinstance(payload, dict) else {}
 
-    raw = bot_id or (payload or {}).get("bot_id")
-    bid = clean_bot_id(raw)
-    if not bid:
-        return JSONResponse(status_code=400, content={"detail": "bot_id required"})
-
+    raw = bot_id or payload.get("bot_id")
+    bid = _require_bot_id(raw)
     return svc.stop(user_id, bid)
 
 
@@ -155,13 +181,8 @@ def log(
     end_ts: int = Query(0, ge=0, description="Epoch seconds (inclusive). 0 = no upper bound."),
     svc: BotService = Depends(get_bot_service),
 ):
-    u = require_user(request, response)
-    user_id = u["id"]
-
-    bid = clean_bot_id(bot_id)
-    if not bid:
-        return JSONResponse(status_code=400, content={"detail": "bot_id required"})
-
+    user_id = _require_cookie_user_id(request, response)
+    bid = _require_bot_id(bot_id)
     m = normalize_mode(mode)
 
     return svc.get_log(
@@ -182,12 +203,8 @@ def intents_snapshot(
     limit: int = Query(10, ge=1, le=10),
     svc: BotService = Depends(get_bot_service),
 ):
-    u = require_user(request, response)
-    user_id = u["id"]
-
-    bid = clean_bot_id(bot_id)
-    if not bid:
-        return JSONResponse(status_code=400, content={"detail": "bot_id required"})
+    user_id = _require_cookie_user_id(request, response)
+    bid = _require_bot_id(bot_id)
 
     st = svc.status(user_id, bid)
     items = st.get("lastIntentsPreview") or []
@@ -214,19 +231,11 @@ def events_feed(
     start_ts: int = Query(0, ge=0, description="Epoch seconds (inclusive). 0 = no lower bound."),
     end_ts: int = Query(0, ge=0, description="Epoch seconds (inclusive). 0 = no upper bound."),
 ):
-    u = require_user(request, response)
-    user_id = str(u.get("id") or "").strip()
-
-    bid = clean_bot_id(bot_id)
-    if not bid:
-        return JSONResponse(status_code=400, content={"detail": "bot_id required"})
+    user_id = _require_cookie_user_id(request, response)
+    bid = _require_bot_id(bot_id)
 
     m = normalize_mode(mode)
     svc = get_supabase_service()
-
-    def _epoch_to_iso_z(ep: int) -> str:
-        import time as _t
-        return _t.strftime("%Y-%m-%dT%H:%M:%SZ", _t.gmtime(int(ep)))
 
     try:
         q = (
@@ -288,48 +297,40 @@ def heartbeat(
     claims: Dict[str, Any] = Depends(require_bot_runner_claims),
     svc: BotService = Depends(get_bot_service),
 ):
-    if not isinstance(payload, dict):
-        return JSONResponse(status_code=400, content={"detail": "payload must be an object"})
+    payload = _require_payload_obj(payload)
 
-    bid = clean_bot_id(payload.get("bot_id"))
-    if not bid:
-        return JSONResponse(status_code=400, content={"detail": "bot_id required"})
+    bid = _require_bot_id(payload.get("bot_id"))
 
-    user_id = str(payload.get("user_id") or "").strip()
-    if not user_id:
-        return JSONResponse(status_code=400, content={"detail": "user_id required"})
-
-    uid_claims = _claims_user_id(claims)
-    if uid_claims:
-        enforce_runner_user(payload_user_id=user_id, claims=claims)
+    # Prefer claims uid, fallback to payload user_id
+    uid = _runner_effective_user_id(claims=claims, fallback_user_id=payload.get("user_id"))
 
     out = dict(payload)
     out["bot_id"] = bid
     out["runner_id"] = runner_id
-    return svc.heartbeat(user_id, out)
+
+    # Ensure stored user_id matches effective uid
+    out["user_id"] = uid
+    return svc.heartbeat(uid, out)
 
 
 @router.get("/status_runner")
 def status_runner(
     bot_id: str = Query(...),
-    user_id: str = Query(...),  # REQUIRED (runner sends it; keeps logging consistent)
+    user_id: Optional[str] = Query(None),  # fallback when token doesn't include uid
     runner_id: str = Depends(require_bot_runner),
     claims: Dict[str, Any] = Depends(require_bot_runner_claims),
     svc: BotService = Depends(get_bot_service),
 ):
-    bid = clean_bot_id(bot_id)
-    if not bid:
-        return JSONResponse(status_code=400, content={"detail": "bot_id required"})
+    bid = _require_bot_id(bot_id)
 
-    uid = str(user_id or "").strip()
-    if not uid:
-        return JSONResponse(status_code=400, content={"detail": "user_id required"})
+    uid = _runner_effective_user_id(claims=claims, fallback_user_id=user_id)
 
-    uid_claims = _claims_user_id(claims)
-    if uid_claims:
-        enforce_runner_user(payload_user_id=uid, claims=claims)
-
-    return svc.status(uid, bid)
+    out = svc.status(uid, bid)
+    if isinstance(out, dict):
+        out.setdefault("runner_id", runner_id)
+        out.setdefault("user_id", uid)
+        out.setdefault("bot_id", bid)
+    return out
 
 
 @router.post("/submit-intents")
@@ -339,20 +340,12 @@ def submit_intents(
     claims: Dict[str, Any] = Depends(require_bot_runner_claims),
     svc: BotService = Depends(get_bot_service),
 ):
-    if not isinstance(payload, dict):
-        return JSONResponse(status_code=400, content={"detail": "payload must be an object"})
+    payload = _require_payload_obj(payload)
 
-    bid = clean_bot_id(payload.get("bot_id"))
-    if not bid:
-        return JSONResponse(status_code=400, content={"detail": "bot_id required"})
+    bid = _require_bot_id(payload.get("bot_id"))
 
-    user_id = str(payload.get("user_id") or "").strip()
-    if not user_id:
-        return JSONResponse(status_code=400, content={"detail": "user_id required"})
-
-    uid_claims = _claims_user_id(claims)
-    if uid_claims:
-        enforce_runner_user(payload_user_id=user_id, claims=claims)
+    # Prefer claims uid, fallback to payload user_id
+    uid = _runner_effective_user_id(claims=claims, fallback_user_id=payload.get("user_id"))
 
     ts = payload.get("ts")
     try:
@@ -362,13 +355,13 @@ def submit_intents(
 
     items = payload.get("items") or []
     if not isinstance(items, list):
-        return JSONResponse(status_code=400, content={"detail": "items must be a list"})
+        raise HTTPException(status_code=400, detail="items must be a list")
 
-    return svc.submit_intents(user_id, bid, ts_int, items)
+    return svc.submit_intents(uid, bid, ts_int, items)
 
 
 # -----------------------------
-# Config endpoints
+# Config endpoints (cookie-auth)
 # -----------------------------
 @router.get("/config")
 def get_config(
@@ -377,13 +370,8 @@ def get_config(
     bot_id: str = Query(...),
     svc: BotService = Depends(get_bot_service),
 ):
-    u = require_user(request, response)
-    user_id = u["id"]
-
-    bid = clean_bot_id(bot_id)
-    if not bid:
-        return JSONResponse(status_code=400, content={"detail": "bot_id required"})
-
+    user_id = _require_cookie_user_id(request, response)
+    bid = _require_bot_id(bot_id)
     return svc.get_config(user_id, bid)
 
 
@@ -394,18 +382,12 @@ def set_config(
     payload: Dict[str, Any],
     svc: BotService = Depends(get_bot_service),
 ):
-    u = require_user(request, response)
-    user_id = u["id"]
+    user_id = _require_cookie_user_id(request, response)
+    payload = _require_payload_obj(payload)
 
-    if not isinstance(payload, dict):
-        return JSONResponse(status_code=400, content={"detail": "payload must be an object"})
-
-    bid = clean_bot_id(payload.get("bot_id"))
+    bid = _require_bot_id(payload.get("bot_id"))
     config = payload.get("config")
-
-    if not bid:
-        return JSONResponse(status_code=400, content={"detail": "bot_id required"})
     if not isinstance(config, dict):
-        return JSONResponse(status_code=400, content={"detail": "config must be an object"})
+        raise HTTPException(status_code=400, detail="config must be an object")
 
     return svc.set_config(user_id, bid, config)
