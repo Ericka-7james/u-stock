@@ -3,6 +3,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiGet, apiPost } from "../../lib/api/botApi.js";
 import { safeStr } from "../../lib/format/botFormat.js";
 
+import botUnavailableSquirrel from "../../assets/modal/bot-unavailable-squirrel.png";
+
 /**
  * IMPORTANT: No JSX in here.
  * Hooks return state + handlers only.
@@ -192,6 +194,7 @@ export default function useBotControlCard({
   const storageKey = useMemo(() => buildStorageKey(storageScope), [storageScope]);
 
   const [available, setAvailable] = useState([]);
+  const [availableLoaded, setAvailableLoaded] = useState(false); // ✅ NEW: prevents premature "bot disappeared"
 
   // selected starts from prop; we also restore from storage on mount (later effect)
   const [selected, setSelected] = useState(safeStr(activeBotId, ""));
@@ -373,12 +376,14 @@ export default function useBotControlCard({
     return true;
   }, [hasSelection, busy, isStarting, isArmed, isRunningEff, isWaiting, marketClosedBlocksStart]);
 
-  const fail = useCallback((title, detail, actionLabel = null, actionKind = null) => {
+  // ✅ updated to match ErrorModal schema: { title, body, subtitle, image, action }
+  const fail = useCallback((title, body, action = null, image = null, subtitle = "") => {
     setErrModal({
       title: title || "Something went wrong",
-      message: detail || "Unexpected error.",
-      actionLabel,
-      actionKind,
+      body: body || "Unexpected error.",
+      subtitle: subtitle || "",
+      image: image || null,
+      action: action || null, // { label, kind?, href? }
     });
     setErrModalOpen(true);
   }, []);
@@ -409,7 +414,12 @@ export default function useBotControlCard({
       setRiskOpen(false);
 
       if (reason) {
-        fail(COPY?.errors?.botUnavailableTitle || "Bot unavailable", reason);
+        fail(
+          COPY?.errors?.botUnavailableTitle || "Bot unavailable",
+          reason,
+          null,
+          botUnavailableSquirrel
+        );
       }
     },
     [onActiveBotChange, fail, COPY, storageKey]
@@ -421,6 +431,8 @@ export default function useBotControlCard({
       setAvailable(normalizeAvailableBots(data));
     } catch {
       setAvailable([]);
+    } finally {
+      setAvailableLoaded(true); // ✅ NEW
     }
   }, []);
 
@@ -465,7 +477,7 @@ export default function useBotControlCard({
           return;
         }
 
-        fail("Failed to load bot status", msg, "Refresh", "refresh");
+        fail("Failed to load bot status", msg, { label: "Refresh", kind: "refresh" });
       } finally {
         if (isHard) setHardLoading(false);
         else setSoftLoading(false);
@@ -475,8 +487,8 @@ export default function useBotControlCard({
   );
 
   const handleErrorAction = useCallback(
-    async () => {
-      const kind = errModal?.actionKind;
+    async (action) => {
+      const kind = action?.kind || errModal?.action?.kind;
       closeErrorModal();
       if (kind === "refresh") {
         await _sleep(10);
@@ -497,8 +509,6 @@ export default function useBotControlCard({
       const data = await apiGet("/api/bots/log", { bot_id: bid, limit: 80, mode: "paper" });
       const incoming = _asList(data?.items || data || []).filter((x) => x && typeof x === "object");
 
-      // Build stable-ish keys so we can prepend new items without duplicates.
-      // Prefer event_id, else fall back to ts+event_type+level+message.
       const keyOf = (it) => {
         const eid = String(it?.event_id || it?.id || "").trim();
         if (eid) return `eid:${eid}`;
@@ -520,7 +530,6 @@ export default function useBotControlCard({
 
         const seen = new Set(old.map(keyOf));
 
-        // Prepend only the truly new ones
         const newOnes = [];
         for (const it of incoming) {
           const k = keyOf(it);
@@ -530,14 +539,10 @@ export default function useBotControlCard({
           }
         }
 
-        // Newest-first look: backend usually returns newest-first.
         const merged = [...newOnes, ...old];
-
-        // Optional: keep memory bounded
         return merged.slice(0, 240);
       });
     } catch (e) {
-      // IMPORTANT: don't wipe the existing log view if refresh fails.
       fail("Failed to load logs", String(e?.message || e || "Unknown error"));
     } finally {
       setLogBusy(false);
@@ -576,22 +581,16 @@ export default function useBotControlCard({
         setSnapshot(null);
         lastUnavailableBotRef.current = "";
 
-        // reset loading history when clearing selection
         loadedBotsRef.current = new Set();
-
-        // ✅ clear persisted
         writeStoredBotId(storageKey, "");
 
         if (typeof onActiveBotChange === "function") onActiveBotChange("");
         return;
       }
 
-      // force a "hard load" the next time we fetch status for this bot
       loadedBotsRef.current.delete(v);
 
       setSelected(v);
-
-      // ✅ persist
       writeStoredBotId(storageKey, v);
 
       if (typeof onActiveBotChange === "function") onActiveBotChange(v);
@@ -605,35 +604,35 @@ export default function useBotControlCard({
     const sel = safeStr(selected, "");
     const hasBotsLoaded = Array.isArray(available) && available.length > 0;
 
-    // If they already selected something, never show it.
     if (sel || propId) {
       if (selectPromptOpen) setSelectPromptOpen(false);
       return;
     }
 
-    // Wait until available list is known (prevents flash on mount)
     if (!hasBotsLoaded) return;
 
     try {
       const alreadyShown = sessionStorage.getItem(selectPromptKey) === "1";
       if (alreadyShown) return;
       sessionStorage.setItem(selectPromptKey, "1");
-    } catch {
-      // If sessionStorage is blocked, we still show once per mount
-    }
+    } catch {}
 
     setSelectPromptOpen(true);
   }, [activeBotId, selected, available, selectPromptOpen, selectPromptKey]);
 
-  // If backend list changes and selected bot disappears, unselect cleanly
+  // ✅ FIXED: Only enforce “selected disappeared” AFTER available has loaded at least once
   useEffect(() => {
+    if (!availableLoaded) return; // ✅ NEW GUARD
+
     const bid = safeStr(selected, "");
     if (!bid) return;
+
     const stillExists = (available || []).some((b) => String(b?.id || "") === bid);
+
     if (!stillExists) {
       unselectBot(COPY?.errors?.botUnavailableMessage || `“${bid}” is not available.`);
     }
-  }, [available, selected, unselectBot, COPY]);
+  }, [availableLoaded, available, selected, unselectBot, COPY]);
 
   const openLog = useCallback(async () => {
     if (!hasSelection) return;

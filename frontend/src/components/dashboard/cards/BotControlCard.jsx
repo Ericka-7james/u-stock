@@ -13,6 +13,8 @@ import "../../../css/dashboard/cards/BotControlCard.css";
 import useBotControlCard from "../../../hooks/bots/useBotControlCard.js";
 import { safeStr, fmtTime, fmtAge, pillTone } from "../../../lib/format/botFormat.js";
 
+import botUnavailableSquirrel from "../../../assets/modal/bot-unavailable-squirrel.png";
+
 /**
  * storageScope (optional):
  * Pass something stable per-user (ex: authed user id) so the hook can namespace localStorage.
@@ -122,14 +124,58 @@ export default function BotControlCard({
     mode,
   } = ui;
 
+  // ---------------------------------------------------------------------------
+  // ✅ VALIDATION PATCH (minimal, UI-only)
+  // If the selected id is stale (e.g., restored from storage after refresh),
+  // treat it as "no selection" until it exists in `available`.
+  // ---------------------------------------------------------------------------
+  const selectedId = safeStr(selected, "");
+  const selectionExistsInAvailable =
+    !!selectedId && (available || []).some((b) => safeStr(b?.id, "") === selectedId);
+
+  // Only consider it a selection if BOTH the hook says we have one AND it's in available
+  const hasValidSelection = !!hasSelection && selectionExistsInAvailable;
+
+  // Force select value to "" if stale so UI doesn't look selected after refresh
+  const selectedValue = hasValidSelection ? selectedId : "";
+
+  // If list loaded and the hook thinks there was a selection but it's stale, show a gentle hint
+  const showStaleSelectionHint =
+    Array.isArray(available) && available.length > 0 && !!hasSelection && !selectionExistsInAvailable;
+
+  const isBotUnavailable =
+    !!errModalOpen &&
+    /bot unavailable|bot not found|unavailable/i.test(
+      String(errModal?.title || errModal?.message || errModal?.detail || "")
+    );
+  // ---------------------------------------------------------------------------
+
   return (
     <>
-      <ErrorModal open={errModalOpen} error={errModal} onClose={closeErrorModal} onAction={handleErrorAction} />
+      <ErrorModal
+        open={errModalOpen}
+        error={errModal}
+        onClose={closeErrorModal}
+        onAction={handleErrorAction}
+      >
+        {isBotUnavailable ? (
+          <div style={{ display: "grid", placeItems: "center", paddingTop: 8 }}>
+            <img
+              src={botUnavailableSquirrel}
+              alt="Squirrel holding a sign: bot unavailable"
+              style={{ width: 180, height: "auto", opacity: 0.95 }}
+              draggable={false}
+            />
+          </div>
+        ) : null}
+      </ErrorModal>
 
       <LoadingOverlay open={hardLoading} label={COPY.loading.overlayLabel} subtitle={COPY.loading.overlaySubtitle} />
 
       <div className="botCard" aria-busy={hardLoading}>
-        {softLoading ? <div className="botCardSoftSpinner" aria-label="Refreshing bot status" title="Refreshing…" /> : null}
+        {softLoading ? (
+          <div className="botCardSoftSpinner" aria-label="Refreshing bot status" title="Refreshing…" />
+        ) : null}
 
         <div className="botCardHead">
           <div className="botCardTitleRow">
@@ -143,16 +189,20 @@ export default function BotControlCard({
             </div>
 
             <div
-              className={`botCardStatePill arm ${hasSelection && isArmed ? "warn" : "neg"}`}
+              className={`botCardStatePill arm ${hasValidSelection && isArmed ? "warn" : "neg"}`}
               title={
-                !hasSelection
+                !hasValidSelection
                   ? COPY.pills.armed.titleNone
                   : isArmed
                   ? COPY.pills.armed.titleArmed
                   : COPY.pills.armed.titleDisarmed
               }
             >
-              {!hasSelection ? COPY.pills.armed.none : isArmed ? COPY.pills.armed.armed : COPY.pills.armed.disarmed}
+              {!hasValidSelection
+                ? COPY.pills.armed.none
+                : isArmed
+                ? COPY.pills.armed.armed
+                : COPY.pills.armed.disarmed}
             </div>
 
             <div className={`botCardStatePill status ${pillTone(runtimeTone)}`}>{runtimeLabel}</div>
@@ -164,7 +214,7 @@ export default function BotControlCard({
             <div className="botSelectWrap">
               <label className="botLabel">{COPY.select.label}</label>
 
-              <select className="botSelect" value={safeStr(selected, "")} onChange={onSelect} disabled={busy}>
+              <select className="botSelect" value={selectedValue} onChange={onSelect} disabled={busy}>
                 <option value="">{COPY.select.placeholder}</option>
                 {(available || []).map((b) => (
                   <option key={b.id} value={b.id}>
@@ -173,32 +223,36 @@ export default function BotControlCard({
                 ))}
               </select>
 
-              <div className="botHint">{safeStr(selectedMeta?.description, hasSelection ? "" : COPY.select.hintNone)}</div>
+              <div className="botHint">
+                {showStaleSelectionHint
+                  ? "Previously selected bot is unavailable. Please choose again."
+                  : safeStr(selectedMeta?.description, hasValidSelection ? "" : COPY.select.hintNone)}
+              </div>
             </div>
 
             <div className="botActions">
-              <button className="botBtn" type="button" onClick={openLog} disabled={busy || !hasSelection}>
+              <button className="botBtn" type="button" onClick={openLog} disabled={busy || !hasValidSelection}>
                 {COPY.actions.viewLog}
               </button>
 
-              <button className="botBtn" type="button" onClick={openRisk} disabled={busy || !hasSelection}>
+              <button className="botBtn" type="button" onClick={openRisk} disabled={busy || !hasValidSelection}>
                 {COPY.actions.risk}
               </button>
 
               {!isRunningEff && !isWaiting && !isStarting ? (
                 isArmed ? (
-                  <button className="botBtn" type="button" onClick={doDisarm} disabled={!canDisarm}>
+                  <button className="botBtn" type="button" onClick={doDisarm} disabled={!canDisarm || !hasValidSelection}>
                     {COPY.actions.disarm}
                   </button>
                 ) : (
-                  <button className="botBtn" type="button" onClick={requestArm} disabled={!canArm}>
+                  <button className="botBtn" type="button" onClick={requestArm} disabled={!canArm || !hasValidSelection}>
                     {COPY.actions.arm}
                   </button>
                 )
               ) : null}
 
               {isRunningEff || isWaiting || isStarting ? (
-                <button className="botBtn stop" type="button" onClick={doPause} disabled={!canPause}>
+                <button className="botBtn stop" type="button" onClick={doPause} disabled={!canPause || !hasValidSelection}>
                   {COPY.actions.pause}
                 </button>
               ) : (
@@ -206,9 +260,9 @@ export default function BotControlCard({
                   className="botBtn start"
                   type="button"
                   onClick={requestStart}
-                  disabled={!canStart}
+                  disabled={!canStart || !hasValidSelection}
                   title={
-                    !hasSelection
+                    !hasValidSelection
                       ? COPY.actions.startTitleNone
                       : !isArmed
                       ? COPY.actions.startTitleNotArmed
@@ -238,22 +292,24 @@ export default function BotControlCard({
           <div className="botGrid">
             <div className="botTile">
               <div className="botTileLabel">{COPY.tiles.intent}</div>
-              <div className="botTileValue">{hasSelection ? intent || "—" : "—"}</div>
+              <div className="botTileValue">{hasValidSelection ? intent || "—" : "—"}</div>
             </div>
 
             <div className="botTile">
               <div className="botTileLabel">{COPY.tiles.effective}</div>
-              <div className="botTileValue">{hasSelection ? eff || "—" : "—"}</div>
+              <div className="botTileValue">{hasValidSelection ? eff || "—" : "—"}</div>
             </div>
 
             <div className="botTile">
               <div className="botTileLabel">{COPY.tiles.desired}</div>
-              <div className="botTileValue">{hasSelection ? desiredState || "—" : "—"}</div>
+              <div className="botTileValue">{hasValidSelection ? desiredState || "—" : "—"}</div>
             </div>
 
             <div className="botTile">
               <div className="botTileLabel">{COPY.tiles.heartbeat}</div>
-              <div className="botTileValue">{!hasSelection ? "—" : hbAge == null ? "—" : `${fmtAge(hbAge)} ago`}</div>
+              <div className="botTileValue">
+                {!hasValidSelection ? "—" : hbAge == null ? "—" : `${fmtAge(hbAge)} ago`}
+              </div>
             </div>
 
             <div className="botTile">
@@ -264,7 +320,7 @@ export default function BotControlCard({
             <div className="botTile botTileFull">
               <div className="botTileLabel">{COPY.tiles.status}</div>
               <div className="botTileValue">{statusLine}</div>
-              {hasSelection && message ? <div className="botPausedLine">{message}</div> : null}
+              {hasValidSelection && message ? <div className="botPausedLine">{message}</div> : null}
             </div>
           </div>
         </div>
@@ -279,7 +335,7 @@ export default function BotControlCard({
             <button className="mBtn" type="button" onClick={() => setArmConfirmOpen(false)} disabled={busy}>
               {COPY.modals.arm.cancel}
             </button>
-            <button className="mBtn mBtnPrimary" type="button" onClick={confirmArm} disabled={busy}>
+            <button className="mBtn mBtnPrimary" type="button" onClick={confirmArm} disabled={busy || !hasValidSelection}>
               {COPY.modals.arm.confirm}
             </button>
           </>
@@ -288,7 +344,7 @@ export default function BotControlCard({
         <div className="botModalStack">
           <div className="botModalRow">
             <span className="botModalLabel">{COPY.modals.arm.botLabel}</span>
-            <span className="mono">{safeStr(selected, "—")}</span>
+            <span className="mono">{safeStr(selectedValue, "—")}</span>
           </div>
           <div className="botModalHelper">{COPY.modals.arm.helper}</div>
           <div className="botModalRow">
@@ -307,7 +363,7 @@ export default function BotControlCard({
             <button className="mBtn" type="button" onClick={() => setStartConfirmOpen(false)} disabled={busy}>
               {COPY.modals.start.cancel}
             </button>
-            <button className="mBtn mBtnPrimary" type="button" onClick={confirmStart} disabled={busy}>
+            <button className="mBtn mBtnPrimary" type="button" onClick={confirmStart} disabled={busy || !hasValidSelection}>
               {COPY.modals.start.confirm}
             </button>
           </>
@@ -316,7 +372,7 @@ export default function BotControlCard({
         <div className="botModalStack">
           <div className="botModalRow">
             <span className="botModalLabel">{COPY.modals.start.botLabel}</span>
-            <span className="mono">{safeStr(selected, "—")}</span>
+            <span className="mono">{safeStr(selectedValue, "—")}</span>
           </div>
 
           <div className="botModalHelper">
@@ -403,7 +459,7 @@ export default function BotControlCard({
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "flex-start",
-                  gap: 0,            // spinner handles spacing via marginRight
+                  gap: 0, // spinner handles spacing via marginRight
                   paddingTop: 10,
                   paddingLeft: 8,
                   opacity: 0.75,
@@ -439,7 +495,7 @@ export default function BotControlCard({
             <button className="mBtn" type="button" onClick={closeRisk} disabled={riskBusy}>
               {COPY.modals.risk.cancel}
             </button>
-            <button className="mBtn mBtnPrimary" type="button" onClick={saveRisk} disabled={riskBusy}>
+            <button className="mBtn mBtnPrimary" type="button" onClick={saveRisk} disabled={riskBusy || !hasValidSelection}>
               {COPY.modals.risk.save}
             </button>
           </>
