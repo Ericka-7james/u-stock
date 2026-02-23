@@ -165,9 +165,12 @@ export default function MarketLeadersCard({
 
                 {showSecondLine ? (
                   <div className="mlRowSub">
-                    <span>Last price: {r.last === null ? "—" : `${fmtMoney(r.last)} (USD/share)`}</span>
-                    <span className="dot">·</span>
-                    <span>Prev close: {r.prev === null ? "—" : `${fmtMoney(r.prev)} (USD/share)`}</span>
+                    <span className="mlLast">
+                      Last price: {r.last === null ? "—" : `${fmtMoney(r.last)} (USD/share)`}
+                    </span>
+                    <span className="mlPrev">
+                      Prev close: {r.prev === null ? "—" : `${fmtMoney(r.prev)} (USD/share)`}
+                    </span>
                   </div>
                 ) : (
                   <div className="mlRowSub muted">—</div>
@@ -243,9 +246,12 @@ export default function MarketLeadersCard({
 
                       {showSecondLine ? (
                         <div className="mlRowSub">
-                          <span>Last price: {r.last === null ? "—" : `${fmtMoney(r.last)} (USD/share)`}</span>
-                          <span className="dot">·</span>
-                          <span>Prev close: {r.prev === null ? "—" : `${fmtMoney(r.prev)} (USD/share)`}</span>
+                          <span className="mlLast">
+                            Last price: {r.last === null ? "—" : `${fmtMoney(r.last)} (USD/share)`}
+                          </span>
+                          <span className="mlPrev">
+                            Prev close: {r.prev === null ? "—" : `${fmtMoney(r.prev)} (USD/share)`}
+                          </span>
                         </div>
                       ) : (
                         <div className="mlRowSub muted">—</div>
