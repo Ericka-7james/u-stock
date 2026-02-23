@@ -1,0 +1,108 @@
+/* frontend/src/css/dashboard/cards/shared/OpportunityTable.css */
+
+.tpOppMiniTable {
+  overflow: hidden;
+  border-radius: 14px;
+}
+
+.tpOppMiniTitle {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.tpOppMiniTitleText {
+  font-weight: 900;
+  font-size: 13px;
+}
+
+.tpOppMiniSource {
+  font-size: 12px;
+  opacity: 0.7;
+  white-space: nowrap;
+}
+
+.tpOppHead {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  font-size: 12px;
+  opacity: 0.8;
+  padding: 6px 2px 10px 2px;
+}
+
+.tpOppHead .right {
+  text-align: right;
+}
+
+.tpOppBody {
+  display: grid;
+  gap: 10px;
+}
+
+.tpOppPill {
+  width: 100%;
+  box-sizing: border-box;
+
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: transparent;
+  border-radius: 12px;
+
+  padding: 10px 12px;
+
+  display: grid;
+  gap: 6px;
+
+  cursor: pointer;
+  color: inherit;
+  overflow: hidden;
+  text-align: left;
+}
+
+.tpOppPill:hover {
+  border-color: rgba(148, 163, 184, 0.4);
+}
+
+.tpOppPill:active {
+  transform: translateY(0.5px);
+}
+
+.tpOppPill.isDisabled {
+  cursor: default;
+  opacity: 0.85;
+}
+
+.tpOppPillTop {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: baseline;
+}
+
+.tpOppPillSymbol {
+  font-weight: 900;
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tpOppPillScore {
+  font-size: 12px;
+  opacity: 0.85;
+  white-space: nowrap;
+}
+
+.tpOppPillNote {
+  font-size: 12px;
+  opacity: 0.75;
+  line-height: 1.25;
+}
+
+.tpEmpty {
+  margin-top: 2px;
+  font-size: 12px;
+  opacity: 0.75;
+}

@@ -6,9 +6,9 @@ import AppShell from "../layout/AppShell";
 import PageHeaderCard from "../common/PageHeaderCard";
 import "../../css/pages/IndexFundsPage.css";
 
-import lucentLogo from "../../assets/images/companyLogo-logoOnly.png";
+import MarketBaselinesSquirrel from "../../assets/pages/MarketBaselinesSquirrel.png";
 
-import { INDEX_FUNDS_PAGE_COPY } from "../../content/indexfundspage.content";
+import { INDEX_FUNDS_PAGE_COPY } from "../../content/indexfundspage.content.ts";
 
 /**
  * Market Baselines (Lucent Financial)
@@ -30,7 +30,7 @@ export default function IndexFundsPage() {
         <PageHeaderCard
           title={copy.header.title}
           subtitle={<span className="index-tagline">{copy.header.subtitle}</span>}
-          right={<img src={lucentLogo} alt="Lucent Financial logo" className="index-hero-logo" />}
+          right={<img src={MarketBaselinesSquirrel} alt="Lucent Financial logo" className="index-hero-logo" />}
         >
           <p className="muted">
             These ETFs act as Lucent’s “system context.” They don’t pick trades by themselves — they help interpret the

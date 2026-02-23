@@ -8,12 +8,12 @@ import PageHeaderCard from "../common/PageHeaderCard.jsx";
 import MarketLeadersCard from "../dashboard/cards/MarketLeadersCard.jsx";
 import BotLogsCard from "../dashboard/cards/BotLogsCard.jsx";
 
-import DatasourcesSquirrel from "../../assets/images/DatasourcesSquirrel.png";
+import DatasourcesSquirrel from "../../assets/pages/DatasourcesSquirrel.png";
 
 import "../../css/pages/DatasourcesPage.css";
 import "../../css/dashboard/cards/CardShared.css";
 
-import { DATASOURCES_PAGE_COPY } from "../../content/datasources.content";
+import { DATASOURCES_PAGE_COPY } from "../../content/datasources.content.ts";
 
 // -------- Small in-memory cache (stale-while-revalidate) --------
 const CACHE_TTL_MS = 60_000;

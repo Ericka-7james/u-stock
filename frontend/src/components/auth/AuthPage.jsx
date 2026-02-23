@@ -3,12 +3,12 @@ import { useCallback, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import AppShell from "../layout/AppShell";
-import ErrorModal from "../common/ErrorMessages";
+import ErrorModal from "../common/ErrorModal";
 
 import { useAuth } from "../../context/AuthContext";
 import { explainAnyError } from "../../lib/errorMessages";
 
-import { AUTH_PAGE_COPY } from "../../content/landing/authPage.content";
+import { AUTH_PAGE_COPY } from "../../content/landing/authPage.content.ts";
 
 import "../../css/auth/AuthPage.css";
 

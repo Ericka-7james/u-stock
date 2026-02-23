@@ -6,7 +6,7 @@ import "../../css/landing/LandingPage.css";
 import AppShell from "../layout/AppShell";
 import Modal from "../common/Modal";
 
-import { LANDING_PAGE_CONTENT } from "../../content/landing/landingPage.content";
+import { LANDING_PAGE_CONTENT } from "../../content/landing/landingPage.content.ts";
 
 // Headshot (optional)
 import headshotImg from "../../assets/ericka-headshot.jpeg";

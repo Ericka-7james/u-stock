@@ -7,7 +7,7 @@ import { API_BASE, API_PREFIX } from "../../config/config";
 import { useAuth } from "../../context/AuthContext";
 import PageHeaderCard from "../common/PageHeaderCard";
 
-import { FEEDBACK_PAGE_COPY } from "../../content/feedbackpage.content";
+import { FEEDBACK_PAGE_COPY } from "../../content/feedbackpage.content.ts";
 
 const SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY;
 

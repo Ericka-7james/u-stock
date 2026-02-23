@@ -1,6 +1,6 @@
 // src/pages/ResumePage.jsx
 import "../../css/pages/ResumePage.css";
-import { RESUME_PAGE_COPY } from "../content/resumepage.content";
+import { RESUME_PAGE_COPY } from "../content/resumepage.content.ts";
 
 export default function ResumePage() {
   const c = RESUME_PAGE_COPY;

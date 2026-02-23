@@ -1,7 +1,14 @@
 /* ------------------------------------------
+<<<<<<< HEAD
    MarketLeadersCard: theme tokens (scoped)
 ------------------------------------------- */
 
+=======
+   MarketLeadersCard (Light exact + Dark + No spill)
+------------------------------------------- */
+
+/* ============ LIGHT MODE (UNCHANGED LOOK) ============ */
+>>>>>>> d7732ef86f6e22bcfce1aca2218fe5d0758ed989
 .mlCard {
   /* Light defaults */
   --ml-surface: #ffffff;
@@ -21,6 +28,7 @@
   background: var(--ml-surface);
   border-radius: 18px;
   padding: 18px;
+<<<<<<< HEAD
   box-shadow: var(--ml-shadow);
 
   /* Key: nothing can visually spill past rounded corners */
@@ -63,6 +71,15 @@
     --ml-pos: #34d399;
     --ml-neg: #fb7185;
   }
+=======
+  box-shadow: 0 12px 36px rgba(15, 23, 42, 0.06);
+
+  /* Added: prevent ANY spill past rounded corners */
+  overflow: hidden;
+
+  /* Optional but recommended for consistency with rows */
+  border: 1px solid #e2e8f0;
+>>>>>>> d7732ef86f6e22bcfce1aca2218fe5d0758ed989
 }
 
 .mlHeader {
@@ -79,9 +96,15 @@
 .mlSubtitle {
   margin-top: 6px;
   font-size: 0.9rem;
+<<<<<<< HEAD
   color: var(--ml-muted);
 
   /* Long subtitle should never overflow */
+=======
+  color: #64748b;
+
+  /* Added: long subtitle never overflows */
+>>>>>>> d7732ef86f6e22bcfce1aca2218fe5d0758ed989
   overflow-wrap: anywhere;
   word-break: break-word;
 }
@@ -94,7 +117,11 @@
   color: var(--ml-muted);
   padding: 8px 2px 10px;
 
+<<<<<<< HEAD
   /* Prevent text spill */
+=======
+  /* Added: prevents flex children from forcing overflow */
+>>>>>>> d7732ef86f6e22bcfce1aca2218fe5d0758ed989
   min-width: 0;
 }
 
@@ -106,7 +133,11 @@
   display: grid;
   gap: 10px;
 
+<<<<<<< HEAD
   /* Prevent any internal overflow from pushing the card */
+=======
+  /* Added: prevents internal overflow from pushing the card wider */
+>>>>>>> d7732ef86f6e22bcfce1aca2218fe5d0758ed989
   min-width: 0;
 }
 
@@ -122,10 +153,16 @@
   border-radius: 14px;
   padding: 12px 14px;
   cursor: pointer;
+<<<<<<< HEAD
 
   transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease, background 120ms ease;
 
   /* Important: button contents can wrap safely */
+=======
+  transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
+
+  /* Added: allows safe wrapping/ellipsis behavior inside */
+>>>>>>> d7732ef86f6e22bcfce1aca2218fe5d0758ed989
   min-width: 0;
 }
 
@@ -232,6 +269,10 @@
   color: var(--ml-muted);
   font-size: 0.9rem;
 
+<<<<<<< HEAD
+=======
+  /* Added: safe wrap */
+>>>>>>> d7732ef86f6e22bcfce1aca2218fe5d0758ed989
   overflow-wrap: anywhere;
   word-break: break-word;
 }
@@ -239,8 +280,14 @@
 .mlFoot {
   margin-top: 12px;
   font-size: 0.8rem;
+<<<<<<< HEAD
   color: rgba(148, 163, 184, 0.9);
 
+=======
+  color: #94a3b8;
+
+  /* Added: safe wrap */
+>>>>>>> d7732ef86f6e22bcfce1aca2218fe5d0758ed989
   overflow-wrap: anywhere;
   word-break: break-word;
 }
@@ -285,6 +332,9 @@
   cursor: pointer;
   color: var(--ml-text);
   transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
+
+  /* Added: no spill in button text */
+  min-width: 0;
 }
 
 .mlMoreBtn:hover {
@@ -320,7 +370,11 @@
   box-shadow: var(--ml-shadow);
   padding: 16px;
 
+<<<<<<< HEAD
   /* Ensure nothing spills past rounded corners */
+=======
+  /* Added: ensure nothing spills past rounded corners */
+>>>>>>> d7732ef86f6e22bcfce1aca2218fe5d0758ed989
   overflow: hidden;
 }
 
@@ -330,6 +384,10 @@
   justify-content: space-between;
   gap: 12px;
 
+<<<<<<< HEAD
+=======
+  /* Added */
+>>>>>>> d7732ef86f6e22bcfce1aca2218fe5d0758ed989
   min-width: 0;
 }
 
@@ -343,9 +401,16 @@
   margin-top: 3px;
   font-size: 12px;
   font-weight: 700;
+<<<<<<< HEAD
   opacity: 0.85;
   color: var(--ml-muted);
 
+=======
+  opacity: 0.75;
+  color: #475569;
+
+  /* Added */
+>>>>>>> d7732ef86f6e22bcfce1aca2218fe5d0758ed989
   overflow-wrap: anywhere;
   word-break: break-word;
 }
@@ -392,8 +457,14 @@
 .mlModalFoot {
   margin-top: 12px;
   font-size: 12px;
+<<<<<<< HEAD
   color: rgba(148, 163, 184, 0.9);
 
+=======
+  color: #94a3b8;
+
+  /* Added */
+>>>>>>> d7732ef86f6e22bcfce1aca2218fe5d0758ed989
   overflow-wrap: anywhere;
   word-break: break-word;
 }
@@ -409,8 +480,120 @@
     font-size: 1rem;
   }
 
+<<<<<<< HEAD
   .mlPrev::before {
     content: "";
     margin: 0;
+=======
+/* ============ DARK MODE OVERRIDES (TOKEN-LIKE, BUT LIGHT STAYS EXACT) ============ */
+/* Hook into either a global theme class or data-theme */
+.theme-dark .mlCard,
+[data-theme="dark"] .mlCard {
+  background: rgba(15, 23, 42, 0.65);
+  border-color: rgba(148, 163, 184, 0.16);
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.28);
+}
+
+.theme-dark .mlTitle,
+[data-theme="dark"] .mlTitle {
+  color: #e5e7eb;
+}
+
+.theme-dark .mlSubtitle,
+[data-theme="dark"] .mlSubtitle,
+.theme-dark .mlTableHead,
+[data-theme="dark"] .mlTableHead {
+  color: rgba(226, 232, 240, 0.72);
+}
+
+.theme-dark .mlRow,
+[data-theme="dark"] .mlRow {
+  background: rgba(30, 41, 59, 0.55);
+  border-color: rgba(148, 163, 184, 0.16);
+}
+
+.theme-dark .mlRow:hover,
+[data-theme="dark"] .mlRow:hover {
+  border-color: rgba(148, 163, 184, 0.28);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.28);
+}
+
+.theme-dark .mlSymbol,
+[data-theme="dark"] .mlSymbol,
+.theme-dark .mlScore,
+[data-theme="dark"] .mlScore {
+  color: #e5e7eb;
+}
+
+.theme-dark .mlScore.pos,
+[data-theme="dark"] .mlScore.pos {
+  color: #34d399;
+}
+
+.theme-dark .mlScore.neg,
+[data-theme="dark"] .mlScore.neg {
+  color: #fb7185;
+}
+
+.theme-dark .mlRowSub,
+[data-theme="dark"] .mlRowSub {
+  color: rgba(226, 232, 240, 0.82);
+}
+
+.theme-dark .mlEmpty,
+[data-theme="dark"] .mlEmpty {
+  color: rgba(226, 232, 240, 0.72);
+}
+
+.theme-dark .mlFoot,
+[data-theme="dark"] .mlFoot {
+  color: rgba(148, 163, 184, 0.9);
+}
+
+.theme-dark .mlMoreBtn,
+[data-theme="dark"] .mlMoreBtn,
+.theme-dark .mlModalClose,
+[data-theme="dark"] .mlModalClose {
+  background: rgba(30, 41, 59, 0.55);
+  border-color: rgba(148, 163, 184, 0.16);
+  color: #e5e7eb;
+}
+
+.theme-dark .mlModal,
+[data-theme="dark"] .mlModal {
+  background: rgba(15, 23, 42, 0.85);
+  border-color: rgba(148, 163, 184, 0.16);
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.40);
+}
+
+.theme-dark .mlModalTitle,
+[data-theme="dark"] .mlModalTitle {
+  color: #e5e7eb;
+}
+
+.theme-dark .mlModalSub,
+[data-theme="dark"] .mlModalSub {
+  color: rgba(226, 232, 240, 0.72);
+}
+
+/* Dark skeleton */
+.theme-dark .mlRowSkeleton,
+[data-theme="dark"] .mlRowSkeleton {
+  border-color: rgba(148, 163, 184, 0.16);
+  background: linear-gradient(
+    90deg,
+    rgba(148, 163, 184, 0.10) 0%,
+    rgba(148, 163, 184, 0.18) 45%,
+    rgba(148, 163, 184, 0.10) 100%
+  );
+}
+
+/* Optional OS fallback if no theme hook exists */
+@media (prefers-color-scheme: dark) {
+  .mlCard {
+    background: rgba(15, 23, 42, 0.65);
+    border-color: rgba(148, 163, 184, 0.16);
+    box-shadow: 0 18px 60px rgba(0, 0, 0, 0.28);
+>>>>>>> d7732ef86f6e22bcfce1aca2218fe5d0758ed989
   }
 }
