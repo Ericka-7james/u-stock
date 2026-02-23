@@ -252,18 +252,84 @@ def _should_insert_heartbeat_event(
 
 
 class BotService:
+    """
+    This version keeps your existing API shapes (available() returns {"ok": True, "bots": [...]})
+    but adds a "wired" flag and ONLY returns wired bots from available().
+
+    It also makes status/control endpoints return a consistent "bot_unavailable" payload
+    so the UI can unselect the bot and stop polling.
+    """
+
+    BOT_CATALOG: List[Dict[str, Any]] = [
+        {
+            "id": "ema_trend",
+            "name": "EMA Trend Bot",
+            "description": "Trend-following EMA signals + risk gates.",
+            "wired": True,
+        },
+        {
+            "id": "orb",
+            "name": "ORB Bot",
+            "description": "Opening Range Breakout scanner + execution.",
+            "wired": False,
+        },
+        {
+            "id": "mean_revert",
+            "name": "Mean Revert Bot",
+            "description": "Mean reversion entries with confidence gating.",
+            "wired": False,
+        },
+    ]
+
     def __init__(self) -> None:
         self.sb = get_supabase_service()
 
     # -------------------------
     # Catalog
     # -------------------------
+    def _catalog_item(self, bot_id: str) -> Optional[Dict[str, Any]]:
+        bid = str(bot_id or "").strip()
+        if not bid:
+            return None
+        for b in self.BOT_CATALOG:
+            if str(b.get("id") or "").strip() == bid:
+                return b
+        return None
+
+    def _is_wired(self, bot_id: str) -> bool:
+        b = self._catalog_item(bot_id)
+        return bool(b and b.get("wired"))
+
+    def _unavailable_payload(self, bot_id: str) -> Dict[str, Any]:
+        bid = str(bot_id or "").strip()
+        return {
+            "ok": False,
+            "code": "bot_unavailable",
+            "detail": f"bot not available: {bid}",
+            "bot_id": bid,
+        }
+
+    def _guard_wired_or_unavailable(self, bot_id: str) -> Optional[Dict[str, Any]]:
+        bid = str(bot_id or "").strip()
+        if not bid:
+            return {"ok": False, "detail": "missing bot_id"}
+        if not self._is_wired(bid):
+            return self._unavailable_payload(bid)
+        return None
+
     def available(self) -> Dict[str, Any]:
-        bots = [
-            {"id": "ema_trend", "name": "EMA Trend Bot", "description": "Trend-following EMA signals + risk gates."},
-            {"id": "orb", "name": "ORB Bot", "description": "Opening Range Breakout scanner + execution."},
-            {"id": "mean_revert", "name": "Mean Revert Bot", "description": "Mean reversion entries with confidence gating."},
-        ]
+        # IMPORTANT: keep your current response shape {"ok": True, "bots": [...]}
+        bots: List[Dict[str, Any]] = []
+        for b in self.BOT_CATALOG:
+            if not b.get("wired"):
+                continue
+            bots.append(
+                {
+                    "id": str(b.get("id") or "").strip(),
+                    "name": str(b.get("name") or "").strip(),
+                    "description": str(b.get("description") or "").strip(),
+                }
+            )
         return {"ok": True, "bots": bots}
 
     # -------------------------
@@ -274,6 +340,10 @@ class BotService:
         bid = str(bot_id or "").strip()
         if not uid or not bid:
             return {"ok": False, "detail": "missing user_id/bot_id"}
+
+        guard = self._guard_wired_or_unavailable(bid)
+        if guard:
+            return guard
 
         def _read():
             res = (
@@ -296,6 +366,12 @@ class BotService:
         uid = str(user_id or "").strip()
         bid = str(bot_id or "").strip()
         cfg = config if isinstance(config, dict) else {}
+        if not uid or not bid:
+            return {"ok": False, "detail": "missing user_id/bot_id"}
+
+        guard = self._guard_wired_or_unavailable(bid)
+        if guard:
+            return guard
 
         def _write():
             self.sb.table("bot_configs").upsert(
@@ -314,6 +390,10 @@ class BotService:
         bid = str(bot_id or "").strip()
         if not uid or not bid:
             return {"ok": False, "detail": "missing user_id/bot_id"}
+
+        guard = self._guard_wired_or_unavailable(bid)
+        if guard:
+            return guard
 
         base: Dict[str, Any] = {
             "ok": True,
@@ -499,6 +579,13 @@ class BotService:
         bid = str(bot_id or "").strip()
         m = normalize_mode(mode) if mode else None
 
+        if not uid or not bid:
+            return {"ok": False, "detail": "missing user_id/bot_id"}
+
+        guard = self._guard_wired_or_unavailable(bid)
+        if guard:
+            return guard
+
         def _write():
             patch: Dict[str, Any] = {
                 "user_id": uid,
@@ -517,6 +604,13 @@ class BotService:
     def disarm(self, user_id: str, bot_id: str) -> Dict[str, Any]:
         uid = str(user_id or "").strip()
         bid = str(bot_id or "").strip()
+
+        if not uid or not bid:
+            return {"ok": False, "detail": "missing user_id/bot_id"}
+
+        guard = self._guard_wired_or_unavailable(bid)
+        if guard:
+            return guard
 
         def _write():
             self.sb.table("bot_state").upsert(
@@ -538,6 +632,13 @@ class BotService:
         bid = str(bot_id or "").strip()
         m = normalize_mode(mode)
 
+        if not uid or not bid:
+            return {"ok": False, "detail": "missing user_id/bot_id"}
+
+        guard = self._guard_wired_or_unavailable(bid)
+        if guard:
+            return guard
+
         def _write():
             self.sb.table("bot_state").upsert(
                 {
@@ -557,6 +658,13 @@ class BotService:
     def stop(self, user_id: str, bot_id: str) -> Dict[str, Any]:
         uid = str(user_id or "").strip()
         bid = str(bot_id or "").strip()
+
+        if not uid or not bid:
+            return {"ok": False, "detail": "missing user_id/bot_id"}
+
+        guard = self._guard_wired_or_unavailable(bid)
+        if guard:
+            return guard
 
         def _write():
             self.sb.table("bot_state").upsert(
@@ -585,6 +693,13 @@ class BotService:
         uid = str(user_id or "").strip()
         bid = str(payload.get("bot_id") or "").strip()
         mode = normalize_mode(payload.get("mode") or "paper")
+
+        if not uid or not bid:
+            return {"ok": False, "detail": "missing user_id/bot_id"}
+
+        guard = self._guard_wired_or_unavailable(bid)
+        if guard:
+            return guard
 
         intent = _normalize_legacy_intent(payload.get("intent"))
         eff = str(payload.get("effective_state") or "").strip().lower()
@@ -678,6 +793,13 @@ class BotService:
         uid = str(user_id or "").strip()
         bid = str(bot_id or "").strip()
 
+        if not uid or not bid:
+            return {"ok": False, "detail": "missing user_id/bot_id"}
+
+        guard = self._guard_wired_or_unavailable(bid)
+        if guard:
+            return guard
+
         preview: List[Dict[str, Any]] = []
         for x in items[:5]:
             preview.append(x if isinstance(x, dict) else {"raw": x})
@@ -714,6 +836,13 @@ class BotService:
         uid = str(user_id or "").strip()
         bid = str(bot_id or "").strip()
         m = normalize_mode(mode)
+
+        if not uid or not bid:
+            return {"ok": False, "detail": "missing user_id/bot_id"}
+
+        guard = self._guard_wired_or_unavailable(bid)
+        if guard:
+            return guard
 
         def _read():
             q = (

@@ -5,6 +5,8 @@ import BotControlCard from "./BotControlCard.jsx";
 import TimeframeCard from "./TimeframeCard.jsx";
 import "../../../css/dashboard/cards/TradePerformancePanel.css";
 
+import { useAuth } from "../../../context/AuthContext";
+
 function n(x) {
   const v = Number(x);
   return Number.isFinite(v) ? v : 0;
@@ -658,6 +660,9 @@ export default function TradePerformancePanel({
 
   const hasBotOpportunities = oppStocks.length > 0;
 
+  const { user } = useAuth();
+  const storageScope = user?.id ? `user:${user.id}` : "";
+
   return (
     <section className="tpPanel">
       <div className="tpHeaderBar">
@@ -686,6 +691,7 @@ export default function TradePerformancePanel({
               onActiveBotChange={(nextId) => setSelectedBotId(String(nextId || "").trim())}
               onStartBot={onStartBot}
               onStopBot={onStopBot}
+              storageScope={storageScope}
             />
           </div>
 

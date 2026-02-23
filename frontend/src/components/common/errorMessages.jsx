@@ -2,6 +2,7 @@
 import { useEffect, useMemo } from "react";
 import "../../css/common/ErrorMessage.css";
 
+
 /**
  * Common modal used by Signup + NavBar-like dialogs.
  *
