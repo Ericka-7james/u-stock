@@ -1,12 +1,14 @@
-// src/components/pages/AboutPage.jsx
+// frontend/src/components/dashboard/pages/AboutPage.jsx
 import AppShell from "../layout/AppShell";
 import "../../css/pages/AboutPage.css";
+
 import headshot from "../../assets/ericka-headshot.jpeg";
 import MarketBaselinesSquirrel from "../../assets/pages/MarketBaselinesSquirrel.png";
+
 import { Link } from "react-router-dom";
 import PageHeaderCard from "../common/PageHeaderCard";
 
-import { ABOUT_PAGE_COPY } from "../../content/aboutpage.content.ts";
+import { ABOUT_PAGE_COPY } from "../../content/pages/aboutpage.content";
 
 export default function AboutPage() {
   const c = ABOUT_PAGE_COPY;
@@ -17,7 +19,13 @@ export default function AboutPage() {
         <PageHeaderCard
           title={c.header.title}
           subtitle={<span className="about-tagline">{c.header.tagline}</span>}
-          right={<img src={MarketBaselinesSquirrel} alt="Lucent Financial logo" className="about-hero-logo" />}
+          right={
+            <img
+              src={MarketBaselinesSquirrel}
+              alt="Lucent Financial mascot"
+              className="about-hero-logo"
+            />
+          }
         >
           <p className="muted">{c.intro.primary}</p>
           <p className="muted small">{c.intro.secondary}</p>
@@ -90,7 +98,11 @@ export default function AboutPage() {
 
             <div className="about-builderRow">
               <div className="about-avatarWrap" title="Ericka James">
-                <img src={headshot} alt="Ericka James headshot" className="about-avatar-image" />
+                <img
+                  src={headshot}
+                  alt="Ericka James headshot"
+                  className="about-avatar-image"
+                />
               </div>
 
               <div className="about-builderText">
