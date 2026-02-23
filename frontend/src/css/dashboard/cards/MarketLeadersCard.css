@@ -1,8 +1,68 @@
+/* ------------------------------------------
+   MarketLeadersCard: theme tokens (scoped)
+------------------------------------------- */
+
 .mlCard {
-  background: #fff;
+  /* Light defaults */
+  --ml-surface: #ffffff;
+  --ml-surface-2: #ffffff;
+  --ml-border: #e2e8f0;
+  --ml-border-2: #cbd5e1;
+
+  --ml-text: #0f172a;
+  --ml-muted: #64748b;
+  --ml-subtext: #475569;
+
+  --ml-shadow: 0 12px 36px rgba(15, 23, 42, 0.06);
+
+  --ml-pos: #0f766e;
+  --ml-neg: #b91c1c;
+
+  background: var(--ml-surface);
   border-radius: 18px;
   padding: 18px;
-  box-shadow: 0 12px 36px rgba(15, 23, 42, 0.06);
+  box-shadow: var(--ml-shadow);
+
+  /* Key: nothing can visually spill past rounded corners */
+  overflow: hidden;
+  border: 1px solid var(--ml-border);
+}
+
+/* If your app uses a theme class, this is the cleanest hook. */
+.theme-dark .mlCard,
+[data-theme="dark"] .mlCard {
+  --ml-surface: rgba(15, 23, 42, 0.65);
+  --ml-surface-2: rgba(30, 41, 59, 0.55);
+  --ml-border: rgba(148, 163, 184, 0.16);
+  --ml-border-2: rgba(148, 163, 184, 0.28);
+
+  --ml-text: #e5e7eb;
+  --ml-muted: rgba(226, 232, 240, 0.72);
+  --ml-subtext: rgba(226, 232, 240, 0.82);
+
+  --ml-shadow: 0 18px 60px rgba(0, 0, 0, 0.28);
+
+  --ml-pos: #34d399; /* softer neon green for dark bg */
+  --ml-neg: #fb7185; /* readable red on dark bg */
+}
+
+/* Fallback for OS dark mode if you don't have a theme class */
+@media (prefers-color-scheme: dark) {
+  .mlCard {
+    --ml-surface: rgba(15, 23, 42, 0.65);
+    --ml-surface-2: rgba(30, 41, 59, 0.55);
+    --ml-border: rgba(148, 163, 184, 0.16);
+    --ml-border-2: rgba(148, 163, 184, 0.28);
+
+    --ml-text: #e5e7eb;
+    --ml-muted: rgba(226, 232, 240, 0.72);
+    --ml-subtext: rgba(226, 232, 240, 0.82);
+
+    --ml-shadow: 0 18px 60px rgba(0, 0, 0, 0.28);
+
+    --ml-pos: #34d399;
+    --ml-neg: #fb7185;
+  }
 }
 
 .mlHeader {
@@ -12,14 +72,18 @@
 .mlTitle {
   font-size: 1.25rem;
   font-weight: 800;
-  color: #0f172a;
+  color: var(--ml-text);
   line-height: 1.2;
 }
 
 .mlSubtitle {
   margin-top: 6px;
   font-size: 0.9rem;
-  color: #64748b;
+  color: var(--ml-muted);
+
+  /* Long subtitle should never overflow */
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .mlTableHead {
@@ -27,8 +91,11 @@
   justify-content: space-between;
   gap: 12px;
   font-size: 0.85rem;
-  color: #64748b;
+  color: var(--ml-muted);
   padding: 8px 2px 10px;
+
+  /* Prevent text spill */
+  min-width: 0;
 }
 
 .mlTableHead .right {
@@ -38,23 +105,45 @@
 .mlBody {
   display: grid;
   gap: 10px;
+
+  /* Prevent any internal overflow from pushing the card */
+  min-width: 0;
 }
+
+/* ------------------------------------------
+   Rows
+------------------------------------------- */
 
 .mlRow {
   width: 100%;
   text-align: left;
-  border: 1px solid #e2e8f0;
-  background: #ffffff;
+  border: 1px solid var(--ml-border);
+  background: var(--ml-surface-2);
   border-radius: 14px;
   padding: 12px 14px;
   cursor: pointer;
-  transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
+
+  transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease, background 120ms ease;
+
+  /* Important: button contents can wrap safely */
+  min-width: 0;
 }
 
 .mlRow:hover {
   transform: translateY(-1px);
-  border-color: #cbd5e1;
-  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.06);
+  border-color: var(--ml-border-2);
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.10);
+}
+
+.theme-dark .mlRow:hover,
+[data-theme="dark"] .mlRow:hover {
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.28);
+}
+
+@media (prefers-color-scheme: dark) {
+  .mlRow:hover {
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.28);
+  }
 }
 
 .mlRowTop {
@@ -62,15 +151,16 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  min-width: 0; /* IMPORTANT: enables ellipsis correctly */
+
+  /* Allows ellipsis without pushing score offscreen */
+  min-width: 0;
 }
 
 .mlSymbol {
   font-weight: 800;
-  color: #0f172a;
+  color: var(--ml-text);
   font-size: 1.05rem;
 
-  /* allow ellipsis if needed */
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -79,9 +169,9 @@
 }
 
 .mlScore {
-  flex: 0 0 auto; /* IMPORTANT: never shrink offscreen */
+  flex: 0 0 auto;
   font-weight: 800;
-  color: #0f172a;
+  color: var(--ml-text);
   font-size: 1.05rem;
   display: inline-flex;
   align-items: center;
@@ -89,11 +179,11 @@
 }
 
 .mlScore.pos {
-  color: #0f766e;
+  color: var(--ml-pos);
 }
 
 .mlScore.neg {
-  color: #b91c1c;
+  color: var(--ml-neg);
 }
 
 .mlArrow {
@@ -102,48 +192,73 @@
   opacity: 0.9;
 }
 
+/* ------------------------------------------
+   Second line: NEVER spill, NEVER cut off
+   (wrapping allowed, safe breaking)
+------------------------------------------- */
+
 .mlRowSub {
   margin-top: 6px;
-  color: #475569;
+  color: var(--ml-subtext);
   font-size: 0.88rem;
-  display: flex;
-  align-items: center;
-  gap: 8px;
 
-  /* keep it from overflowing the card */
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+
+  /* Key: allow wrap + safe breaking */
+  white-space: normal;
+  overflow: hidden; /* doesn't clip text; keeps child layout from spilling */
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
-.mlRowSub .dot {
+/* Separator injected before "Prev close" so it doesn't become its own node */
+.mlPrev::before {
+  content: "·";
+  margin: 0 6px;
   opacity: 0.6;
 }
 
+/* Muted row placeholder */
 .mlRowSub.muted {
-  color: #94a3b8;
+  color: rgba(148, 163, 184, 0.9);
 }
 
 .mlEmpty {
   padding: 12px 4px;
-  color: #64748b;
+  color: var(--ml-muted);
   font-size: 0.9rem;
+
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .mlFoot {
   margin-top: 12px;
   font-size: 0.8rem;
-  color: #94a3b8;
+  color: rgba(148, 163, 184, 0.9);
+
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
+/* Skeleton */
 .mlRowSkeleton {
   height: 72px;
   border-radius: 14px;
-  border: 1px solid #e2e8f0;
-  background: linear-gradient(90deg, #f8fafc 0%, #eef2f7 45%, #f8fafc 100%);
+  border: 1px solid var(--ml-border);
+  background: linear-gradient(90deg, rgba(248, 250, 252, 0.7) 0%, rgba(238, 242, 247, 0.7) 45%, rgba(248, 250, 252, 0.7) 100%);
   background-size: 220% 100%;
   animation: mlShimmer 1.2s ease-in-out infinite;
+}
+
+@media (prefers-color-scheme: dark) {
+  .mlRowSkeleton {
+    background: linear-gradient(90deg, rgba(148, 163, 184, 0.10) 0%, rgba(148, 163, 184, 0.18) 45%, rgba(148, 163, 184, 0.10) 100%);
+  }
 }
 
 @keyframes mlShimmer {
@@ -151,9 +266,9 @@
   100% { background-position: 100% 0; }
 }
 
-/* -----------------------------
-   Modal + "View more" styling
------------------------------- */
+/* ------------------------------------------
+   View more + Modal (dark mode included)
+------------------------------------------- */
 
 .mlMoreRow {
   margin-top: 10px;
@@ -162,26 +277,32 @@
 }
 
 .mlMoreBtn {
-  border: 1px solid #e2e8f0;
-  background: #ffffff;
+  border: 1px solid var(--ml-border);
+  background: var(--ml-surface-2);
   border-radius: 12px;
   padding: 8px 12px;
   font-weight: 800;
   cursor: pointer;
-  color: #0f172a;
+  color: var(--ml-text);
   transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
 }
 
 .mlMoreBtn:hover {
   transform: translateY(-1px);
-  border-color: #cbd5e1;
-  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.06);
+  border-color: var(--ml-border-2);
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.10);
+}
+
+@media (prefers-color-scheme: dark) {
+  .mlMoreBtn:hover {
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.28);
+  }
 }
 
 .mlModalBackdrop {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.55);
+  background: rgba(2, 6, 23, 0.65);
   z-index: 9999;
   display: flex;
   align-items: center;
@@ -194,10 +315,13 @@
   max-height: 82vh;
   overflow: hidden;
   border-radius: 18px;
-  border: 1px solid #e2e8f0;
-  background: #ffffff;
-  box-shadow: 0 18px 60px rgba(15, 23, 42, 0.18);
+  border: 1px solid var(--ml-border);
+  background: var(--ml-surface);
+  box-shadow: var(--ml-shadow);
   padding: 16px;
+
+  /* Ensure nothing spills past rounded corners */
+  overflow: hidden;
 }
 
 .mlModalHeader {
@@ -205,32 +329,37 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+
+  min-width: 0;
 }
 
 .mlModalTitle {
   font-weight: 900;
   font-size: 16px;
-  color: #0f172a;
+  color: var(--ml-text);
 }
 
 .mlModalSub {
   margin-top: 3px;
   font-size: 12px;
   font-weight: 700;
-  opacity: 0.75;
-  color: #475569;
+  opacity: 0.85;
+  color: var(--ml-muted);
+
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .mlModalClose {
-  border: 1px solid #e2e8f0;
-  background: #ffffff;
+  border: 1px solid var(--ml-border);
+  background: var(--ml-surface-2);
   border-radius: 12px;
   width: 38px;
   height: 38px;
   font-size: 18px;
   font-weight: 900;
   cursor: pointer;
-  color: #0f172a;
+  color: var(--ml-text);
   line-height: 1;
   display: inline-flex;
   align-items: center;
@@ -238,9 +367,15 @@
 }
 
 .mlModalClose:hover {
-  border-color: #cbd5e1;
-  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.06);
+  border-color: var(--ml-border-2);
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.10);
   transform: translateY(-1px);
+}
+
+@media (prefers-color-scheme: dark) {
+  .mlModalClose:hover {
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.28);
+  }
 }
 
 .mlModalHead {
@@ -251,49 +386,31 @@
   margin-top: 6px;
   max-height: calc(82vh - 140px);
   overflow: auto;
-  padding-right: 2px; /* helps with scrollbar */
+  padding-right: 2px;
 }
 
 .mlModalFoot {
   margin-top: 12px;
   font-size: 12px;
-  color: #94a3b8;
+  color: rgba(148, 163, 184, 0.9);
+
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
-/* Mobile / small screens: prevent spill */
+/* Small screens: remove separator dot so it doesn't start a new line */
 @media (max-width: 520px) {
   .mlCard {
     padding: 14px;
-  }
-
-  /* subtitle can be long */
-  .mlSubtitle {
-    word-break: break-word;
-    overflow-wrap: anywhere;
-  }
-
-  /* allow second line to wrap instead of forcing one long line */
-  .mlRowSub {
-    white-space: normal;          /* was nowrap */
-    overflow: hidden;
-    text-overflow: clip;          /* ellipsis doesn't apply to multi-line */
-    flex-wrap: wrap;
-    row-gap: 4px;
-  }
-
-  /* dot separator becomes awkward when wrapping */
-  .mlRowSub .dot {
-    display: none;
-  }
-
-  /* tighten top row spacing a bit */
-  .mlRowTop {
-    gap: 8px;
   }
 
   .mlSymbol,
   .mlScore {
     font-size: 1rem;
   }
-}
 
+  .mlPrev::before {
+    content: "";
+    margin: 0;
+  }
+}
