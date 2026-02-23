@@ -3,7 +3,7 @@ import { useCallback, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import AppShell from "../layout/AppShell";
-import ErrorModal from "../common/ErrorMessages";
+import ErrorModal from "../common/ErrorModal";
 import { useAuth } from "../../context/AuthContext";
 import { explainAnyError } from "../../lib/errorMessages";
 

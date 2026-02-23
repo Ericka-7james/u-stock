@@ -1,84 +1,26 @@
-// src/components/dashboard/cards/BotLogsCard.jsx
+// frontend/src/components/dashboard/cards/BotLogsCard.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import Modal from "../../common/Modal.jsx";
+import ErrorBanner from "../../common/ErrorBanner.jsx";
+
+import { apiGetWithRetry } from "../../../lib/api/http.js";
+import { createSWRCache, isFresh } from "../../../lib/cache/swrCache.js";
+import { safeStr, safeJson, includesAny } from "../../../lib/format/safe.js";
+import { fmtEpochSeconds, dayKeyFromEpochSeconds, dateStrToEpochSec } from "../../../lib/format/datetime.js";
+
 import "../../../css/dashboard/cards/BotLogsCard.css";
 
 const CACHE_TTL_MS = 60_000;
 
-const logsCache = {
-  ts: 0,
-  key: "",
-  items: [],
-};
+// ✅ SWR cache with our own cache key field (no new exports needed)
+const logsCache = { ...createSWRCache([]), key: "" };
 
-function isFresh(ts) {
-  return Date.now() - Number(ts || 0) < CACHE_TTL_MS;
-}
-
-async function apiGet(url, { signal } = {}) {
-  const res = await fetch(url, { credentials: "include", signal });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data?.detail || "Request failed");
-  return data;
-}
-
-async function apiGetWithRetry(url, { signal } = {}) {
-  try {
-    return await apiGet(url, { signal });
-  } catch (e) {
-    if (signal?.aborted) throw e;
-    return await apiGet(url, { signal });
-  }
-}
-
-function safeStr(x, fallback = "") {
-  const s = String(x ?? "").trim();
-  return s || fallback;
-}
-
-function fmtTime(epochSeconds) {
-  const t = Number(epochSeconds);
-  if (!Number.isFinite(t) || t <= 0) return "—";
-  try {
-    return new Date(t * 1000).toLocaleString();
-  } catch {
-    return "—";
-  }
-}
-
-function dayKey(epochSeconds) {
-  const t = Number(epochSeconds);
-  if (!Number.isFinite(t) || t <= 0) return "";
-  try {
-    const d = new Date(t * 1000);
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    return `${y}-${m}-${day}`;
-  } catch {
-    return "";
-  }
-}
+// --- local helpers that are specific to logs behavior ---
 
 function isFailishLevel(level) {
   const l = String(level || "").toLowerCase();
   return l === "error" || l === "warn" || l === "warning";
-}
-
-function includesAny(haystack, needle) {
-  const h = String(haystack || "").toLowerCase();
-  const n = String(needle || "").toLowerCase().trim();
-  if (!n) return true;
-  return h.includes(n);
-}
-
-function safeJson(x) {
-  try {
-    return JSON.stringify(x, null, 2);
-  } catch {
-    return String(x ?? "");
-  }
 }
 
 function normalizeEffective(x) {
@@ -113,14 +55,8 @@ function statusPill(effective) {
 
 /**
  * ✅ Normalize backend rows into a unified shape for classifyLog().
- *
  * Backend /api/bots/log returns items like:
  *   { ts, level, event_type, symbol, event_id, payload }
- * There is NOT necessarily a row.message or row.meta.
- *
- * We synthesize:
- *   message: best-effort from payload.message / payload.last_error / event_type
- *   meta: payload (or relevant subset)
  */
 function normalizeLogRow(row) {
   const ts = Number(row?.ts) || 0;
@@ -135,7 +71,6 @@ function normalizeLogRow(row) {
   const pPausedReason = payload ? safeStr(payload.paused_reason, "") : "";
   const pNextOpen = payload ? payload.next_open_epoch ?? payload.nextOpenEpoch : null;
 
-  // Create a stable “message” string for your classifier
   let message = pMessage;
   if (!message && pPausedReason) message = pPausedReason;
   if (!message && pReason) message = pReason;
@@ -143,7 +78,6 @@ function normalizeLogRow(row) {
   if (!message && eventType) message = eventType;
   if (!message) message = "Update";
 
-  // Provide meta for details view
   const meta = payload
     ? {
         ...payload,
@@ -178,7 +112,6 @@ function classifyLog(row) {
   let detail = "";
   let action = "Update";
 
-  // ✅ Pull “waiting for market” signal from meta too
   const metaStr = meta ? safeJson(meta).toLowerCase() : "";
   const hasMetaAny = (...needles) => needles.some((n) => metaStr.includes(String(n).toLowerCase()));
 
@@ -269,41 +202,41 @@ function effectiveExplainer(eff, nextOpenEpoch) {
     return {
       tone: "warn",
       title: "Waiting for market open",
-      body: `The market is closed, so the bot is idle. Next open: ${nextOpenEpoch ? fmtTime(nextOpenEpoch) : "—"}.`,
+      body: `The market is closed, so the bot is idle. Next open: ${nextOpenEpoch ? fmtEpochSeconds(nextOpenEpoch) : "—"}.`,
     };
   }
   if (eff === "paused") {
-    return { tone: "neutral", title: "Paused", body: "The bot is not trading right now. Start it from the Dashboard when you’re ready." };
+    return {
+      tone: "neutral",
+      title: "Paused",
+      body: "The bot is not trading right now. Start it from the Dashboard when you’re ready.",
+    };
   }
   if (eff === "starting") {
     return { tone: "neutral", title: "Starting up", body: "Loading configuration and checking connectivity." };
   }
   if (eff === "offline") {
-    return { tone: "bad", title: "Runner offline", body: "U-Stock isn’t receiving runner heartbeats. Check your runner host and API connectivity." };
+    return {
+      tone: "bad",
+      title: "Runner offline",
+      body: "U-Stock isn’t receiving runner heartbeats. Check your runner host and API connectivity.",
+    };
   }
   if (eff === "error") {
-    return { tone: "bad", title: "Error state", body: "The bot reported an error. Review recent issues below and the raw details in “View all”." };
+    return {
+      tone: "bad",
+      title: "Error state",
+      body: "The bot reported an error. Review recent issues below and the raw details in “View all”.",
+    };
   }
   if (eff === "degraded") {
-    return { tone: "warn", title: "Degraded", body: "The bot is running, but some dependencies may be failing (data/broker/session). Review recent issues." };
+    return {
+      tone: "warn",
+      title: "Degraded",
+      body: "The bot is running, but some dependencies may be failing (data/broker/session). Review recent issues.",
+    };
   }
   return { tone: "neutral", title: "Status unknown", body: "The bot status couldn’t be determined. Refresh and verify the runner is online." };
-}
-
-// YYYY-MM-DD -> epoch sec at local midnight (start) / end-of-day (end)
-function dateStrToEpochSec(dateStr, { endOfDay = false } = {}) {
-  const s = String(dateStr || "").trim();
-  if (!s) return 0;
-
-  // NOTE: this assumes the browser local timezone. That’s okay for UI filtering.
-  // TODO: if you want strict UTC ranges, build Date via Date.UTC instead.
-  const d = new Date(`${s}T00:00:00`);
-  if (Number.isNaN(d.getTime())) return 0;
-
-  if (!endOfDay) return Math.floor(d.getTime() / 1000);
-
-  d.setHours(23, 59, 59, 999);
-  return Math.floor(d.getTime() / 1000);
 }
 
 export default function BotLogsCard({
@@ -312,10 +245,7 @@ export default function BotLogsCard({
   defaultBotId = "ema_trend",
   maxPreview = 4,
   showQuickLink = true,
-
   timeframe = null,
-
-  // ✅ NEW: mode (paper/live). If not provided, default to paper.
   mode = "paper",
 }) {
   const [botId, setBotId] = useState(defaultBotId);
@@ -335,7 +265,6 @@ export default function BotLogsCard({
 
   const modeNorm = String(mode || "paper").toLowerCase() === "live" ? "live" : "paper";
 
-  // timeframe -> epoch bounds
   const startTs = useMemo(() => dateStrToEpochSec(timeframe?.start || "", { endOfDay: false }), [timeframe]);
   const endTs = useMemo(() => dateStrToEpochSec(timeframe?.end || "", { endOfDay: true }), [timeframe]);
 
@@ -380,20 +309,18 @@ export default function BotLogsCard({
 
       const raw = Array.isArray(data?.items) ? data.items : [];
 
-      // ✅ Normalize backend rows into {ts, level, message, meta}
       const normalized = raw
         .filter((x) => x && typeof x === "object")
         .map(normalizeLogRow)
         .filter((x) => Number(x.ts) > 0);
 
-      // service returns descending; we keep it as-is (newest last in preview)
       setItems(normalized);
 
       logsCache.ts = Date.now();
       logsCache.key = cacheKey;
-      logsCache.items = normalized;
+      logsCache.data = normalized;
 
-      const dayList = normalized.map((r) => dayKey(r?.ts)).filter(Boolean);
+      const dayList = normalized.map((r) => dayKeyFromEpochSeconds(r?.ts)).filter(Boolean);
       const uniq = Array.from(new Set(dayList)).sort();
       if (!selectedDay && uniq.length) setSelectedDay(uniq[uniq.length - 1]);
     } catch (e) {
@@ -411,10 +338,9 @@ export default function BotLogsCard({
     inflightRef.current.status = ac;
 
     try {
-      const s = await apiGetWithRetry(
-        `/api/bots/status?bot_id=${encodeURIComponent(safeStr(botId, "ema_trend"))}`,
-        { signal: ac.signal }
-      );
+      const s = await apiGetWithRetry(`/api/bots/status?bot_id=${encodeURIComponent(safeStr(botId, "ema_trend"))}`, {
+        signal: ac.signal,
+      });
       if (!aliveRef.current || ac.signal.aborted) return;
       setBotStatus(s);
     } catch {
@@ -426,8 +352,8 @@ export default function BotLogsCard({
   }
 
   useEffect(() => {
-    const fresh = isFresh(logsCache.ts) && logsCache.key === cacheKey;
-    if (fresh) setItems(Array.isArray(logsCache.items) ? logsCache.items : []);
+    const fresh = isFresh(logsCache.ts, CACHE_TTL_MS) && logsCache.key === cacheKey;
+    if (fresh) setItems(Array.isArray(logsCache.data) ? logsCache.data : []);
     else refresh();
 
     refreshStatus();
@@ -435,7 +361,7 @@ export default function BotLogsCard({
   }, [botId, modeNorm, limit, startTs, endTs]);
 
   const availableDays = useMemo(() => {
-    const dayList = (Array.isArray(items) ? items : []).map((r) => dayKey(r?.ts)).filter(Boolean);
+    const dayList = (Array.isArray(items) ? items : []).map((r) => dayKeyFromEpochSeconds(r?.ts)).filter(Boolean);
     const uniq = Array.from(new Set(dayList)).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
     if (selectedDay && !uniq.includes(selectedDay)) uniq.push(selectedDay);
     return uniq;
@@ -450,7 +376,7 @@ export default function BotLogsCard({
     const list = Array.isArray(friendly) ? friendly : [];
 
     return list.filter((r) => {
-      const d = dayKey(r?.ts);
+      const d = dayKeyFromEpochSeconds(r?.ts);
       if (selectedDay && d && d !== selectedDay) return false;
 
       if (status !== "all") {
@@ -478,7 +404,6 @@ export default function BotLogsCard({
   const eff = normalizeEffective(botStatus?.effective_state || botStatus?.state);
   const pill = statusPill(eff);
 
-  // next open can exist in status OR inside recent heartbeat payloads
   const nextOpen = botStatus?.nextOpenEpoch || botStatus?.next_open_epoch || null;
   const explain = effectiveExplainer(eff, nextOpen);
 
@@ -537,7 +462,7 @@ export default function BotLogsCard({
           <div className="blog-statusTitle">{explain.title}</div>
           <div className="blog-statusBody">{explain.body}</div>
           {eff === "waiting_for_market" && nextOpen ? (
-            <div className="blog-statusMeta">Next open: {fmtTime(nextOpen)}</div>
+            <div className="blog-statusMeta">Next open: {fmtEpochSeconds(nextOpen)}</div>
           ) : null}
         </div>
 
@@ -635,12 +560,7 @@ export default function BotLogsCard({
           </div>
         </div>
 
-        {err ? (
-          <div className="errorBanner" style={{ marginTop: 12 }}>
-            <strong>Couldn’t load logs</strong>
-            <div style={{ marginTop: 6 }}>{err}</div>
-          </div>
-        ) : null}
+        {err ? <ErrorBanner title="Couldn’t load logs" body={err} /> : null}
 
         <div className="blog-list">
           {busy && !items.length ? (
@@ -656,7 +576,7 @@ export default function BotLogsCard({
                       <span className="blog-evtDot">•</span>
                       <span className="blog-evtChip blog-evtChip--soft">{r.action}</span>
                       <span className="blog-evtDot">•</span>
-                      <span className="mMono">{fmtTime(r.ts)}</span>
+                      <span className="mMono">{fmtEpochSeconds(r.ts)}</span>
                     </div>
                   </div>
 
@@ -693,7 +613,7 @@ export default function BotLogsCard({
           </button>
         }
       >
-        {err ? <div className="botError">{err}</div> : null}
+        {err ? <ErrorBanner title="Couldn’t load logs" body={err} /> : null}
 
         {busy && !items.length ? (
           <div style={{ opacity: 0.75, fontWeight: 800 }}>Loading events…</div>
@@ -709,7 +629,7 @@ export default function BotLogsCard({
                       <span className="blog-evtDot">•</span>
                       <span className="blog-evtChip blog-evtChip--soft">{r.action}</span>
                       <span className="blog-evtDot">•</span>
-                      <span className="mMono">{fmtTime(r.ts)}</span>
+                      <span className="mMono">{fmtEpochSeconds(r.ts)}</span>
                     </div>
                   </div>
 
@@ -743,10 +663,3 @@ export default function BotLogsCard({
     </>
   );
 }
-
-/**
- * TODOs / breakpoints:
- * - If backend changes bot_events schema, update normalizeLogRow() only (everything else stays stable).
- * - If you want strict UTC day buckets, compute dayKey() via UTC methods.
- * - If large accounts produce huge logs, add pagination via before_ts (like /events endpoint).
- */

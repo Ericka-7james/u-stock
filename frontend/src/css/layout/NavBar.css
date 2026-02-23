@@ -240,17 +240,27 @@ body.ustock-dark .topbar {
   color: inherit;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+
+  /* ✅ give the bigger icon breathing room */
+  gap: 12px; /* was 8px */
+
   min-width: 0;
   white-space: nowrap;
 }
 
+/* ✅ make the squirrel larger + crisp */
 .topbar-squirrel {
-  width: 22px;
-  height: 22px;
+  width: 36px;       /* tweak: 32–42px */
+  height: 36px;
   object-fit: contain;
   display: block;
   user-select: none;
+  flex-shrink: 0;
+}
+
+/* Optional: adds separation on dark backgrounds */
+body.ustock-dark .topbar-squirrel {
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.5));
 }
 
 .topbar-home-label {

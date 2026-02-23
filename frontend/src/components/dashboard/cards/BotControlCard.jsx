@@ -2,7 +2,7 @@
 import HelpTooltip from "../../common/HelpTooltip.jsx";
 import Modal from "../../common/Modal.jsx";
 import LoadingOverlay from "../../common/LoadingOverlay.jsx";
-import ErrorModal from "../../common/ErrorMessages.jsx";
+import ErrorModal from "../../common/ErrorModal.jsx";
 
 import { BOT_CONTROL_CARD_CONTENT as COPY } from "../../../content/dashboard/botControlCard.content.js";
 
@@ -314,7 +314,9 @@ export default function BotControlCard({
 
             <div className="botTile">
               <div className="botTileLabel">{isOpen ? COPY.tiles.market : COPY.tiles.nextOpen}</div>
-              <div className="botTileValue">{isOpen ? COPY.market.openNow : nextOpenEpoch ? fmtTime(nextOpenEpoch) : "—"}</div>
+              <div className="botTileValue">
+                {isOpen ? COPY.market.openNow : nextOpenEpoch ? fmtTime(nextOpenEpoch) : "—"}
+              </div>
             </div>
 
             <div className="botTile botTileFull">

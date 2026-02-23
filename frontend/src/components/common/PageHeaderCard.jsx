@@ -22,7 +22,9 @@ export default function PageHeaderCard({ title, subtitle, children, right }) {
 
         {right ? (
           <div className="page-header-right" aria-label="Page header media">
-            <div className="page-header-rightInner">{right}</div>
+            <div className="page-header-rightInner">
+              <div className="page-header-mediaBox">{right}</div>
+            </div>
           </div>
         ) : null}
       </section>

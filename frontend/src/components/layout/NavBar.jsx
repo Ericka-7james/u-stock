@@ -5,8 +5,8 @@ import { useAuth } from "../../context/AuthContext";
 import AuthRequiredModal from "../common/AuthRequiredModal";
 import "../../css/layout/NavBar.css";
 
-import dapperSquirrel from "../../assets/images/DapperSquirrel.png";
-import navBarLogo from "../../assets/images/NavBarLogo.png";
+import dapperSquirrel from "../../assets/icons/DapperSquirrel_HQ.png";
+
 
 export default function NavBar({
   navOpen,
@@ -234,7 +234,7 @@ export default function NavBar({
 
           <Link to="/" className="topbar-home-link" onClick={handleNavTo("/")}>
             <img
-              src={navBarLogo}
+              src={dapperSquirrel}
               alt=""
               className="topbar-squirrel"
               aria-hidden="true"

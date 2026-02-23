@@ -2,7 +2,7 @@
 import AppShell from "../layout/AppShell";
 import "../../css/pages/AboutPage.css";
 import headshot from "../../assets/ericka-headshot.jpeg";
-import lucentLogo from "../../assets/images/companyLogo-logoOnly.png";
+import MarketBaselinesSquirrel from "../../assets/pages/MarketBaselinesSquirrel.png";
 import { Link } from "react-router-dom";
 import PageHeaderCard from "../common/PageHeaderCard";
 
@@ -17,7 +17,7 @@ export default function AboutPage() {
         <PageHeaderCard
           title={c.header.title}
           subtitle={<span className="about-tagline">{c.header.tagline}</span>}
-          right={<img src={lucentLogo} alt="Lucent Financial logo" className="about-hero-logo" />}
+          right={<img src={MarketBaselinesSquirrel} alt="Lucent Financial logo" className="about-hero-logo" />}
         >
           <p className="muted">{c.intro.primary}</p>
           <p className="muted small">{c.intro.secondary}</p>

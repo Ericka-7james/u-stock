@@ -1,19 +1,11 @@
-// src/components/dashboard/cards/MacroCard.jsx
+// frontend/src/components/dashboard/cards/MacroCard.jsx
 import { useEffect, useMemo, useState } from "react";
 import HelpTooltip from "../../common/HelpTooltip.jsx";
+
+import { getJson } from "../../../lib/api/json.js";
+import { fmtPct2, fmtRate2 } from "../../../lib/format/number.js";
+
 import "../../../css/dashboard/cards/MacroCard.css";
-
-function fmtPct(x) {
-  const n = Number(x);
-  if (x === null || x === undefined || Number.isNaN(n)) return "—";
-  return `${n.toFixed(2)}%`;
-}
-
-function fmtRate(x) {
-  const n = Number(x);
-  if (x === null || x === undefined || Number.isNaN(n)) return "—";
-  return `${n.toFixed(2)}%`;
-}
 
 function safeRiskClass(risk) {
   const r = String(risk || "")
@@ -28,16 +20,6 @@ function RiskPill({ risk }) {
   return <span className={`macro-pill macro-pill--${cls}`}>{risk || "Unknown"}</span>;
 }
 
-async function safeReadJson(res) {
-  const ct = res?.headers?.get?.("content-type") || "";
-  if (!ct.includes("application/json")) return null;
-  try {
-    return await res.json();
-  } catch {
-    return null;
-  }
-}
-
 // Backend envelope: { ok, as_of, source, ttl_seconds, data: {...} }
 function normalizeMacroEnvelope(json) {
   if (!json || typeof json !== "object") return null;
@@ -45,9 +27,6 @@ function normalizeMacroEnvelope(json) {
   const data = json?.data && typeof json.data === "object" ? json.data : null;
   if (!data) return null;
 
-  // Support a few likely shapes from fred_client.get_macro_summary():
-  // Preferred (what UI wants): data = { risk, rates:{fed_funds,ten_year}, inflation:{cpi_yoy}, labor:{unemployment} }
-  // Accept alternates: data may be flat or use common FRED series codes.
   const rates = data.rates || data.rate || data.yields || {};
   const inflation = data.inflation || data.prices || {};
   const labor = data.labor || data.jobs || {};
@@ -129,21 +108,7 @@ export default function MacroCard() {
         setErr("");
         setLoading(true);
 
-        const res = await fetch("/api/macro/summary", {
-          credentials: "include",
-          signal: ctrl.signal,
-          headers: { Accept: "application/json" },
-        });
-
-        const json = await safeReadJson(res);
-
-        // Backend error detail is an object: { code, message }
-        const detail =
-          json?.detail?.message ||
-          json?.detail ||
-          (res.ok ? null : `Failed to load macro (${res.status})`);
-
-        if (!res.ok) throw new Error(typeof detail === "string" ? detail : "Failed to load macro");
+        const json = await getJson("/api/macro/summary", { signal: ctrl.signal });
 
         const normalized = normalizeMacroEnvelope(json);
         if (!normalized) {
@@ -189,27 +154,31 @@ export default function MacroCard() {
       </div>
 
       {err ? <div className="macro-error">{err}</div> : null}
-      {loading && !data ? <div className="macro-error" style={{ opacity: 0.7 }}>Loading…</div> : null}
+      {loading && !data ? (
+        <div className="macro-error" style={{ opacity: 0.7 }}>
+          Loading…
+        </div>
+      ) : null}
 
       <div className="macro-grid">
         <div className="macro-metric">
           <div className="macro-label">Fed Funds (DFF)</div>
-          <div className="macro-value">{fmtRate(data?.data?.rates?.fed_funds)}</div>
+          <div className="macro-value">{fmtRate2(data?.data?.rates?.fed_funds)}</div>
         </div>
 
         <div className="macro-metric">
           <div className="macro-label">10Y Yield (DGS10)</div>
-          <div className="macro-value">{fmtRate(data?.data?.rates?.ten_year)}</div>
+          <div className="macro-value">{fmtRate2(data?.data?.rates?.ten_year)}</div>
         </div>
 
         <div className="macro-metric">
           <div className="macro-label">CPI YoY</div>
-          <div className="macro-value">{fmtPct(data?.data?.inflation?.cpi_yoy)}</div>
+          <div className="macro-value">{fmtPct2(data?.data?.inflation?.cpi_yoy)}</div>
         </div>
 
         <div className="macro-metric">
           <div className="macro-label">Unemployment (UNRATE)</div>
-          <div className="macro-value">{fmtPct(data?.data?.labor?.unemployment)}</div>
+          <div className="macro-value">{fmtPct2(data?.data?.labor?.unemployment)}</div>
         </div>
       </div>
 
