@@ -7,7 +7,7 @@ import ConnectProviderModal from "./ConnectProviderModal";
 import { useNavigate } from "react-router-dom";
 import { explainResponseError } from "../../lib/errorMessages";
 
-import lucentLogo from "../../assets/images/companyLogo-logoOnly.png";
+import ConnectedAppsSquirrel from "../../assets/pages/ConnectedAppsSquirrel.png";
 import TermsModal from "../common/TermsModal";
 import PageHeaderCard from "../common/PageHeaderCard";
 import LoadingOverlay from "../common/LoadingOverlay";
@@ -228,7 +228,7 @@ export default function ConnectedAppsPage() {
         <PageHeaderCard
           title="Connected Apps"
           subtitle="Connect brokers and market data providers to power charts and strategies."
-          right={<img src={lucentLogo} alt="Lucent Financial logo" className="connected-hero-logo" />}
+          right={<img src={ConnectedAppsSquirrel} alt="Lucent Financial logo" className="connected-hero-logo" />}
         >
           <p className="muted">
             Add integrations like Alpaca or Polygon so Lucent can fetch pricing data and (optionally) run strategies you
