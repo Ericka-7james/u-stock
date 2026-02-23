@@ -8,7 +8,7 @@ import MarketBaselinesSquirrel from "../../assets/pages/MarketBaselinesSquirrel.
 import { Link } from "react-router-dom";
 import PageHeaderCard from "../common/PageHeaderCard";
 
-import { ABOUT_PAGE_COPY } from "../../content/pages/aboutpage.content";
+import { ABOUT_PAGE_COPY } from "../../content/aboutpage.content";
 
 export default function AboutPage() {
   const c = ABOUT_PAGE_COPY;
