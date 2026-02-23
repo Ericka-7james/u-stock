@@ -314,7 +314,9 @@ export default function BotControlCard({
 
             <div className="botTile">
               <div className="botTileLabel">{isOpen ? COPY.tiles.market : COPY.tiles.nextOpen}</div>
-              <div className="botTileValue">{isOpen ? COPY.market.openNow : nextOpenEpoch ? fmtTime(nextOpenEpoch) : "—"}</div>
+              <div className="botTileValue">
+                {isOpen ? COPY.market.openNow : nextOpenEpoch ? fmtTime(nextOpenEpoch) : "—"}
+              </div>
             </div>
 
             <div className="botTile botTileFull">

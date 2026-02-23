@@ -3,6 +3,13 @@ import { useMemo, useState } from "react";
 import Modal from "../../common/Modal.jsx";
 import "../../../css/dashboard/cards/CardShared.css";
 
+import {
+  buildPreset,
+  clampRange,
+  computeInclusiveDays,
+  mapDaysToTvInterval,
+} from "../../../lib/time/timeframe.js";
+
 /**
  * Timeframe object shape:
  * {
@@ -10,148 +17,21 @@ import "../../../css/dashboard/cards/CardShared.css";
  *   start: "YYYY-MM-DD" | null,
  *   end: "YYYY-MM-DD" | null,
  *   label: string,
- *   // ✅ NEW: derived hints for the rest of the UI
  *   days: number | null,
  *   tvInterval: "15" | "60" | "240" | "D" | "W"
  * }
- *
- * Notes:
- * - TradingView free Advanced Chart embed does NOT let us force the visible window.
- * - We only use timeframe to pick a sensible candle interval (15m/1h/4h/1D/1W).
  */
 
-function pad2(n) {
-  return String(n).padStart(2, "0");
-}
-
-function toDateStr(d) {
-  if (!(d instanceof Date)) return "";
-  const y = d.getFullYear();
-  const m = pad2(d.getMonth() + 1);
-  const day = pad2(d.getDate());
-  return `${y}-${m}-${day}`;
-}
-
-function todayStr() {
-  return toDateStr(new Date());
-}
-
-function addDays(date, days) {
-  const d = new Date(date);
-  d.setDate(d.getDate() + Number(days || 0));
-  return d;
-}
-
-function startOfYear(date) {
-  const d = new Date(date);
-  d.setMonth(0, 1);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
-function clampRange(start, end) {
-  if (!start || !end) return { start, end };
-  if (start <= end) return { start, end };
-  return { start: end, end: start };
-}
-
-function parseDateLoose(v) {
-  const s = String(v || "").trim();
-  if (!s) return null;
-  const d = new Date(s);
-  return Number.isFinite(d?.getTime?.()) ? d : null;
-}
-
-// inclusive days: Jan 28 -> Feb 1 = 5 days
-function computeInclusiveDays(start, end) {
-  const a = parseDateLoose(start);
-  const b = parseDateLoose(end);
-  if (!a || !b) return null;
-
-  const ms = b.getTime() - a.getTime();
-  const days = Math.floor(ms / 86400000) + 1;
-  if (!Number.isFinite(days) || days <= 0) return null;
-  return days;
-}
-
-// ✅ Your rule: map days -> TradingView candle interval
-function mapDaysToTvInterval(days) {
-  const d = Number(days);
-  if (!Number.isFinite(d) || d <= 0) return "60"; // default "Past week feel"
-  if (d <= 2) return "15"; // 15m
-  if (d <= 10) return "60"; // 1h
-  if (d <= 45) return "240"; // 4h
-  if (d <= 180) return "D"; // 1D
-  return "W"; // 1W
-}
-
-function buildPreset(preset) {
-  const now = new Date();
-  const t = todayStr();
-
-  if (preset === "today") {
-    const days = 1;
-    return { preset, start: t, end: t, label: "Today", days, tvInterval: mapDaysToTvInterval(days) };
-  }
-
-  // "Last 24h" still maps to ≤2 days. We cannot force last-24h window in the widget.
-  if (preset === "24h") {
-    const days = 1;
-    return { preset, start: t, end: t, label: "Last 24h", days, tvInterval: mapDaysToTvInterval(days) };
-  }
-
-  if (preset === "7d") {
-    const start = toDateStr(addDays(now, -6));
-    const end = t;
-    const days = computeInclusiveDays(start, end) ?? 7;
-    return { preset, start, end, label: "Past week", days, tvInterval: mapDaysToTvInterval(days) };
-  }
-
-  if (preset === "30d") {
-    const start = toDateStr(addDays(now, -29));
-    const end = t;
-    const days = computeInclusiveDays(start, end) ?? 30;
-    return { preset, start, end, label: "Past 30 days", days, tvInterval: mapDaysToTvInterval(days) };
-  }
-
-  if (preset === "90d") {
-    const start = toDateStr(addDays(now, -89));
-    const end = t;
-    const days = computeInclusiveDays(start, end) ?? 90;
-    return { preset, start, end, label: "Past 90 days", days, tvInterval: mapDaysToTvInterval(days) };
-  }
-
-  if (preset === "ytd") {
-    const start = toDateStr(startOfYear(now));
-    const end = t;
-    const days = computeInclusiveDays(start, end);
-    return { preset, start, end, label: "Year to date", days, tvInterval: mapDaysToTvInterval(days) };
-  }
-
-  // fallback = past week
-  {
-    const start = toDateStr(addDays(now, -6));
-    const end = t;
-    const days = computeInclusiveDays(start, end) ?? 7;
-    return { preset: "7d", start, end, label: "Past week", days, tvInterval: mapDaysToTvInterval(days) };
-  }
-}
-
 export default function TimeframeCard({
-  // "card" = full panel card
-  // "inline" = just the control (for embedding in another header)
   variant = "card",
-
   title = "Timeframe",
   subtitle = "Defaults to Past week. Used for filters and to set the chart candle interval (zoom is controlled in-chart).",
   value = null,
   onChange,
   disabled = false,
 }) {
-  // default = past week if none provided
   const effective = useMemo(() => {
     if (value && typeof value === "object") {
-      // Ensure any external value still has derived fields
       const start = value?.start ?? null;
       const end = value?.end ?? null;
       const days = value?.days ?? (start && end ? computeInclusiveDays(start, end) : null);
@@ -163,7 +43,6 @@ export default function TimeframeCard({
 
   const [open, setOpen] = useState(false);
 
-  // Custom draft state for the modal
   const [draftPreset, setDraftPreset] = useState(effective?.preset || "7d");
   const [draftStart, setDraftStart] = useState(effective?.start || "");
   const [draftEnd, setDraftEnd] = useState(effective?.end || "");
@@ -191,7 +70,6 @@ export default function TimeframeCard({
     const end = String(draftEnd || "").trim();
     const fixed = clampRange(start, end);
 
-    // If user leaves one blank, treat as "past week"
     if (!fixed.start || !fixed.end) {
       const tf = buildPreset("7d");
       onChange?.(tf);
