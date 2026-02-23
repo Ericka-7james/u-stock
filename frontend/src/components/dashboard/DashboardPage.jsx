@@ -1,6 +1,5 @@
 // frontend/src/components/dashboard/DashboardPage.jsx
-import { useEffect, useMemo, useState, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
 import AppShell from "../layout/AppShell.jsx";
 import { useAuth } from "../../context/AuthContext";
 
@@ -14,214 +13,37 @@ import { useAlpacaDailyBars } from "../../hooks/useAlpacaDailyBars.js";
 import { useAlpacaTradeSummary } from "../../hooks/useAlpacaTradeSummary.js";
 
 import ErrorModal from "../common/ErrorModal.jsx";
+import ErrorBanner from "../common/ErrorBanner.jsx";
 import { explainAnyError } from "../../lib/errorMessages.jsx";
 
+import useIsDarkMode from "../../hooks/common/useIsDarkMode.js";
+import useBotOpportunities from "../../hooks/dashboard/useBotOpportunities.js";
+import useMarketLeaders from "../../hooks/dashboard/useMarketLeaders.js";
+import useConnectBotNudge from "../../hooks/dashboard/useConnectBotNudge.js";
+
+import { LS } from "../../lib/storage/keys.js";
+import { lsGet, lsSet } from "../../lib/storage/localStorage.js";
+import { normalizeSymbol, isTvSafe } from "../../lib/symbols.js";
+
 import { DASHBOARD_PAGE_COPY as COPY } from "../../content/dashboard.content.js";
-import welcomeBackImg from "../../assets/modal/WelcomeBack.png";
 
 import "../../css/dashboard/DashboardPage.css";
 import "../../css/dashboard/cards/ChartControls.css";
 import "../../css/dashboard/cards/CardShared.css";
 
-const LAST_TICKER_KEY = "ustock:last_ticker";
-const JUST_AUTHED_KEY = "ustock:just_authed_v1";
-const JUST_AUTHED_KIND_KEY = "ustock:just_authed_kind_v1"; // "signup" | "login"
-const BOT_CONNECTED_HINT_KEY = "ustock:bot_connected_v1";
-
-// -------- Small in-memory caches (stale-while-revalidate) --------
-const CACHE_TTL_MS = 60_000;
-
-const oppCache = {
-  ts: 0,
-  data: { crypto: [], stocks: [], funds: [] },
-};
-
-const leadersCache = {
-  ts: 0,
-  data: null,
-};
-
-function isFresh(ts) {
-  return Date.now() - Number(ts || 0) < CACHE_TTL_MS;
-}
-
-function toError(e) {
-  if (e instanceof Error) return e;
-  const msg = typeof e === "string" ? e : e?.message ? String(e.message) : JSON.stringify(e);
-  return new Error(msg);
-}
-
-async function apiGet(path, { signal } = {}) {
-  const res = await fetch(path, {
-    method: "GET",
-    credentials: "include",
-    headers: { Accept: "application/json" },
-    signal,
-  });
-
-  const ct = res.headers.get("content-type") || "";
-  const json = ct.includes("application/json")
-    ? await res.json().catch(() => ({}))
-    : await res.text().catch(() => "");
-
-  if (!res.ok) {
-    const msg =
-      (typeof json === "object" && (json?.detail || json?.error || json?.message)) ||
-      `Request failed (${res.status})`;
-
-    const err = new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
-    err.status = res.status;
-    err.payload = json;
-    throw err;
-  }
-
-  return typeof json === "object" ? json : { ok: true, raw: json };
-}
-
-async function apiGetWithRetry(path, { signal } = {}) {
-  try {
-    return await apiGet(path, { signal });
-  } catch (e) {
-    if (signal?.aborted) throw e;
-    return await apiGet(path, { signal });
-  }
-}
-
-function readIsDarkMode() {
-  if (typeof document === "undefined") return false;
-  const root = document.documentElement;
-  const body = document.body;
-  return (
-    root?.classList?.contains("dark") ||
-    body?.classList?.contains("dark") ||
-    root?.getAttribute("data-theme") === "dark"
-  );
-}
-
 function loadLastTicker() {
-  try {
-    const v = localStorage.getItem(LAST_TICKER_KEY);
-    const s = String(v || "").trim().toUpperCase();
-    return s || COPY.defaults.fallbackTicker;
-  } catch {
-    return COPY.defaults.fallbackTicker;
-  }
+  const v = lsGet(LS.LAST_TICKER, "");
+  const s = String(v || "").trim().toUpperCase();
+  return s || COPY.defaults.fallbackTicker;
 }
-
-function normalizeSymbol(sym) {
-  const s = String(sym || "").trim();
-  if (!s) return "";
-  return s.includes(":") ? s.split(":").pop().toUpperCase() : s.toUpperCase();
-}
-
-function isTvSafe(sym) {
-  return /^[A-Z]+$/.test(String(sym || "").toUpperCase());
-}
-
-function ErrorBanner({ title, body }) {
-  return (
-    <div className="errorBanner">
-      <strong>{title}</strong>
-      <div style={{ marginTop: 6, whiteSpace: "pre-line" }}>{body}</div>
-    </div>
-  );
-}
-
-/* ---------------- Bot Opportunities ---------------- */
-
-function useBotOpportunities() {
-  const [data, setData] = useState(() =>
-    isFresh(oppCache.ts) ? oppCache.data : { crypto: [], stocks: [], funds: [] }
-  );
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-
-  useEffect(() => {
-    const ac = new AbortController();
-    let alive = true;
-
-    async function run() {
-      if (!isFresh(oppCache.ts)) setLoading(true);
-      setError(null);
-
-      try {
-        const json = await apiGetWithRetry("/api/opportunities/bot/top?limit=8", { signal: ac.signal });
-        if (!alive) return;
-        setData(json || { crypto: [], stocks: [], funds: [] });
-        oppCache.ts = Date.now();
-        oppCache.data = json;
-      } catch (e) {
-        if (!alive || ac.signal.aborted) return;
-        setError(toError(e));
-      } finally {
-        if (!alive) return;
-        setLoading(false);
-      }
-    }
-
-    run();
-    return () => {
-      alive = false;
-      ac.abort();
-    };
-  }, []);
-
-  return { data, loading, error };
-}
-
-/* ---------------- Market Leaders ---------------- */
-
-function useMarketLeaders({ direction = "up", limit = 10 } = {}) {
-  const [data, setData] = useState(() => (isFresh(leadersCache.ts) ? leadersCache.data : null));
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-
-  useEffect(() => {
-    const ac = new AbortController();
-    let alive = true;
-
-    async function run() {
-      if (!isFresh(leadersCache.ts)) setLoading(true);
-      setError(null);
-
-      try {
-        const qs = new URLSearchParams({ market: "stocks", direction, limit: String(limit) });
-        const json = await apiGetWithRetry(`/api/market/leaders?${qs}`, { signal: ac.signal });
-        if (!alive) return;
-        setData(json || null);
-        leadersCache.ts = Date.now();
-        leadersCache.data = json;
-      } catch (e) {
-        if (!alive || ac.signal.aborted) return;
-        setError(toError(e));
-      } finally {
-        if (!alive) return;
-        setLoading(false);
-      }
-    }
-
-    run();
-    const t = setInterval(run, 20_000);
-    return () => {
-      alive = false;
-      ac.abort();
-      clearInterval(t);
-    };
-  }, [direction, limit]);
-
-  return { data, loading, error };
-}
-
-/* ---------------- Dashboard ---------------- */
 
 export default function DashboardPage() {
   const { isAuthed, loading: authLoading } = useAuth();
-  const navigate = useNavigate();
 
   const [currentTicker, setCurrentTicker] = useState(loadLastTicker);
   const [timeframe, setTimeframe] = useState(null);
 
-  // ✅ Error modal
+  // ✅ Error modal (kept, even if currently unused)
   const [errOpen, setErrOpen] = useState(false);
   const [errPayload, setErrPayload] = useState(null);
 
@@ -230,124 +52,19 @@ export default function DashboardPage() {
     setErrPayload(null);
   };
 
-  // ✅ Connect bot modal
-  const [connectOpen, setConnectOpen] = useState(false);
-  const [connectPayload, setConnectPayload] = useState(null);
-
-  const closeConnect = useCallback(() => {
-    setConnectOpen(false);
-    setConnectPayload(null);
-  }, []);
-
-  const onConnectAction = useCallback(
-    (action) => {
-      closeConnect();
-      if (action?.href) navigate(action.href);
-    },
-    [closeConnect, navigate]
-  );
-
-  /**
-   * IMPORTANT:
-   * Your old call was GET /api/bots (404).
-   * Replace with an endpoint that exists.
-   *
-   * If your router exposes BotService.available() at /api/bots/available, use that.
-   * If your path differs, change ONLY BOT_AVAILABLE_PATH below.
-   */
-  const BOT_AVAILABLE_PATH = "/api/bots/available";
-
-  const checkHasConnectedBot = useCallback(async ({ signal } = {}) => {
-    try {
-      if (window.localStorage.getItem(BOT_CONNECTED_HINT_KEY) === "1") return true;
-    } catch {
-      // ignore
-    }
-
-    // Backend check: "do we have bots available to connect?"
-    // This is safer than calling a not-yet-implemented /api/bots list endpoint.
-    try {
-      const json = await apiGetWithRetry(BOT_AVAILABLE_PATH, { signal });
-      if (json && typeof json === "object") {
-        if (Array.isArray(json.bots)) return json.bots.length > 0;
-      }
-    } catch {
-      // If this endpoint also doesn't exist yet, don't block UI.
-      return false;
-    }
-
-    return false;
-  }, []);
-
-  useEffect(() => {
-    if (authLoading || !isAuthed) return;
-
-    const ac = new AbortController();
-    let alive = true;
-
-    async function run() {
-      let justAuthed = false;
-      let kind = "login";
-
-      try {
-        justAuthed = window.localStorage.getItem(JUST_AUTHED_KEY) === "1";
-        kind = window.localStorage.getItem(JUST_AUTHED_KIND_KEY) || "login";
-      } catch {
-        // ignore
-      }
-
-      if (!justAuthed || !alive) return;
-
-      const hasBot = await checkHasConnectedBot({ signal: ac.signal }).catch(() => false);
-      if (!alive || ac.signal.aborted) return;
-
-      if (!hasBot) {
-        const title = kind === "signup" ? "Welcome to Lucent 👋" : "Welcome back 👋";
-        const body =
-          kind === "signup"
-            ? "Next step: connect a bot so you can start/pause strategies and see activity in your dashboard."
-            : "Quick reminder: connect a bot to start/pause strategies and keep your dashboard data in sync.";
-
-        setConnectPayload({
-          title,
-          body,
-          subtitle: "Tip: You can change bots later from the Bot Runner page.",
-          image: welcomeBackImg,
-          action: { label: "Connect a bot", href: "/bots" },
-        });
-        setConnectOpen(true);
-      }
-
-      try {
-        window.localStorage.removeItem(JUST_AUTHED_KEY);
-        window.localStorage.removeItem(JUST_AUTHED_KIND_KEY);
-      } catch {
-        // ignore
-      }
-    }
-
-    run();
-    return () => {
-      alive = false;
-      ac.abort();
-    };
-  }, [authLoading, isAuthed, checkHasConnectedBot]);
+  // ✅ Connect-bot nudge (hook owns the logic + localStorage flags + navigation)
+  const connectNudge = useConnectBotNudge({
+    botAvailablePath: "/api/bots/available",
+    connectHref: "/bots",
+  });
 
   if (authLoading || !isAuthed) return null;
 
   useEffect(() => {
-    try {
-      localStorage.setItem(LAST_TICKER_KEY, currentTicker);
-    } catch {}
+    lsSet(LS.LAST_TICKER, currentTicker);
   }, [currentTicker]);
 
-  const [isDarkMode, setIsDarkMode] = useState(readIsDarkMode);
-
-  useEffect(() => {
-    const obs = new MutationObserver(() => setIsDarkMode(readIsDarkMode()));
-    obs.observe(document.documentElement, { attributes: true });
-    return () => obs.disconnect();
-  }, []);
+  const isDarkMode = useIsDarkMode();
 
   const { bars, loading: alpacaLoading, error: alpacaError, meta: alpacaMeta } =
     useAlpacaDailyBars(currentTicker, 220);
@@ -371,7 +88,13 @@ export default function DashboardPage() {
   return (
     <AppShell>
       <ErrorModal open={errOpen} error={errPayload} onClose={closeErr} />
-      <ErrorModal open={connectOpen} error={connectPayload} onClose={closeConnect} onAction={onConnectAction} />
+
+      <ErrorModal
+        open={connectNudge.open}
+        error={connectNudge.payload}
+        onClose={connectNudge.onClose}
+        onAction={connectNudge.onAction}
+      />
 
       <div className="dashboard-page-wrap">
         <main className="dashboard-main">
