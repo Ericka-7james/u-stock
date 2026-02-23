@@ -13,7 +13,7 @@ import MarketLeadersCard from "./cards/MarketLeadersCard.jsx";
 import { useAlpacaDailyBars } from "../../hooks/useAlpacaDailyBars.js";
 import { useAlpacaTradeSummary } from "../../hooks/useAlpacaTradeSummary.js";
 
-import ErrorModal from "../common/ErrorMessages.jsx";
+import ErrorModal from "../common/ErrorModal.jsx";
 import { explainAnyError } from "../../lib/errorMessages.jsx";
 
 import { DASHBOARD_PAGE_COPY as COPY } from "../../content/dashboard.content.js";
