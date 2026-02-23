@@ -13,13 +13,26 @@ import "../../../css/dashboard/cards/BotControlCard.css";
 import useBotControlCard from "../../../hooks/bots/useBotControlCard.js";
 import { safeStr, fmtTime, fmtAge, pillTone } from "../../../lib/format/botFormat.js";
 
-export default function BotControlCard({ activeBotId, onActiveBotChange, onStartBot, onStopBot }) {
+/**
+ * storageScope (optional):
+ * Pass something stable per-user (ex: authed user id) so the hook can namespace localStorage.
+ * Example usage from parent:
+ *   <BotControlCard storageScope={user?.id} ... />
+ */
+export default function BotControlCard({
+  activeBotId,
+  onActiveBotChange,
+  onStartBot,
+  onStopBot,
+  storageScope, // ✅ NEW (optional)
+}) {
   const ui = useBotControlCard({
     activeBotId,
     onActiveBotChange,
     onStartBot,
     onStopBot,
     COPY,
+    storageScope, // ✅ NEW: lets hook persist per-user
   });
 
   const {
@@ -30,7 +43,8 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
     handleErrorAction,
 
     // loading overlay
-    snapshotLoading,
+    hardLoading,
+    softLoading,
 
     // selection
     available,
@@ -112,9 +126,11 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
     <>
       <ErrorModal open={errModalOpen} error={errModal} onClose={closeErrorModal} onAction={handleErrorAction} />
 
-      <LoadingOverlay open={snapshotLoading} label={COPY.loading.overlayLabel} subtitle={COPY.loading.overlaySubtitle} />
+      <LoadingOverlay open={hardLoading} label={COPY.loading.overlayLabel} subtitle={COPY.loading.overlaySubtitle} />
 
-      <div className="botCard" aria-busy={snapshotLoading}>
+      <div className="botCard" aria-busy={hardLoading}>
+        {softLoading ? <div className="botCardSoftSpinner" aria-label="Refreshing bot status" title="Refreshing…" /> : null}
+
         <div className="botCardHead">
           <div className="botCardTitleRow">
             <div className="botCardTitle">{COPY.title}</div>
@@ -312,7 +328,6 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
         </div>
       </Modal>
 
-      {/* ✅ UPDATED log modal: same event-row look as BotLogsCard "View all" */}
       <Modal
         open={logOpen}
         title={COPY.modals.log.title}
@@ -323,61 +338,95 @@ export default function BotControlCard({ activeBotId, onActiveBotChange, onStart
           </button>
         }
       >
-        {logBusy ? (
+        {/* ✅ Only block the UI on the very first load (no items yet) */}
+        {logItems.length === 0 && logBusy ? (
           <div className="botModalLoading">{COPY.modals.log.loading}</div>
         ) : logItems.length === 0 ? (
           <div className="botModalLoading">{COPY.modals.log.empty}</div>
         ) : (
-          <div style={{ display: "grid", gap: 10, maxHeight: "62vh", overflow: "auto", paddingRight: 6 }}>
-            {logItems.map((it, idx) => {
-              const sev = logSeverity(it);
-              const headline = logMessageFor(it) || "Update";
-              const action = safeStr(it?.event_type, "").replaceAll("_", " ") || "Event";
+          <>
+            <div style={{ display: "grid", gap: 10, maxHeight: "62vh", overflow: "auto", paddingRight: 6 }}>
+              {logItems.map((it, idx) => {
+                const sev = logSeverity(it);
+                const headline = logMessageFor(it) || "Update";
+                const action = safeStr(it?.event_type, "").replaceAll("_", " ") || "Event";
 
-              return (
-                <div key={idx} className={toneClass(sev)}>
-                  <div className="blog-evtTop">
-                    <div className="blog-evtLeft">
-                      <div className="blog-evtTitle">{headline}</div>
+                return (
+                  <div key={it?.event_id || `${idx}-${it?.ts || "0"}`} className={toneClass(sev)}>
+                    <div className="blog-evtTop">
+                      <div className="blog-evtLeft">
+                        <div className="blog-evtTitle">{headline}</div>
 
-                      <div className="blog-evtSub">
-                        <span className="blog-evtChip">System</span>
-                        <span className="blog-evtDot">•</span>
-                        <span className="blog-evtChip blog-evtChip--soft">{action}</span>
-                        <span className="blog-evtDot">•</span>
-                        <span className="mMono">{it?.ts ? fmtTime(it.ts) : "—"}</span>
+                        <div className="blog-evtSub">
+                          <span className="blog-evtChip">System</span>
+                          <span className="blog-evtDot">•</span>
+                          <span className="blog-evtChip blog-evtChip--soft">{action}</span>
+                          <span className="blog-evtDot">•</span>
+                          <span className="mMono">{it?.ts ? fmtTime(it.ts) : "—"}</span>
+                        </div>
+                      </div>
+
+                      <div className="blog-evtRight">
+                        <span className={`blog-level blog-level--${sev}`}>
+                          {sev === "info" ? "OK" : sev === "warn" ? "WARN" : "ERROR"}
+                        </span>
                       </div>
                     </div>
 
-                    <div className="blog-evtRight">
-                      <span className={`blog-level blog-level--${sev}`}>
-                        {sev === "info" ? "OK" : sev === "warn" ? "WARN" : "ERROR"}
-                      </span>
+                    <div className="blog-evtDetails">
+                      <details>
+                        <summary>Raw log</summary>
+                        <div className="blog-rawGrid">
+                          <div className="blog-rawLabel">Level</div>
+                          <div className="mMono">{safeStr(it?.level, "info").toUpperCase()}</div>
+
+                          <div className="blog-rawLabel">Event</div>
+                          <div className="mMono">{safeStr(it?.event_type, "—")}</div>
+
+                          <div className="blog-rawLabel">Message</div>
+                          <div>{headline}</div>
+
+                          <div className="blog-rawLabel">Payload</div>
+                          <pre className="mMono blog-pre">{it?.payload ? safeJson(it.payload) : "—"}</pre>
+                        </div>
+                      </details>
                     </div>
                   </div>
+                );
+              })}
+            </div>
 
-                  <div className="blog-evtDetails">
-                    <details>
-                      <summary>Raw log</summary>
-                      <div className="blog-rawGrid">
-                        <div className="blog-rawLabel">Level</div>
-                        <div className="mMono">{safeStr(it?.level, "info").toUpperCase()}</div>
-
-                        <div className="blog-rawLabel">Event</div>
-                        <div className="mMono">{safeStr(it?.event_type, "—")}</div>
-
-                        <div className="blog-rawLabel">Message</div>
-                        <div>{headline}</div>
-
-                        <div className="blog-rawLabel">Payload</div>
-                        <pre className="mMono blog-pre">{it?.payload ? safeJson(it.payload) : "—"}</pre>
-                      </div>
-                    </details>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+            {/* ✅ tiny spinner at bottom during polling, no wiping */}
+            {logBusy ? (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "flex-start",
+                  gap: 0,            // spinner handles spacing via marginRight
+                  paddingTop: 10,
+                  paddingLeft: 8,
+                  opacity: 0.75,
+                  fontWeight: 800,
+                  fontSize: 12,
+                }}
+                aria-live="polite"
+              >
+                <span
+                  className="botCardSoftSpinner"
+                  aria-label="Updating logs"
+                  title="Updating…"
+                  style={{
+                    marginLeft: 0,
+                    marginRight: 10,
+                    flex: "0 0 auto",
+                    position: "static",
+                  }}
+                />
+                Updating…
+              </div>
+            ) : null}
+          </>
         )}
       </Modal>
 

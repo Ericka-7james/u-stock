@@ -31,12 +31,34 @@ function toErrorPayload(res, data) {
   };
 }
 
-export async function apiGet(url, { signal } = {}) {
-  const res = await fetch(url, {
+function withQuery(url, params) {
+  if (!params || typeof params !== "object") return url;
+
+  // Works for "/api/..." relative URLs too
+  const u = new URL(url, window.location.origin);
+
+  for (const [k, v] of Object.entries(params)) {
+    if (v === undefined || v === null) continue;
+    const s = String(v).trim();
+    if (!s) continue;
+    u.searchParams.set(k, s);
+  }
+
+  // Return relative if caller provided relative (keeps logs tidy)
+  if (String(url).startsWith("/")) return u.pathname + (u.search ? u.search : "");
+  return u.toString();
+}
+
+// ✅ NEW SIGNATURE: apiGet(url, params?, options?)
+export async function apiGet(url, params = {}, { signal } = {}) {
+  const finalUrl = withQuery(url, params);
+
+  const res = await fetch(finalUrl, {
     credentials: "include",
     signal,
     headers: { Accept: "application/json" },
   });
+
   const { json, text } = await safeRead(res);
   const data = json ?? text;
 
@@ -44,14 +66,18 @@ export async function apiGet(url, { signal } = {}) {
   return typeof data === "object" ? data : { ok: true, raw: data };
 }
 
-export async function apiPost(url, body, { signal } = {}) {
-  const res = await fetch(url, {
+// ✅ NEW SIGNATURE: apiPost(url, body, params?, options?)
+export async function apiPost(url, body, params = {}, { signal } = {}) {
+  const finalUrl = withQuery(url, params);
+
+  const res = await fetch(finalUrl, {
     method: "POST",
     credentials: "include",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
     body: body ? JSON.stringify(body) : undefined,
     signal,
   });
+
   const { json, text } = await safeRead(res);
   const data = json ?? text;
 

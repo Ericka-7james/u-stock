@@ -382,6 +382,36 @@
   word-break: break-word;
 }
 
+.botCard {
+  position: relative; /* ✅ needed for absolute spinner */
+}
+
+/* Small in-card refresh spinner (bottom-right) */
+.botCardSoftSpinner {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 2px solid rgba(148, 163, 184, 0.35);
+  border-top-color: rgba(15, 23, 42, 0.85);
+  animation: botSpin 0.8s linear infinite;
+  opacity: 0.9;
+  pointer-events: none;
+}
+
+@keyframes botSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+body.ustock-dark .botCardSoftSpinner {
+  border-color: rgba(148, 163, 184, 0.25);
+  border-top-color: rgba(226, 232, 240, 0.85);
+}
+
 /* ---------------------------------
    ✅ Dark mode (matches your app)
    --------------------------------- */
