@@ -8,7 +8,7 @@ import ErrorModal from "../common/ErrorModal";
 import { useAuth } from "../../context/AuthContext";
 import { explainAnyError } from "../../lib/errorMessages";
 
-import { AUTH_PAGE_COPY } from "../../content/landing/authPage.content.ts";
+import { AUTH_PAGE_COPY } from "../../content/landing/authpage.content.ts";
 
 import "../../css/auth/AuthPage.css";
 
