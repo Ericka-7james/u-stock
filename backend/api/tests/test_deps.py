@@ -1,11 +1,10 @@
 # backend/api/tests/test_deps.py
 from __future__ import annotations
 
-import os
 import types
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 from fastapi.testclient import TestClient
 
 import api.deps as mod
@@ -29,29 +28,11 @@ class FakeSupabase:
         self.auth = FakeAuth()
 
 
-@pytest.fixture()
-def app(monkeypatch):
-    app = FastAPI()
-
-    @app.get("/whoami")
-    def whoami():
-        # We call deps directly using the request/response context in FastAPI route
-        # FastAPI injects request/response automatically when declared
-        raise RuntimeError("not used")
-
-    return app
-
-
-@pytest.fixture()
-def client(app):
-    return TestClient(app)
-
-
 def _make_app_for_dep(dep_func):
     app = FastAPI()
 
     @app.get("/probe")
-    def probe(request: mod.Request, response: mod.Response):  # type: ignore[attr-defined]
+    def probe(request: Request, response: Response):
         u = dep_func(request, response)
         return {"ok": True, "user": u}
 
@@ -71,7 +52,6 @@ def test_require_user_401_when_no_token(monkeypatch):
 
 def test_require_user_uses_authorization_header_over_cookie(monkeypatch):
     sb = FakeSupabase()
-    # object response with .user.id
     sb.auth.result = types.SimpleNamespace(user=types.SimpleNamespace(id="user-123", email="a@b.com"))
     monkeypatch.setattr(mod, "get_supabase_anon", lambda: sb)
 
@@ -97,6 +77,7 @@ def test_require_user_reads_token_from_cookie(monkeypatch):
     assert resp.status_code == 200
     assert sb.auth.calls == ["cookie-token"]
     assert resp.json()["user"]["id"] == "user-123"
+    assert resp.json()["user"]["email"] == "a@b.com"
 
 
 def test_require_user_401_on_invalid_session_token(monkeypatch):
@@ -137,16 +118,22 @@ def test_require_runner_500_when_secret_not_configured(monkeypatch):
     monkeypatch.delenv(mod.RUNNER_SECRET_ENV, raising=False)
 
     client = _make_app_for_dep(mod.require_runner)
-    resp = client.get("/probe", headers={mod.RUNNER_SECRET_HEADER: "x", mod.RUNNER_USER_ID_HEADER: "user-1"})
+    resp = client.get(
+        "/probe",
+        headers={mod.RUNNER_SECRET_HEADER: "x", mod.RUNNER_USER_ID_HEADER: "user-1"},
+    )
     assert resp.status_code == 500
-    assert "BOT_RUNNER_SECRET" in resp.json()["detail"]
+    assert resp.json()["detail"] == "BOT_RUNNER_SECRET not configured"
 
 
 def test_require_runner_401_when_secret_wrong(monkeypatch):
     monkeypatch.setenv(mod.RUNNER_SECRET_ENV, "expected")
 
     client = _make_app_for_dep(mod.require_runner)
-    resp = client.get("/probe", headers={mod.RUNNER_SECRET_HEADER: "wrong", mod.RUNNER_USER_ID_HEADER: "user-1"})
+    resp = client.get(
+        "/probe",
+        headers={mod.RUNNER_SECRET_HEADER: "wrong", mod.RUNNER_USER_ID_HEADER: "user-1"},
+    )
     assert resp.status_code == 401
     assert resp.json()["detail"] == "Runner not authenticated"
 
@@ -157,7 +144,7 @@ def test_require_runner_401_when_user_id_header_missing(monkeypatch):
     client = _make_app_for_dep(mod.require_runner)
     resp = client.get("/probe", headers={mod.RUNNER_SECRET_HEADER: "expected"})
     assert resp.status_code == 401
-    assert resp.json()["detail"] == "Runner missing X-Runner-User-Id"
+    assert resp.json()["detail"] == "Runner missing user_id header"
 
 
 def test_require_runner_accepts_primary_user_id_header(monkeypatch):
@@ -171,6 +158,7 @@ def test_require_runner_accepts_primary_user_id_header(monkeypatch):
     assert resp.status_code == 200
     assert resp.json()["user"]["id"] == "user-abc"
     assert resp.json()["user"]["auth"] == "runner"
+    assert resp.json()["user"]["email"] is None
 
 
 def test_require_runner_accepts_alt_user_id_header(monkeypatch):
@@ -183,10 +171,10 @@ def test_require_runner_accepts_alt_user_id_header(monkeypatch):
     )
     assert resp.status_code == 200
     assert resp.json()["user"]["id"] == "user-alt"
+    assert resp.json()["user"]["auth"] == "runner"
 
 
 def test_require_user_or_runner_prefers_runner_when_runner_header_present(monkeypatch):
-    # If runner secret header exists, it should use require_runner path
     monkeypatch.setenv(mod.RUNNER_SECRET_ENV, "expected")
 
     client = _make_app_for_dep(mod.require_user_or_runner)

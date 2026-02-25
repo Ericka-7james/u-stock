@@ -1,116 +1,138 @@
-# backend/api/security/tests/test_bot_runner_token.py
+# u-stock-bots/runner/tests/test_bot_runner.py
 from __future__ import annotations
 
-import time
+import os
+from typing import Any, Dict, Optional
 
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.testclient import TestClient
 import jwt
 import pytest
 
-import api.security.bot_runner_token as mod
+
+def _env(name: str, default: str = "") -> str:
+    return str(os.getenv(name, default) or "").strip()
 
 
-def _fresh_times(ttl: int = 600) -> tuple[int, int]:
-    now = int(time.time())
-    return now, now + ttl
+def _get_bearer(request: Request) -> Optional[str]:
+    auth = request.headers.get("authorization") or request.headers.get("Authorization")
+    if not auth:
+        return None
+    parts = auth.split(" ", 1)
+    if len(parts) == 2 and parts[0].lower() == "bearer":
+        return parts[1].strip() or None
+    return None
 
 
-def test_load_bot_runner_config_requires_secret(monkeypatch):
-    monkeypatch.delenv("BOT_RUNNER_JWT_SECRET", raising=False)
-    monkeypatch.setenv("BOT_RUNNER_JWT_TTL_SECONDS", "900")
+def _decode_runner_jwt(token: str) -> Dict[str, Any]:
+    key = _env("RUNNER_JWT_SIGNING_KEY")
+    if not key:
+        raise HTTPException(status_code=500, detail="RUNNER_JWT_SIGNING_KEY not configured")
 
-    with pytest.raises(RuntimeError) as e:
-        mod.load_bot_runner_config()
-    assert "BOT_RUNNER_JWT_SECRET is not set" in str(e.value)
+    issuer = _env("RUNNER_JWT_ISSUER", "ustock-backend")
+    audience = _env("RUNNER_JWT_AUDIENCE", "ustock-runner")
 
+    try:
+        claims = jwt.decode(
+            token,
+            key,
+            algorithms=["HS256"],
+            issuer=issuer,
+            audience=audience,
+            options={"require": ["exp", "iat", "iss", "aud", "sub"]},
+            leeway=30,
+        )
+        if not isinstance(claims, dict):
+            raise HTTPException(status_code=401, detail="Invalid runner token")
+        return claims
 
-def test_load_bot_runner_config_validates_ttl_int(monkeypatch):
-    monkeypatch.setenv("BOT_RUNNER_JWT_SECRET", "secret")
-    monkeypatch.setenv("BOT_RUNNER_JWT_TTL_SECONDS", "nope")
-
-    with pytest.raises(RuntimeError) as e:
-        mod.load_bot_runner_config()
-    assert "BOT_RUNNER_JWT_TTL_SECONDS must be an int" in str(e.value)
-
-
-def test_load_bot_runner_config_validates_ttl_positive(monkeypatch):
-    monkeypatch.setenv("BOT_RUNNER_JWT_SECRET", "secret")
-    monkeypatch.setenv("BOT_RUNNER_JWT_TTL_SECONDS", "0")
-
-    with pytest.raises(RuntimeError) as e:
-        mod.load_bot_runner_config()
-    assert "BOT_RUNNER_JWT_TTL_SECONDS must be > 0" in str(e.value)
-
-
-def test_mint_bot_runner_token_requires_user_id():
-    cfg = mod.BotRunnerTokenConfig(secret="s", ttl_seconds=60, issuer="iss")
-    with pytest.raises(ValueError):
-        mod.mint_bot_runner_token("   ", cfg)
-
-
-def test_mint_and_verify_roundtrip_success():
-    cfg = mod.BotRunnerTokenConfig(secret="secret", ttl_seconds=900, issuer="u-stock-backend")
-    minted = mod.mint_bot_runner_token("user-123", cfg)
-    assert "token" in minted
-    assert minted["expires_in"] == 900
-
-    payload = mod.verify_bot_runner_token(minted["token"], cfg)
-    assert payload["sub"] == "user-123"
-    assert payload["iss"] == "u-stock-backend"
-    assert payload["scope"] == "bot:run"
-    assert isinstance(payload["iat"], int)
-    assert isinstance(payload["exp"], int)
-    assert payload["exp"] > payload["iat"]
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Runner token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid runner token")
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid runner token")
 
 
-def test_verify_rejects_wrong_scope():
-    cfg = mod.BotRunnerTokenConfig(secret="secret", ttl_seconds=900, issuer="u-stock-backend")
-    now, exp = _fresh_times(ttl=600)
+def require_bot_runner(request: Request) -> str:
+    token = _get_bearer(request)
+    if not token:
+        raise HTTPException(status_code=401, detail="Runner token missing")
 
-    token = jwt.encode(
-        {"iss": cfg.issuer, "sub": "user-123", "scope": "nope", "iat": now, "exp": exp},
-        cfg.secret,
-        algorithm="HS256",
-    )
+    claims = _decode_runner_jwt(token)
 
-    with pytest.raises(jwt.InvalidTokenError) as e:
-        mod.verify_bot_runner_token(token, cfg)
-    assert "Invalid scope" in str(e.value)
+    runner_id = str(claims.get("sub") or "").strip()
+    if not runner_id:
+        raise HTTPException(status_code=401, detail="Invalid runner token")
 
-
-def test_verify_rejects_wrong_issuer():
-    cfg = mod.BotRunnerTokenConfig(secret="secret", ttl_seconds=900, issuer="u-stock-backend")
-    now, exp = _fresh_times(ttl=600)
-
-    token = jwt.encode(
-        {"iss": "someone-else", "sub": "user-123", "scope": "bot:run", "iat": now, "exp": exp},
-        cfg.secret,
-        algorithm="HS256",
-    )
-
-    with pytest.raises(jwt.InvalidIssuerError):
-        mod.verify_bot_runner_token(token, cfg)
+    return runner_id
 
 
-def test_verify_rejects_expired_token():
-    cfg = mod.BotRunnerTokenConfig(secret="secret", ttl_seconds=1, issuer="u-stock-backend")
-    now = int(time.time())
+@pytest.fixture()
+def client(monkeypatch):
+    monkeypatch.setenv("RUNNER_JWT_SIGNING_KEY", "sek")
+    monkeypatch.setenv("RUNNER_JWT_ISSUER", "ustock-backend")
+    monkeypatch.setenv("RUNNER_JWT_AUDIENCE", "ustock-runner")
 
-    token = jwt.encode(
-        # expired a while ago
-        {"iss": cfg.issuer, "sub": "user-123", "scope": "bot:run", "iat": now - 1000, "exp": now - 500},
-        cfg.secret,
-        algorithm="HS256",
-    )
+    app = FastAPI()
 
-    with pytest.raises(jwt.ExpiredSignatureError):
-        mod.verify_bot_runner_token(token, cfg)
+    @app.get("/protected")
+    def protected(runner_id: str = Depends(require_bot_runner)):
+        return {"ok": True, "runner_id": runner_id}
+
+    return TestClient(app)
 
 
-def test_verify_rejects_wrong_secret():
-    cfg_good = mod.BotRunnerTokenConfig(secret="secretA", ttl_seconds=900, issuer="u-stock-backend")
-    cfg_bad = mod.BotRunnerTokenConfig(secret="secretB", ttl_seconds=900, issuer="u-stock-backend")
+def test_missing_authorization_header_returns_401(client):
+    resp = client.get("/protected")
+    assert resp.status_code == 401
+    assert resp.json()["detail"] == "Runner token missing"
 
-    minted = mod.mint_bot_runner_token("user-123", cfg_good)
 
-    with pytest.raises(jwt.InvalidTokenError):
-        mod.verify_bot_runner_token(minted["token"], cfg_bad)
+def test_wrong_prefix_returns_401(client):
+    resp = client.get("/protected", headers={"Authorization": "Token abc"})
+    assert resp.status_code == 401
+    assert resp.json()["detail"] == "Runner token missing"
+
+
+def test_bearer_with_empty_token_returns_401(client):
+    resp = client.get("/protected", headers={"Authorization": "Bearer   "})
+    assert resp.status_code == 401
+    assert resp.json()["detail"] == "Runner token missing"
+
+
+def test_expired_signature_returns_401(client, monkeypatch):
+    monkeypatch.setattr(jwt, "decode", lambda *a, **k: (_ for _ in ()).throw(jwt.ExpiredSignatureError()))
+    resp = client.get("/protected", headers={"Authorization": "Bearer abc"})
+    assert resp.status_code == 401
+    assert resp.json()["detail"] == "Runner token expired"
+
+
+def test_invalid_token_error_returns_401(client, monkeypatch):
+    monkeypatch.setattr(jwt, "decode", lambda *a, **k: (_ for _ in ()).throw(jwt.InvalidTokenError()))
+    resp = client.get("/protected", headers={"Authorization": "Bearer abc"})
+    assert resp.status_code == 401
+    assert resp.json()["detail"] == "Invalid runner token"
+
+
+def test_missing_subject_returns_401(client, monkeypatch):
+    monkeypatch.setattr(jwt, "decode", lambda *a, **k: {"sub": "   "})
+    resp = client.get("/protected", headers={"Authorization": "Bearer abc"})
+    assert resp.status_code == 401
+    assert resp.json()["detail"] == "Invalid runner token"
+
+
+def test_success_returns_user_id(client, monkeypatch):
+    monkeypatch.setattr(jwt, "decode", lambda *a, **k: {"sub": "user-123"})
+    resp = client.get("/protected", headers={"Authorization": "Bearer good"})
+    assert resp.status_code == 200
+    assert resp.json()["runner_id"] == "user-123"
+
+
+def test_unexpected_exception_fails_closed_401(client, monkeypatch):
+    monkeypatch.setattr(jwt, "decode", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
+    resp = client.get("/protected", headers={"Authorization": "Bearer good"})
+    assert resp.status_code == 401
+    assert resp.json()["detail"] == "Invalid runner token"
