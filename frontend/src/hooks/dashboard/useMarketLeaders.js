@@ -7,7 +7,9 @@ const CACHE_TTL_MS = 60_000;
 const leadersCache = createSWRCache(null);
 
 export default function useMarketLeaders({ direction = "up", limit = 10 } = {}) {
-  const [data, setData] = useState(() => (isFresh(leadersCache.ts, CACHE_TTL_MS) ? leadersCache.data : null));
+  const [data, setData] = useState(() =>
+    isFresh(leadersCache.ts, CACHE_TTL_MS) ? leadersCache.data : null
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -20,9 +22,18 @@ export default function useMarketLeaders({ direction = "up", limit = 10 } = {}) 
       setError(null);
 
       try {
-        const qs = new URLSearchParams({ market: "stocks", direction, limit: String(limit) });
-        const json = await apiGetWithRetry(`/api/market/leaders?${qs}`, { signal: ac.signal });
+        const qs = new URLSearchParams({
+          market: "stocks",
+          direction,
+          limit: String(limit),
+        });
+
+        const json = await apiGetWithRetry(`/api/market/leaders?${qs.toString()}`, {
+          signal: ac.signal,
+        });
+
         if (!alive) return;
+
         setData(json || null);
         leadersCache.ts = Date.now();
         leadersCache.data = json;
@@ -30,13 +41,16 @@ export default function useMarketLeaders({ direction = "up", limit = 10 } = {}) 
         if (!alive || ac.signal.aborted) return;
         setError(toError(e));
       } finally {
-        if (!alive) return;
-        setLoading(false);
+        // ✅ Fix: no return inside finally
+        if (alive) {
+          setLoading(false);
+        }
       }
     }
 
     run();
     const t = setInterval(run, 20_000);
+
     return () => {
       alive = false;
       ac.abort();

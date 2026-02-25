@@ -74,9 +74,9 @@ export function useAlpacaDailyBars(symbol, limit = 220) {
       setError(null);
 
       try {
-        const url = `/api/alpaca/bars/daily?symbol=${encodeURIComponent(sym)}&limit=${encodeURIComponent(
-          String(limit || 220)
-        )}`;
+        const url = `/api/alpaca/bars/daily?symbol=${encodeURIComponent(
+          sym
+        )}&limit=${encodeURIComponent(String(limit || 220))}`;
 
         const res = await fetch(url, {
           method: "GET",
@@ -105,8 +105,10 @@ export function useAlpacaDailyBars(symbol, limit = 220) {
         // store the full error object so explainAnyError can see code/detail
         setError(e);
       } finally {
-        if (!alive) return;
-        setLoading(false);
+        // ✅ Fix: no return inside finally
+        if (alive) {
+          setLoading(false);
+        }
       }
     }
 

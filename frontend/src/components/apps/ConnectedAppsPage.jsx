@@ -224,7 +224,7 @@ export default function ConnectedAppsPage() {
     <AppShell>
       <LoadingOverlay open={loading} label="Loading connections…" subtitle="Please wait…" />
 
-      <div className="app-page connected-page" aria-busy={loading}>
+      <div className="connected-page" aria-busy={loading}>
         <PageHeaderCard
           title="Connected Apps"
           subtitle="Connect brokers and market data providers to power charts and strategies."

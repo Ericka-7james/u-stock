@@ -3,7 +3,7 @@ import AppShell from "../layout/AppShell";
 import "../../css/pages/AboutPage.css";
 
 import headshot from "../../assets/ericka-headshot.jpeg";
-import MarketBaselinesSquirrel from "../../assets/pages/MarketBaselinesSquirrel.png";
+import AboutPageSquirrel from "../../assets/pages/AboutPageSquirrel.png";
 
 import { Link } from "react-router-dom";
 import PageHeaderCard from "../common/PageHeaderCard";
@@ -21,7 +21,7 @@ export default function AboutPage() {
           subtitle={<span className="about-tagline">{c.header.tagline}</span>}
           right={
             <img
-              src={MarketBaselinesSquirrel}
+              src={AboutPageSquirrel}
               alt="Lucent Financial mascot"
               className="about-hero-logo"
             />

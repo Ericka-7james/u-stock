@@ -1,5 +1,5 @@
 // frontend/src/hooks/useTopTickers.js
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 async function apiGet(path, { signal } = {}) {
   const res = await fetch(path, {
@@ -44,8 +44,6 @@ export function useTopTickers(list = "most_active", limit = 10) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const paramsKey = useMemo(() => `${list}:${limit}`, [list, limit]);
-
   useEffect(() => {
     const ac = new AbortController();
     let alive = true;
@@ -55,9 +53,9 @@ export function useTopTickers(list = "most_active", limit = 10) {
       setError(null);
 
       try {
-        const url = `/api/market/us/top-tickers?list=${encodeURIComponent(list)}&limit=${encodeURIComponent(
-          limit
-        )}`;
+        const url = `/api/market/us/top-tickers?list=${encodeURIComponent(
+          list
+        )}&limit=${encodeURIComponent(limit)}`;
 
         const json = await apiGet(url, { signal: ac.signal });
         if (!alive) return;
@@ -72,8 +70,7 @@ export function useTopTickers(list = "most_active", limit = 10) {
         setError(e);
         setData(null);
       } finally {
-        if (!alive) return;
-        setLoading(false);
+        if (alive) setLoading(false);
       }
     }
 
@@ -82,7 +79,7 @@ export function useTopTickers(list = "most_active", limit = 10) {
       alive = false;
       ac.abort();
     };
-  }, [paramsKey]);
+  }, [list, limit]);
 
   return { data, loading, error };
 }

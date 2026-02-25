@@ -1,4 +1,4 @@
-// frontend/src/lib/errorMessages.jsx
+// frontend/src/lib/ErrorMessages.jsx
 
 import { ERROR_KEYS, ERROR_PRESETS } from "../content/error/errorCatalog";
 
