@@ -1,6 +1,7 @@
 export const LS = {
   LAST_TICKER: "ustock:last_ticker",
-  JUST_AUTHED: "ustock:just_authed_v1",
-  JUST_AUTHED_KIND: "ustock:just_authed_kind_v1", // "signup" | "login"
-  BOT_CONNECTED_HINT: "ustock:bot_connected_v1",
+  BOT_CONNECTED_HINT: "ustock:bot_connected_v1", // optional, can keep as a hint
+
+  // ✅ per-user key will be `${WELCOME_CONNECT_DISMISSED}::<uid>`
+  WELCOME_CONNECT_DISMISSED: "ustock:welcome_connect_dismissed_v1",
 };
