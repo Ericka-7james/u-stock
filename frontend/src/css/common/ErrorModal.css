@@ -1,0 +1,140 @@
+/* frontend/src/css/common/ErrorModal.css
+   Styled to match AuthRequiredModal overlay + card polish
+*/
+
+.ustock-em-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  background: rgba(2, 6, 23, 0.55);
+  backdrop-filter: blur(2px);
+  display: grid;
+  place-items: center;
+  padding: 18px;
+}
+
+.ustock-em-modal {
+  width: min(440px, 92vw);
+  border-radius: 18px;
+  background: var(--ustock-bg-card);
+  border: 1px solid var(--ustock-border-card);
+  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+  position: relative;
+}
+
+/* Top hero area (like AuthRequiredModal head) */
+.ustock-em-hero {
+  height: 150px;
+  background: linear-gradient(180deg, rgba(15, 118, 110, 0.35) 0%, rgba(2, 6, 23, 0.08) 100%);
+  display: grid;
+  place-items: center;
+  position: relative;
+}
+
+body.ustock-dark .ustock-em-hero {
+  background: linear-gradient(180deg, rgba(2, 44, 34, 0.55) 0%, rgba(2, 6, 23, 0.25) 100%);
+}
+
+.ustock-em-heroImg {
+  width: 96px;
+  height: 96px;
+  object-fit: contain;
+  user-select: none;
+  filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.25));
+}
+
+/* Close button (X) */
+.ustock-em-close {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: none;
+  cursor: pointer;
+
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.92);
+}
+
+body.ustock-dark .ustock-em-close {
+  background: rgba(148, 163, 184, 0.16);
+  color: rgba(248, 250, 252, 0.92);
+}
+
+/* Draw the X */
+.ustock-em-close::before,
+.ustock-em-close::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 16px;
+  height: 2px;
+  background: currentColor;
+  border-radius: 2px;
+  transform-origin: center;
+}
+.ustock-em-close::before {
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+.ustock-em-close::after {
+  transform: translate(-50%, -50%) rotate(-45deg);
+}
+
+.ustock-em-body {
+  padding: 18px 18px 16px;
+  text-align: center;
+}
+
+.ustock-em-title {
+  margin: 0;
+  font-weight: 900;
+  font-size: 18px;
+  color: var(--ustock-text-main);
+}
+
+.ustock-em-text {
+  margin: 10px 0 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ustock-text-muted);
+}
+
+.ustock-em-sub {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: color-mix(in srgb, var(--ustock-text-muted) 86%, transparent);
+}
+
+.ustock-em-actions {
+  margin-top: 14px;
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.ustock-em-btn {
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.ustock-em-btn--secondary {
+  background: rgba(42, 137, 114, 0.10);
+  border: 1px solid rgba(42, 137, 114, 0.28);
+  color: rgba(42, 137, 114, 0.98);
+}
+
+.ustock-em-btn--primary {
+  background: var(--ustock-green-main);
+  color: #ffffff;
+  box-shadow: 0 12px 26px rgba(42, 137, 114, 0.25);
+}
