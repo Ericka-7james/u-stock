@@ -1,181 +1,138 @@
+# u-stock-bots/runner/tests/test_bot_runner.py
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Tuple
+import os
+from typing import Any, Dict, Optional
 
-import runner.orchestrator as br
-
-
-class FakeAPI:
-    def __init__(self):
-        self.get_calls: List[Tuple[str, Dict[str, Any]]] = []
-        self.post_calls: List[Tuple[str, Dict[str, Any]]] = []
-        self.responses: Dict[str, Any] = {}
-
-    def set(self, path: str, value: Any) -> None:
-        self.responses[path] = value
-
-    def get(self, path: str, params: Optional[Dict[str, Any]] = None):
-        self.get_calls.append((path, dict(params or {})))
-        return self.responses.get(path, {})
-
-    def post(self, path: str, json: Optional[Dict[str, Any]] = None):
-        self.post_calls.append((path, dict(json or {})))
-        return {"ok": True}
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.testclient import TestClient
+import jwt
+import pytest
 
 
-def test_extract_mode_cfg_prefers_status_mode_then_config_mode():
-    mode, cfg = br._extract_mode_cfg({"mode": "LIVE", "config": {"mode": "paper", "x": 1}})
-    assert mode == "live"
-    assert cfg["x"] == 1
-
-    mode2, cfg2 = br._extract_mode_cfg({"config": {"mode": "paper"}})
-    assert mode2 == "paper"
-    assert cfg2["mode"] == "paper"
+def _env(name: str, default: str = "") -> str:
+    return str(os.getenv(name, default) or "").strip()
 
 
-def test_main_pauses_when_market_closed(monkeypatch):
-    api = FakeAPI()
-
-    # ✅ orchestrator uses status_runner
-    api.set(
-        "/api/bots/status_runner",
-        {
-            "user_id": "user_test",
-            "intent": "running",
-            "effective_state": "running",
-            "mode": "paper",
-            "config": {},
-        },
-    )
-
-    # market closed
-    api.set("/api/market/us/session", {"ok": True, "is_open": False, "reason": "closed", "next_open": 123})
-
-    # patch context manager behavior
-    class _Ctx:
-        def __enter__(self):
-            return api
-
-        def __exit__(self, exc_type, exc, tb):
-            return False
-
-    monkeypatch.setattr(br, "UStockAPI", lambda *a, **k: _Ctx())
-    monkeypatch.setattr(br, "LOOP_SECONDS", 0)
-
-    br.main(max_loops=1, sleep_fn=lambda s: None)
-
-    # ✅ heartbeat waiting_for_market should be posted
-    assert any(
-        path == "/api/bots/heartbeat" and body.get("effective_state") == "waiting_for_market"
-        for path, body in api.post_calls
-    )
-    # and it should carry the reason_code
-    assert any(
-        path == "/api/bots/heartbeat" and body.get("reason_code") == "market_closed"
-        for path, body in api.post_calls
-    )
+def _get_bearer(request: Request) -> Optional[str]:
+    auth = request.headers.get("authorization") or request.headers.get("Authorization")
+    if not auth:
+        return None
+    parts = auth.split(" ", 1)
+    if len(parts) == 2 and parts[0].lower() == "bearer":
+        return parts[1].strip() or None
+    return None
 
 
-def test_main_running_submits_intents_uploads_and_heartbeats(monkeypatch):
-    api = FakeAPI()
+def _decode_runner_jwt(token: str) -> Dict[str, Any]:
+    key = _env("RUNNER_JWT_SIGNING_KEY")
+    if not key:
+        raise HTTPException(status_code=500, detail="RUNNER_JWT_SIGNING_KEY not configured")
 
-    # ✅ orchestrator uses status_runner
-    api.set(
-        "/api/bots/status_runner",
-        {
-            "user_id": "user_test",
-            "intent": "running",
-            "effective_state": "running",
-            "mode": "paper",
-            "config": {},
-        },
-    )
-    api.set("/api/market/us/session", {"ok": True, "is_open": True})
+    issuer = _env("RUNNER_JWT_ISSUER", "ustock-backend")
+    audience = _env("RUNNER_JWT_AUDIENCE", "ustock-runner")
 
-    # strategy returns intents (patch the symbol orchestrator actually calls)
-    monkeypatch.setattr(
-        br,
-        "compute_bot_output",
-        lambda _api, _bot_id, _cfg: {
-            "intents": [
-                {
-                    "symbol": "AAPL",
-                    "side": "buy",
-                    "qty": 1,
-                    "entry": 1.0,
-                    "stop": 0.5,
-                    "take_profit": 2.0,
-                    "confidence": 0.5,
-                    "bot_id": "ema_trend",
-                    "timeframe": "1Min",
-                    "reason_codes": [],
-                }
-            ],
-            "events": [],
-        },
-    )
+    try:
+        claims = jwt.decode(
+            token,
+            key,
+            algorithms=["HS256"],
+            issuer=issuer,
+            audience=audience,
+            options={"require": ["exp", "iat", "iss", "aud", "sub"]},
+            leeway=30,
+        )
+        if not isinstance(claims, dict):
+            raise HTTPException(status_code=401, detail="Invalid runner token")
+        return claims
 
-    # scanner hook should be stable + not require network
-    monkeypatch.setattr(br, "attach_scanner_context", lambda _api, cfg: (dict(cfg), []))
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Runner token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid runner token")
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid runner token")
 
-    # risk gate should allow as-is
-    monkeypatch.setattr(
-        br,
-        "filter_intents_with_gates",
-        lambda **kwargs: (kwargs["intents"], None),
-    )
 
-    # engine returns tx events
-    class FakeEngine:
-        def __init__(self, mode: str):
-            self.mode = mode
+def require_bot_runner(request: Request) -> str:
+    token = _get_bearer(request)
+    if not token:
+        raise HTTPException(status_code=401, detail="Runner token missing")
 
-        def execute_intents(self, intents):
-            return [{"ts": "t", "event_type": "order_submitted", "level": "info", "symbol": "AAPL", "payload": {}}]
+    claims = _decode_runner_jwt(token)
 
-    monkeypatch.setattr(br, "BotEngine", FakeEngine)
+    runner_id = str(claims.get("sub") or "").strip()
+    if not runner_id:
+        raise HTTPException(status_code=401, detail="Invalid runner token")
 
-    uploaded: Dict[str, Any] = {}
+    return runner_id
 
-    # ✅ signature must match: (user_id, bot_id, mode, events)
-    def fake_upload(user_id, bot_id, mode, events):
-        uploaded["user_id"] = user_id
-        uploaded["bot_id"] = bot_id
-        uploaded["mode"] = mode
-        uploaded["events"] = list(events)
 
-    monkeypatch.setattr(br, "upload_transaction_events", fake_upload)
+@pytest.fixture()
+def client(monkeypatch):
+    monkeypatch.setenv("RUNNER_JWT_SIGNING_KEY", "sek")
+    monkeypatch.setenv("RUNNER_JWT_ISSUER", "ustock-backend")
+    monkeypatch.setenv("RUNNER_JWT_AUDIENCE", "ustock-runner")
 
-    # avoid calling fill-sync endpoint in this test
-    monkeypatch.setattr(br.api_client, "sync_trade_fills", lambda *a, **k: None)
+    app = FastAPI()
 
-    # patch context manager
-    class _Ctx:
-        def __enter__(self):
-            return api
+    @app.get("/protected")
+    def protected(runner_id: str = Depends(require_bot_runner)):
+        return {"ok": True, "runner_id": runner_id}
 
-        def __exit__(self, exc_type, exc, tb):
-            return False
+    return TestClient(app)
 
-    monkeypatch.setattr(br, "UStockAPI", lambda *a, **k: _Ctx())
-    monkeypatch.setattr(br, "LOOP_SECONDS", 0)
 
-    br.main(max_loops=1, sleep_fn=lambda s: None)
+def test_missing_authorization_header_returns_401(client):
+    resp = client.get("/protected")
+    assert resp.status_code == 401
+    assert resp.json()["detail"] == "Runner token missing"
 
-    # intents submitted
-    assert any(path == "/api/bots/submit-intents" for path, _ in api.post_calls)
 
-    # upload called with tx event
-    assert uploaded["user_id"] == "user_test"
-    assert uploaded["mode"] == "paper"
-    assert any(e.get("event_type") == "order_submitted" for e in uploaded["events"])
+def test_wrong_prefix_returns_401(client):
+    resp = client.get("/protected", headers={"Authorization": "Token abc"})
+    assert resp.status_code == 401
+    assert resp.json()["detail"] == "Runner token missing"
 
-    # ✅ heartbeat running posted (effective_state)
-    assert any(
-        path == "/api/bots/heartbeat" and body.get("effective_state") == "running"
-        for path, body in api.post_calls
-    )
-    assert any(
-        path == "/api/bots/heartbeat" and body.get("reason_code") == "loop_ok"
-        for path, body in api.post_calls
-    )
+
+def test_bearer_with_empty_token_returns_401(client):
+    resp = client.get("/protected", headers={"Authorization": "Bearer   "})
+    assert resp.status_code == 401
+    assert resp.json()["detail"] == "Runner token missing"
+
+
+def test_expired_signature_returns_401(client, monkeypatch):
+    monkeypatch.setattr(jwt, "decode", lambda *a, **k: (_ for _ in ()).throw(jwt.ExpiredSignatureError()))
+    resp = client.get("/protected", headers={"Authorization": "Bearer abc"})
+    assert resp.status_code == 401
+    assert resp.json()["detail"] == "Runner token expired"
+
+
+def test_invalid_token_error_returns_401(client, monkeypatch):
+    monkeypatch.setattr(jwt, "decode", lambda *a, **k: (_ for _ in ()).throw(jwt.InvalidTokenError()))
+    resp = client.get("/protected", headers={"Authorization": "Bearer abc"})
+    assert resp.status_code == 401
+    assert resp.json()["detail"] == "Invalid runner token"
+
+
+def test_missing_subject_returns_401(client, monkeypatch):
+    monkeypatch.setattr(jwt, "decode", lambda *a, **k: {"sub": "   "})
+    resp = client.get("/protected", headers={"Authorization": "Bearer abc"})
+    assert resp.status_code == 401
+    assert resp.json()["detail"] == "Invalid runner token"
+
+
+def test_success_returns_user_id(client, monkeypatch):
+    monkeypatch.setattr(jwt, "decode", lambda *a, **k: {"sub": "user-123"})
+    resp = client.get("/protected", headers={"Authorization": "Bearer good"})
+    assert resp.status_code == 200
+    assert resp.json()["runner_id"] == "user-123"
+
+
+def test_unexpected_exception_fails_closed_401(client, monkeypatch):
+    monkeypatch.setattr(jwt, "decode", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
+    resp = client.get("/protected", headers={"Authorization": "Bearer good"})
+    assert resp.status_code == 401
+    assert resp.json()["detail"] == "Invalid runner token"

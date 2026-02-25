@@ -1,7 +1,10 @@
+# u-stock-bots/runner/tests/test_engine.py
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Dict, List
+
+import pytest
 
 import runner.engine as eng_mod
 from runner.engine import BotEngine
@@ -38,8 +41,14 @@ def test_engine_uses_tradestation_when_mode_live():
     assert eng.executor.__class__.__name__ == "TradeStationExecutor"
 
 
+def test_execute_intents_returns_empty_list_when_no_intents():
+    eng = BotEngine(mode="paper")
+    assert eng.execute_intents([]) == []
+    assert eng.execute_intents(None) == []  # type: ignore[arg-type]
+
+
 def test_execute_intents_skips_non_dict_entries(monkeypatch):
-    # Patch intent conversion so this test isn't coupled to TradeIntent's full schema
+    # Keep this test decoupled from TradeIntent schema.
     monkeypatch.setattr(eng_mod, "_intent_from_dict", lambda d: FakeIntent(symbol=d["symbol"]))
 
     eng = BotEngine(mode="paper")
@@ -52,8 +61,45 @@ def test_execute_intents_skips_non_dict_entries(monkeypatch):
     assert out[0]["symbol"] == "AAPL"
 
 
-def test_execute_intents_emits_error_event_on_bad_intent_shape(monkeypatch):
-    # Force conversion failure
+@pytest.mark.parametrize(
+    "raw",
+    [
+        {},  # missing everything
+        {"symbol": "AAPL"},  # missing side/qty
+        {"symbol": "AAPL", "side": "hold", "qty": 1},  # invalid side
+        {"symbol": "AAPL", "side": "buy", "qty": 0},  # invalid qty
+        {"symbol": "AAPL", "side": "buy", "qty": ""},  # invalid qty
+        {"symbol": "   ", "side": "buy", "qty": 1},  # invalid symbol (blank)
+    ],
+)
+def test_execute_intents_emits_invalid_intent_event_for_missing_required_fields(raw):
+    eng = BotEngine(mode="paper")
+    eng.executor = FakeExecutor()
+
+    out = eng.execute_intents([raw])
+
+    assert len(out) == 1
+    evt = out[0]
+    assert evt["event_type"] == "order_failed"
+    assert evt["level"] == "error"
+    assert evt["payload"]["error"] == "invalid_intent"
+    assert "Missing/invalid required fields" in evt["payload"]["detail"]
+
+
+def test_execute_intents_normalizes_symbol_uppercase(monkeypatch):
+    monkeypatch.setattr(eng_mod, "_intent_from_dict", lambda d: FakeIntent(symbol=d["symbol"]))
+
+    eng = BotEngine(mode="paper")
+    eng.executor = FakeExecutor()
+
+    out = eng.execute_intents([{"symbol": " aapl ", "side": "buy", "qty": 1}])
+
+    assert len(out) == 1
+    assert out[0]["event_type"] == "order_submitted"
+    assert out[0]["symbol"] == "AAPL"
+
+
+def test_execute_intents_emits_error_event_on_tradeintent_conversion_failure(monkeypatch):
     def boom(_: Dict[str, Any]):
         raise ValueError("bad shape")
 
@@ -62,11 +108,16 @@ def test_execute_intents_emits_error_event_on_bad_intent_shape(monkeypatch):
     eng = BotEngine(mode="paper")
     eng.executor = FakeExecutor()
 
-    out = eng.execute_intents([{"symbol": "AAPL"}])
+    # Must pass basic sanity checks first (symbol/side/qty), then conversion fails.
+    out = eng.execute_intents([{"symbol": "AAPL", "side": "buy", "qty": 1}])
+
     assert len(out) == 1
-    assert out[0]["event_type"] == "order_failed"
-    assert out[0]["level"] == "error"
-    assert out[0]["symbol"] == "AAPL"
+    evt = out[0]
+    assert evt["event_type"] == "order_failed"
+    assert evt["level"] == "error"
+    assert evt["symbol"] == "AAPL"
+    assert evt["payload"]["error"] == "invalid_tradeintent_shape"
+    assert "bad shape" in evt["payload"]["detail"]
 
 
 def test_execute_intents_emits_error_event_on_executor_exception(monkeypatch):
@@ -80,7 +131,39 @@ def test_execute_intents_emits_error_event_on_executor_exception(monkeypatch):
     eng.executor = BoomExecutor()
 
     out = eng.execute_intents([{"symbol": "TSLA", "side": "buy", "qty": 1}])
+
     assert len(out) == 1
-    assert out[0]["event_type"] == "order_failed"
-    assert out[0]["symbol"] == "TSLA"
-    assert "broker down" in out[0]["payload"]["error"]
+    evt = out[0]
+    assert evt["event_type"] == "order_failed"
+    assert evt["level"] == "error"
+    assert evt["symbol"] == "TSLA"
+    assert evt["payload"]["error"] == "executor_exception"
+    assert "broker down" in evt["payload"]["detail"]
+
+
+def test_execute_intents_caps_max_intents_and_emits_cap_event(monkeypatch):
+    # Ensure deterministic cap
+    monkeypatch.setattr(eng_mod, "_env_int", lambda name, default: 2)
+
+    monkeypatch.setattr(eng_mod, "_intent_from_dict", lambda d: FakeIntent(symbol=d["symbol"]))
+
+    eng = BotEngine(mode="paper")
+    eng.executor = FakeExecutor()
+
+    intents = [
+        {"symbol": "AAPL", "side": "buy", "qty": 1},
+        {"symbol": "TSLA", "side": "buy", "qty": 1},
+        {"symbol": "MSFT", "side": "buy", "qty": 1},
+    ]
+
+    out = eng.execute_intents(intents)
+
+    # 2 orders executed + 1 cap warning event
+    assert len(out) == 3
+    assert out[0]["event_type"] == "order_submitted"
+    assert out[1]["event_type"] == "order_submitted"
+
+    cap_evt = out[2]
+    assert cap_evt["event_type"] == "order_failed"
+    assert cap_evt["payload"]["error"] == "execution_cap_exceeded"
+    assert "capped execution" in cap_evt["payload"]["detail"]
