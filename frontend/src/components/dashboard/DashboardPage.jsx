@@ -17,7 +17,7 @@ import ErrorBanner from "../common/ErrorBanner.jsx";
 import { explainAnyError } from "../../lib/errorMessages.jsx";
 
 import useIsDarkMode from "../../hooks/common/useIsDarkMode.js";
-import useBotOpportunities from "../../hooks/dashboard/useBotOpportunities.js";
+import { useBotOpportunities } from "../../hooks/dashboard/useBotOpportunities.js";
 import useMarketLeaders from "../../hooks/dashboard/useMarketLeaders.js";
 import useConnectBotNudge from "../../hooks/dashboard/useConnectBotNudge.js";
 

@@ -246,8 +246,8 @@ body:not(.ustock-dark) .landing-hero--portfolio {
 .landing-brandline {
   display: inline-flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 14px;
+  gap: 14px;
+  margin-bottom: 16px;
   user-select: none;
 }
 
@@ -446,11 +446,18 @@ body:not(.ustock-dark) .landing-shape--c {
 }
 
 .landing-brandicon {
-  width: 40px;
-  height: 40px;
+  /* Bigger by default, responsive, and still safe on small screens */
+  width: clamp(64px, 4.8vw, 96px);
+  height: clamp(64px, 4.8vw, 96px);
+
   object-fit: contain;
   flex: 0 0 auto;
-  transform: translateY(1px);
+
+  /* slightly better baseline alignment as it grows */
+  transform: translateY(2px);
+
+  /* optional: makes it feel crisp against the green hero */
+  filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.18));
 }
 
 .landing-play-icon {
@@ -1004,8 +1011,8 @@ body.ustock-dark .landing-trusted-logo {
   }
 
   .landing-brandicon {
-    width: 34px;
-    height: 34px;
+    width: 52px;
+    height: 52px;
   }
 }
 

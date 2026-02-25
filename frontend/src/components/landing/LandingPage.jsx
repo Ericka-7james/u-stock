@@ -19,7 +19,7 @@ import mltLogo from "../../assets/trusted-logos/mlt-trusted-gray.png";
 
 // ✅ Replace ▲ with WelcomeSquirrel asset
 // If your filename/extension differs, update this import path.
-import welcomeSquirrel from "../../assets/images/WelcomeSquirrel.png";
+import welcomeSquirrel from "../../assets/icons/LucentAppIcon.png";
 
 export default function LandingPage() {
   const navigate = useNavigate();

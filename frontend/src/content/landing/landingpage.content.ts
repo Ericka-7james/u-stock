@@ -1,7 +1,8 @@
 // frontend/src/content/landing/landingPage.content.ts
 
-import heroIllustration from "../../assets/images/LandingPageIcon_v2.png";
-import visionImage from "../../assets/images/companyHope.png";
+import heroIllustration from "../../assets/icons/LucentLandingEducation.png";
+import visionImage from "../../assets/icons/LucentLandingTrust.png";
+
 
 export const LANDING_PAGE_CONTENT = {
   assets: {
