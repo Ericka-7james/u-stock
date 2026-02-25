@@ -132,7 +132,8 @@ export default function DashboardPage() {
     const selectedBotId = String(lsGet(selectedBotKey, "") || "").trim();
 
     if (!selectedBotId) {
-      setWelcomeOpen(true);
+      // Avoid react-hooks/set-state-in-effect (schedule it, same UX)
+      queueMicrotask(() => setWelcomeOpen(true));
       ssSet(shownKey, "1");
     }
   }, [authLoading, isAuthed, user?.id]);

@@ -21,7 +21,6 @@ describe("lib/time/timeframe", () => {
     expect(toDateStr("nope")).toBe("");
     expect(toDateStr(null)).toBe("");
 
-    const d = new Date("2024-02-03T12:00:00Z");
     // beware timezone differences; force local date object components by constructing explicitly
     const local = new Date(2024, 1, 3); // Feb 3, 2024 (month is 0-based)
     expect(toDateStr(local)).toBe("2024-02-03");

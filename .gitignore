@@ -64,3 +64,7 @@ u-stock-bots/.env.local
 # Temp / Scratch
 # ======================
 _my_commits_tmp.txt
+
+.coverage
+coverage-*.xml
+frontend/coverage/
