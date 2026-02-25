@@ -105,11 +105,12 @@ export default function MacroCard() {
     let alive = true;
     const ctrl = new AbortController();
 
+    // inside useEffect -> async function run() { ... }
     async function run() {
-      try {
-        setErr("");
-        setLoading(true);
+      setErr("");
+      setLoading(true);
 
+      try {
         const json = await getJson("/api/macro/summary", { signal: ctrl.signal });
 
         const normalized = normalizeMacroEnvelope(json);
@@ -119,12 +120,13 @@ export default function MacroCard() {
 
         if (alive) setData(normalized);
       } catch (e) {
+        // ✅ no returns in catch
         if (!alive) return;
         if (e?.name === "AbortError") return;
         setErr(String(e?.message || e));
       } finally {
-        if (!alive) return;
-        setLoading(false);
+        // ✅ no returns in finally
+        if (alive) setLoading(false);
       }
     }
 

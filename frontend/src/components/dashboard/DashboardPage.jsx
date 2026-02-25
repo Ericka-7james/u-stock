@@ -1,7 +1,7 @@
 // frontend/src/components/dashboard/DashboardPage.jsx
 import { useEffect, useMemo, useState } from "react";
 import AppShell from "../layout/AppShell.jsx";
-import { useAuth } from "../../context/AuthContext";
+import { useAuth } from "../../context/authContextBase.js";
 
 import PriceChartPanel from "./cards/PriceChartPanel.jsx";
 import SentimentCard from "./cards/SentimentCard.jsx";
@@ -39,11 +39,11 @@ function loadLastTicker() {
 
 export default function DashboardPage() {
   const { isAuthed, loading: authLoading } = useAuth();
+  const canRender = !authLoading && Boolean(isAuthed);
 
   const [currentTicker, setCurrentTicker] = useState(loadLastTicker);
   const [timeframe, setTimeframe] = useState(null);
 
-  // ✅ Error modal (kept, even if currently unused)
   const [errOpen, setErrOpen] = useState(false);
   const [errPayload, setErrPayload] = useState(null);
 
@@ -52,20 +52,21 @@ export default function DashboardPage() {
     setErrPayload(null);
   };
 
-  // ✅ Connect-bot nudge (hook owns the logic + localStorage flags + navigation)
+  // Hook is always called (rules-of-hooks), but the hook itself can decide what to do.
   const connectNudge = useConnectBotNudge({
     botAvailablePath: "/api/bots/available",
     connectHref: "/bots",
   });
 
-  if (authLoading || !isAuthed) return null;
-
+  // ✅ Only persist ticker when authed and page is actually “live”
   useEffect(() => {
+    if (!canRender) return;
     lsSet(LS.LAST_TICKER, currentTicker);
-  }, [currentTicker]);
+  }, [canRender, currentTicker]);
 
   const isDarkMode = useIsDarkMode();
 
+  // These hooks are now always called; if they internally fetch, they can key off ticker.
   const { bars, loading: alpacaLoading, error: alpacaError, meta: alpacaMeta } =
     useAlpacaDailyBars(currentTicker, 220);
 
@@ -74,16 +75,18 @@ export default function DashboardPage() {
   const { data: tradePerfData, loading: tradePerfLoading, error: tradePerfError } =
     useAlpacaTradeSummary("Week", {});
 
+  const { data: oppData, loading: oppLoading, error: oppError } = useBotOpportunities();
+  const { data: leadersResp, loading: leadersLoading, error: leadersError } = useMarketLeaders();
+
   const tradeErrUI = tradePerfError ? explainAnyError(tradePerfError) : null;
   const barsErrUI = alpacaError ? explainAnyError(alpacaError) : null;
-
-  const { data: oppData, loading: oppLoading, error: oppError } = useBotOpportunities();
   const oppErrUI = oppError ? explainAnyError(oppError) : null;
-
-  const { data: leadersResp, loading: leadersLoading, error: leadersError } = useMarketLeaders();
   const leadersErrUI = leadersError ? explainAnyError(leadersError) : null;
 
   const leadersItems = useMemo(() => leadersResp?.items || [], [leadersResp]);
+
+  // ✅ render gate comes AFTER hooks
+  if (!canRender) return null;
 
   return (
     <AppShell>

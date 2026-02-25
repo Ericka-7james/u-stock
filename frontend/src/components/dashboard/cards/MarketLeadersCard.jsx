@@ -36,34 +36,36 @@ export default function MarketLeadersCard({
   }, [items]);
 
   const { rows, anyComputed } = useMemo(() => {
-    let computed = false;
+    return list.reduce(
+      (acc, r) => {
+        const sym = r.symbol;
 
-    const out = list.map((r) => {
-      const sym = r.symbol;
+        const pctMove = nOrNull(r?.score ?? r?.changePct);
+        const last = nOrNull(r?.last);
 
-      const pctMove = nOrNull(r?.score ?? r?.changePct);
-      const last = nOrNull(r?.last);
+        let prev = nOrNull(r?.prevClose);
+        if (prev !== null && prev <= 0) prev = null;
 
-      let prev = nOrNull(r?.prevClose);
-      if (prev !== null && prev <= 0) prev = null;
+        const backendComputed = Boolean(r?.prevCloseComputed);
 
-      const backendComputed = Boolean(r?.prevCloseComputed);
-
-      let computedHere = false;
-      if (prev === null) {
-        const fb = computePrevFallback(last, pctMove);
-        if (fb !== null) {
-          prev = fb;
-          computedHere = true;
+        let computedHere = false;
+        if (prev === null) {
+          const fb = computePrevFallback(last, pctMove);
+          if (fb !== null) {
+            prev = fb;
+            computedHere = true;
+          }
         }
-      }
 
-      if (backendComputed || computedHere) computed = true;
+        const computed = backendComputed || computedHere;
 
-      return { sym, pctMove, last, prev };
-    });
-
-    return { rows: out, anyComputed: computed };
+        return {
+          rows: [...acc.rows, { sym, pctMove, last, prev }],
+          anyComputed: acc.anyComputed || computed,
+        };
+      },
+      { rows: [], anyComputed: false }
+    );
   }, [list]);
 
   const sourceLabel =
@@ -96,7 +98,9 @@ export default function MarketLeadersCard({
 
       <div className="mlBody">
         {loading ? (
-          Array.from({ length: CARD_MAX }).map((_, i) => <div key={i} className="mlRow mlRowSkeleton" />)
+          Array.from({ length: CARD_MAX }).map((_, i) => (
+            <div key={i} className="mlRow mlRowSkeleton" />
+          ))
         ) : cardRows.length ? (
           cardRows.map((r, i) => {
             const scoreTone = toneForScore(r.pctMove);
@@ -143,7 +147,12 @@ export default function MarketLeadersCard({
 
         {!loading && hasMore ? (
           <div className="mlMoreRow">
-            <button type="button" className="mlMoreBtn" onClick={() => setMoreOpen(true)} title="View more leaders">
+            <button
+              type="button"
+              className="mlMoreBtn"
+              onClick={() => setMoreOpen(true)}
+              title="View more leaders"
+            >
               View more
             </button>
           </div>
@@ -157,7 +166,12 @@ export default function MarketLeadersCard({
       </div>
 
       {/* ✅ Use shared Modal so mobile centering matches Feedback/etc */}
-      <Modal open={moreOpen} title="More market leaders" onClose={() => setMoreOpen(false)} footer={modalFooter}>
+      <Modal
+        open={moreOpen}
+        title="More market leaders"
+        onClose={() => setMoreOpen(false)}
+        footer={modalFooter}
+      >
         <div className="mlModalSub">Showing up to {MODAL_MAX}. Click one to load the chart.</div>
 
         <div className="mlTableHead mlModalHead">

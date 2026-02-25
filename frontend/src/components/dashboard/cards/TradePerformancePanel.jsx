@@ -4,7 +4,7 @@ import BotControlCard from "./BotControlCard.jsx";
 import TimeframeCard from "./TimeframeCard.jsx";
 import "../../../css/dashboard/cards/TradePerformancePanel.css";
 
-import { useAuth } from "../../../context/AuthContext";
+import { useAuth } from "../../../context/authContextBase.js";
 
 import ConnectedBrokersMiniCard from "./shared/ConnectedBrokersMiniCard.jsx";
 import OpportunityTable, { PillRow } from "./shared/OpportunityTable.jsx";

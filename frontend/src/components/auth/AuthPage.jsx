@@ -5,7 +5,7 @@ import { useNavigate } from "react-router-dom";
 import AppShell from "../layout/AppShell";
 import ErrorModal from "../common/ErrorModal";
 
-import { useAuth } from "../../context/AuthContext";
+import { useAuth } from "../../context/authContextBase.js";
 import { explainAnyError } from "../../lib/errorMessages";
 
 import { AUTH_PAGE_COPY } from "../../content/landing/authpage.content.ts";

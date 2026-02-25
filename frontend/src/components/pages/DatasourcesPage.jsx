@@ -97,8 +97,8 @@ function useMarketLeaders() {
       } catch {
         // keep page clean; MarketLeadersCard can handle empty
       } finally {
-        if (!alive) return;
-        setLoading(false);
+        // ✅ no return in finally (no-unsafe-finally)
+        if (alive) setLoading(false);
       }
     }
 
@@ -149,7 +149,6 @@ export default function DatasourcesPage() {
           </div>
         </PageHeaderCard>
 
-        {/* ✅ lane wrapper like ConnectedAppsPage / IndexFundsPage */}
         <div className="ds-page-wrap">
           <main className="ds-main">
             <div className="ds-left">
@@ -167,7 +166,7 @@ export default function DatasourcesPage() {
 
                     try {
                       localStorage.setItem("ustock:last_ticker", clean);
-                    } catch (_err) {
+                    } catch {
                       // ignore storage failures (private mode, blocked storage, etc.)
                     }
 

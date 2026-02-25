@@ -1,5 +1,5 @@
 // frontend/src/components/dashboard/cards/PriceChartPanel.jsx
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import HelpTooltip from "../../common/HelpTooltip.jsx";
 
 import { normalizeSymbol } from "../../../lib/symbols.js";
@@ -30,14 +30,23 @@ function loadTradingViewScript() {
   });
 }
 
+function randomIdHex(bytesLen = 8) {
+  const bytes = new Uint8Array(bytesLen);
+  window.crypto.getRandomValues(bytes);
+  return Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
 export default function PriceChartPanel({
   currentTicker = COPY.fallbacks.symbol,
   isDarkMode = false,
-  timeframeLabel = "Past week", // (you can content-ize later if you want; currently unused here)
   activeRangeLabel = "",
   interval = COPY.fallbacks.interval,
 }) {
-  const containerIdRef = useRef(`tv-${Math.random().toString(16).slice(2)}`);
+  // ✅ random, stable per mount, no ref access during render
+  const [containerId] = useState(() => `tv-${randomIdHex(8)}`);
+
   const widgetRef = useRef(null);
 
   const intervalLabel = useMemo(() => prettyTvInterval(interval), [interval]);
@@ -52,12 +61,12 @@ export default function PriceChartPanel({
 
         const symbol = normalizeSymbol(currentTicker) || COPY.fallbacks.symbol;
 
-        const containerEl = document.getElementById(containerIdRef.current);
+        const containerEl = document.getElementById(containerId);
         if (containerEl) containerEl.innerHTML = "";
         widgetRef.current = null;
 
         widgetRef.current = new window.TradingView.widget({
-          container_id: containerIdRef.current,
+          container_id: containerId,
           symbol,
           interval: String(interval || COPY.fallbacks.interval),
           autosize: true,
@@ -77,7 +86,7 @@ export default function PriceChartPanel({
     return () => {
       alive = false;
     };
-  }, [isDarkMode, currentTicker, interval]);
+  }, [isDarkMode, currentTicker, interval, containerId]);
 
   return (
     <section className="panel panel-chart">
@@ -108,7 +117,7 @@ export default function PriceChartPanel({
         </div>
 
         <div className="tv-chart-wrapper">
-          <div id={containerIdRef.current} className="tv-chart-inner" />
+          <div id={containerId} className="tv-chart-inner" />
         </div>
       </div>
     </section>

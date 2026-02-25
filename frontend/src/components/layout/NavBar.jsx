@@ -1,7 +1,7 @@
 // src/components/layout/NavBar.jsx
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { useAuth } from "../../context/AuthContext";
+import { useAuth } from "../../context/authContextBase.js";
 import AuthRequiredModal from "../common/AuthRequiredModal";
 import "../../css/layout/NavBar.css";
 
@@ -44,7 +44,7 @@ export default function NavBar({
     return false;
   };
 
-  const openAuthModalFor = (to) => {
+  const openAuthModalFor = () => {
     setAuthModalOpen(true);
   };
 
