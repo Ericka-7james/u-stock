@@ -1,11 +1,11 @@
 // frontend/src/components/dashboard/cards/shared/OpportunityTable.jsx
+import React from "react";
 
-function isAlphaOnlySymbol(sym) {
-  const s = String(sym || "").trim().toUpperCase();
-  return /^[A-Z]+$/.test(s);
-}
-
-function PillRow({ symbol, score, sub = "", onClick }) {
+/**
+ * Clickable "pill row" used in Opportunity tables and Bot Intents list.
+ * (Matches your original inline styling.)
+ */
+export function PillRow({ symbol, score, sub = "", onClick }) {
   const sym = String(symbol || "").toUpperCase();
   const scoreStr = Number.isFinite(Number(score)) ? Number(score).toFixed(2) : "—";
   const tooltip = [sym, `Score: ${scoreStr}`, sub].filter(Boolean).join("\n");
@@ -53,8 +53,20 @@ function PillRow({ symbol, score, sub = "", onClick }) {
   );
 }
 
-export default function OpportunityTable({ title, rows, emptyMessage, onPickSymbol, sourceLabel }) {
+/**
+ * OpportunityTable
+ * Mini-table wrapper used in TradePerformancePanel.
+ */
+export default function OpportunityTable({
+  title,
+  rows,
+  emptyMessage,
+  onPickSymbol,
+  sourceLabel,
+  isValidSymbol, // optional validator (lets parent control strictness)
+}) {
   const clean = Array.isArray(rows) ? rows : [];
+  const valid = typeof isValidSymbol === "function" ? isValidSymbol : () => true;
 
   return (
     <div className="tpOppMiniTable" style={{ overflow: "hidden", borderRadius: 14 }}>
@@ -78,7 +90,7 @@ export default function OpportunityTable({ title, rows, emptyMessage, onPickSymb
           clean.slice(0, 6).map((r, i) => {
             const sym = String(r.symbol || "").toUpperCase();
             const sub = r.sub ? String(r.sub) : "";
-            if (!isAlphaOnlySymbol(sym)) return null;
+            if (!sym || !valid(sym)) return null;
 
             return (
               <PillRow
@@ -89,7 +101,7 @@ export default function OpportunityTable({ title, rows, emptyMessage, onPickSymb
                 onClick={
                   onPickSymbol
                     ? () => {
-                        if (!isAlphaOnlySymbol(sym)) return;
+                        if (!valid(sym)) return;
                         onPickSymbol(sym);
                       }
                     : undefined

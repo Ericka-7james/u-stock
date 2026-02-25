@@ -5,6 +5,8 @@ import HelpTooltip from "../../common/HelpTooltip.jsx";
 import { getJson } from "../../../lib/api/json.js";
 import { fmtPct2, fmtRate2 } from "../../../lib/format/number.js";
 
+import { MACRO_CARD_COPY as COPY } from "../../../content/dashboard/cards/macroCard.content.ts";
+
 import "../../../css/dashboard/cards/MacroCard.css";
 
 function safeRiskClass(risk) {
@@ -17,7 +19,7 @@ function safeRiskClass(risk) {
 
 function RiskPill({ risk }) {
   const cls = useMemo(() => safeRiskClass(risk), [risk]);
-  return <span className={`macro-pill macro-pill--${cls}`}>{risk || "Unknown"}</span>;
+  return <span className={`macro-pill macro-pill--${cls}`}>{risk || COPY.pill.unknown}</span>;
 }
 
 // Backend envelope: { ok, as_of, source, ttl_seconds, data: {...} }
@@ -89,9 +91,9 @@ function normalizeMacroEnvelope(json) {
 
 function cacheLabelFromTtlSeconds(ttlSeconds) {
   const s = Number(ttlSeconds);
-  if (!Number.isFinite(s) || s <= 0) return "cached 10m";
+  if (!Number.isFinite(s) || s <= 0) return COPY.footer.cacheFallback;
   const m = Math.max(1, Math.round(s / 60));
-  return `cached ${m}m`;
+  return `${COPY.footer.cachePrefix}${m}${COPY.footer.cacheSuffix}`;
 }
 
 export default function MacroCard() {
@@ -143,11 +145,9 @@ export default function MacroCard() {
     <div className="macro-card">
       <div className="macro-header">
         <div className="macro-title">
-          <span>Macro</span>
+          <span>{COPY.title}</span>
 
-          <HelpTooltip title="Macro help">
-            US macro snapshot (FRED): rates, inflation (CPI YoY), labor, and a simple risk signal.
-          </HelpTooltip>
+          <HelpTooltip title={COPY.tooltip.title}>{COPY.tooltip.body}</HelpTooltip>
         </div>
 
         <RiskPill risk={risk} />
@@ -156,34 +156,36 @@ export default function MacroCard() {
       {err ? <div className="macro-error">{err}</div> : null}
       {loading && !data ? (
         <div className="macro-error" style={{ opacity: 0.7 }}>
-          Loading…
+          {COPY.states.loading}
         </div>
       ) : null}
 
       <div className="macro-grid">
         <div className="macro-metric">
-          <div className="macro-label">Fed Funds (DFF)</div>
+          <div className="macro-label">{COPY.labels.fedFunds}</div>
           <div className="macro-value">{fmtRate2(data?.data?.rates?.fed_funds)}</div>
         </div>
 
         <div className="macro-metric">
-          <div className="macro-label">10Y Yield (DGS10)</div>
+          <div className="macro-label">{COPY.labels.tenYear}</div>
           <div className="macro-value">{fmtRate2(data?.data?.rates?.ten_year)}</div>
         </div>
 
         <div className="macro-metric">
-          <div className="macro-label">CPI YoY</div>
+          <div className="macro-label">{COPY.labels.cpiYoY}</div>
           <div className="macro-value">{fmtPct2(data?.data?.inflation?.cpi_yoy)}</div>
         </div>
 
         <div className="macro-metric">
-          <div className="macro-label">Unemployment (UNRATE)</div>
+          <div className="macro-label">{COPY.labels.unemployment}</div>
           <div className="macro-value">{fmtPct2(data?.data?.labor?.unemployment)}</div>
         </div>
       </div>
 
       <div className="macro-footnote">
-        Source: {data?.source || "—"} · {cacheLabelFromTtlSeconds(ttlSeconds)}
+        {COPY.footer.sourcePrefix} {data?.source || COPY.footer.sourceFallback}
+        {COPY.footer.dot}
+        {cacheLabelFromTtlSeconds(ttlSeconds)}
       </div>
     </div>
   );

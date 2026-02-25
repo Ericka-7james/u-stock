@@ -1,28 +1,14 @@
 // frontend/src/components/dashboard/cards/TopDayTradesCard.jsx
 import { useMemo } from "react";
 
-function fmtPct(x) {
-  if (x == null) return "—";
-  return `${x.toFixed(2)}%`;
-}
+import { fmtMoney } from "../../../lib/format/marketFormat.js";
+import { fmtPct2, fmtInt0 } from "../../../lib/format/number.js";
 
-function fmtPrice(x) {
-  if (x == null) return "—";
-  return `$${x.toFixed(2)}`;
-}
-
-function fmtInt(x) {
-  if (x == null) return "—";
-  try {
-    return Intl.NumberFormat().format(Math.round(x));
-  } catch {
-    return String(x);
-  }
-}
+import { TOP_DAY_TRADES_CARD_COPY as COPY } from "../../../content/dashboard/cards/topDayTradesCard.content.ts";
 
 export default function TopDayTradesCard({
-  title = "Top Day Trades",
-  subtitle = "Live from Alpaca screener",
+  title = COPY.header.title,
+  subtitle = COPY.header.subtitle,
   list = "most_active",
   items = [],
   loading = false,
@@ -52,18 +38,22 @@ export default function TopDayTradesCard({
           onClick={() => onChangeList?.("most_active")}
           style={list === "most_active" ? activeStyle : idleStyle}
         >
-          Most Active
+          {COPY.tabs.mostActive}
         </button>
+
         <button
           type="button"
           onClick={() => onChangeList?.("top_gainers")}
           style={list === "top_gainers" ? activeStyle : idleStyle}
         >
-          Top Gainers
+          {COPY.tabs.topGainers}
         </button>
       </div>
     );
   }, [list, onChangeList]);
+
+  const rows = Array.isArray(items) ? items : [];
+  const hasRows = rows.length > 0;
 
   return (
     <section className="panel" style={{ marginBottom: 16 }}>
@@ -80,30 +70,31 @@ export default function TopDayTradesCard({
 
       <div style={{ marginTop: 12 }}>
         {loading ? (
-          <div style={{ fontSize: 13, opacity: 0.75 }}>Loading top tickers…</div>
-        ) : !items || items.length === 0 ? (
+          <div style={{ fontSize: 13, opacity: 0.75 }}>{COPY.states.loading}</div>
+        ) : !hasRows ? (
           <div style={{ fontSize: 13, opacity: 0.75 }}>
-            No results yet.
+            {COPY.states.empty.line1}
             <br />
-            If Alpaca isn’t connected, reconnect in Connected Apps.
+            {COPY.states.empty.line2}
           </div>
         ) : (
           <table className="mini-table" style={{ marginTop: 6 }}>
             <thead>
               <tr>
-                <th>Symbol</th>
-                <th>Price</th>
-                <th>Chg%</th>
-                <th>Volume</th>
+                <th>{COPY.table.columns.symbol}</th>
+                <th>{COPY.table.columns.price}</th>
+                <th>{COPY.table.columns.chgPct}</th>
+                <th>{COPY.table.columns.volume}</th>
               </tr>
             </thead>
+
             <tbody>
-              {items.slice(0, 10).map((r) => (
+              {rows.slice(0, COPY.limits.maxRows).map((r) => (
                 <tr key={r.symbol}>
                   <td style={{ fontWeight: 700 }}>{r.symbol}</td>
-                  <td>{fmtPrice(r.price)}</td>
-                  <td>{fmtPct(r.changePct)}</td>
-                  <td>{fmtInt(r.volume)}</td>
+                  <td>{fmtMoney(r.price)}</td>
+                  <td>{fmtPct2(r.changePct)}</td>
+                  <td>{fmtInt0(r.volume)}</td>
                 </tr>
               ))}
             </tbody>

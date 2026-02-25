@@ -5,6 +5,8 @@ import HelpTooltip from "../../common/HelpTooltip.jsx";
 import { normalizeSymbol } from "../../../lib/symbols.js";
 import { prettyTvInterval } from "../../../lib/format/tradingview.js";
 
+import { PRICE_CHART_PANEL_COPY as COPY } from "../../../content/dashboard/cards/priceChartPanel.content.ts";
+
 import "../../../css/dashboard/cards/PriceChartPanel.css";
 
 function loadTradingViewScript() {
@@ -29,11 +31,11 @@ function loadTradingViewScript() {
 }
 
 export default function PriceChartPanel({
-  currentTicker = "AAPL",
+  currentTicker = COPY.fallbacks.symbol,
   isDarkMode = false,
-  timeframeLabel = "Past week",
+  timeframeLabel = "Past week", // (you can content-ize later if you want; currently unused here)
   activeRangeLabel = "",
-  interval = "60",
+  interval = COPY.fallbacks.interval,
 }) {
   const containerIdRef = useRef(`tv-${Math.random().toString(16).slice(2)}`);
   const widgetRef = useRef(null);
@@ -48,7 +50,7 @@ export default function PriceChartPanel({
         await loadTradingViewScript();
         if (!alive) return;
 
-        const symbol = normalizeSymbol(currentTicker) || "AAPL";
+        const symbol = normalizeSymbol(currentTicker) || COPY.fallbacks.symbol;
 
         const containerEl = document.getElementById(containerIdRef.current);
         if (containerEl) containerEl.innerHTML = "";
@@ -57,7 +59,7 @@ export default function PriceChartPanel({
         widgetRef.current = new window.TradingView.widget({
           container_id: containerIdRef.current,
           symbol,
-          interval: String(interval || "60"),
+          interval: String(interval || COPY.fallbacks.interval),
           autosize: true,
           theme: isDarkMode ? "dark" : "light",
           locale: "en",
@@ -68,7 +70,7 @@ export default function PriceChartPanel({
           save_image: false,
         });
       } catch (e) {
-        console.error("TradingView init failed:", e);
+        console.error(COPY.errors.initFailedPrefix, e);
       }
     })();
 
@@ -83,23 +85,22 @@ export default function PriceChartPanel({
         <div className="card-header">
           <div className="card-header-left">
             <div className="card-title-row">
-              <h2 className="card-title-text">Price action viewer</h2>
+              <h2 className="card-title-text">{COPY.title}</h2>
 
-              <HelpTooltip title="What is the Price action viewer?">
-                <p>This chart is powered by TradingView.</p>
-                <p className="help-popover__note">
-                  The free embed supports changing candle interval (e.g., 15m/1h/1D). It does not let us force the visible
-                  date window. Use the chart controls to zoom/pan.
-                </p>
+              <HelpTooltip title={COPY.tooltip.title}>
+                {COPY.tooltip.body.map((p, i) => (
+                  <p key={i}>{p}</p>
+                ))}
+                <p className="help-popover__note">{COPY.tooltip.note}</p>
               </HelpTooltip>
             </div>
 
             <p className="card-subtitle">
-              Candle interval: <strong>{intervalLabel}</strong>
+              {COPY.subtitle.candleIntervalPrefix} <strong>{intervalLabel}</strong>
               {activeRangeLabel ? (
                 <>
-                  {" "}
-                  · <span style={{ opacity: 0.85 }}>{activeRangeLabel}</span>
+                  {COPY.subtitle.dot}
+                  <span style={{ opacity: 0.85 }}>{activeRangeLabel}</span>
                 </>
               ) : null}
             </p>

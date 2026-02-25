@@ -1,50 +1,16 @@
 // frontend/src/components/dashboard/cards/MarketLeadersCard.jsx
 import { useMemo, useState } from "react";
+import Modal from "../../common/Modal.jsx";
 import "../../../css/dashboard/cards/MarketLeadersCard.css";
 
-function n(x) {
-  const v = Number(x);
-  return Number.isFinite(v) ? v : null;
-}
-
-function fmtMoney(v) {
-  const x = Number(v);
-  return Number.isFinite(x) ? `$${x.toFixed(2)}` : "—";
-}
-
-function fmtPct(x) {
-  const v = n(x);
-  if (v === null) return "—";
-  const sign = v > 0 ? "+" : "";
-  return `${sign}${v.toFixed(2)}%`;
-}
-
-function toneForScore(score) {
-  const v = n(score);
-  if (v === null) return "";
-  if (v > 0) return "pos";
-  if (v < 0) return "neg";
-  return "";
-}
-
-// STRICT: only A–Z tickers
-function isAlphaOnly(sym) {
-  const s = String(sym || "").trim().toUpperCase();
-  return /^[A-Z]+$/.test(s);
-}
-
-// If prevClose missing but we have last + pct move,
-// back-calc prev ≈ last / (1 + pct/100)
-function computePrevFallback(last, pct) {
-  const L = n(last);
-  const P = n(pct);
-  if (L === null || P === null) return null;
-  const denom = 1 + P / 100;
-  if (!Number.isFinite(denom) || denom <= 0) return null;
-  const prev = L / denom;
-  if (!Number.isFinite(prev) || prev <= 0) return null;
-  return prev;
-}
+import {
+  nOrNull,
+  fmtMoney,
+  fmtPctSigned,
+  toneForScore,
+  isAlphaOnlySymbol,
+  computePrevFallback,
+} from "../../../lib/format/marketFormat.js";
 
 export default function MarketLeadersCard({
   title = "Market leaders",
@@ -56,28 +22,29 @@ export default function MarketLeadersCard({
 }) {
   const [moreOpen, setMoreOpen] = useState(false);
 
-  // show 4 in-card; modal shows up to 7
   const CARD_MAX = 4;
   const MODAL_MAX = 7;
 
-  const raw = Array.isArray(items) ? items : [];
-  const list = raw
-    .map((r) => ({
-      ...r,
-      symbol: String(r?.symbol || "").toUpperCase().trim(),
-    }))
-    .filter((r) => isAlphaOnly(r.symbol));
+  const list = useMemo(() => {
+    const raw = Array.isArray(items) ? items : [];
+    return raw
+      .map((r) => ({
+        ...r,
+        symbol: String(r?.symbol || "").toUpperCase().trim(),
+      }))
+      .filter((r) => isAlphaOnlySymbol(r.symbol));
+  }, [items]);
 
   const { rows, anyComputed } = useMemo(() => {
     let computed = false;
 
     const out = list.map((r) => {
       const sym = r.symbol;
-      const pctMove = r?.score ?? r?.changePct;
 
-      const last = n(r?.last);
+      const pctMove = nOrNull(r?.score ?? r?.changePct);
+      const last = nOrNull(r?.last);
 
-      let prev = n(r?.prevClose);
+      let prev = nOrNull(r?.prevClose);
       if (prev !== null && prev <= 0) prev = null;
 
       const backendComputed = Boolean(r?.prevCloseComputed);
@@ -93,12 +60,7 @@ export default function MarketLeadersCard({
 
       if (backendComputed || computedHere) computed = true;
 
-      return {
-        sym,
-        pctMove,
-        last,
-        prev,
-      };
+      return { sym, pctMove, last, prev };
     });
 
     return { rows: out, anyComputed: computed };
@@ -118,9 +80,7 @@ export default function MarketLeadersCard({
     setMoreOpen(false);
   }
 
-  function closeModal() {
-    setMoreOpen(false);
-  }
+  const modalFooter = <div className="mlModalFoot">Source: {sourceLabel}</div>;
 
   return (
     <section className="panel mlCard">
@@ -141,6 +101,7 @@ export default function MarketLeadersCard({
           cardRows.map((r, i) => {
             const scoreTone = toneForScore(r.pctMove);
             const showSecondLine = r.last !== null || r.prev !== null;
+            const hasPct = r.pctMove !== null;
 
             return (
               <button
@@ -156,10 +117,8 @@ export default function MarketLeadersCard({
                   </div>
 
                   <div className={`mlScore ${scoreTone}`}>
-                    {fmtPct(r.pctMove)}
-                    {n(r.pctMove) !== null ? (
-                      <span className="mlArrow">{n(r.pctMove) >= 0 ? "↑" : "↓"}</span>
-                    ) : null}
+                    {fmtPctSigned(r.pctMove)}
+                    {hasPct ? <span className="mlArrow">{r.pctMove >= 0 ? "↑" : "↓"}</span> : null}
                   </div>
                 </div>
 
@@ -197,77 +156,61 @@ export default function MarketLeadersCard({
         {meta?.asOf ? <span>As of {new Date(meta.asOf * 1000).toLocaleTimeString()}</span> : null}
       </div>
 
-      {/* Modal */}
-      {moreOpen ? (
-        <div className="mlModalBackdrop" onClick={closeModal}>
-          <div className="mlModal" onClick={(e) => e.stopPropagation()}>
-            <div className="mlModalHeader">
-              <div>
-                <div className="mlModalTitle">More market leaders</div>
-                <div className="mlModalSub">Showing up to {MODAL_MAX}. Click one to load the chart.</div>
-              </div>
+      {/* ✅ Use shared Modal so mobile centering matches Feedback/etc */}
+      <Modal open={moreOpen} title="More market leaders" onClose={() => setMoreOpen(false)} footer={modalFooter}>
+        <div className="mlModalSub">Showing up to {MODAL_MAX}. Click one to load the chart.</div>
 
-              <button type="button" className="mlModalClose" onClick={closeModal} aria-label="Close">
-                ×
-              </button>
-            </div>
-
-            <div className="mlTableHead mlModalHead">
-              <div>Symbol</div>
-              <div className="right">Move</div>
-            </div>
-
-            <div className="mlBody mlModalBody">
-              {modalRows.length ? (
-                modalRows.map((r, i) => {
-                  const scoreTone = toneForScore(r.pctMove);
-                  const showSecondLine = r.last !== null || r.prev !== null;
-
-                  return (
-                    <button
-                      key={`modal-${r.sym}-${i}`}
-                      type="button"
-                      className="mlRow"
-                      onClick={() => handlePick(r.sym)}
-                      title={r.sym}
-                    >
-                      <div className="mlRowTop">
-                        <div className="mlSymbol" title={r.sym}>
-                          {r.sym}
-                        </div>
-
-                        <div className={`mlScore ${scoreTone}`}>
-                          {fmtPct(r.pctMove)}
-                          {n(r.pctMove) !== null ? (
-                            <span className="mlArrow">{n(r.pctMove) >= 0 ? "↑" : "↓"}</span>
-                          ) : null}
-                        </div>
-                      </div>
-
-                      {showSecondLine ? (
-                        <div className="mlRowSub">
-                          <span className="mlLast">
-                            Last price: {r.last === null ? "—" : `${fmtMoney(r.last)} (USD/share)`}
-                          </span>
-                          <span className="mlPrev">
-                            Prev close: {r.prev === null ? "—" : `${fmtMoney(r.prev)} (USD/share)`}
-                          </span>
-                        </div>
-                      ) : (
-                        <div className="mlRowSub muted">—</div>
-                      )}
-                    </button>
-                  );
-                })
-              ) : (
-                <div className="mlEmpty">No leaders returned yet.</div>
-              )}
-            </div>
-
-            <div className="mlModalFoot">Source: {sourceLabel}</div>
-          </div>
+        <div className="mlTableHead mlModalHead">
+          <div>Symbol</div>
+          <div className="right">Move</div>
         </div>
-      ) : null}
+
+        <div className="mlBody mlModalBody">
+          {modalRows.length ? (
+            modalRows.map((r, i) => {
+              const scoreTone = toneForScore(r.pctMove);
+              const showSecondLine = r.last !== null || r.prev !== null;
+              const hasPct = r.pctMove !== null;
+
+              return (
+                <button
+                  key={`modal-${r.sym}-${i}`}
+                  type="button"
+                  className="mlRow"
+                  onClick={() => handlePick(r.sym)}
+                  title={r.sym}
+                >
+                  <div className="mlRowTop">
+                    <div className="mlSymbol" title={r.sym}>
+                      {r.sym}
+                    </div>
+
+                    <div className={`mlScore ${scoreTone}`}>
+                      {fmtPctSigned(r.pctMove)}
+                      {hasPct ? <span className="mlArrow">{r.pctMove >= 0 ? "↑" : "↓"}</span> : null}
+                    </div>
+                  </div>
+
+                  {showSecondLine ? (
+                    <div className="mlRowSub">
+                      <span className="mlLast">
+                        Last price: {r.last === null ? "—" : `${fmtMoney(r.last)} (USD/share)`}
+                      </span>
+                      <span className="mlPrev">
+                        Prev close: {r.prev === null ? "—" : `${fmtMoney(r.prev)} (USD/share)`}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="mlRowSub muted">—</div>
+                  )}
+                </button>
+              );
+            })
+          ) : (
+            <div className="mlEmpty">No leaders returned yet.</div>
+          )}
+        </div>
+      </Modal>
     </section>
   );
 }

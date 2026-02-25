@@ -101,6 +101,31 @@
   color: var(--ustock-text-muted);
 }
 
+/* ✅ Dark theme overrides for semantic pills (fixes "Low" looking like a light-mode band) */
+[data-theme="dark"] .macro-pill--low {
+  background: rgba(16, 185, 129, 0.16);
+  color: rgba(167, 243, 208, 0.98);
+  border-color: rgba(16, 185, 129, 0.32);
+}
+
+[data-theme="dark"] .macro-pill--medium {
+  background: rgba(245, 158, 11, 0.16);
+  color: rgba(253, 230, 138, 0.98);
+  border-color: rgba(245, 158, 11, 0.34);
+}
+
+[data-theme="dark"] .macro-pill--high {
+  background: rgba(239, 68, 68, 0.14);
+  color: rgba(254, 202, 202, 0.98);
+  border-color: rgba(239, 68, 68, 0.34);
+}
+
+[data-theme="dark"] .macro-pill--unknown {
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(229, 231, 235, 0.72);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
 /* Footer + errors */
 
 .macro-footnote {

@@ -4,7 +4,7 @@ import Modal from "../../common/Modal.jsx";
 import LoadingOverlay from "../../common/LoadingOverlay.jsx";
 import ErrorModal from "../../common/ErrorModal.jsx";
 
-import { BOT_CONTROL_CARD_CONTENT as COPY } from "../../../content/dashboard/botControlCard.content.ts";
+import { BOT_CONTROL_CARD_CONTENT as COPY } from "../../../content/dashboard/botControlCard.content.js";
 
 // ✅ Reuse BotLogsCard styling for the log modal rows
 import "../../../css/dashboard/cards/BotLogsCard.css";
@@ -152,12 +152,7 @@ export default function BotControlCard({
 
   return (
     <>
-      <ErrorModal
-        open={errModalOpen}
-        error={errModal}
-        onClose={closeErrorModal}
-        onAction={handleErrorAction}
-      >
+      <ErrorModal open={errModalOpen} error={errModal} onClose={closeErrorModal} onAction={handleErrorAction}>
         {isBotUnavailable ? (
           <div style={{ display: "grid", placeItems: "center", paddingTop: 8 }}>
             <img
@@ -177,37 +172,42 @@ export default function BotControlCard({
           <div className="botCardSoftSpinner" aria-label="Refreshing bot status" title="Refreshing…" />
         ) : null}
 
-        <div className="botCardHead">
-          <div className="botCardTitleRow">
-            <div className="botCardTitle">{COPY.title}</div>
-            <HelpTooltip text={COPY.help} />
+        {/* ✅ Use shared header layout classes; keep BotControl visuals via botCardHead */}
+        <header className="card-header botCardHead">
+          <div className="card-header-left">
+            <div className="botCardTitleRow">
+              <div className="botCardTitle">{COPY.title}</div>
+              <HelpTooltip text={COPY.help} />
+            </div>
           </div>
 
-          <div className="botPillRow">
-            <div className="botCardStatePill mode" title={COPY.pills.paper.title}>
-              {COPY.pills.paper.label}
-            </div>
+          <div className="card-header-right">
+            <div className="botPillRow">
+              <div className="botCardStatePill mode" title={COPY.pills.paper.title}>
+                {COPY.pills.paper.label}
+              </div>
 
-            <div
-              className={`botCardStatePill arm ${hasValidSelection && isArmed ? "warn" : "neg"}`}
-              title={
-                !hasValidSelection
-                  ? COPY.pills.armed.titleNone
+              <div
+                className={`botCardStatePill arm ${hasValidSelection && isArmed ? "warn" : "neg"}`}
+                title={
+                  !hasValidSelection
+                    ? COPY.pills.armed.titleNone
+                    : isArmed
+                    ? COPY.pills.armed.titleArmed
+                    : COPY.pills.armed.titleDisarmed
+                }
+              >
+                {!hasValidSelection
+                  ? COPY.pills.armed.none
                   : isArmed
-                  ? COPY.pills.armed.titleArmed
-                  : COPY.pills.armed.titleDisarmed
-              }
-            >
-              {!hasValidSelection
-                ? COPY.pills.armed.none
-                : isArmed
-                ? COPY.pills.armed.armed
-                : COPY.pills.armed.disarmed}
-            </div>
+                  ? COPY.pills.armed.armed
+                  : COPY.pills.armed.disarmed}
+              </div>
 
-            <div className={`botCardStatePill status ${pillTone(runtimeTone)}`}>{runtimeLabel}</div>
+              <div className={`botCardStatePill status ${pillTone(runtimeTone)}`}>{runtimeLabel}</div>
+            </div>
           </div>
-        </div>
+        </header>
 
         <div className="botCardBody">
           <div className="botCardTopRow">
@@ -328,6 +328,7 @@ export default function BotControlCard({
         </div>
       </div>
 
+      {/* everything below unchanged (modals) */}
       <Modal
         open={armConfirmOpen}
         title={COPY.modals.arm.title}
@@ -396,7 +397,6 @@ export default function BotControlCard({
           </button>
         }
       >
-        {/* ✅ Only block the UI on the very first load (no items yet) */}
         {logItems.length === 0 && logBusy ? (
           <div className="botModalLoading">{COPY.modals.log.loading}</div>
         ) : logItems.length === 0 ? (
@@ -454,14 +454,13 @@ export default function BotControlCard({
               })}
             </div>
 
-            {/* ✅ tiny spinner at bottom during polling, no wiping */}
             {logBusy ? (
               <div
                 style={{
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "flex-start",
-                  gap: 0, // spinner handles spacing via marginRight
+                  gap: 0,
                   paddingTop: 10,
                   paddingLeft: 8,
                   opacity: 0.75,
