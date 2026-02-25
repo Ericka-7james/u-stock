@@ -1,6 +1,6 @@
 // src/components/common/ErrorMessages.jsx
 import { useEffect, useMemo } from "react";
-import "../../css/common/ErrorMessage.css";
+import "../../css/common/ErrorModal.css";
 
 
 /**
