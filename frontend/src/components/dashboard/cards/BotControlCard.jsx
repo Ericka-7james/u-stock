@@ -1,4 +1,5 @@
 // frontend/src/components/dashboard/cards/BotControlCard.jsx
+import { useEffect, useRef } from "react";
 import HelpTooltip from "../../common/HelpTooltip.jsx";
 import Modal from "../../common/Modal.jsx";
 import LoadingOverlay from "../../common/LoadingOverlay.jsx";
@@ -15,12 +16,24 @@ import { safeStr, fmtTime, fmtAge, pillTone } from "../../../lib/format/botForma
 
 import botUnavailableSquirrel from "../../../assets/modal/bot-unavailable-squirrel.png";
 
+import { lsSet } from "../../../lib/storage/localStorage.js";
+
 /**
  * storageScope (optional):
  * Pass something stable per-user (ex: authed user id) so the hook can namespace localStorage.
  * Example usage from parent:
  *   <BotControlCard storageScope={user?.id} ... />
+ *
+ * ✅ Also persist "selected bot" (for dashboard welcome modal logic):
+ *   ustock:selected_bot_id_v1::<storageScope>
  */
+const SELECTED_BOT_KEY_BASE = "ustock:selected_bot_id_v1";
+
+function scopedKey(base, scope) {
+  const s = String(scope || "").trim();
+  return s ? `${base}::${s}` : base;
+}
+
 export default function BotControlCard({
   activeBotId,
   onActiveBotChange,
@@ -148,6 +161,28 @@ export default function BotControlCard({
     /bot unavailable|bot not found|unavailable/i.test(
       String(errModal?.title || errModal?.message || errModal?.detail || "")
     );
+  // ---------------------------------------------------------------------------
+
+  // ---------------------------------------------------------------------------
+  // ✅ Persist "selected bot" (for dashboard welcome modal logic)
+  // ---------------------------------------------------------------------------
+  const selectedBotLsKey = scopedKey(SELECTED_BOT_KEY_BASE, storageScope);
+  const lastPersistedRef = useRef(null);
+
+  useEffect(() => {
+    const next = String(selectedValue || "").trim();
+
+    // Avoid redundant writes
+    if (lastPersistedRef.current === next) return;
+    lastPersistedRef.current = next;
+
+    try {
+      // Store "" when none selected (keeps dashboard logic simple)
+      lsSet(selectedBotLsKey, next);
+    } catch {
+      // ignore
+    }
+  }, [selectedValue, selectedBotLsKey]);
   // ---------------------------------------------------------------------------
 
   return (
