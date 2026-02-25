@@ -4,7 +4,7 @@ import Turnstile from "react-turnstile";
 import AppShell from "../layout/AppShell";
 import "../../css/pages/FeedbackPage.css";
 import { API_BASE, API_PREFIX } from "../../config/config";
-import { useAuth } from "../../context/authContextBase.js";
+import { useAuth } from "../../context/AuthContext";
 import PageHeaderCard from "../common/PageHeaderCard";
 
 import { FEEDBACK_PAGE_COPY } from "../../content/feedbackpage.content.ts";
