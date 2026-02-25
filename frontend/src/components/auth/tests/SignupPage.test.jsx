@@ -1,17 +1,28 @@
+// frontend/src/components/auth/tests/SignupPage.test.jsx
 import React from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { describe, test, expect, vi, beforeEach } from "vitest";
 
-import SignupPage from "../SignupPage";
+import SignupPage from "../SignupPage.jsx";
+
+// --------------------
+// Stable mock targets (NO TDZ)
+// --------------------
+const authImpl = {
+  signup: vi.fn(),
+  signupWithGoogle: vi.fn(),
+  signupWithFacebook: vi.fn(),
+};
+
+const mockNavigate = vi.fn();
 
 // ---- Mocks ----
 vi.mock("../../layout/AppShell", () => ({
   default: ({ children }) => <div data-testid="app-shell">{children}</div>,
 }));
 
-// Render ErrorModal content in tests when open
 vi.mock("../../common/ErrorModal", () => ({
   default: ({ open, error, onClose }) =>
     open ? (
@@ -25,7 +36,6 @@ vi.mock("../../common/ErrorModal", () => ({
     ) : null,
 }));
 
-// Make error messages predictable
 vi.mock("../../../lib/errorMessages", () => ({
   explainAnyError: (err) => ({
     title: "Error",
@@ -36,7 +46,6 @@ vi.mock("../../../lib/errorMessages", () => ({
   }),
 }));
 
-// Mock content so placeholders + button text are stable
 vi.mock("../../../content/landing/signuppage.content.ts", () => ({
   SIGNUP_PAGE_CONTENT: {
     header: { title: "Create account", subtitle: "Join Lucent" },
@@ -58,11 +67,6 @@ vi.mock("../../../content/landing/signuppage.content.ts", () => ({
   },
 }));
 
-const mockSignup = vi.fn();
-const mockSignupWithGoogle = vi.fn();
-const mockSignupWithFacebook = vi.fn();
-const mockNavigate = vi.fn();
-
 vi.mock("react-router-dom", async () => {
   const actual = await vi.importActual("react-router-dom");
   return {
@@ -71,12 +75,9 @@ vi.mock("react-router-dom", async () => {
   };
 });
 
-vi.mock("../../../context/AuthContext", () => ({
-  useAuth: () => ({
-    signup: mockSignup,
-    signupWithGoogle: mockSignupWithGoogle,
-    signupWithFacebook: mockSignupWithFacebook,
-  }),
+// ✅ THIS is what SignupPage actually imports
+vi.mock("../../../context/authContextBase.js", () => ({
+  useAuth: () => authImpl,
 }));
 
 function renderSignup() {
@@ -105,9 +106,9 @@ async function fillBaseValid(user, overrides = {}) {
 
 describe("SignupPage validation and behavior", () => {
   beforeEach(() => {
-    mockSignup.mockReset();
-    mockSignupWithGoogle.mockReset();
-    mockSignupWithFacebook.mockReset();
+    authImpl.signup.mockReset();
+    authImpl.signupWithGoogle.mockReset();
+    authImpl.signupWithFacebook.mockReset();
     mockNavigate.mockReset();
   });
 
@@ -121,7 +122,7 @@ describe("SignupPage validation and behavior", () => {
     await user.click(screen.getByRole("button", { name: "Sign up" }));
 
     expect(await screen.findByText(/please enter your username\./i)).toBeInTheDocument();
-    expect(mockSignup).not.toHaveBeenCalled();
+    expect(authImpl.signup).not.toHaveBeenCalled();
   });
 
   test("shows error when email is invalid", async () => {
@@ -135,22 +136,22 @@ describe("SignupPage validation and behavior", () => {
     await user.click(screen.getByRole("button", { name: "Sign up" }));
 
     expect(await screen.findByText(/please enter a valid email address\./i)).toBeInTheDocument();
-    expect(mockSignup).not.toHaveBeenCalled();
+    expect(authImpl.signup).not.toHaveBeenCalled();
   });
 
   test("phone is optional (blank phone should not block submit)", async () => {
     const user = userEvent.setup();
     renderSignup();
 
-    mockSignup.mockResolvedValueOnce();
+    authImpl.signup.mockResolvedValueOnce();
 
     // don't touch phone at all
     await fillBaseValid(user, { phone: undefined });
 
     await user.click(screen.getByRole("button", { name: "Sign up" }));
 
-    await waitFor(() => expect(mockSignup).toHaveBeenCalledTimes(1));
-    expect(mockSignup.mock.calls[0][0].phone).toBeNull();
+    await waitFor(() => expect(authImpl.signup).toHaveBeenCalledTimes(1));
+    expect(authImpl.signup.mock.calls[0][0].phone).toBeNull();
   });
 
   test("shows error when phone number has too few digits (if provided)", async () => {
@@ -166,23 +167,24 @@ describe("SignupPage validation and behavior", () => {
 
     await user.click(screen.getByRole("button", { name: "Sign up" }));
 
-    expect(await screen.findByText(/please enter a valid phone number \(10–15 digits\)\./i)).toBeInTheDocument();
-    expect(mockSignup).not.toHaveBeenCalled();
+    expect(
+      await screen.findByText(/please enter a valid phone number \(10–15 digits\)\./i)
+    ).toBeInTheDocument();
+    expect(authImpl.signup).not.toHaveBeenCalled();
   });
 
   test("accepts formatted phone as long as digits count is valid", async () => {
     const user = userEvent.setup();
     renderSignup();
 
-    mockSignup.mockResolvedValueOnce();
+    authImpl.signup.mockResolvedValueOnce();
 
     await fillBaseValid(user, { phone: " (555) 555-5555 " });
 
     await user.click(screen.getByRole("button", { name: "Sign up" }));
-    await waitFor(() => expect(mockSignup).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(authImpl.signup).toHaveBeenCalledTimes(1));
 
-    // SignupPage normalizes to digits-only string
-    expect(mockSignup.mock.calls[0][0].phone).toBe("5555555555");
+    expect(authImpl.signup.mock.calls[0][0].phone).toBe("5555555555");
   });
 
   test("shows error when password is shorter than 12 characters", async () => {
@@ -197,7 +199,7 @@ describe("SignupPage validation and behavior", () => {
     await user.click(screen.getByRole("button", { name: "Sign up" }));
 
     expect(await screen.findByText(/password must be at least 12 characters long\./i)).toBeInTheDocument();
-    expect(mockSignup).not.toHaveBeenCalled();
+    expect(authImpl.signup).not.toHaveBeenCalled();
   });
 
   test("rejects password that contains the email local-part", async () => {
@@ -214,7 +216,7 @@ describe("SignupPage validation and behavior", () => {
     await user.click(screen.getByRole("button", { name: "Sign up" }));
 
     expect(await screen.findByText(/password must not contain your email\./i)).toBeInTheDocument();
-    expect(mockSignup).not.toHaveBeenCalled();
+    expect(authImpl.signup).not.toHaveBeenCalled();
   });
 
   test("rejects password that contains the username", async () => {
@@ -231,28 +233,26 @@ describe("SignupPage validation and behavior", () => {
     await user.click(screen.getByRole("button", { name: "Sign up" }));
 
     expect(await screen.findByText(/password must not contain your username\./i)).toBeInTheDocument();
-    expect(mockSignup).not.toHaveBeenCalled();
+    expect(authImpl.signup).not.toHaveBeenCalled();
   });
 
   test("calls signup with trimmed/normalized values when valid", async () => {
     const user = userEvent.setup();
     renderSignup();
 
-    mockSignup.mockResolvedValueOnce();
+    authImpl.signup.mockResolvedValueOnce();
 
     await user.type(screen.getByPlaceholderText("Username"), "  Test User  ");
     await user.type(screen.getByPlaceholderText("Email"), "  TEST@EXAMPLE.COM  ");
     await user.type(screen.getByPlaceholderText("(555) 555-5555"), " (555) 555-5555 ");
     await user.type(screen.getByPlaceholderText("Password"), "VeryStrongPass1!");
 
-    // choose a non-default avatar
     await user.click(screen.getByRole("button", { name: "📊" }));
-
     await user.click(screen.getByRole("button", { name: "Sign up" }));
 
-    await waitFor(() => expect(mockSignup).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(authImpl.signup).toHaveBeenCalledTimes(1));
 
-    expect(mockSignup).toHaveBeenCalledWith({
+    expect(authImpl.signup).toHaveBeenCalledWith({
       username: "Test User",
       email: "test@example.com",
       phone: "5555555555",
@@ -260,7 +260,6 @@ describe("SignupPage validation and behavior", () => {
       avatar: "📊",
     });
 
-    // flow: signup -> then sign in
     expect(mockNavigate).toHaveBeenCalledWith("/auth");
   });
 
@@ -268,18 +267,18 @@ describe("SignupPage validation and behavior", () => {
     const user = userEvent.setup();
     renderSignup();
 
-    mockSignup.mockResolvedValueOnce();
+    authImpl.signup.mockResolvedValueOnce();
 
     await fillBaseValid(user, { phone: undefined });
     await user.click(screen.getByRole("button", { name: "Sign up" }));
 
-    await waitFor(() => expect(mockSignup).toHaveBeenCalledTimes(1));
-    expect(mockSignup.mock.calls[0][0].avatar).toBe("📈");
+    await waitFor(() => expect(authImpl.signup).toHaveBeenCalledTimes(1));
+    expect(authImpl.signup.mock.calls[0][0].avatar).toBe("📈");
   });
 
   test("shows backend error message when signup throws", async () => {
     const user = userEvent.setup();
-    mockSignup.mockRejectedValueOnce(new Error("Backend exploded"));
+    authImpl.signup.mockRejectedValueOnce(new Error("Backend exploded"));
 
     renderSignup();
     await fillBaseValid(user, { phone: undefined });
@@ -294,7 +293,7 @@ describe("SignupPage validation and behavior", () => {
     const user = userEvent.setup();
 
     let resolveSignup;
-    mockSignup.mockImplementationOnce(
+    authImpl.signup.mockImplementationOnce(
       () =>
         new Promise((resolve) => {
           resolveSignup = resolve;
@@ -309,6 +308,6 @@ describe("SignupPage validation and behavior", () => {
     const loadingButton = screen.getByRole("button", { name: "Creating account…" });
     expect(loadingButton).toBeDisabled();
 
-    resolveSignup();
+    resolveSignup?.();
   });
 });

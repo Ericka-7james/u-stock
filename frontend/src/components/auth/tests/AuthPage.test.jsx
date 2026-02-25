@@ -1,12 +1,13 @@
-// src/components/auth/tests/AuthPage.test.jsx
+// frontend/src/components/auth/tests/AuthPage.test.jsx
 import React from "react";
 import { render, screen, within, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { describe, test, expect, vi, beforeEach } from "vitest";
-import AuthPage from "../AuthPage";
 
-// --- Mocks ---
+/* -----------------------
+   Mocks
+------------------------ */
 const mockLogin = vi.fn();
 const mockNavigate = vi.fn();
 
@@ -14,7 +15,7 @@ vi.mock("../../layout/AppShell", () => ({
   default: ({ children }) => <div data-testid="app-shell">{children}</div>,
 }));
 
-// ✅ Make ErrorModal assertable (your AuthPage now uses centralized modal errors)
+// ✅ Assertable ErrorModal
 vi.mock("../../common/ErrorModal", () => ({
   default: ({ open, error, onClose, onAction }) =>
     open ? (
@@ -36,6 +37,19 @@ vi.mock("../../common/ErrorModal", () => ({
     ) : null,
 }));
 
+// ✅ IMPORTANT: AuthPage imports from authContextBase.js
+vi.mock("../../../context/authContextBase.js", () => ({
+  useAuth: () => ({
+    user: null,
+    isAuthed: false,
+    loading: false,
+    login: mockLogin,
+    logout: vi.fn(),
+    authFetch: vi.fn(),
+  }),
+}));
+
+// (Optional safety if some child imports AuthContext)
 vi.mock("../../../context/AuthContext", () => ({
   useAuth: () => ({
     user: null,
@@ -55,7 +69,7 @@ vi.mock("react-router-dom", async () => {
   };
 });
 
-// ✅ Keep copy stable so tests don't depend on changing content files
+// ✅ Stable copy
 vi.mock("../../../content/landing/authpage.content.ts", () => ({
   AUTH_PAGE_COPY: {
     left: {
@@ -84,7 +98,7 @@ vi.mock("../../../content/landing/authpage.content.ts", () => ({
   },
 }));
 
-// ✅ Make explainAnyError deterministic (maps unknown errors to fallback)
+// ✅ Deterministic error mapping
 vi.mock("../../../lib/errorMessages", () => ({
   explainAnyError: (anyErr, { feature } = {}) => {
     const msg =
@@ -103,6 +117,11 @@ vi.mock("../../../lib/errorMessages", () => ({
     };
   },
 }));
+
+/* -----------------------
+   Import AFTER mocks
+------------------------ */
+import AuthPage from "../AuthPage";
 
 function renderAuth() {
   return render(
@@ -162,8 +181,7 @@ describe("AuthPage", () => {
     const modal = await screen.findByRole("dialog", { name: /error-modal/i });
     expect(modal).toBeInTheDocument();
 
-    const m = within(modal);
-    expect(m.getByText(/invalid credentials/i)).toBeInTheDocument();
+    expect(within(modal).getByText(/invalid credentials/i)).toBeInTheDocument();
   });
 
   test("shows fallback error when login throws without a message", async () => {
@@ -180,8 +198,7 @@ describe("AuthPage", () => {
     const modal = await screen.findByRole("dialog", { name: /error-modal/i });
     expect(modal).toBeInTheDocument();
 
-    const m = within(modal);
-    expect(m.getByText(/unable to sign in/i)).toBeInTheDocument();
+    expect(within(modal).getByText(/unable to sign in/i)).toBeInTheDocument();
   });
 
   test("clears previous modal error on a new submit attempt", async () => {
@@ -196,11 +213,9 @@ describe("AuthPage", () => {
     await user.click(screen.getByRole("button", { name: /sign in →/i }));
     expect(await screen.findByText(/invalid credentials/i)).toBeInTheDocument();
 
-    // close modal (represents user dismissing it)
     await user.click(screen.getByRole("button", { name: /close/i }));
     expect(screen.queryByRole("dialog", { name: /error-modal/i })).not.toBeInTheDocument();
 
-    // next attempt: should not instantly show old error
     mockLogin.mockResolvedValueOnce();
     await user.click(screen.getByRole("button", { name: /sign in →/i }));
 

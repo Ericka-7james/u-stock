@@ -1,17 +1,17 @@
-// src/context/tests/AuthContext.test.jsx
+// frontend/src/context/tests/AuthContext.test.jsx
 import React, { useState } from "react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 
-import { AuthProvider, useAuth } from "../AuthContext.jsx";
+import { AuthProvider } from "../AuthContext.jsx";
+import { useAuth } from "../authContextBase.js";
+import { SESSION_HINT_KEY } from "../authUtils.js";
 
-// ✅ IMPORTANT: mock BOTH exports used by AuthContext
+// ✅ IMPORTANT: mock config used by AuthContext.authFetch()
 vi.mock("../../config/config", () => ({
   API_BASE: "http://test-api.local",
-  API_PREFIX: "", // AuthContext builds `${API_BASE}${API_PREFIX}/auth/...`
+  API_PREFIX: "",
 }));
-
-const SESSION_HINT_KEY = "ustock_session_hint_v1";
 
 function jsonResponse(obj, ok = true, status = 200) {
   return Promise.resolve({
@@ -25,7 +25,7 @@ function jsonResponse(obj, ok = true, status = 200) {
 
 /**
  * Test Consumer
- * ✅ Wrap all async context calls in try/catch so failures don't become unhandled rejections.
+ * Wrap async context calls in try/catch so failures don't become unhandled rejections.
  */
 function Consumer() {
   const { user, loading, isAuthed, login, signup, logout, refreshSession } = useAuth();
@@ -167,7 +167,8 @@ describe("AuthContext", () => {
 
     const meCall = globalThis.fetch.mock.calls.find(
       ([url, opts]) =>
-        url === "http://test-api.local/auth/me" && (opts?.method || "GET").toUpperCase() === "GET"
+        url === "http://test-api.local/auth/me" &&
+        (opts?.method || "GET").toUpperCase() === "GET"
     );
     expect(meCall).toBeTruthy();
 
@@ -240,7 +241,8 @@ describe("AuthContext", () => {
 
     const loginCall = globalThis.fetch.mock.calls.find(
       ([url, opts]) =>
-        url === "http://test-api.local/auth/login" && (opts?.method || "GET").toUpperCase() === "POST"
+        url === "http://test-api.local/auth/login" &&
+        (opts?.method || "GET").toUpperCase() === "POST"
     );
     const [, loginOptions] = loginCall;
 

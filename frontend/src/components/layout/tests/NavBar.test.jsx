@@ -10,13 +10,22 @@ import NavBar from "../NavBar";
 const mockLogout = vi.fn();
 let authState = { user: null, logout: mockLogout };
 
-vi.mock("../../../context/AuthContext", () => ({
+// ✅ IMPORTANT: NavBar now imports from authContextBase.js
+vi.mock("../../../context/authContextBase.js", () => ({
   useAuth: () => authState,
 }));
 
 // Stub AuthRequiredModal so we can assert it opens
 vi.mock("../../common/AuthRequiredModal", () => ({
-  default: ({ open, title, message, primaryLabel, secondaryLabel, onClose, onPrimary }) =>
+  default: ({
+    open,
+    title,
+    message,
+    primaryLabel,
+    secondaryLabel,
+    onClose,
+    onPrimary,
+  }) =>
     open ? (
       <div role="dialog" aria-label="auth-required">
         <h2>{title}</h2>
@@ -71,23 +80,45 @@ describe("NavBar", () => {
     const sideNav = document.querySelector("aside.side-nav");
     expect(sideNav).toBeTruthy();
 
-    // ✅ Brand in side-nav only
     const brand = within(sideNav);
     expect(brand.getByText(/lucent financial/i)).toBeInTheDocument();
     expect(brand.getByText(/financial intelligence/i)).toBeInTheDocument();
 
-    // ...rest of your assertions...
+    const sideNavMenu = document.querySelector("nav.side-nav-menu");
+    expect(sideNavMenu).toBeTruthy();
+    const nav = within(sideNavMenu);
+
+    expect(nav.getByRole("link", { name: /^dashboard$/i })).toBeInTheDocument();
+    expect(nav.getByRole("link", { name: /^market & logs$/i })).toBeInTheDocument();
+    expect(nav.getByRole("link", { name: /^market baselines$/i })).toBeInTheDocument();
+    expect(nav.getByRole("link", { name: /^connected brokers$/i })).toBeInTheDocument();
+    expect(nav.getByRole("link", { name: /^about$/i })).toBeInTheDocument();
+    expect(nav.getByRole("link", { name: /^feedback$/i })).toBeInTheDocument();
+
+    const topbar = document.querySelector("header.topbar");
+    expect(topbar).toBeTruthy();
+    const top = within(topbar);
+
+    expect(top.getByRole("button", { name: /open navigation/i })).toBeInTheDocument();
+    expect(top.getByRole("button", { name: /toggle theme/i })).toBeInTheDocument();
+
+    // topbar icon links (aria-label)
+    expect(top.getByRole("link", { name: /^about$/i })).toBeInTheDocument();
+    expect(top.getByRole("link", { name: /^feedback$/i })).toBeInTheDocument();
+
+    expect(screen.queryByRole("button", { name: /sign out/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /open user menu/i })).not.toBeInTheDocument();
   });
 
-    it("applies active class to Market & Logs when on /data-sources", () => {
-      renderNavBar({ route: "/data-sources" });
+  it("applies active class to Market & Logs when on /data-sources", () => {
+    renderNavBar({ route: "/data-sources" });
 
-      const sideNavMenu = document.querySelector("nav.side-nav-menu");
-      const nav = within(sideNavMenu);
+    const sideNavMenu = document.querySelector("nav.side-nav-menu");
+    const nav = within(sideNavMenu);
 
-      const link = nav.getByRole("link", { name: /^market & logs$/i });
-      expect(link.className).toMatch(/side-nav-item--active/);
-    });
+    const link = nav.getByRole("link", { name: /^market & logs$/i });
+    expect(link.className).toMatch(/side-nav-item--active/);
+  });
 
   it("applies active class to Market Baselines when on /index-funds", () => {
     renderNavBar({ route: "/index-funds" });

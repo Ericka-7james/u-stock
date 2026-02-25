@@ -8,9 +8,9 @@ import DashboardPage from "../DashboardPage.jsx";
 import { LS } from "../../../lib/storage/keys.js";
 
 /* -------------------------
-   Auth (mocked)
+   Auth (mocked) ✅ correct module path
 -------------------------- */
-vi.mock("../../../context/AuthContext", () => ({
+vi.mock("../../../context/authContextBase.js", () => ({
   useAuth: () => ({
     user: { id: "test-user", email: "t@t.com" },
     loading: false,
@@ -24,9 +24,9 @@ vi.mock("../../../context/AuthContext", () => ({
 }));
 
 /* -------------------------
-   Layout
+   Layout ✅ correct module path
 -------------------------- */
-vi.mock("../../layout/AppShell", () => ({
+vi.mock("../../layout/AppShell.jsx", () => ({
   default: ({ children }) => <div data-testid="app-shell">{children}</div>,
 }));
 
@@ -90,24 +90,43 @@ vi.mock("../cards/MarketLeadersCard.jsx", () => ({
 }));
 
 /* -------------------------
-   Hooks
+   Hooks (mocked)
 -------------------------- */
 const mockDailyBars = vi.fn();
 const mockTradeSummary = vi.fn();
+const mockOpps = vi.fn();
+const mockLeaders = vi.fn();
+const mockIsDarkMode = vi.fn();
+const mockConnectNudge = vi.fn();
 
-vi.mock("../../hooks/useAlpacaDailyBars.js", () => ({
+vi.mock("../../../hooks/useAlpacaDailyBars.js", () => ({
   useAlpacaDailyBars: (...args) => mockDailyBars(...args),
 }));
 
-vi.mock("../../hooks/useAlpacaTradeSummary.js", () => ({
+vi.mock("../../../hooks/useAlpacaTradeSummary.js", () => ({
   useAlpacaTradeSummary: (...args) => mockTradeSummary(...args),
+}));
+
+vi.mock("../../../hooks/dashboard/useBotOpportunities.js", () => ({
+  useBotOpportunities: (...args) => mockOpps(...args),
+}));
+
+vi.mock("../../../hooks/dashboard/useMarketLeaders.js", () => ({
+  default: (...args) => mockLeaders(...args),
+}));
+
+vi.mock("../../../hooks/common/useIsDarkMode.js", () => ({
+  default: (...args) => mockIsDarkMode(...args),
+}));
+
+vi.mock("../../../hooks/dashboard/useConnectBotNudge.js", () => ({
+  default: (...args) => mockConnectNudge(...args),
 }));
 
 /* -------------------------
    Helpers
 -------------------------- */
-const getChartProps = () =>
-  JSON.parse(screen.getByTestId("price-chart-props").textContent);
+const getChartProps = () => JSON.parse(screen.getByTestId("price-chart-props").textContent);
 
 function renderPage() {
   return render(
@@ -118,11 +137,18 @@ function renderPage() {
 }
 
 describe("DashboardPage", () => {
-  let fetchSpy;
-
   beforeEach(() => {
     vi.restoreAllMocks();
     localStorage.clear();
+
+    mockIsDarkMode.mockReturnValue(false);
+
+    mockConnectNudge.mockReturnValue({
+      open: false,
+      payload: null,
+      onClose: vi.fn(),
+      onAction: vi.fn(),
+    });
 
     mockDailyBars.mockReturnValue({
       bars: [],
@@ -137,45 +163,20 @@ describe("DashboardPage", () => {
       error: null,
     });
 
-    fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
-      const u = String(url);
+    mockOpps.mockReturnValue({
+      data: { crypto: [], stocks: [], funds: [] },
+      loading: false,
+      error: null,
+    });
 
-      if (u.includes("/api/opportunities/bot/top")) {
-        return {
-          ok: true,
-          status: 200,
-          headers: { get: () => "application/json" },
-          json: async () => ({ crypto: [], stocks: [], funds: [] }),
-          text: async () => "",
-        };
-      }
-
-      if (u.includes("/api/market/leaders")) {
-        return {
-          ok: true,
-          status: 200,
-          headers: { get: () => "application/json" },
-          json: async () => ({
-            items: [],
-            meta: { source: "ALPACA", source_label: "ALPACA" },
-            asOf: null,
-          }),
-          text: async () => "",
-        };
-      }
-
-      return {
-        ok: true,
-        status: 200,
-        headers: { get: () => "application/json" },
-        json: async () => ({}),
-        text: async () => "",
-      };
+    mockLeaders.mockReturnValue({
+      data: { items: [], meta: { source: "ALPACA", source_label: "ALPACA" }, asOf: null },
+      loading: false,
+      error: null,
     });
   });
 
   afterEach(() => {
-    fetchSpy?.mockRestore();
     cleanup();
   });
 
@@ -212,37 +213,34 @@ describe("DashboardPage", () => {
   });
 
   it("blocks non TradingView-safe symbols (BRK.B)", async () => {
-  renderPage();
+    renderPage();
 
-  // From TradePerformancePanel: guarded by isTvSafe, so should NOT update.
-  fireEvent.click(screen.getByTestId("tp-pick-brkb"));
+    // From TradePerformancePanel: guarded by isTvSafe, so should NOT update.
+    fireEvent.click(screen.getByTestId("tp-pick-brkb"));
 
-  await waitFor(() => {
-    expect(getChartProps().currentTicker).toBe("AAPL");
+    await waitFor(() => {
+      expect(getChartProps().currentTicker).toBe("AAPL");
+    });
+
+    // From PriceChartPanel: not guarded (direct setState), so WILL update.
+    fireEvent.click(screen.getByTestId("chart-select-brkb"));
+
+    await waitFor(() => {
+      expect(getChartProps().currentTicker).toBe("BRK.B");
+    });
   });
 
-  // From PriceChartPanel: NOT guarded in DashboardPage (onSelectTicker is direct setState)
-  fireEvent.click(screen.getByTestId("chart-select-brkb"));
-
-  await waitFor(() => {
-    expect(getChartProps().currentTicker).toBe("BRK.B");
-  });
-});
-
-  it("fetches bot opportunities + leaders on mount", async () => {
+  it("fetches bot opportunities + leaders on mount (via hooks)", async () => {
     renderPage();
 
     await waitFor(() => {
-      expect(
-        fetchSpy.mock.calls.some(([u]) =>
-          String(u).includes("/api/opportunities/bot/top")
-        )
-      ).toBe(true);
-
-      expect(
-        fetchSpy.mock.calls.some(([u]) => String(u).includes("/api/market/leaders"))
-      ).toBe(true);
+      expect(mockOpps.mock.calls.length).toBeGreaterThan(0);
+      expect(mockLeaders.mock.calls.length).toBeGreaterThan(0);
     });
+
+    // Optional: sanity check they weren't called 0 times, without being brittle about exact counts.
+    expect(mockOpps).toHaveBeenCalled();
+    expect(mockLeaders).toHaveBeenCalled();
   });
 
   it("does NOT update ticker from TradingView postMessage events (handled inside chart widget, not DashboardPage)", async () => {
@@ -255,7 +253,6 @@ describe("DashboardPage", () => {
       })
     );
 
-    // DashboardPage doesn't subscribe to postMessage anymore, so ticker should remain the default.
     await waitFor(() => {
       expect(getChartProps().currentTicker).toBe("AAPL");
     });

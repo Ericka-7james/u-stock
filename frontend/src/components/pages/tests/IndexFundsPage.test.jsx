@@ -8,16 +8,28 @@ import { MemoryRouter } from "react-router-dom";
  * ✅ Mocks MUST be declared before importing the component under test
  */
 
-// ✅ Mock AuthContext so AppShell/NavBar can safely use useAuth
+// Shared auth mock object
+const authMock = {
+  user: null,
+  isAuthed: false,
+  loading: false,
+  refreshSession: vi.fn(),
+  login: vi.fn(),
+  signup: vi.fn(),
+  logout: vi.fn(),
+};
+
+// ✅ Mock BOTH possible auth import paths used across the app
 vi.mock("../../../context/AuthContext", () => ({
-  useAuth: () => ({
-    user: null,
-    isAuthed: false,
-    refreshSession: vi.fn(),
-    login: vi.fn(),
-    signup: vi.fn(),
-    logout: vi.fn(),
-  }),
+  useAuth: () => authMock,
+  AuthProvider: ({ children }) => children,
+}));
+vi.mock("../../../context/AuthContext.jsx", () => ({
+  useAuth: () => authMock,
+  AuthProvider: ({ children }) => children,
+}));
+vi.mock("../../../context/authContextBase.js", () => ({
+  useAuth: () => authMock,
 }));
 
 // (optional) config mock if other components import it
@@ -26,13 +38,8 @@ vi.mock("../../../config/config", () => ({
   API_PREFIX: "/api",
 }));
 
-/**
- * ✅ FIX: this test lives in src/components/pages/tests/
- * LandingPage lives in src/components/landing/
- * So the correct relative path is ../../landing/LandingPage (NOT ../LandingPage).
- *
- * If IndexFundsPage does not import LandingPage, you can delete this mock entirely.
- */
+// ✅ If IndexFundsPage does not import LandingPage, this mock is unnecessary.
+// Keeping it harmless.
 vi.mock("../../landing/LandingPage", () => ({
   default: () => <div data-testid="landing-page" />,
 }));
@@ -71,23 +78,18 @@ describe("IndexFundsPage", () => {
 
   it("renders without crashing", () => {
     renderPage();
-
-    // Keep this intentionally broad to avoid brittle failures
-    // (adjust if your page has a specific title heading)
     expect(document.body).toBeTruthy();
   });
 
   it("navigates to /auth when a CTA is clicked (if present)", () => {
     renderPage();
 
-    // If your IndexFundsPage has a CTA button, this will work.
-    // If not, either remove this test or update the label to match your UI.
     const cta =
       screen.queryByRole("button", { name: /sign in/i }) ||
       screen.queryByRole("button", { name: /get started/i }) ||
       screen.queryByRole("button", { name: /sign up/i });
 
-    if (!cta) return; // keep test non-brittle if CTA doesn't exist
+    if (!cta) return;
 
     fireEvent.click(cta);
     expect(mockNavigate).toHaveBeenCalledWith("/auth");

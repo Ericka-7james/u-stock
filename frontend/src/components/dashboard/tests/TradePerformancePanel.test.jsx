@@ -127,8 +127,13 @@ vi.mock("../../../content/dashboard/cards/tradePerformancePanel.content.ts", () 
 });
 
 /* -----------------------------------------
-   Avoid AuthContext dependency
+   ✅ Mock the RIGHT auth hook (component uses authContextBase)
 ------------------------------------------ */
+vi.mock("../../../context/authContextBase.js", () => ({
+  useAuth: () => ({ user: { id: "u1" } }),
+}));
+
+// (Optional safety if other children use AuthContext)
 vi.mock("../../../context/AuthContext", () => ({
   useAuth: () => ({ user: { id: "u1" } }),
 }));
@@ -136,24 +141,17 @@ vi.mock("../../../context/AuthContext", () => ({
 /* -----------------------------------------
    Prevent BotControlCard side-effects
 ------------------------------------------ */
-vi.mock("../cards/BotControlCard.jsx", async () => {
-  const React = (await import("react")).default;
-  function BotControlCardMock({ activeBotId, onActiveBotChange }) {
-    React.useEffect(() => {
-      void activeBotId;
-      void onActiveBotChange;
-    }, [activeBotId, onActiveBotChange]);
+vi.mock("../cards/BotControlCard.jsx", () => ({
+  default: function BotControlCardMock() {
     return <div data-testid="bot-control-card" />;
-  }
-  return { default: BotControlCardMock };
-});
+  },
+}));
 
 /* -----------------------------------------
    TimeframeCard mock (deterministic buttons)
 ------------------------------------------ */
-vi.mock("../cards/TimeframeCard.jsx", async () => {
-  const React = (await import("react")).default;
-  function TimeframeCardMock({ onChange }) {
+vi.mock("../cards/TimeframeCard.jsx", () => ({
+  default: function TimeframeCardMock({ onChange }) {
     return (
       <div data-testid="timeframe-card">
         <button type="button" onClick={() => onChange?.({ preset: "Week" })}>
@@ -167,9 +165,8 @@ vi.mock("../cards/TimeframeCard.jsx", async () => {
         </button>
       </div>
     );
-  }
-  return { default: TimeframeCardMock };
-});
+  },
+}));
 
 /* -----------------------------------------
    Connected brokers mini card mock
@@ -183,19 +180,17 @@ vi.mock("../cards/shared/ConnectedBrokersMiniCard.jsx", () => ({
 /* -----------------------------------------
    StatTiles mock (predictable DOM)
 ------------------------------------------ */
-vi.mock("../cards/shared/StatTiles.jsx", async () => {
-  const React = (await import("react")).default;
-
-  function CardShell({ title, className, children }) {
+vi.mock("../cards/shared/StatTiles.jsx", () => ({
+  CardShell: function CardShell({ title, className, children }) {
     return (
       <section className={`tpCard ${className || ""}`.trim()}>
         <h3>{title}</h3>
         <div>{children}</div>
       </section>
     );
-  }
+  },
 
-  function BigStat({ label, value, sub }) {
+  BigStat: function BigStat({ label, value, sub }) {
     return (
       <div className="tpCard" data-testid={`bigstat:${label}`}>
         <div>{label}</div>
@@ -203,27 +198,23 @@ vi.mock("../cards/shared/StatTiles.jsx", async () => {
         {sub ? <div>{sub}</div> : null}
       </div>
     );
-  }
+  },
 
-  function MiniStat({ label, value }) {
+  MiniStat: function MiniStat({ label, value }) {
     return (
       <div data-testid={`ministat:${label}`}>
         <span>{label}</span>
         <span>{String(value)}</span>
       </div>
     );
-  }
-
-  return { CardShell, BigStat, MiniStat };
-});
+  },
+}));
 
 /* -----------------------------------------
    OpportunityTable mock
 ------------------------------------------ */
-vi.mock("../cards/shared/OpportunityTable.jsx", async () => {
-  const React = (await import("react")).default;
-
-  function OpportunityTableMock({ title, rows = [], emptyMessage = "", sourceLabel }) {
+vi.mock("../cards/shared/OpportunityTable.jsx", () => ({
+  default: function OpportunityTableMock({ title, rows = [], emptyMessage = "", sourceLabel }) {
     return (
       <div className="tpOppMiniTable">
         <h4>{title}</h4>
@@ -249,30 +240,17 @@ vi.mock("../cards/shared/OpportunityTable.jsx", async () => {
         )}
       </div>
     );
-  }
+  },
 
-  function PillRowMock() {
+  PillRow: function PillRowMock() {
     return <div data-testid="pill-row" />;
-  }
-
-  return { default: OpportunityTableMock, PillRow: PillRowMock };
-});
+  },
+}));
 
 /* -----------------------------------------
    Import component after mocks
 ------------------------------------------ */
-import * as TradePerformancePanelModule from "../cards/TradePerformancePanel.jsx";
-
-function pickComponent(mod) {
-  if (!mod) return undefined;
-  if (typeof mod.default === "function") return mod.default;
-  if (typeof mod.TradePerformancePanel === "function") return mod.TradePerformancePanel;
-  for (const k of Object.keys(mod)) {
-    if (typeof mod[k] === "function") return mod[k];
-  }
-  return undefined;
-}
-const TradePerformancePanel = pickComponent(TradePerformancePanelModule);
+import TradePerformancePanel from "../cards/TradePerformancePanel.jsx";
 
 describe("TradePerformancePanel", () => {
   let originalConsoleError;
@@ -282,6 +260,7 @@ describe("TradePerformancePanel", () => {
     console.error = (...args) => {
       const msg = String(args?.[0] ?? "");
       if (msg.includes("not wrapped in act")) return;
+      originalConsoleError(...args);
     };
 
     vi.stubGlobal(
@@ -329,7 +308,6 @@ describe("TradePerformancePanel", () => {
 
   const normalize = (s) => String(s || "").replace(/\s+/g, " ").trim();
 
-  // ✅ Prefer the <h4> table titles (avoids MiniStat collisions like "Internal")
   const getOppTableByTitle = (titleTextOrRegex) => {
     const titleEl =
       titleTextOrRegex instanceof RegExp
@@ -341,9 +319,7 @@ describe("TradePerformancePanel", () => {
 
   const getCardByTitle = (titleRegexOrText) => {
     const titleEl =
-      titleRegexOrText instanceof RegExp
-        ? screen.getByText(titleRegexOrText)
-        : screen.getByText(String(titleRegexOrText));
+      titleRegexOrText instanceof RegExp ? screen.getByText(titleRegexOrText) : screen.getByText(String(titleRegexOrText));
     return titleEl.closest(".tpCard");
   };
 
@@ -459,7 +435,6 @@ describe("TradePerformancePanel", () => {
     expect(alignedTable).not.toBeNull();
     expect(normalize(alignedTable.textContent).toLowerCase()).toContain("start a bot to generate aligned picks");
 
-    // ✅ Tight match: table title, not MiniStat label
     const internalTable = getOppTableByTitle(/internal \(bot picks\)/i);
     expect(internalTable).not.toBeNull();
 

@@ -149,9 +149,7 @@ export default function ConnectedAppsPage() {
         setError(ui ? `${ui.title}\n\n${ui.body}` : e?.message || "Could not load connected apps.");
       });
     } finally {
-      if (myReqId !== reqIdRef.current) {
-      safeSet(() => setLoading(false));
-    }
+    if (myReqId === reqIdRef.current) safeSet(() => setLoading(false));
   }
   }, [authFetch, isAuthed, safeSet]);
 

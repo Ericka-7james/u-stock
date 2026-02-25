@@ -1,6 +1,6 @@
 // frontend/src/context/AuthContext.jsx
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
-import { API_BASE, API_PREFIX } from "../config/config";
+import { API_BASE, API_PREFIX } from "../config/config.js";
 
 import { AuthContext } from "./authContextBase.js";
 
