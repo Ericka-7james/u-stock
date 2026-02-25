@@ -1,5 +1,6 @@
+// src/components/auth/tests/AuthPage.test.jsx
 import React from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, within, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { describe, test, expect, vi, beforeEach } from "vitest";
@@ -11,6 +12,28 @@ const mockNavigate = vi.fn();
 
 vi.mock("../../layout/AppShell", () => ({
   default: ({ children }) => <div data-testid="app-shell">{children}</div>,
+}));
+
+// ✅ Make ErrorModal assertable (your AuthPage now uses centralized modal errors)
+vi.mock("../../common/ErrorModal", () => ({
+  default: ({ open, error, onClose, onAction }) =>
+    open ? (
+      <div role="dialog" aria-label="error-modal">
+        <div>{error?.title}</div>
+        <div>{error?.body}</div>
+        {error?.subtitle ? <div>{error.subtitle}</div> : null}
+
+        {error?.action?.label ? (
+          <button type="button" onClick={() => onAction?.(error.action)}>
+            {error.action.label}
+          </button>
+        ) : null}
+
+        <button type="button" onClick={onClose}>
+          Close
+        </button>
+      </div>
+    ) : null,
 }));
 
 vi.mock("../../../context/AuthContext", () => ({
@@ -31,6 +54,55 @@ vi.mock("react-router-dom", async () => {
     useNavigate: () => mockNavigate,
   };
 });
+
+// ✅ Keep copy stable so tests don't depend on changing content files
+vi.mock("../../../content/landing/authpage.content.ts", () => ({
+  AUTH_PAGE_COPY: {
+    left: {
+      title: "Welcome back",
+      fields: {
+        emailPlaceholder: "Email",
+        passwordPlaceholder: "Password",
+      },
+      submit: {
+        idle: "Sign in →",
+        loading: "Signing in…",
+      },
+      alt: {
+        prefix: "New here?",
+        cta: "Create an account →",
+      },
+    },
+    right: {
+      title: "U-Stock Radar Suite",
+      description: "Log in to see your market dashboard",
+      cta: "Sign Up",
+    },
+    errors: {
+      fallback: "Unable to sign in",
+    },
+  },
+}));
+
+// ✅ Make explainAnyError deterministic (maps unknown errors to fallback)
+vi.mock("../../../lib/errorMessages", () => ({
+  explainAnyError: (anyErr, { feature } = {}) => {
+    const msg =
+      anyErr && typeof anyErr === "object" && "message" in anyErr && anyErr.message
+        ? anyErr.message
+        : typeof anyErr === "string"
+        ? anyErr
+        : null;
+
+    return {
+      title: feature === "login" ? "Sign in failed" : "Error",
+      body: msg || "Unable to sign in",
+      subtitle: "",
+      image: null,
+      action: null,
+    };
+  },
+}));
 
 function renderAuth() {
   return render(
@@ -61,13 +133,13 @@ describe("AuthPage", () => {
     expect(screen.getByRole("button", { name: /^sign up$/i })).toBeInTheDocument();
   });
 
-  test("calls login with trimmed email and password on submit", async () => {
+  test("calls login with normalized email (trim + lowercase) and password on submit", async () => {
     const user = userEvent.setup();
     mockLogin.mockResolvedValueOnce();
 
     renderAuth();
 
-    await user.type(screen.getByPlaceholderText(/email/i), "  test@example.com  ");
+    await user.type(screen.getByPlaceholderText(/email/i), "  TEST@Example.com  ");
     await user.type(screen.getByPlaceholderText(/password/i), "MySecretPass!");
 
     await user.click(screen.getByRole("button", { name: /sign in →/i }));
@@ -76,7 +148,7 @@ describe("AuthPage", () => {
     expect(mockLogin).toHaveBeenCalledWith("test@example.com", "MySecretPass!");
   });
 
-  test("shows backend error message when login fails", async () => {
+  test("shows backend error message in ErrorModal when login fails", async () => {
     const user = userEvent.setup();
     mockLogin.mockRejectedValueOnce(new Error("Invalid credentials"));
 
@@ -87,7 +159,11 @@ describe("AuthPage", () => {
 
     await user.click(screen.getByRole("button", { name: /sign in →/i }));
 
-    expect(await screen.findByText(/invalid credentials/i)).toBeInTheDocument();
+    const modal = await screen.findByRole("dialog", { name: /error-modal/i });
+    expect(modal).toBeInTheDocument();
+
+    const m = within(modal);
+    expect(m.getByText(/invalid credentials/i)).toBeInTheDocument();
   });
 
   test("shows fallback error when login throws without a message", async () => {
@@ -101,10 +177,14 @@ describe("AuthPage", () => {
 
     await user.click(screen.getByRole("button", { name: /sign in →/i }));
 
-    expect(await screen.findByText(/unable to sign in/i)).toBeInTheDocument();
+    const modal = await screen.findByRole("dialog", { name: /error-modal/i });
+    expect(modal).toBeInTheDocument();
+
+    const m = within(modal);
+    expect(m.getByText(/unable to sign in/i)).toBeInTheDocument();
   });
 
-  test("clears previous error on a new submit attempt", async () => {
+  test("clears previous modal error on a new submit attempt", async () => {
     const user = userEvent.setup();
 
     mockLogin.mockRejectedValueOnce(new Error("Invalid credentials"));
@@ -116,7 +196,11 @@ describe("AuthPage", () => {
     await user.click(screen.getByRole("button", { name: /sign in →/i }));
     expect(await screen.findByText(/invalid credentials/i)).toBeInTheDocument();
 
-    // next attempt should clear error immediately
+    // close modal (represents user dismissing it)
+    await user.click(screen.getByRole("button", { name: /close/i }));
+    expect(screen.queryByRole("dialog", { name: /error-modal/i })).not.toBeInTheDocument();
+
+    // next attempt: should not instantly show old error
     mockLogin.mockResolvedValueOnce();
     await user.click(screen.getByRole("button", { name: /sign in →/i }));
 

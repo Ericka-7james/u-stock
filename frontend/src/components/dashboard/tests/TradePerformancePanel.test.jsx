@@ -5,51 +5,262 @@ import { render, screen, cleanup, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 
-// --- Prevent side-effects from BotControlCard (polling/fetch/timers) ---
+/* -----------------------------------------
+   Stable COPY (avoid brittle copy changes)
+------------------------------------------ */
+vi.mock("../../../content/dashboard/cards/tradePerformancePanel.content.ts", () => {
+  const COPY = {
+    header: {
+      title: "Opportunities",
+      subtitles: {
+        noBot: "No bot selected.",
+        paused: (id) => `Bot ${id} is paused.`,
+        running: (id) => `Bot ${id} is running.`,
+        waiting: (id) => `Bot ${id} is waiting for market.`,
+        starting: (id) => `Bot ${id} is starting.`,
+        offline: (id) => `Bot ${id} is offline.`,
+        unknown: (id) => `Bot ${id} status unknown.`,
+        disarmed: (id) => `Bot ${id} is disarmed.`,
+        stopped: (id) => `Bot ${id} is stopped.`,
+        fallback: (id) => `Bot ${id} status.`,
+      },
+      range: {
+        aria: "Active range",
+        labelPrefix: "Range:",
+        fallbackLabel: "—",
+      },
+    },
+
+    stats: {
+      botStatus: {
+        label: "Bot Status",
+        values: {
+          empty: "—",
+          offline: "OFFLINE",
+          paused: "PAUSED",
+          waiting: "WAITING",
+          starting: "STARTING",
+          running: "RUNNING",
+          disarmed: "DISARMED",
+          armed: "ARMED",
+          stopped: "STOPPED",
+          idle: "IDLE",
+        },
+        subs: {
+          noBot: "No bot selected.",
+          unknown: "No status yet.",
+          offline: "Runner offline.",
+          paused: "Bot paused.",
+          waiting: "Waiting for market.",
+          starting: "Starting up.",
+          running: "Trading enabled.",
+          disarmed: "Disarmed.",
+          armed: "Armed.",
+          stopped: "Stopped.",
+          idle: "Idle.",
+        },
+      },
+      tradesContext: {
+        label: "Trades Context",
+        winRatePrefix: "Win rate",
+      },
+      mini: {
+        leaders: "Leaders",
+        aligned: "Aligned",
+        internal: "Internal",
+      },
+    },
+
+    cards: {
+      intents: {
+        title: "Recent Intents",
+        headerLines: {
+          selectBot: "Select a bot to see intents.",
+          unknown: (id) => `Bot ${id} status unknown`,
+          offline: (id) => `Bot ${id} offline`,
+          paused: (id) => `Bot ${id} paused`,
+          waiting: (id) => `Bot ${id} waiting`,
+          starting: (id) => `Bot ${id} starting`,
+          disarmed: (id) => `Bot ${id} disarmed`,
+          stopped: (id) => `Bot ${id} stopped`,
+          ok: (id) => `Bot ${id} active`,
+        },
+        updatedPrefix: "Updated",
+        updatedFallback: "—",
+        refresh: "Refresh",
+        errors: { prefix: "Error:", loadFail: "Failed to load intents." },
+        states: { loading: "Loading…", emptyNoBot: "No bot selected.", emptyNoIntents: "No intents yet." },
+        footnote: "Intent feed is informational.",
+      },
+
+      topDayTrades: {
+        title: "Top Day Trades",
+        tables: {
+          aligned: {
+            title: "Bot-aligned (Leaders ∩ Bot)",
+            empty: {
+              noBot: "Start a bot to generate aligned picks.",
+              noOpp: "No bot opportunities yet.",
+              offline: "Bot is offline.",
+              noOverlap: "No overlap today.",
+            },
+          },
+          leaders: {
+            title: "Market Leaders (Today)",
+            empty: "No leaders available.",
+            sources: {
+              plain: "ALPACA",
+              computed: "ALPACA+Computed",
+            },
+          },
+          internal: {
+            title: "Internal (Bot Picks)",
+            empty: "No internal picks.",
+          },
+        },
+        footnote: "Scores are informational.",
+      },
+    },
+  };
+
+  return { TRADE_PERFORMANCE_PANEL_COPY: COPY };
+});
+
+/* -----------------------------------------
+   Avoid AuthContext dependency
+------------------------------------------ */
+vi.mock("../../../context/AuthContext", () => ({
+  useAuth: () => ({ user: { id: "u1" } }),
+}));
+
+/* -----------------------------------------
+   Prevent BotControlCard side-effects
+------------------------------------------ */
 vi.mock("../cards/BotControlCard.jsx", async () => {
   const React = (await import("react")).default;
-  function BotControlCardMock({ onStateChange }) {
+  function BotControlCardMock({ activeBotId, onActiveBotChange }) {
     React.useEffect(() => {
-      // Panel expects BotControlCard to call this; keep bot OFF in tests
-      onStateChange?.(null);
-    }, [onStateChange]);
+      void activeBotId;
+      void onActiveBotChange;
+    }, [activeBotId, onActiveBotChange]);
     return <div data-testid="bot-control-card" />;
   }
   return { default: BotControlCardMock };
 });
 
-// If your panel uses these libs, keep these mocks (they won't hurt)
-vi.mock("recharts", async () => {
+/* -----------------------------------------
+   TimeframeCard mock (deterministic buttons)
+------------------------------------------ */
+vi.mock("../cards/TimeframeCard.jsx", async () => {
   const React = (await import("react")).default;
-  return new Proxy(
-    {},
-    {
-      get: (_t, prop) =>
-        function RechartsStub({ children, ...rest }) {
-          return (
-            <div data-recharts={String(prop)} {...rest}>
-              {children}
-            </div>
-          );
-        },
-    }
-  );
+  function TimeframeCardMock({ onChange }) {
+    return (
+      <div data-testid="timeframe-card">
+        <button type="button" onClick={() => onChange?.({ preset: "Week" })}>
+          Week
+        </button>
+        <button type="button" onClick={() => onChange?.({ preset: "Month" })}>
+          Month
+        </button>
+        <button type="button" onClick={() => onChange?.({ preset: "Year" })}>
+          Year
+        </button>
+      </div>
+    );
+  }
+  return { default: TimeframeCardMock };
 });
 
-vi.mock("lucide-react", async () => {
+/* -----------------------------------------
+   Connected brokers mini card mock
+------------------------------------------ */
+vi.mock("../cards/shared/ConnectedBrokersMiniCard.jsx", () => ({
+  default: function ConnectedBrokersMiniCardMock() {
+    return <div data-testid="connected-brokers" />;
+  },
+}));
+
+/* -----------------------------------------
+   StatTiles mock (predictable DOM)
+------------------------------------------ */
+vi.mock("../cards/shared/StatTiles.jsx", async () => {
   const React = (await import("react")).default;
-  return new Proxy(
-    {},
-    {
-      get: (_t, prop) =>
-        function LucideStub(props) {
-          return <svg data-lucide={String(prop)} {...props} />;
-        },
-    }
-  );
+
+  function CardShell({ title, className, children }) {
+    return (
+      <section className={`tpCard ${className || ""}`.trim()}>
+        <h3>{title}</h3>
+        <div>{children}</div>
+      </section>
+    );
+  }
+
+  function BigStat({ label, value, sub }) {
+    return (
+      <div className="tpCard" data-testid={`bigstat:${label}`}>
+        <div>{label}</div>
+        <div>{String(value)}</div>
+        {sub ? <div>{sub}</div> : null}
+      </div>
+    );
+  }
+
+  function MiniStat({ label, value }) {
+    return (
+      <div data-testid={`ministat:${label}`}>
+        <span>{label}</span>
+        <span>{String(value)}</span>
+      </div>
+    );
+  }
+
+  return { CardShell, BigStat, MiniStat };
 });
 
-// Import the module and select the exported component safely
+/* -----------------------------------------
+   OpportunityTable mock
+------------------------------------------ */
+vi.mock("../cards/shared/OpportunityTable.jsx", async () => {
+  const React = (await import("react")).default;
+
+  function OpportunityTableMock({ title, rows = [], emptyMessage = "", sourceLabel }) {
+    return (
+      <div className="tpOppMiniTable">
+        <h4>{title}</h4>
+        <div className="tpOppHead">
+          <span>Symbol</span>
+          <span>Score</span>
+        </div>
+
+        {sourceLabel ? <div>{`Source: ${sourceLabel}`}</div> : null}
+
+        {rows?.length ? (
+          <ul>
+            {rows.map((r) => (
+              <li key={r.symbol}>
+                <span>{r.symbol}</span>
+                <span>{String(r.score)}</span>
+                {r.sub ? <span>{r.sub}</span> : null}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div className="tpEmpty">{emptyMessage}</div>
+        )}
+      </div>
+    );
+  }
+
+  function PillRowMock() {
+    return <div data-testid="pill-row" />;
+  }
+
+  return { default: OpportunityTableMock, PillRow: PillRowMock };
+});
+
+/* -----------------------------------------
+   Import component after mocks
+------------------------------------------ */
 import * as TradePerformancePanelModule from "../cards/TradePerformancePanel.jsx";
 
 function pickComponent(mod) {
@@ -67,17 +278,19 @@ describe("TradePerformancePanel", () => {
   let originalConsoleError;
 
   beforeEach(() => {
-    // Avoid vitest spy recursion issues: do NOT vi.spyOn(console.error)
     originalConsoleError = console.error;
     console.error = (...args) => {
       const msg = String(args?.[0] ?? "");
       if (msg.includes("not wrapped in act")) return;
-      // swallow other errors during tests (optional)
-      // originalConsoleError(...args); // uncomment if you want to see non-act errors
     };
 
-    // Optional: if anything else fetches unexpectedly, keep it from rejecting
-    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => ({}) })));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({ items: [], ts: 0 }),
+      }))
+    );
   });
 
   afterEach(() => {
@@ -89,10 +302,19 @@ describe("TradePerformancePanel", () => {
   function baseProps(overrides = {}) {
     return {
       data: { start: "2026-01-01", end: "2026-01-07", trades: [] },
-      onChangeRange: vi.fn(),
+
       opportunities: { stocks: [] },
       leaders: [],
       onPickSymbol: vi.fn(),
+
+      timeframe: null,
+      onTimeframeChange: vi.fn(),
+
+      activeBot: null,
+      botStatuses: null,
+      onStartBot: vi.fn(),
+      onStopBot: vi.fn(),
+
       ...overrides,
     };
   }
@@ -107,16 +329,21 @@ describe("TradePerformancePanel", () => {
 
   const normalize = (s) => String(s || "").replace(/\s+/g, " ").trim();
 
+  // ✅ Prefer the <h4> table titles (avoids MiniStat collisions like "Internal")
   const getOppTableByTitle = (titleTextOrRegex) => {
     const titleEl =
       titleTextOrRegex instanceof RegExp
-        ? screen.getByText(titleTextOrRegex)
-        : screen.getByText(String(titleTextOrRegex));
+        ? screen.getByRole("heading", { level: 4, name: titleTextOrRegex })
+        : screen.getByRole("heading", { level: 4, name: String(titleTextOrRegex) });
+
     return titleEl.closest(".tpOppMiniTable");
   };
 
-  const getCardByTitle = (titleRegex) => {
-    const titleEl = screen.getByText(titleRegex);
+  const getCardByTitle = (titleRegexOrText) => {
+    const titleEl =
+      titleRegexOrText instanceof RegExp
+        ? screen.getByText(titleRegexOrText)
+        : screen.getByText(String(titleRegexOrText));
     return titleEl.closest(".tpCard");
   };
 
@@ -124,10 +351,11 @@ describe("TradePerformancePanel", () => {
     expect(TradePerformancePanel).toBeTypeOf("function");
   });
 
-  it("renders header + range tabs and calls onChangeRange with Week/Month/Year", async () => {
+  it("renders header + timeframe control and calls onTimeframeChange from TimeframeCard", async () => {
     const user = userEvent.setup();
-    const onChangeRange = vi.fn();
-    renderWithRouter(baseProps({ onChangeRange }));
+    const onTimeframeChange = vi.fn();
+
+    renderWithRouter(baseProps({ onTimeframeChange }));
 
     expect(screen.getByRole("heading", { name: /opportunities/i })).toBeInTheDocument();
 
@@ -135,19 +363,19 @@ describe("TradePerformancePanel", () => {
     await user.click(screen.getByRole("button", { name: /month/i }));
     await user.click(screen.getByRole("button", { name: /year/i }));
 
-    const calls = onChangeRange.mock.calls.map((c) => c[0]);
-    expect(calls.slice(-3)).toEqual(["Week", "Month", "Year"]);
+    expect(onTimeframeChange).toHaveBeenCalledTimes(3);
+    const payloads = onTimeframeChange.mock.calls.map((c) => c[0]?.preset);
+    expect(payloads).toEqual(["Week", "Month", "Year"]);
   });
 
-  it("shows bot OFF state + locked messages when no bot is running", () => {
-    renderWithRouter(baseProps());
+  it("shows aligned locked message when no bot is selected", () => {
+    renderWithRouter(baseProps({ activeBot: null, botStatuses: null }));
 
-    expect(screen.getAllByText(/no bot running/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText("OFF").length).toBeGreaterThan(0);
-
-    const alignedTable = getOppTableByTitle(/bot-aligned \(leaders ∩ bot\)/i);
+    const alignedTable = getOppTableByTitle(/bot-aligned/i);
     expect(alignedTable).not.toBeNull();
-    expect(normalize(alignedTable.textContent).toLowerCase()).toContain("start a bot to generate aligned picks");
+
+    const text = normalize(alignedTable.textContent).toLowerCase();
+    expect(text).toContain("start a bot to generate aligned picks");
   });
 
   it("renders Trades Context count and computes win rate percent", () => {
@@ -164,11 +392,12 @@ describe("TradePerformancePanel", () => {
     const tradesCard = getCardByTitle(/trades context/i);
     expect(tradesCard).not.toBeNull();
 
+    expect(within(tradesCard).getByText("Trades Context")).toBeInTheDocument();
     expect(within(tradesCard).getByText("3")).toBeInTheDocument();
     expect(within(tradesCard).getByText(/win rate 67%/i)).toBeInTheDocument();
   });
 
-  it("renders Market leaders section and shows Source: ALPACA by default", () => {
+  it("renders Market Leaders section and shows Source: ALPACA by default", () => {
     renderWithRouter(
       baseProps({
         leaders: [{ symbol: "AAPL", changePct: 1, last: 100, prevClose: 99, prevCloseComputed: false }],
@@ -214,7 +443,7 @@ describe("TradePerformancePanel", () => {
     expect(text).toMatch(/MSFT/i);
   });
 
-  it("aligned locked when bot not running; internal shows picks when opportunities provided", () => {
+  it("internal shows picks when opportunities provided; aligned still locked with no bot", () => {
     renderWithRouter(
       baseProps({
         opportunities: {
@@ -226,10 +455,11 @@ describe("TradePerformancePanel", () => {
       })
     );
 
-    const alignedTable = getOppTableByTitle(/bot-aligned \(leaders ∩ bot\)/i);
+    const alignedTable = getOppTableByTitle(/bot-aligned/i);
     expect(alignedTable).not.toBeNull();
     expect(normalize(alignedTable.textContent).toLowerCase()).toContain("start a bot to generate aligned picks");
 
+    // ✅ Tight match: table title, not MiniStat label
     const internalTable = getOppTableByTitle(/internal \(bot picks\)/i);
     expect(internalTable).not.toBeNull();
 

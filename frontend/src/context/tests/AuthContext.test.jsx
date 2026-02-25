@@ -111,16 +111,16 @@ function renderWithProvider() {
 }
 
 describe("AuthContext", () => {
-  const realFetch = global.fetch;
+  const realFetch = globalThis.fetch;
 
   beforeEach(() => {
     vi.clearAllMocks();
     window.localStorage.clear();
-    global.fetch = vi.fn();
+    globalThis.fetch = vi.fn();
   });
 
   afterEach(() => {
-    global.fetch = realFetch;
+    globalThis.fetch = realFetch;
   });
 
   it("useAuth throws if used outside AuthProvider", () => {
@@ -137,21 +137,19 @@ describe("AuthContext", () => {
   it("on mount: WITHOUT session hint, does NOT call /auth/me and ends loading=false", async () => {
     renderWithProvider();
 
-    // should finish loading without calling fetch at all
     await waitFor(() => {
       expect(screen.getByTestId("loading").textContent).toBe("false");
     });
 
-    expect(global.fetch).not.toHaveBeenCalled();
+    expect(globalThis.fetch).not.toHaveBeenCalled();
     expect(screen.getByTestId("isAuthed").textContent).toBe("false");
     expect(screen.getByTestId("user").textContent).toBe("null");
   });
 
   it("on mount: WITH session hint, calls /auth/me with credentials include and does not set Content-Type for GET", async () => {
-    // enable mount refresh
     window.localStorage.setItem(SESSION_HINT_KEY, "1");
 
-    global.fetch.mockImplementation((url, opts = {}) => {
+    globalThis.fetch.mockImplementation((url, opts = {}) => {
       const method = (opts.method || "GET").toUpperCase();
 
       if (url === "http://test-api.local/auth/me" && method === "GET") {
@@ -164,10 +162,10 @@ describe("AuthContext", () => {
     renderWithProvider();
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalled();
+      expect(globalThis.fetch).toHaveBeenCalled();
     });
 
-    const meCall = global.fetch.mock.calls.find(
+    const meCall = globalThis.fetch.mock.calls.find(
       ([url, opts]) =>
         url === "http://test-api.local/auth/me" && (opts?.method || "GET").toUpperCase() === "GET"
     );
@@ -179,11 +177,9 @@ describe("AuthContext", () => {
     expect(options.method).toBe("GET");
     expect(options.credentials).toBe("include");
 
-    // IMPORTANT: GET should not force JSON content-type
     const headers = options.headers;
     if (headers) {
-      const ct =
-        headers instanceof Headers ? headers.get("Content-Type") : headers["Content-Type"];
+      const ct = headers instanceof Headers ? headers.get("Content-Type") : headers["Content-Type"];
       expect(ct).toBeFalsy();
     }
 
@@ -195,10 +191,9 @@ describe("AuthContext", () => {
   });
 
   it("refreshSession: when forced /auth/me ok, sets isAuthed true and stores user_id into user.id", async () => {
-    // We will explicitly click refresh after setting hint, to ensure it calls /auth/me.
     window.localStorage.setItem(SESSION_HINT_KEY, "1");
 
-    global.fetch.mockImplementation((url, opts = {}) => {
+    globalThis.fetch.mockImplementation((url, opts = {}) => {
       const method = (opts.method || "GET").toUpperCase();
       if (url === "http://test-api.local/auth/me" && method === "GET") {
         return jsonResponse({ user_id: 123 }, true, 200);
@@ -210,15 +205,12 @@ describe("AuthContext", () => {
 
     await waitFor(() => expect(screen.getByTestId("loading").textContent).toBe("false"));
 
-    // after mount, should be authed already because /auth/me returned ok
     expect(screen.getByTestId("isAuthed").textContent).toBe("true");
     expect(screen.getByTestId("user").textContent).toMatch(/"id":123/);
   });
 
   it("login: POSTs to /auth/login with JSON body + credentials, then calls /auth/me", async () => {
-    // NOTE: without hint, mount does NOT call /auth/me (good)
-    // login() will POST /auth/login, then refreshSession(force:true) => GET /auth/me
-    global.fetch.mockImplementation((url, opts = {}) => {
+    globalThis.fetch.mockImplementation((url, opts = {}) => {
       const method = (opts.method || "GET").toUpperCase();
 
       if (url === "http://test-api.local/auth/login" && method === "POST") {
@@ -237,16 +229,16 @@ describe("AuthContext", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "login" }));
 
-    // ✅ find /auth/login call
     await waitFor(() => {
-      const loginCall = global.fetch.mock.calls.find(
+      const loginCall = globalThis.fetch.mock.calls.find(
         ([url, opts]) =>
-          url === "http://test-api.local/auth/login" && (opts?.method || "GET").toUpperCase() === "POST"
+          url === "http://test-api.local/auth/login" &&
+          (opts?.method || "GET").toUpperCase() === "POST"
       );
       expect(loginCall).toBeTruthy();
     });
 
-    const loginCall = global.fetch.mock.calls.find(
+    const loginCall = globalThis.fetch.mock.calls.find(
       ([url, opts]) =>
         url === "http://test-api.local/auth/login" && (opts?.method || "GET").toUpperCase() === "POST"
     );
@@ -261,9 +253,8 @@ describe("AuthContext", () => {
 
     expect(loginOptions.body).toBe(JSON.stringify({ email: "test@example.com", password: "pw" }));
 
-    // ✅ ensure /auth/me was called at least once after login
     await waitFor(() => {
-      const meCalls = global.fetch.mock.calls.filter(([url]) => url === "http://test-api.local/auth/me");
+      const meCalls = globalThis.fetch.mock.calls.filter(([url]) => url === "http://test-api.local/auth/me");
       expect(meCalls.length).toBeGreaterThanOrEqual(1);
     });
 
@@ -275,7 +266,7 @@ describe("AuthContext", () => {
   });
 
   it("signup: POSTs to /auth/signup and then calls /auth/me", async () => {
-    global.fetch.mockImplementation((url, opts = {}) => {
+    globalThis.fetch.mockImplementation((url, opts = {}) => {
       const method = (opts.method || "GET").toUpperCase();
 
       if (url === "http://test-api.local/auth/signup" && method === "POST") {
@@ -295,14 +286,14 @@ describe("AuthContext", () => {
     fireEvent.click(screen.getByRole("button", { name: "signup" }));
 
     await waitFor(() => {
-      const signupCall = global.fetch.mock.calls.find(
+      const signupCall = globalThis.fetch.mock.calls.find(
         ([url, opts]) =>
-          url === "http://test-api.local/auth/signup" && (opts?.method || "GET").toUpperCase() === "POST"
+          url === "http://test-api.local/auth/signup" &&
+          (opts?.method || "GET").toUpperCase() === "POST"
       );
       expect(signupCall).toBeTruthy();
     });
 
-    // After refreshSession, user.id should be set
     await waitFor(() => {
       expect(screen.getByTestId("isAuthed").textContent).toBe("true");
       expect(screen.getByTestId("user").textContent).toMatch(/"id":77/);
@@ -311,10 +302,9 @@ describe("AuthContext", () => {
   });
 
   it("logout: POSTs to /auth/logout and clears user + isAuthed", async () => {
-    // Start authed via login path first, then logout
     let authed = true;
 
-    global.fetch.mockImplementation((url, opts = {}) => {
+    globalThis.fetch.mockImplementation((url, opts = {}) => {
       const method = (opts.method || "GET").toUpperCase();
 
       if (url === "http://test-api.local/auth/me" && method === "GET") {
@@ -329,7 +319,6 @@ describe("AuthContext", () => {
       return jsonResponse({ detail: "Unhandled route in test", url }, false, 500);
     });
 
-    // ensure mount checks /me by setting hint
     window.localStorage.setItem(SESSION_HINT_KEY, "1");
 
     renderWithProvider();
@@ -342,9 +331,10 @@ describe("AuthContext", () => {
     fireEvent.click(screen.getByRole("button", { name: "logout" }));
 
     await waitFor(() => {
-      const logoutCall = global.fetch.mock.calls.find(
+      const logoutCall = globalThis.fetch.mock.calls.find(
         ([url, opts]) =>
-          url === "http://test-api.local/auth/logout" && (opts?.method || "GET").toUpperCase() === "POST"
+          url === "http://test-api.local/auth/logout" &&
+          (opts?.method || "GET").toUpperCase() === "POST"
       );
       expect(logoutCall).toBeTruthy();
     });
