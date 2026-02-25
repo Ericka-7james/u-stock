@@ -3,30 +3,34 @@
   "private": true,
   "version": "0.0.0",
   "scripts": {
-    "test:frontend": "npm --prefix frontend run test",
-    "test:frontend:watch": "npm --prefix frontend run test -- --watch",
-    "test:frontend:ui": "npm --prefix frontend run test:ui",
-    "test:frontend:cov": "npm --prefix frontend run test -- --coverage",
+  "test:frontend": "npm --prefix frontend run test",
+  "test:frontend:watch": "npm --prefix frontend run test -- --watch",
+  "test:frontend:ui": "npm --prefix frontend run test:ui",
+  "test:frontend:cov": "npm --prefix frontend run test -- --coverage",
 
-    "test:frontend:dashboard": "npm --prefix frontend run test -- src/components/dashboard",
-    "test:frontend:landing": "npm --prefix frontend run test -- src/components/landing",
-    "test:frontend:context": "npm --prefix frontend run test -- src/context",
-    "test:frontend:file": "npm --prefix frontend run test --",
+  "test:frontend:dashboard": "npm --prefix frontend run test -- src/components/dashboard",
+  "test:frontend:landing": "npm --prefix frontend run test -- src/components/landing",
+  "test:frontend:context": "npm --prefix frontend run test -- src/context",
+  "test:frontend:file": "npm --prefix frontend run test --",
 
-    "test:backend": "cross-env ENV=test PYTHONPATH=backend pytest -q --no-cov backend/api",
-    "test:backend:unit": "cross-env ENV=test PYTHONPATH=backend pytest -q --no-cov backend/api -m \"not slow\"",
-    "test:backend:cov": "cross-env ENV=test PYTHONPATH=backend pytest -q backend/api --cov=backend/api --cov-report=term-missing",
+  "test:backend": "cross-env ENV=test PYTHONPATH=backend pytest -q --no-cov backend/api",
+  "test:backend:unit": "cross-env ENV=test PYTHONPATH=backend pytest -q --no-cov backend/api -m \"not slow\"",
+  "test:backend:cov": "cross-env ENV=test PYTHONPATH=backend pytest -q backend/api --cov=backend/api --cov-report=term-missing",
 
-    "test:bots": "cross-env ENV=test PYTHONPATH=u-stock-bots pytest -q --no-cov u-stock-bots",
-    "test:bots:unit": "cross-env ENV=test PYTHONPATH=u-stock-bots pytest -q --no-cov u-stock-bots -m \"not slow\"",
+  "test:bots": "cross-env ENV=test PYTHONPATH=u-stock-bots pytest -q --no-cov u-stock-bots",
+  "test:bots:unit": "cross-env ENV=test PYTHONPATH=u-stock-bots pytest -q --no-cov u-stock-bots -m \"not slow\"",
+  "test:bots:cov": "cross-env ENV=test PYTHONPATH=u-stock-bots pytest -q u-stock-bots --cov=u-stock-bots --cov-report=term-missing",
 
-    "test:quick": "npm run test:frontend:dashboard && npm run test:backend:unit && npm run test:bots:unit",
-    "test:frontend:all": "npm run test:frontend && npm run test:frontend:context",
-    "test:all": "npm run test:frontend && npm run test:backend && npm run test:bots",
+  "test:quick": "npm run test:frontend:dashboard && npm run test:backend:unit && npm run test:bots:unit",
 
-    "py:backend": "cross-env PYTHONPATH=backend python",
-    "debug:config": "cross-env ENV=test PYTHONPATH=backend python -c \"import api.core.config as c; print('CONFIG_FILE=', c.__file__); s=c.get_settings(); print('TYPE=', type(s)); print('ENV=', getattr(s,'env',None)); print('HAS_DB_URL=', hasattr(s,'database_url')); print('DICT_KEYS=', list(getattr(s,'__dict__',{}).keys()))\""
-  },
+  "test:frontend:all": "npm run test:frontend && npm run test:frontend:context",
+
+  "test:all": "npm run test:frontend && npm run test:backend && npm run test:bots",
+  "test:all:cov": "npm run test:frontend:cov && npm run test:backend:cov && npm run test:bots:cov",
+
+  "py:backend": "cross-env PYTHONPATH=backend python",
+  "debug:config": "cross-env ENV=test PYTHONPATH=backend python -c \"import api.core.config as c; print('CONFIG_FILE=', c.__file__); s=c.get_settings(); print('TYPE=', type(s)); print('ENV=', getattr(s,'env',None)); print('HAS_DB_URL=', hasattr(s,'database_url')); print('DICT_KEYS=', list(getattr(s,'__dict__',{}).keys()))\""
+},
   "devDependencies": {
     "cross-env": "^10.1.0"
   }
