@@ -2,50 +2,92 @@ name: CI
 
 on:
   push:
-    branches: [ main, feat/data-bot ]
+    branches: [ main ]
   pull_request:
     branches: [ main ]
 
 jobs:
-  build-and-test:
+  test-and-coverage:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      # 1) Setup Node and run Node-side tasks (lint + vitest)
-      - name: Setup Node
+      # -------------------------
+      # Frontend (Vitest)
+      # -------------------------
+      - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
-          cache: "npm"
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
 
-      - name: Install Node dependencies
+      - name: Install frontend deps
+        working-directory: frontend
         run: npm ci
 
-      - name: Lint (ESLint)
+      - name: Lint frontend
+        working-directory: frontend
         run: npm run lint
 
-      - name: Frontend tests (Vitest + coverage)
-        run: npm run test:frontend -- --coverage
+      - name: Frontend tests (coverage)
+        working-directory: frontend
+        run: npm run test -- --coverage
 
-      # 2) Setup Python and run backend tests (pytest + coverage)
-      - name: Setup Python
+      # -------------------------
+      # Backend (pytest)
+      # -------------------------
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - name: Install Python dependencies
+      - name: Install backend deps (root)
         run: |
-          pip install --upgrade pip
-          # If you already have requirements.txt, this is perfect:
+          python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then
             pip install -r requirements.txt
           else
-            # Fallback: install what data_scout needs
-            pip install pytest pytest-cov yfinance requests python-dotenv
+            pip install pytest pytest-cov python-dotenv requests
           fi
 
       - name: Backend tests (pytest + coverage)
-        run: npm run test:backend
+        run: pytest
+
+      # -------------------------
+      # Bots/runner (pytest)
+      # -------------------------
+      - name: Install bots deps
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f u-stock-bots/requirements.txt ]; then
+            pip install -r u-stock-bots/requirements.txt
+          else
+            pip install pytest pytest-cov python-dotenv requests
+          fi
+
+      - name: Bots tests (pytest + coverage)
+        working-directory: u-stock-bots
+        run: pytest
+
+      # -------------------------
+      # Upload artifacts
+      # -------------------------
+      - name: Upload frontend coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage
+          path: frontend/coverage/
+
+      - name: Upload backend coverage xml
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage-xml
+          path: coverage-backend.xml
+
+      - name: Upload bots coverage xml
+        uses: actions/upload-artifact@v4
+        with:
+          name: bots-coverage-xml
+          path: u-stock-bots/coverage-bots.xml
