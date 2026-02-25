@@ -12,7 +12,7 @@ import AuthPage from "./components/auth/AuthPage";
 import SignupPage from "./components/auth/SignupPage";
 import LandingPage from "./components/landing/LandingPage";
 
-import { useAuth } from "./context/AuthContext";
+import { useAuth } from "./context/authContextBase.js";
 import ConnectedAppsPage from "./components/apps/ConnectedAppsPage";
 
 import FullPageLoader from "./components/common/FullPageLoader";
