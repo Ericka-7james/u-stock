@@ -120,7 +120,7 @@ export default function DatasourcesPage() {
 
   return (
     <AppShell>
-      <div className="app-page datasources-page">
+      <div className="datasources-page">
         <PageHeaderCard
           title={c.header.title}
           subtitle={
@@ -149,6 +149,7 @@ export default function DatasourcesPage() {
           </div>
         </PageHeaderCard>
 
+        {/* ✅ lane wrapper like ConnectedAppsPage / IndexFundsPage */}
         <div className="ds-page-wrap">
           <main className="ds-main">
             <div className="ds-left">
@@ -166,7 +167,9 @@ export default function DatasourcesPage() {
 
                     try {
                       localStorage.setItem("ustock:last_ticker", clean);
-                    } catch {}
+                    } catch (_err) {
+                      // ignore storage failures (private mode, blocked storage, etc.)
+                    }
 
                     navigate(`/?ticker=${encodeURIComponent(clean)}`);
                   }}

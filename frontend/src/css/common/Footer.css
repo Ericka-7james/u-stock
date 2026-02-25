@@ -1,10 +1,31 @@
 /* src/css/common/Footer.css */
 
+:root {
+  /* match your app/landing lane + padding behavior */
+  --footer-lane: 1100px;
+  --footer-side-pad: 24px;
+}
+
+@media (max-width: 768px) {
+  :root {
+    --footer-side-pad: 16px;
+  }
+}
+
 .app-footer {
   width: 100%;
   margin-top: auto;
-  padding: 18px 16px;
+  padding: 18px 0; /* important: padding handled by inner lane */
   text-align: center;
   font-size: 12px;
   color: var(--ustock-text-muted);
+  box-sizing: border-box;
+}
+
+.app-footer-inner {
+  max-width: var(--footer-lane);
+  margin: 0 auto;
+  padding: 0 var(--footer-side-pad);
+  box-sizing: border-box;
+  min-width: 0;
 }

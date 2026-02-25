@@ -1,28 +1,31 @@
 /* src/css/pages/DatasourcesPage.css */
 
-/* ========= DATA SOURCES PAGE ======================================= */
+/* ========= DATASOURCES PAGE ======================================= */
 
 .datasources-page {
-  padding-top: 18px;
-  padding-bottom: 40px;
+  width: 100%;
+  padding: 18px 0 40px;
+  box-sizing: border-box;
+
+  --ds-gap: 16px; /* single source of truth */
 }
 
-/* ✅ Content lane (ConnectedApps pattern) */
+/* ✅ Lane wrapper (same structure as other pages) */
 .ds-page-wrap {
   width: 100%;
   max-width: 1100px;
-  margin: 0 auto;
+  margin: var(--ds-gap) auto 0; /* 👈 THIS creates consistent spacing under header */
   padding: 0 24px;
   box-sizing: border-box;
 }
 
-/* ✅ Space between header card and content (don’t target .page-header-wrap here,
-   because PageHeaderCard owns that class globally) */
-.datasources-page .page-header-card {
-  margin-bottom: 16px;
+/* Remove any header-bottom margin overrides if present */
+.datasources-page .page-header-card,
+.datasources-page .page-header-wrap {
+  margin-bottom: 0;
 }
 
-/* Right media (PageHeaderCard hides on <=768px) */
+/* Hero image */
 .datasources-hero-logo {
   width: 100%;
   height: auto;
@@ -33,7 +36,7 @@
   transform: translateY(-6px);
 }
 
-/* Header actions row */
+/* Header actions */
 .ds-header-actions {
   margin-top: 12px;
   display: flex;
@@ -65,7 +68,7 @@
   }
 }
 
-/* Clamp wrapper */
+/* Card clamp */
 .ds-cardClamp {
   min-width: 0;
   max-width: 100%;
@@ -81,11 +84,7 @@
   box-sizing: border-box;
 }
 
-.ds-cardClamp * {
-  box-sizing: border-box;
-}
-
-/* Mobile gutters (match ConnectedAppsPage + PageHeaderCard) */
+/* Mobile gutters */
 @media (max-width: 768px) {
   .ds-page-wrap {
     padding: 0 16px;

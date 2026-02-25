@@ -5,7 +5,7 @@ import { useAuth } from "../../context/AuthContext";
 import AuthRequiredModal from "../common/AuthRequiredModal";
 import "../../css/layout/NavBar.css";
 
-import dapperSquirrel from "../../assets/icons/DapperSquirrel_HQ.png";
+import LucentAppIcon from "../../assets/icons/LucentAppIcon.png"; // ✅ updated logo
 
 
 export default function NavBar({
@@ -21,7 +21,6 @@ export default function NavBar({
   const navigate = useNavigate();
 
   const [authModalOpen, setAuthModalOpen] = useState(false);
-  const [pendingPath, setPendingPath] = useState(null);
 
   const isDashboard = location.pathname === "/";
   const isDatasources = location.pathname.startsWith("/data-sources");
@@ -46,7 +45,6 @@ export default function NavBar({
   };
 
   const openAuthModalFor = (to) => {
-    setPendingPath(to);
     setAuthModalOpen(true);
   };
 
@@ -56,7 +54,7 @@ export default function NavBar({
       e.preventDefault();
       setUserMenuOpen(false);
       setNavOpen(false);
-      openAuthModalFor(to);
+      openAuthModalFor();
       return;
     }
 
@@ -107,7 +105,6 @@ export default function NavBar({
 
   const closeAuthModal = () => {
     setAuthModalOpen(false);
-    setPendingPath(null);
   };
 
   const goToAuth = () => {
@@ -137,7 +134,7 @@ export default function NavBar({
         <div className="side-nav-brand">
           <div className="side-nav-logo">
             <img
-              src={dapperSquirrel}
+              src={LucentAppIcon}
               alt="Lucent squirrel"
               className="side-nav-logo-img"
               draggable="false"
@@ -234,13 +231,18 @@ export default function NavBar({
 
           <Link to="/" className="topbar-home-link" onClick={handleNavTo("/")}>
             <img
-              src={dapperSquirrel}
+              src={LucentAppIcon}
               alt=""
               className="topbar-squirrel"
               aria-hidden="true"
               draggable="false"
             />
-            <span className="topbar-home-label">U-Stock</span>
+            <span className="topbar-home-label topbar-home-label--full">
+              Lucent Financial
+            </span>
+            <span className="topbar-home-label topbar-home-label--short">
+              UStock
+            </span>
           </Link>
         </div>
 

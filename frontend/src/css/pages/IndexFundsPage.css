@@ -1,26 +1,27 @@
+/* src/css/pages/IndexFundsPage.css */
+
 /* ========= MARKET BASELINES PAGE ======================================= */
 
 .index-funds-page {
-  padding-top: 18px;
-  padding-bottom: 40px;
+  width: 100%;
+  padding: 18px 0 40px;
 
   /* one source of truth for vertical rhythm on this page */
   --index-gap: 16px;
 }
 
+/* ✅ This is the ConnectedAppsPage move: clamp + gutters live here */
+.index-page-wrap {
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 24px;
+  box-sizing: border-box;
+}
+
 /* Tighten header -> tabs spacing ONLY on this page */
 .index-funds-page .page-header-wrap {
-  margin-bottom: var(--index-gap); /* consistent */
-}
-
-/* Tabs should sit closer to the header */
-.index-tabs-row {
-  margin: 0 auto var(--index-gap);
-}
-
-/* Give the first panel a consistent top rhythm under tabs */
-.index-funds-page .panel:first-of-type {
-  margin-top: 0;
+  margin-bottom: var(--index-gap);
 }
 
 /* Header logo (right media). Hidden on <=768px by PageHeaderCard.css */
@@ -54,11 +55,7 @@
 /* TABS ------------------------------------------------------------- */
 
 .index-tabs-row {
-  width: 100%;
-  max-width: 1100px;
-  margin: 0 auto 16px;
-  padding: 0 24px;
-  box-sizing: border-box;
+  margin: 0 0 var(--index-gap);
 }
 
 .tabs {
@@ -91,12 +88,12 @@
   font-weight: 700;
 }
 
-/* PANEL lane (match About grid lane width) */
-.panel {
+/* PANELS (scoped to this page only) -------------------------------- */
+
+.index-funds-page .panel {
   width: 100%;
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 16px 18px;          /* inner padding */
+  margin: 0;
+  padding: 16px 18px;
   box-sizing: border-box;
 
   background: var(--ustock-bg-card);
@@ -105,14 +102,11 @@
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
 }
 
-/* ABOUT PANELS ----------------------------------------------------- */
-.index-funds-page .panel {
-  margin-top: 0; /* baseline */
+.index-funds-page .panel + .panel {
+  margin-top: var(--index-gap);
 }
 
-.index-funds-page .panel + .panel {
-  margin-top: var(--index-gap); /* space between cards */
-}
+/* ABOUT PANELS ----------------------------------------------------- */
 
 .index-about-panel h3 {
   margin-top: 0;
@@ -248,21 +242,9 @@
   color: var(--ustock-green-main);
 }
 
-/* Responsive */
-
-/* ✅ match the same horizontal lane as PageHeaderCard/tabs */
-@media (min-width: 0px) {
-  .index-funds-page .panel {
-    width: calc(100% - 48px);   /* 24px left + 24px right */
-  }
-}
-
+/* MOBILE (match ConnectedApps) */
 @media (max-width: 768px) {
-  .index-funds-page .panel {
-    width: calc(100% - 32px);   /* 16px left + 16px right */
-  }
-
-  .index-tabs-row {
+  .index-page-wrap {
     padding: 0 16px;
   }
 }
