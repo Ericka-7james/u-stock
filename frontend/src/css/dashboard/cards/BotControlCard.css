@@ -7,13 +7,11 @@
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.06);
   overflow: visible;
   color: #0f172a;
+  position: relative; /* ✅ needed for absolute spinner */
 }
 
+/* ✅ Layout handled by .card-header in DashboardCard.css */
 .botCardHead {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
   padding: 14px 16px;
   background: rgba(241, 245, 249, 0.55);
   border-bottom: 1px solid rgba(148, 163, 184, 0.2);
@@ -380,10 +378,6 @@
   margin-top: 6px;
   overflow-wrap: anywhere;
   word-break: break-word;
-}
-
-.botCard {
-  position: relative; /* ✅ needed for absolute spinner */
 }
 
 /* Small in-card refresh spinner (bottom-right) */

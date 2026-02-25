@@ -1,13 +1,15 @@
-// src/components/dashboard/cards/SentimentCard.jsx
+// frontend/src/components/dashboard/cards/SentimentCard.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import "../../../css/dashboard/cards/SentimentCard.css";
 
-const SENTIMENT_MODES = [
-  { value: "ALL", label: "All" },
-  { value: "PRICE", label: "Price-based Sentiment" },
-  { value: "VOL", label: "Volatility Sentiment" },
-  { value: "TECH", label: "Technical Pattern Sentiment" },
-];
+import DashboardCard from "./shared/DashboardCard.jsx";
+
+import { SENTIMENT_CARD_COPY as COPY } from "../../../content/dashboard/cards/sentimentCard.content.ts";
+
+import { nOrNull, fmtPctSigned } from "../../../lib/format/marketFormat.js";
+import { fmtPct1FromRatio } from "../../../lib/format/number.js";
+
+const SENTIMENT_MODES = COPY.modes;
 
 export default function SentimentCard({
   symbol,
@@ -63,13 +65,13 @@ export default function SentimentCard({
       risk: null,
       style: null,
       crossSection: null,
-      overallLabel: "Not enough data",
+      overallLabel: COPY.labels.notEnoughData,
       overallScore: 0,
     };
   }, [backendSnapshot, localSentiment]);
 
   const hasData = Boolean(sentiment.hasEnoughData);
-  const displayTicker = symbol || "—";
+  const displayTicker = symbol || COPY.header.tickerFallback;
 
   // Help modal: ESC closes + focus close button
   useEffect(() => {
@@ -86,18 +88,19 @@ export default function SentimentCard({
   }, [showHelp]);
 
   return (
-    <section className="sentiment-card">
-      <header className="sentiment-card__header">
-        <div className="sentiment-card__header-left">
+    <DashboardCard className="sentiment-card">
+      <header className="card-header">
+        <div className="card-header-left">
           <div className="sentiment-card__title-row">
-            <h2 className="sentiment-card__title">
-              Sentiment for{" "}
+            <h2 className="panel-title">
+              {COPY.header.titlePrefix}{" "}
               <span className="sentiment-card__ticker">{displayTicker}</span>
             </h2>
+
             <button
               type="button"
               className="help-icon-button"
-              aria-label="Explain this sentiment card"
+              aria-label={COPY.header.helpButtonAria}
               onClick={() => setShowHelp(true)}
             >
               ?
@@ -105,46 +108,44 @@ export default function SentimentCard({
           </div>
 
           {!symbol && !loading && (
-            <p className="sentiment-card__subtitle">
-              Select a ticker to view sentiment.
-            </p>
+            <p className="card-subtitle">{COPY.header.subtitles.noSymbol}</p>
           )}
 
           {symbol && loading && (
-            <p className="sentiment-card__subtitle">
-              Loading price &amp; sentiment…
-            </p>
+            <p className="card-subtitle">{COPY.header.subtitles.loading}</p>
           )}
 
           {symbol && !loading && !hasData && (
-            <p className="sentiment-card__subtitle">
-              Not enough history to compute sentiment yet.
+            <p className="card-subtitle">
+              {COPY.header.subtitles.notEnoughHistory}
             </p>
           )}
 
           {symbol && !loading && hasData && (
-            <p className="sentiment-card__subtitle">
-              Overall:{" "}
+            <p className="card-subtitle">
+              {COPY.header.subtitles.overallPrefix}{" "}
               <span className="sentiment-card__overall">
                 {sentiment.overallLabel}
               </span>{" "}
               <span className="sentiment-card__overall-score">
-                (score {sentiment.overallScore}
-                {sentiment.source === "backend" ? ", from snapshot" : ""})
+                {COPY.header.subtitles.scorePrefix} {sentiment.overallScore}
+                {sentiment.source === "backend"
+                  ? COPY.header.subtitles.scoreSuffixBackend
+                  : COPY.header.subtitles.scoreSuffixLocal}
               </span>
             </p>
           )}
 
           {sentiment.source === "backend" && sentiment.style && (
-            <p className="sentiment-card__subtitle">
-              Style:{" "}
+            <p className="card-subtitle">
+              {COPY.header.subtitles.stylePrefix}{" "}
               <span className="sentiment-chip sentiment-chip--style">
                 {sentiment.style.label}
               </span>
               {sentiment.risk && (
                 <>
-                  {" • "}
-                  Risk:{" "}
+                  {COPY.header.subtitles.dot}
+                  {COPY.header.subtitles.riskPrefix}{" "}
                   <span className="sentiment-chip sentiment-chip--risk">
                     {sentiment.risk.label}
                   </span>
@@ -154,7 +155,9 @@ export default function SentimentCard({
           )}
         </div>
 
-        <SentimentModeDropdown mode={mode} onChange={setMode} />
+        <div className="card-header-right">
+          <SentimentModeDropdown mode={mode} onChange={setMode} />
+        </div>
       </header>
 
       {showHelp && (
@@ -162,7 +165,7 @@ export default function SentimentCard({
           className="help-popover-backdrop"
           role="dialog"
           aria-modal="true"
-          aria-label="Sentiment explanation"
+          aria-label={COPY.help.dialogAria}
           onClick={() => setShowHelp(false)}
         >
           <div className="help-popover" onClick={(e) => e.stopPropagation()}>
@@ -170,44 +173,34 @@ export default function SentimentCard({
               ref={closeBtnRef}
               type="button"
               className="help-popover__close"
-              aria-label="Close explanation"
+              aria-label={COPY.help.closeAria}
               onClick={() => setShowHelp(false)}
             >
               ×
             </button>
 
-            <h3 className="help-popover__title">
-              What does this “Sentiment” mean?
-            </h3>
+            <h3 className="help-popover__title">{COPY.help.title}</h3>
 
             <p className="help-popover__text">
-              Right now, this card is <strong>price-derived sentiment</strong> —
-              it summarizes what the price has been doing recently. It does{" "}
-              <strong>not</strong> include news, social media, fundamentals, or
-              macro data yet.
+              {COPY.help.p1.a}
+              <strong>{COPY.help.p1.strong1}</strong>
+              {COPY.help.p1.b}
+              <strong>{COPY.help.p1.strong2}</strong>
+              {COPY.help.p1.c}
             </p>
 
             <ul className="help-popover__list">
-              <li>
-                <strong>Price-based</strong> looks at recent returns (1D, 5D,
-                ~20D) and labels the move as bullish/bearish/neutral.
-              </li>
-              <li>
-                <strong>Volatility</strong> uses realized volatility from daily
-                returns to describe whether price action is calm, normal, or
-                stressed.
-              </li>
-              <li>
-                <strong>Technical</strong> compares the latest close to moving
-                averages (20/50-day) to detect trend vs mixed/range behavior.
-              </li>
+              {COPY.help.bullets.map((b) => (
+                <li key={b.strong}>
+                  <strong>{b.strong}</strong>
+                  {b.text}
+                </li>
+              ))}
             </ul>
 
             <p className="help-popover__note">
-              <strong>Exploration only.</strong> This is not a trading signal or
-              investment advice. Next upgrades: combine price signals with news
-              + social sentiment + fundamentals, and store decision logs with
-              confidence + outcome tracking.
+              <strong>{COPY.help.note.strong}</strong>
+              {COPY.help.note.text}
             </p>
           </div>
         </div>
@@ -218,60 +211,61 @@ export default function SentimentCard({
           {(mode === "ALL" || mode === "PRICE") && sentiment.priceBased && (
             <div className="sentiment-section sentiment-section--price">
               <h3 className="sentiment-section__title">
-                Price-based Sentiment
+                {COPY.sections.price.title}
               </h3>
               <p className="sentiment-section__label">
                 <span className="sentiment-chip sentiment-chip--price">
                   {sentiment.priceBased.label}
                 </span>
               </p>
+
               <dl className="sentiment-metrics">
                 <div className="sentiment-metric">
-                  <dt>1D Change</dt>
+                  <dt>{COPY.sections.price.metricLabels.change1d}</dt>
                   <dd
                     className={classForPct(
-                      sentiment.priceBased.change_1d ??
-                        sentiment.priceBased.change1D
+                      pctFromPriceBased(sentiment.priceBased, "1d")
                     )}
                   >
-                    {formatPct(
-                      sentiment.priceBased.change_1d ??
-                        sentiment.priceBased.change1D
+                    {fmtPctSigned(
+                      pctFromPriceBased(sentiment.priceBased, "1d")
                     )}
                   </dd>
                 </div>
+
                 <div className="sentiment-metric">
-                  <dt>5D Change</dt>
+                  <dt>{COPY.sections.price.metricLabels.change5d}</dt>
                   <dd
                     className={classForPct(
-                      sentiment.priceBased.change_5d ??
-                        sentiment.priceBased.change5D
+                      pctFromPriceBased(sentiment.priceBased, "5d")
                     )}
                   >
-                    {formatPct(
-                      sentiment.priceBased.change_5d ??
-                        sentiment.priceBased.change5D
+                    {fmtPctSigned(
+                      pctFromPriceBased(sentiment.priceBased, "5d")
                     )}
                   </dd>
                 </div>
+
                 <div className="sentiment-metric">
-                  <dt>≈1M Change</dt>
+                  <dt>{COPY.sections.price.metricLabels.change20d}</dt>
                   <dd
                     className={classForPct(
-                      sentiment.priceBased.change_20d ??
-                        sentiment.priceBased.change20D
+                      pctFromPriceBased(sentiment.priceBased, "20d")
                     )}
                   >
-                    {formatPct(
-                      sentiment.priceBased.change_20d ??
-                        sentiment.priceBased.change20D
+                    {fmtPctSigned(
+                      pctFromPriceBased(sentiment.priceBased, "20d")
                     )}
                   </dd>
                 </div>
+
                 {sentiment.crossSection?.ret_20d_pct != null && (
                   <div className="sentiment-metric">
-                    <dt>20D Return Rank</dt>
-                    <dd>{formatPercentile(sentiment.crossSection.ret_20d_pct)}</dd>
+                    <dt>{COPY.sections.price.metricLabels.rank20d}</dt>
+                    <dd>
+                      {fmtPct1FromRatio(sentiment.crossSection.ret_20d_pct)}
+                      {COPY.misc.pctileSuffix}
+                    </dd>
                   </div>
                 )}
               </dl>
@@ -281,31 +275,34 @@ export default function SentimentCard({
           {(mode === "ALL" || mode === "VOL") && sentiment.volatility && (
             <div className="sentiment-section sentiment-section--vol">
               <h3 className="sentiment-section__title">
-                Volatility Sentiment
+                {COPY.sections.vol.title}
               </h3>
               <p className="sentiment-section__label">
                 <span className="sentiment-chip sentiment-chip--vol">
                   {sentiment.volatility.label}
                 </span>
               </p>
+
               <dl className="sentiment-metrics">
                 <div className="sentiment-metric">
-                  <dt>Realized Volatility</dt>
+                  <dt>{COPY.sections.vol.metricLabels.realizedVol}</dt>
                   <dd>
-                    {formatNumber(
+                    {fmtNum2(
                       sentiment.volatility.realized_vol ??
                         sentiment.volatility.realizedVol
                     )}
                     %
                   </dd>
                 </div>
+
                 {sentiment.crossSection?.realized_vol_pct != null && (
                   <div className="sentiment-metric">
-                    <dt>Volatility Rank</dt>
+                    <dt>{COPY.sections.vol.metricLabels.volRank}</dt>
                     <dd>
-                      {formatPercentile(
+                      {fmtPct1FromRatio(
                         sentiment.crossSection.realized_vol_pct
                       )}
+                      {COPY.misc.pctileSuffix}
                     </dd>
                   </div>
                 )}
@@ -316,40 +313,45 @@ export default function SentimentCard({
           {(mode === "ALL" || mode === "TECH") && sentiment.technical && (
             <div className="sentiment-section sentiment-section--tech">
               <h3 className="sentiment-section__title">
-                Technical Pattern Sentiment
+                {COPY.sections.tech.title}
               </h3>
               <p className="sentiment-section__label">
                 <span className="sentiment-chip sentiment-chip--tech">
                   {sentiment.technical.label}
                 </span>
               </p>
+
               <dl className="sentiment-metrics">
                 <div className="sentiment-metric">
-                  <dt>Last Close</dt>
+                  <dt>{COPY.sections.tech.metricLabels.lastClose}</dt>
                   <dd>
-                    {formatNumber(
+                    {fmtNum2(
                       sentiment.technical.last_close ??
                         sentiment.technical.lastClose
                     )}
                   </dd>
                 </div>
+
                 <div className="sentiment-metric">
-                  <dt>20-day MA</dt>
-                  <dd>{formatNumber(sentiment.technical.ma_short)}</dd>
+                  <dt>{COPY.sections.tech.metricLabels.ma20}</dt>
+                  <dd>{fmtNum2(sentiment.technical.ma_short)}</dd>
                 </div>
+
                 <div className="sentiment-metric">
-                  <dt>50-day MA</dt>
-                  <dd>{formatNumber(sentiment.technical.ma_long)}</dd>
+                  <dt>{COPY.sections.tech.metricLabels.ma50}</dt>
+                  <dd>{fmtNum2(sentiment.technical.ma_long)}</dd>
                 </div>
+
                 {sentiment.technical.rsi_14 != null && (
                   <div className="sentiment-metric">
-                    <dt>RSI (14)</dt>
-                    <dd>{formatNumber(sentiment.technical.rsi_14)}</dd>
+                    <dt>{COPY.sections.tech.metricLabels.rsi14}</dt>
+                    <dd>{fmtNum2(sentiment.technical.rsi_14)}</dd>
                   </div>
                 )}
+
                 {sentiment.technical.bb_position != null && (
                   <div className="sentiment-metric">
-                    <dt>Bollinger Position</dt>
+                    <dt>{COPY.sections.tech.metricLabels.bbPos}</dt>
                     <dd>
                       {formatBollinger(sentiment.technical.bb_position)}
                     </dd>
@@ -360,7 +362,7 @@ export default function SentimentCard({
           )}
         </div>
       )}
-    </section>
+    </DashboardCard>
   );
 }
 
@@ -370,8 +372,9 @@ function SentimentModeDropdown({ mode, onChange }) {
   const [isOpen, setIsOpen] = useState(false);
   const wrapRef = useRef(null);
 
-  const current = SENTIMENT_MODES.find((m) => m.value === mode) || SENTIMENT_MODES[0];
-  const labelText = mode === "ALL" ? "View" : current.label;
+  const current =
+    SENTIMENT_MODES.find((m) => m.value === mode) || SENTIMENT_MODES[0];
+  const labelText = mode === "ALL" ? COPY.dropdown.viewLabel : current.label;
 
   const handleSelect = (value) => {
     onChange(value);
@@ -406,7 +409,7 @@ function SentimentModeDropdown({ mode, onChange }) {
         onClick={() => setIsOpen((open) => !open)}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
-        aria-label="Sentiment view mode"
+        aria-label={COPY.dropdown.aria}
       >
         <span className="chart-select-label">{labelText}</span>
         <span className="chart-select-caret">▾</span>
@@ -414,7 +417,11 @@ function SentimentModeDropdown({ mode, onChange }) {
 
       {isOpen && (
         <div className="chart-select-menu">
-          <ul className="chart-select-options" role="listbox" aria-label="Sentiment modes">
+          <ul
+            className="chart-select-options"
+            role="listbox"
+            aria-label={COPY.dropdown.modesAria}
+          >
             {SENTIMENT_MODES.map((option) => (
               <li
                 key={option.value}
@@ -443,35 +450,37 @@ function SentimentModeDropdown({ mode, onChange }) {
   );
 }
 
-/* ---------- Formatting helpers & fallback sentiment (unchanged) ------------ */
-function formatPct(v) {
-  if (v === null || v === undefined || isNaN(v)) return "—";
-  return `${v >= 0 ? "+" : ""}${v.toFixed(2)}%`;
+/* ---------- Shared-ish formatting helpers ------------------- */
+
+function fmtNum2(v) {
+  const x = nOrNull(v);
+  return x === null ? "—" : x.toFixed(2);
 }
 
-function formatNumber(v) {
-  if (v === null || v === undefined || isNaN(v)) return "—";
-  return v.toFixed(2);
-}
-
-function formatPercentile(p) {
-  if (p === null || p === undefined || isNaN(p)) return "—";
-  return `${(p * 100).toFixed(1)} pctile`;
+// backend supports both snake_case + camelCase keys; normalize to a percent number
+function pctFromPriceBased(pb, horizon) {
+  if (!pb || typeof pb !== "object") return null;
+  if (horizon === "1d") return nOrNull(pb.change_1d ?? pb.change1D);
+  if (horizon === "5d") return nOrNull(pb.change_5d ?? pb.change5D);
+  if (horizon === "20d") return nOrNull(pb.change_20d ?? pb.change20D);
+  return null;
 }
 
 function formatBollinger(pos) {
-  if (pos === null || pos === undefined || isNaN(pos)) return "—";
-  if (pos >= 0.8) return "Near upper band";
-  if (pos <= -0.8) return "Near lower band";
-  if (pos > 0.2) return "Above mid band";
-  if (pos < -0.2) return "Below mid band";
-  return "Around mid band";
+  const p = nOrNull(pos);
+  if (p === null) return "—";
+  if (p >= 0.8) return COPY.labels.bollinger.nearUpper;
+  if (p <= -0.8) return COPY.labels.bollinger.nearLower;
+  if (p > 0.2) return COPY.labels.bollinger.aboveMid;
+  if (p < -0.2) return COPY.labels.bollinger.belowMid;
+  return COPY.labels.bollinger.aroundMid;
 }
 
 function classForPct(v) {
-  if (v === null || v === undefined || isNaN(v)) return "sentiment-pct";
-  if (v > 0.1) return "sentiment-pct sentiment-pct--up";
-  if (v < -0.1) return "sentiment-pct sentiment-pct--down";
+  const x = nOrNull(v);
+  if (x === null) return "sentiment-pct";
+  if (x > 0.1) return "sentiment-pct sentiment-pct--up";
+  if (x < -0.1) return "sentiment-pct sentiment-pct--down";
   return "sentiment-pct";
 }
 
@@ -483,21 +492,19 @@ function computeSentimentFromHistory(history = []) {
       priceBased: null,
       volatility: null,
       technical: null,
-      overallLabel: "Not enough data",
+      overallLabel: COPY.labels.notEnoughData,
       overallScore: 0,
     };
   }
 
-  const closes = history
-    .map((bar) => Number(bar.close))
-    .filter((v) => !isNaN(v));
+  const closes = history.map((bar) => Number(bar.close)).filter((v) => !isNaN(v));
   if (closes.length < 3) {
     return {
       hasEnoughData: false,
       priceBased: null,
       volatility: null,
       technical: null,
-      overallLabel: "Not enough data",
+      overallLabel: COPY.labels.notEnoughData,
       overallScore: 0,
     };
   }
@@ -508,8 +515,7 @@ function computeSentimentFromHistory(history = []) {
   const close5 = closes[Math.max(0, lastIdx - 5)];
   const close20 = closes[Math.max(0, lastIdx - 20)];
 
-  const pct = (from, to) =>
-    from && from !== 0 ? ((to - from) / from) * 100 : 0;
+  const pct = (from, to) => (from && from !== 0 ? ((to - from) / from) * 100 : 0);
 
   const change1D = pct(prevClose, lastClose);
   const change5D = pct(close5, lastClose);
@@ -524,16 +530,16 @@ function computeSentimentFromHistory(history = []) {
   const smallDown = change1D < 0 || change5D < 0;
 
   if (bigUp) {
-    priceLabel = "Strongly Bullish";
+    priceLabel = COPY.labels.price.stronglyBullish;
     priceScore = 2;
   } else if (smallUp) {
-    priceLabel = "Bullish";
+    priceLabel = COPY.labels.price.bullish;
     priceScore = 1;
   } else if (bigDown) {
-    priceLabel = "Strongly Bearish";
+    priceLabel = COPY.labels.price.stronglyBearish;
     priceScore = -2;
   } else if (smallDown) {
-    priceLabel = "Bearish";
+    priceLabel = COPY.labels.price.bearish;
     priceScore = -1;
   }
 
@@ -551,33 +557,28 @@ function computeSentimentFromHistory(history = []) {
     returns.push(r);
   }
 
-  const meanVal =
-    returns.reduce((acc, r) => acc + r, 0) / (returns.length || 1);
+  const meanVal = returns.reduce((acc, r) => acc + r, 0) / (returns.length || 1);
   const variance =
     returns.reduce((acc, r) => acc + (r - meanVal) * (r - meanVal), 0) /
     (returns.length || 1);
   const stdev = Math.sqrt(variance);
   const realizedVol = stdev * Math.sqrt(252) * 100;
 
-  let volLabel = "Normal";
+  let volLabel = COPY.labels.vol.normal;
   let volScore = 0;
 
   if (realizedVol < 20) {
-    volLabel = "Calm";
+    volLabel = COPY.labels.vol.calm;
     volScore = 1;
   } else if (realizedVol > 60) {
-    volLabel = "Stressed";
+    volLabel = COPY.labels.vol.stressed;
     volScore = -2;
   } else if (realizedVol > 40) {
-    volLabel = "Elevated";
+    volLabel = COPY.labels.vol.elevated;
     volScore = -1;
   }
 
-  const volatility = {
-    label: volLabel,
-    score: volScore,
-    realizedVol,
-  };
+  const volatility = { label: volLabel, score: volScore, realizedVol };
 
   const windowShort = 20;
   const windowLong = 50;
@@ -585,29 +586,28 @@ function computeSentimentFromHistory(history = []) {
   const recentShort = closes.slice(-windowShort);
   const recentLong = closes.slice(-windowLong);
 
-  const avg = (arr) =>
-    arr.length ? arr.reduce((acc, v) => acc + v, 0) / arr.length : lastClose;
+  const avg = (arr) => (arr.length ? arr.reduce((acc, v) => acc + v, 0) / arr.length : lastClose);
 
   const maShort = avg(recentShort);
   const maLong = avg(recentLong.length ? recentLong : recentShort);
 
-  let techLabel = "Range-Bound / Mixed";
+  let techLabel = COPY.labels.tech.rangeMixed;
   let techScore = 0;
 
   const aboveShort = lastClose > maShort;
   const aboveLong = lastClose > maLong;
 
   if (aboveShort && aboveLong) {
-    techLabel = "Uptrend";
+    techLabel = COPY.labels.tech.uptrend;
     techScore = 2;
   } else if (!aboveShort && !aboveLong) {
-    techLabel = "Downtrend";
+    techLabel = COPY.labels.tech.downtrend;
     techScore = -2;
   } else if (aboveShort && !aboveLong) {
-    techLabel = "Potential Early Uptrend";
+    techLabel = COPY.labels.tech.earlyUptrend;
     techScore = 1;
   } else if (!aboveShort && aboveLong) {
-    techLabel = "Potential Early Breakdown";
+    techLabel = COPY.labels.tech.earlyBreakdown;
     techScore = -1;
   }
 
@@ -622,19 +622,12 @@ function computeSentimentFromHistory(history = []) {
   };
 
   const overallScore = priceScore + volScore + techScore;
-  let overallLabel = "Neutral / Mixed";
+  let overallLabel = COPY.labels.overall.neutralMixed;
 
-  if (overallScore >= 3) overallLabel = "Strongly Bullish";
-  else if (overallScore >= 1) overallLabel = "Bullish Tilt";
-  else if (overallScore <= -3) overallLabel = "Strongly Bearish";
-  else if (overallScore <= -1) overallLabel = "Bearish Tilt";
+  if (overallScore >= 3) overallLabel = COPY.labels.overall.stronglyBullish;
+  else if (overallScore >= 1) overallLabel = COPY.labels.overall.bullishTilt;
+  else if (overallScore <= -3) overallLabel = COPY.labels.overall.stronglyBearish;
+  else if (overallScore <= -1) overallLabel = COPY.labels.overall.bearishTilt;
 
-  return {
-    hasEnoughData: true,
-    priceBased,
-    volatility,
-    technical,
-    overallLabel,
-    overallScore,
-  };
+  return { hasEnoughData: true, priceBased, volatility, technical, overallLabel, overallScore };
 }

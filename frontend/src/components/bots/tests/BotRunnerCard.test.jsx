@@ -27,7 +27,7 @@ let authState = {
   authFetch: vi.fn(),
 };
 
-vi.mock("../../../context/AuthContext", () => ({
+vi.mock("../../../context/authContextBase.js", () => ({
   useAuth: () => authState,
 }));
 

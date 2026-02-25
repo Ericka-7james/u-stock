@@ -4,6 +4,44 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, within, cleanup } from "@testing-library/react";
 import TopSignalsCard from "../cards/TopSignalsCard.jsx";
 
+/* -----------------------------------------
+   Stable COPY mock (don’t couple tests to copy files)
+------------------------------------------ */
+vi.mock("../../../content/dashboard/cards/topSignalsCard.content.ts", () => {
+  return {
+    TOP_SIGNALS_CARD_COPY: {
+      title: "Top Signals",
+      tooltip: {
+        title: "How are top signals ranked?",
+        intro: "Intro text",
+        bullets: [
+          { label: "Daily", text: "Daily text" },
+          { label: "Intraday", text: "Intraday text" },
+          { label: "Multiday", text: "Multiday text" },
+        ],
+        footer: "Footer text",
+      },
+      states: {
+        loading: "Loading signals…",
+        empty: {
+          line1: "No signals available yet.",
+          line2: "Start your backend ranking endpoint or run your pipeline.",
+        },
+      },
+      table: {
+        headers: {
+          ticker: "Ticker",
+          score: "Score",
+          d1: "1d",
+          intraday: "Intraday",
+          d5: "5d",
+        },
+        rowTitle: "Click to select ticker",
+      },
+    },
+  };
+});
+
 // Mock HelpTooltip so we don't depend on its internal DOM
 vi.mock("../../common/HelpTooltip", () => ({
   default: ({ title, children }) => (
@@ -42,9 +80,7 @@ describe("TopSignalsCard", () => {
     expect(screen.getByText(/top signals/i)).toBeInTheDocument();
 
     // HelpTooltip mock provides a button with aria-label === title
-    expect(
-      screen.getByRole("button", { name: /how are top signals ranked\?/i })
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /how are top signals ranked\?/i })).toBeInTheDocument();
   });
 
   it("shows loading message when loading is true", () => {
@@ -76,11 +112,8 @@ describe("TopSignalsCard", () => {
       />
     );
 
-    // Updated copy
     expect(screen.getByText(/no signals available yet\./i)).toBeInTheDocument();
-    expect(
-      screen.getByText(/start your backend ranking endpoint or run your pipeline/i)
-    ).toBeInTheDocument();
+    expect(screen.getByText(/start your backend ranking endpoint or run your pipeline/i)).toBeInTheDocument();
 
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
     expect(logSpy).toHaveBeenCalled();
@@ -198,9 +231,7 @@ describe("TopSignalsCard", () => {
   });
 
   it("shows dashes when numeric fields missing", () => {
-    const signals = [
-      { ticker: "ZZZZ", components: {} }, // score missing, components missing
-    ];
+    const signals = [{ ticker: "ZZZZ", components: {} }]; // score missing, components missing
 
     render(
       <TopSignalsCard
@@ -231,9 +262,7 @@ describe("TopSignalsCard", () => {
       />
     );
 
-    expect(
-      screen.getByText(/ranked by composite signal score\./i)
-    ).toBeInTheDocument();
+    expect(screen.getByText(/ranked by composite signal score\./i)).toBeInTheDocument();
   });
 
   it("does not spam logs when rerendered with same state", () => {

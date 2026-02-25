@@ -1,5 +1,11 @@
 // frontend/src/components/dashboard/cards/shared/StatTiles.jsx
+import React from "react";
 
+/**
+ * CardShell
+ * Basic interior wrapper used in TradePerformancePanel.
+ * Keeps your existing tp* classnames.
+ */
 export function CardShell({ title, children, className = "" }) {
   return (
     <div className={`tpCard ${className}`}>

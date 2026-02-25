@@ -20,7 +20,6 @@ export default defineConfig(({ mode }) => {
               target: API_TARGET,
               changeOrigin: true,
               secure: false,
-              // keep path identical (explicit)
               rewrite: (path) => path,
             },
           }
@@ -36,6 +35,19 @@ export default defineConfig(({ mode }) => {
       globals: true,
       setupFiles: ["./src/setup.js"],
       environmentOptions: { jsdom: { url: "http://localhost/" } },
+
+      // ✅ coverage gate (>= 70%)
+      coverage: {
+        provider: "v8",
+        reporter: ["text", "html", "json"],
+        reportsDirectory: "./coverage",
+        thresholds: {
+          lines: 70,
+          functions: 70,
+          statements: 70,
+          branches: 60,
+        },
+      },
     },
   };
 });

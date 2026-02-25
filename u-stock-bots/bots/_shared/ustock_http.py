@@ -24,6 +24,10 @@ class CircuitBreakerOpen(RuntimeError):
     pass
 
 
+def _env(name: str, default: str = "") -> str:
+    return str(os.getenv(name, default) or "").strip()
+
+
 class _CircuitBreaker:
     """
     Simple circuit breaker:
@@ -74,20 +78,9 @@ class _CircuitBreaker:
             self.half_open_calls_left = max(1, int(self.cfg.half_open_max_calls))
 
 
-def _env(name: str, default: str = "") -> str:
-    return str(os.getenv(name, default) or "").strip()
-
-
 class UStockAPI:
     """
     Production-minded HTTP client for the U-Stock API.
-
-    Why this exists:
-      Bots run outside the browser, so they need a reliable way to:
-        - call your FastAPI backend
-        - authenticate (runner token or dev secret)
-        - retry transient errors
-        - avoid hammering the server when it's unhealthy (circuit breaker)
 
     Env:
       - USTOCK_API_BASE (default http://localhost:8000)
@@ -96,6 +89,10 @@ class UStockAPI:
       - RUNNER_TOKEN (preferred) -> Authorization: Bearer <token>
       - BOT_RUNNER_TOKEN (back-compat alias)
       - BOT_RUNNER_SECRET (dev fallback) -> X-Bot-Runner-Secret: <secret>
+
+      Optional runner user binding:
+      - RUNNER_USER_ID -> X-Runner-User-Id
+      - USTOCK_USER_ID (fallback alias)
 
       HTTP:
       - USTOCK_HTTP_TIMEOUT (default 15)
@@ -122,6 +119,9 @@ class UStockAPI:
 
         # ✅ Dev fallback
         self.runner_secret = _env("BOT_RUNNER_SECRET")
+
+        # ✅ Optional user binding header for mint endpoint / runner auth flows
+        self.runner_user_id = _env("RUNNER_USER_ID") or _env("USTOCK_USER_ID")
 
         # Retry policy knobs
         self.retries = int(_env("USTOCK_HTTP_RETRIES", "3") or 3)
@@ -178,6 +178,10 @@ class UStockAPI:
         # ✅ Dev fallback (optional)
         if self.runner_secret:
             headers["X-Bot-Runner-Secret"] = self.runner_secret
+
+        # ✅ Optional user binding
+        if self.runner_user_id:
+            headers["X-Runner-User-Id"] = self.runner_user_id
 
         return headers
 

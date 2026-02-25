@@ -4,18 +4,26 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
-// Mock AuthContext so NavBar/AppShell don't throw
+// ✅ Mock BOTH auth hooks so AppShell/NavBar can't throw regardless of which one is imported
+const mockAuth = {
+  user: null,
+  isAuthed: false,
+  refreshSession: vi.fn(),
+  login: vi.fn(),
+  signup: vi.fn(),
+  logout: vi.fn(),
+  authFetch: vi.fn(),
+};
+
 vi.mock("../../../context/AuthContext", () => ({
-  useAuth: () => ({
-    user: null,
-    isAuthed: false,
-    refreshSession: vi.fn(),
-    login: vi.fn(),
-    signup: vi.fn(),
-    logout: vi.fn(),
-  }),
+  useAuth: () => mockAuth,
 }));
 
+vi.mock("../../../context/authContextBase.js", () => ({
+  useAuth: () => mockAuth,
+}));
+
+// ✅ IMPORTANT: AboutPage actually lives here now
 import AboutPage from "../AboutPage";
 
 describe("AboutPage", () => {
@@ -30,17 +38,14 @@ describe("AboutPage", () => {
   it("renders the hero heading and builder headshot avatar", () => {
     renderAbout();
 
-    // Hero title on this page
     expect(
       screen.getByRole("heading", { name: /about lucent financial/i })
     ).toBeInTheDocument();
 
-    // Builder section heading exists
     expect(
       screen.getByRole("heading", { name: /about the builder/i })
     ).toBeInTheDocument();
 
-    // Headshot image exists and uses expected class
     const img = screen.getByAltText(/ericka james headshot/i);
     expect(img).toBeInTheDocument();
     expect(img).toHaveClass("about-avatar-image");

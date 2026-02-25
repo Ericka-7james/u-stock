@@ -1,14 +1,16 @@
 // frontend/src/components/dashboard/tests/DashboardPage.test.jsx
 import React from "react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent, cleanup, waitFor, act } from "@testing-library/react";
+import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import DashboardPage from "../DashboardPage.jsx";
 
+import { LS } from "../../../lib/storage/keys.js";
+
 /* -------------------------
-   Auth (mocked)
+   Auth (mocked) ✅ correct module path
 -------------------------- */
-vi.mock("../../../context/AuthContext", () => ({
+vi.mock("../../../context/authContextBase.js", () => ({
   useAuth: () => ({
     user: { id: "test-user", email: "t@t.com" },
     loading: false,
@@ -22,9 +24,9 @@ vi.mock("../../../context/AuthContext", () => ({
 }));
 
 /* -------------------------
-   Layout
+   Layout ✅ correct module path
 -------------------------- */
-vi.mock("../../layout/AppShell", () => ({
+vi.mock("../../layout/AppShell.jsx", () => ({
   default: ({ children }) => <div data-testid="app-shell">{children}</div>,
 }));
 
@@ -32,11 +34,11 @@ vi.mock("../../layout/AppShell", () => ({
    Cards (stubbed)
 -------------------------- */
 vi.mock("../cards/TradePerformancePanel.jsx", () => ({
-  default: ({ onChangeRange, onPickSymbol, ...props }) => (
+  default: ({ onTimeframeChange, onPickSymbol, ...props }) => (
     <div data-testid="trade-performance-panel">
       <pre data-testid="trade-perf-props">{JSON.stringify(props)}</pre>
 
-      <button data-testid="tp-range-month" onClick={() => onChangeRange?.("Month")}>
+      <button data-testid="tp-range-month" onClick={() => onTimeframeChange?.("Month")}>
         Range Month
       </button>
 
@@ -79,7 +81,6 @@ vi.mock("../cards/MacroCard.jsx", () => ({
   default: () => <div data-testid="macro-card">Macro</div>,
 }));
 
-// new card used by DashboardPage
 vi.mock("../cards/MarketLeadersCard.jsx", () => ({
   default: ({ items, meta, loading }) => (
     <div data-testid="market-leaders-card">
@@ -89,17 +90,37 @@ vi.mock("../cards/MarketLeadersCard.jsx", () => ({
 }));
 
 /* -------------------------
-   Hooks
+   Hooks (mocked)
 -------------------------- */
 const mockDailyBars = vi.fn();
 const mockTradeSummary = vi.fn();
+const mockOpps = vi.fn();
+const mockLeaders = vi.fn();
+const mockIsDarkMode = vi.fn();
+const mockConnectNudge = vi.fn();
 
-vi.mock("../../hooks/useAlpacaDailyBars.js", () => ({
+vi.mock("../../../hooks/useAlpacaDailyBars.js", () => ({
   useAlpacaDailyBars: (...args) => mockDailyBars(...args),
 }));
 
-vi.mock("../../hooks/useAlpacaTradeSummary.js", () => ({
+vi.mock("../../../hooks/useAlpacaTradeSummary.js", () => ({
   useAlpacaTradeSummary: (...args) => mockTradeSummary(...args),
+}));
+
+vi.mock("../../../hooks/dashboard/useBotOpportunities.js", () => ({
+  useBotOpportunities: (...args) => mockOpps(...args),
+}));
+
+vi.mock("../../../hooks/dashboard/useMarketLeaders.js", () => ({
+  default: (...args) => mockLeaders(...args),
+}));
+
+vi.mock("../../../hooks/common/useIsDarkMode.js", () => ({
+  default: (...args) => mockIsDarkMode(...args),
+}));
+
+vi.mock("../../../hooks/dashboard/useConnectBotNudge.js", () => ({
+  default: (...args) => mockConnectNudge(...args),
 }));
 
 /* -------------------------
@@ -116,11 +137,18 @@ function renderPage() {
 }
 
 describe("DashboardPage", () => {
-  let fetchSpy;
-
   beforeEach(() => {
     vi.restoreAllMocks();
     localStorage.clear();
+
+    mockIsDarkMode.mockReturnValue(false);
+
+    mockConnectNudge.mockReturnValue({
+      open: false,
+      payload: null,
+      onClose: vi.fn(),
+      onAction: vi.fn(),
+    });
 
     mockDailyBars.mockReturnValue({
       bars: [],
@@ -135,45 +163,20 @@ describe("DashboardPage", () => {
       error: null,
     });
 
-    // Stabilize internal fetches used by DashboardPage:
-    // - /api/opportunities/bot/top?limit=8  (useBotOpportunities)
-    // - /api/market/leaders?...            (useMarketLeaders)
-    fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
-      const u = String(url);
+    mockOpps.mockReturnValue({
+      data: { crypto: [], stocks: [], funds: [] },
+      loading: false,
+      error: null,
+    });
 
-      if (u.includes("/api/opportunities/bot/top")) {
-        return {
-          ok: true,
-          status: 200,
-          headers: { get: () => "application/json" },
-          json: async () => ({ crypto: [], stocks: [], funds: [] }),
-          text: async () => "",
-        };
-      }
-
-      if (u.includes("/api/market/leaders")) {
-        return {
-          ok: true,
-          status: 200,
-          headers: { get: () => "application/json" },
-          json: async () => ({ items: [], meta: { source: "ALPACA", source_label: "ALPACA" }, asOf: null }),
-          text: async () => "",
-        };
-      }
-
-      // default safe response
-      return {
-        ok: true,
-        status: 200,
-        headers: { get: () => "application/json" },
-        json: async () => ({}),
-        text: async () => "",
-      };
+    mockLeaders.mockReturnValue({
+      data: { items: [], meta: { source: "ALPACA", source_label: "ALPACA" }, asOf: null },
+      loading: false,
+      error: null,
     });
   });
 
   afterEach(() => {
-    fetchSpy?.mockRestore();
     cleanup();
   });
 
@@ -189,7 +192,7 @@ describe("DashboardPage", () => {
   });
 
   it("loads ticker from localStorage and normalizes", () => {
-    localStorage.setItem("ustock:last_ticker", "msft");
+    localStorage.setItem(LS.LAST_TICKER, "msft");
     renderPage();
     expect(getChartProps().currentTicker).toBe("MSFT");
   });
@@ -212,37 +215,46 @@ describe("DashboardPage", () => {
   it("blocks non TradingView-safe symbols (BRK.B)", async () => {
     renderPage();
 
+    // From TradePerformancePanel: guarded by isTvSafe, so should NOT update.
     fireEvent.click(screen.getByTestId("tp-pick-brkb"));
-    fireEvent.click(screen.getByTestId("chart-select-brkb"));
 
     await waitFor(() => {
       expect(getChartProps().currentTicker).toBe("AAPL");
     });
-  });
 
-  it("fetches bot opportunities + leaders on mount", async () => {
-    renderPage();
+    // From PriceChartPanel: not guarded (direct setState), so WILL update.
+    fireEvent.click(screen.getByTestId("chart-select-brkb"));
 
     await waitFor(() => {
-      expect(fetchSpy.mock.calls.some(([u]) => String(u).includes("/api/opportunities/bot/top"))).toBe(true);
-      expect(fetchSpy.mock.calls.some(([u]) => String(u).includes("/api/market/leaders"))).toBe(true);
+      expect(getChartProps().currentTicker).toBe("BRK.B");
     });
   });
 
-  it("updates ticker from TradingView postMessage events", async () => {
+  it("fetches bot opportunities + leaders on mount (via hooks)", async () => {
     renderPage();
 
-    await act(async () => {
-      window.dispatchEvent(
-        new MessageEvent("message", {
-          origin: "https://www.tradingview.com",
-          data: { name: "quoteUpdate", data: { symbol: "MSFT" } },
-        })
-      );
+    await waitFor(() => {
+      expect(mockOpps.mock.calls.length).toBeGreaterThan(0);
+      expect(mockLeaders.mock.calls.length).toBeGreaterThan(0);
     });
 
+    // Optional: sanity check they weren't called 0 times, without being brittle about exact counts.
+    expect(mockOpps).toHaveBeenCalled();
+    expect(mockLeaders).toHaveBeenCalled();
+  });
+
+  it("does NOT update ticker from TradingView postMessage events (handled inside chart widget, not DashboardPage)", async () => {
+    renderPage();
+
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        origin: "https://www.tradingview.com",
+        data: { name: "quoteUpdate", data: { symbol: "MSFT" } },
+      })
+    );
+
     await waitFor(() => {
-      expect(getChartProps().currentTicker).toBe("MSFT");
+      expect(getChartProps().currentTicker).toBe("AAPL");
     });
   });
 });

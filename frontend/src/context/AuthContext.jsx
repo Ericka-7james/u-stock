@@ -1,74 +1,21 @@
-// src/context/AuthContext.jsx
-import { createContext, useContext, useEffect, useMemo, useState, useCallback, useRef } from "react";
-import { API_BASE, API_PREFIX } from "../config/config";
+// frontend/src/context/AuthContext.jsx
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import { API_BASE, API_PREFIX } from "../config/config.js";
 
-const AuthContext = createContext(null);
+import { AuthContext } from "./authContextBase.js";
 
-// localStorage “hint” so we don’t ping /auth/me for brand new visitors
-const SESSION_HINT_KEY = "ustock_session_hint_v1";
-
-// one-time “show dashboard onboarding after auth”
-const JUST_AUTHED_KEY = "ustock:just_authed_v1";
-const JUST_AUTHED_KIND_KEY = "ustock:just_authed_kind_v1"; // "signup" | "login"
-
-async function safeJson(res) {
-  try {
-    return await res.json();
-  } catch {
-    return {};
-  }
-}
-
-function extractDetailMessage(detail) {
-  if (!detail) return "";
-  if (typeof detail === "string") return detail;
-
-  if (typeof detail === "object") {
-    // your backend sends: { code, message }
-    return String(detail.message || detail.detail || detail.error || "");
-  }
-
-  return String(detail);
-}
-
-function makeHttpError(res, data) {
-  const detail = data?.detail ?? null;
-
-  const code =
-    typeof detail === "object" && detail?.code
-      ? detail.code
-      : typeof data === "object" && data?.code
-      ? data.code
-      : null;
-
-  const msg = extractDetailMessage(detail) || String(data?.message || data?.error || "") || `Request failed (${res.status})`;
-
-  const err = new Error(msg);
-
-  // attach metadata so explainAnyError() can use it
-  err.status = res.status;
-  err.code = code;
-  err.detail = detail;
-  err.payload = data;
-
-  return err;
-}
-
-function setJustAuthed(kind = "login") {
-  try {
-    window.localStorage.setItem(JUST_AUTHED_KEY, "1");
-    window.localStorage.setItem(JUST_AUTHED_KIND_KEY, kind);
-  } catch {
-    // ignore
-  }
-}
+import {
+  SESSION_HINT_KEY,
+  safeJson,
+  makeHttpError,
+  setJustAuthed,
+} from "./authUtils.js";
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isAuthed, setIsAuthed] = useState(false);
 
-  // derived from localStorage; used to decide whether we should even try /auth/me
   const [sessionHint, setSessionHint] = useState(() => {
     try {
       return window.localStorage.getItem(SESSION_HINT_KEY) === "1";
@@ -77,7 +24,6 @@ export function AuthProvider({ children }) {
     }
   });
 
-  // prevent double mount calls in React 18 StrictMode dev
   const didInitRef = useRef(false);
 
   const authFetch = useMemo(() => {
@@ -124,7 +70,6 @@ export function AuthProvider({ children }) {
     async (opts = {}) => {
       const { force = false } = opts;
 
-      // ✅ don’t call /auth/me for brand-new visitors unless forced or we have a hint
       if (!force && !sessionHint && !isAuthed) {
         setIsAuthed(false);
         setUser(null);
@@ -140,21 +85,16 @@ export function AuthProvider({ children }) {
       try {
         let { ok, status, data } = await attempt();
 
-        // Safari-ish fallback: retry once quickly
         if (!ok) {
           await new Promise((r) => setTimeout(r, 250));
           ({ ok, status, data } = await attempt());
         }
 
-        // 401 is normal when no cookie exists — treat as unauth silently
         if (!ok) {
           if (status === 401) {
             setIsAuthed(false);
             setUser(null);
-
-            // if we thought we had a session but server says no, clear hint
             if (sessionHint) clearHint();
-
             return false;
           }
 
@@ -163,7 +103,6 @@ export function AuthProvider({ children }) {
           return false;
         }
 
-        // success -> keep hint so future reloads can restore session quietly
         setHintOn();
 
         if (data?.user?.id) {
@@ -194,7 +133,6 @@ export function AuthProvider({ children }) {
     [authFetch, clearHint, isAuthed, sessionHint, setHintOn]
   );
 
-  // Initial boot: only refresh if we have a hint
   useEffect(() => {
     if (didInitRef.current) return;
     didInitRef.current = true;
@@ -211,7 +149,6 @@ export function AuthProvider({ children }) {
     })();
   }, [refreshSession, sessionHint]);
 
-  // Keep-alive polling ONLY when authed (or when we have a hint)
   useEffect(() => {
     if (!isAuthed && !sessionHint) return;
 
@@ -234,13 +171,9 @@ export function AuthProvider({ children }) {
     setUser(data.user || null);
     setIsAuthed(true);
 
-    // ✅ set hint so future reloads can restore session
     setHintOn();
-
-    // ✅ NEW: mark dashboard onboarding to show once
     setJustAuthed("login");
 
-    // confirm cookie works
     await refreshSession({ force: true });
   };
 
@@ -257,8 +190,6 @@ export function AuthProvider({ children }) {
     setIsAuthed(true);
 
     setHintOn();
-
-    // ✅ NEW: mark dashboard onboarding to show once
     setJustAuthed("signup");
 
     await refreshSession({ force: true });
@@ -268,7 +199,7 @@ export function AuthProvider({ children }) {
     try {
       await authFetch("auth/logout", { method: "POST" });
     } catch {
-      // ignore network/logout errors; still clear local state
+      // ignore
     } finally {
       setUser(null);
       setIsAuthed(false);
@@ -292,10 +223,4 @@ export function AuthProvider({ children }) {
       {children}
     </AuthContext.Provider>
   );
-}
-
-export function useAuth() {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth must be used inside AuthProvider");
-  return ctx;
 }

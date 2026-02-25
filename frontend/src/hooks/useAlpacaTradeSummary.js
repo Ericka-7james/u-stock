@@ -40,11 +40,12 @@ async function throwApiError(res, feature = "alpaca_trade_summary") {
   throw err;
 }
 
-export function useAlpacaTradeSummary(preset = "Week", { slippageBps = 0, feeBps = 0 } = {}) {
+export function useAlpacaTradeSummary(
+  preset = "Week",
+  { slippageBps = 0, feeBps = 0 } = {}
+) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
-
-  // IMPORTANT: store error object
   const [error, setError] = useState(null);
 
   useEffect(() => {
@@ -83,14 +84,15 @@ export function useAlpacaTradeSummary(preset = "Week", { slippageBps = 0, feeBps
         if (e?.name === "AbortError") return;
 
         setData(null);
-        setError(e); // keep structured error
+        setError(e);
       } finally {
-        if (!alive) return;
-        setLoading(false);
+        // ✅ Fix: no return inside finally
+        if (alive) setLoading(false);
       }
     }
 
     run();
+
     return () => {
       alive = false;
       ac.abort();

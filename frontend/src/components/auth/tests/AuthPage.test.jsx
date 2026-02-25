@@ -1,11 +1,13 @@
+// frontend/src/components/auth/tests/AuthPage.test.jsx
 import React from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, within, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { describe, test, expect, vi, beforeEach } from "vitest";
-import AuthPage from "../AuthPage";
 
-// --- Mocks ---
+/* -----------------------
+   Mocks
+------------------------ */
 const mockLogin = vi.fn();
 const mockNavigate = vi.fn();
 
@@ -13,6 +15,41 @@ vi.mock("../../layout/AppShell", () => ({
   default: ({ children }) => <div data-testid="app-shell">{children}</div>,
 }));
 
+// ✅ Assertable ErrorModal
+vi.mock("../../common/ErrorModal", () => ({
+  default: ({ open, error, onClose, onAction }) =>
+    open ? (
+      <div role="dialog" aria-label="error-modal">
+        <div>{error?.title}</div>
+        <div>{error?.body}</div>
+        {error?.subtitle ? <div>{error.subtitle}</div> : null}
+
+        {error?.action?.label ? (
+          <button type="button" onClick={() => onAction?.(error.action)}>
+            {error.action.label}
+          </button>
+        ) : null}
+
+        <button type="button" onClick={onClose}>
+          Close
+        </button>
+      </div>
+    ) : null,
+}));
+
+// ✅ IMPORTANT: AuthPage imports from authContextBase.js
+vi.mock("../../../context/authContextBase.js", () => ({
+  useAuth: () => ({
+    user: null,
+    isAuthed: false,
+    loading: false,
+    login: mockLogin,
+    logout: vi.fn(),
+    authFetch: vi.fn(),
+  }),
+}));
+
+// (Optional safety if some child imports AuthContext)
 vi.mock("../../../context/AuthContext", () => ({
   useAuth: () => ({
     user: null,
@@ -31,6 +68,60 @@ vi.mock("react-router-dom", async () => {
     useNavigate: () => mockNavigate,
   };
 });
+
+// ✅ Stable copy
+vi.mock("../../../content/landing/authpage.content.ts", () => ({
+  AUTH_PAGE_COPY: {
+    left: {
+      title: "Welcome back",
+      fields: {
+        emailPlaceholder: "Email",
+        passwordPlaceholder: "Password",
+      },
+      submit: {
+        idle: "Sign in →",
+        loading: "Signing in…",
+      },
+      alt: {
+        prefix: "New here?",
+        cta: "Create an account →",
+      },
+    },
+    right: {
+      title: "U-Stock Radar Suite",
+      description: "Log in to see your market dashboard",
+      cta: "Sign Up",
+    },
+    errors: {
+      fallback: "Unable to sign in",
+    },
+  },
+}));
+
+// ✅ Deterministic error mapping
+vi.mock("../../../lib/errorMessages", () => ({
+  explainAnyError: (anyErr, { feature } = {}) => {
+    const msg =
+      anyErr && typeof anyErr === "object" && "message" in anyErr && anyErr.message
+        ? anyErr.message
+        : typeof anyErr === "string"
+        ? anyErr
+        : null;
+
+    return {
+      title: feature === "login" ? "Sign in failed" : "Error",
+      body: msg || "Unable to sign in",
+      subtitle: "",
+      image: null,
+      action: null,
+    };
+  },
+}));
+
+/* -----------------------
+   Import AFTER mocks
+------------------------ */
+import AuthPage from "../AuthPage";
 
 function renderAuth() {
   return render(
@@ -61,13 +152,13 @@ describe("AuthPage", () => {
     expect(screen.getByRole("button", { name: /^sign up$/i })).toBeInTheDocument();
   });
 
-  test("calls login with trimmed email and password on submit", async () => {
+  test("calls login with normalized email (trim + lowercase) and password on submit", async () => {
     const user = userEvent.setup();
     mockLogin.mockResolvedValueOnce();
 
     renderAuth();
 
-    await user.type(screen.getByPlaceholderText(/email/i), "  test@example.com  ");
+    await user.type(screen.getByPlaceholderText(/email/i), "  TEST@Example.com  ");
     await user.type(screen.getByPlaceholderText(/password/i), "MySecretPass!");
 
     await user.click(screen.getByRole("button", { name: /sign in →/i }));
@@ -76,7 +167,7 @@ describe("AuthPage", () => {
     expect(mockLogin).toHaveBeenCalledWith("test@example.com", "MySecretPass!");
   });
 
-  test("shows backend error message when login fails", async () => {
+  test("shows backend error message in ErrorModal when login fails", async () => {
     const user = userEvent.setup();
     mockLogin.mockRejectedValueOnce(new Error("Invalid credentials"));
 
@@ -87,7 +178,10 @@ describe("AuthPage", () => {
 
     await user.click(screen.getByRole("button", { name: /sign in →/i }));
 
-    expect(await screen.findByText(/invalid credentials/i)).toBeInTheDocument();
+    const modal = await screen.findByRole("dialog", { name: /error-modal/i });
+    expect(modal).toBeInTheDocument();
+
+    expect(within(modal).getByText(/invalid credentials/i)).toBeInTheDocument();
   });
 
   test("shows fallback error when login throws without a message", async () => {
@@ -101,10 +195,13 @@ describe("AuthPage", () => {
 
     await user.click(screen.getByRole("button", { name: /sign in →/i }));
 
-    expect(await screen.findByText(/unable to sign in/i)).toBeInTheDocument();
+    const modal = await screen.findByRole("dialog", { name: /error-modal/i });
+    expect(modal).toBeInTheDocument();
+
+    expect(within(modal).getByText(/unable to sign in/i)).toBeInTheDocument();
   });
 
-  test("clears previous error on a new submit attempt", async () => {
+  test("clears previous modal error on a new submit attempt", async () => {
     const user = userEvent.setup();
 
     mockLogin.mockRejectedValueOnce(new Error("Invalid credentials"));
@@ -116,7 +213,9 @@ describe("AuthPage", () => {
     await user.click(screen.getByRole("button", { name: /sign in →/i }));
     expect(await screen.findByText(/invalid credentials/i)).toBeInTheDocument();
 
-    // next attempt should clear error immediately
+    await user.click(screen.getByRole("button", { name: /close/i }));
+    expect(screen.queryByRole("dialog", { name: /error-modal/i })).not.toBeInTheDocument();
+
     mockLogin.mockResolvedValueOnce();
     await user.click(screen.getByRole("button", { name: /sign in →/i }));
 

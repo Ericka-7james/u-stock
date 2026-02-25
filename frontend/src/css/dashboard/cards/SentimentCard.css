@@ -1,40 +1,17 @@
-/* ========= Sentiment Card ================================================= */
+/* frontend/src/css/dashboard/cards/SentimentCard.css */
+/* ========= Sentiment Card (card shell handled by DashboardCard) ============ */
 
-.sentiment-card {
-  margin-top: 1rem;
-  background: var(--ustock-bg-card);
-  border-radius: 12px;
-  padding: 1rem 1.25rem;
-  box-shadow: 0 8px 20px rgba(15, 118, 110, 0.06);
-  border: 1px solid var(--ustock-border-card);
-  color: var(--ustock-text-main);
-}
-
-.sentiment-card__header {
-  display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-  align-items: flex-start;
-  margin-bottom: 0.75rem;
-}
-
-.sentiment-card__title {
-  font-size: 1rem;
-  font-weight: 600;
-  margin: 0;
-  color: var(--ustock-text-strong);
+/* Keep only card-specific header tweaks */
+.sentiment-card__title-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .sentiment-card__ticker {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
     "Liberation Mono", "Courier New", monospace;
   color: var(--ustock-text-strong);
-}
-
-.sentiment-card__subtitle {
-  margin: 0.25rem 0 0;
-  font-size: 0.85rem;
-  color: var(--ustock-text-muted);
 }
 
 .sentiment-card__overall {
@@ -47,43 +24,17 @@
   color: var(--ustock-text-muted);
 }
 
-/* Mode Select */
-
-.sentiment-card__mode-select {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  min-width: 180px;
-}
-
-.sentiment-card__mode-label {
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--ustock-text-muted);
-}
-
-.sentiment-card__mode-input {
-  font-size: 0.85rem;
-  padding: 0.35rem 0.5rem;
-  border-radius: 999px;
-  border: 1px solid var(--ustock-border-card);
-  background: var(--ustock-bg-card-soft);
-  color: var(--ustock-text-main);
-}
-
-/* Card Sections */
-
-/* Space between header (View dropdown) and body cards */
+/* Card body layout */
 .sentiment-card__body {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.75rem;
 
-  /* ✅ adds space between header (View dropdown area) and the cards */
+  /* space between header and body cards */
   margin-top: 0.75rem;
 }
 
+/* Sections */
 .sentiment-section {
   padding: 0.75rem 0.75rem;
   border-radius: 10px;
@@ -104,7 +55,6 @@
 }
 
 /* Chips */
-
 .sentiment-chip {
   display: inline-flex;
   align-items: center;
@@ -114,7 +64,7 @@
   font-weight: 600;
 }
 
-/* Chip colors stay as semantic signals */
+/* Chip colors stay semantic signals */
 .sentiment-chip--price {
   background: #ecfdf3;
   color: #166534;
@@ -131,7 +81,6 @@
 }
 
 /* Metrics */
-
 .sentiment-metrics {
   margin: 0;
   padding: 0;
@@ -159,7 +108,6 @@
 }
 
 /* Pct coloring stays semantic */
-
 .sentiment-pct {
   font-weight: 600;
 }
@@ -173,22 +121,7 @@
 }
 
 /* Mobile tweaks */
-
 @media (max-width: 768px) {
-  .sentiment-card {
-    padding: 0.85rem 0.9rem;
-  }
-
-  .sentiment-card__header {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .sentiment-card__mode-select {
-    min-width: 0;
-    align-items: flex-start;
-  }
-
   .sentiment-card__body {
     grid-template-columns: 1fr;
   }

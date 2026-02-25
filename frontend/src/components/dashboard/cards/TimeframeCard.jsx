@@ -10,6 +10,8 @@ import {
   mapDaysToTvInterval,
 } from "../../../lib/time/timeframe.js";
 
+import { TIMEFRAME_CARD_COPY as COPY } from "../../../content/dashboard/cards/timeframeCard.content.ts";
+
 /**
  * Timeframe object shape:
  * {
@@ -24,8 +26,8 @@ import {
 
 export default function TimeframeCard({
   variant = "card",
-  title = "Timeframe",
-  subtitle = "Defaults to Past week. Used for filters and to set the chart candle interval (zoom is controlled in-chart).",
+  title = COPY.header.title,
+  subtitle = COPY.header.subtitle,
   value = null,
   onChange,
   disabled = false,
@@ -85,7 +87,7 @@ export default function TimeframeCard({
     setOpen(false);
   }
 
-  const badge = effective?.label || "Past week";
+  const badge = effective?.label || COPY.control.badgeFallback;
 
   const Control = (
     <>
@@ -94,7 +96,7 @@ export default function TimeframeCard({
         className="tpTab"
         onClick={openModal}
         disabled={disabled}
-        title="Choose date range"
+        title={COPY.control.buttonTitle}
         style={{ height: 34 }}
       >
         {badge} ▾
@@ -102,42 +104,34 @@ export default function TimeframeCard({
 
       <Modal
         open={open}
-        title="Choose date range"
+        title={COPY.control.modalTitle}
         onClose={closeModal}
         footer={
           <div style={{ display: "flex", justifyContent: "space-between", gap: 10, width: "100%" }}>
             <button className="mBtn" type="button" onClick={closeModal}>
-              Cancel
+              {COPY.modal.footer.cancel}
             </button>
 
             <div style={{ display: "flex", gap: 10 }}>
               <button className="mBtn" type="button" onClick={() => applyPreset("7d")}>
-                Reset to week
+                {COPY.modal.footer.resetWeek}
               </button>
               <button
                 className="mBtn mBtnPrimary"
                 type="button"
                 onClick={draftPreset === "custom" ? applyCustom : () => applyPreset(draftPreset)}
               >
-                Apply
+                {COPY.modal.footer.apply}
               </button>
             </div>
           </div>
         }
       >
         <div style={{ display: "grid", gap: 10 }}>
-          <div style={{ fontSize: 12, opacity: 0.8, fontWeight: 800 }}>Quick ranges</div>
+          <div style={{ fontSize: 12, opacity: 0.8, fontWeight: 800 }}>{COPY.modal.sections.quickRanges}</div>
 
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {[
-              { id: "today", label: "Today" },
-              { id: "24h", label: "Last 24h" },
-              { id: "7d", label: "Past week" },
-              { id: "30d", label: "Past 30 days" },
-              { id: "90d", label: "Past 90 days" },
-              { id: "ytd", label: "Year to date" },
-              { id: "custom", label: "Custom" },
-            ].map((p) => (
+            {COPY.modal.presets.map((p) => (
               <button
                 key={p.id}
                 type="button"
@@ -161,11 +155,11 @@ export default function TimeframeCard({
           </div>
 
           <div style={{ marginTop: 6, paddingTop: 10, borderTop: "1px solid rgba(148,163,184,0.18)" }}>
-            <div style={{ fontSize: 12, opacity: 0.8, fontWeight: 800 }}>Custom range</div>
+            <div style={{ fontSize: 12, opacity: 0.8, fontWeight: 800 }}>{COPY.modal.sections.customRange}</div>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 10 }}>
               <label style={{ display: "grid", gap: 6 }}>
-                <span style={{ fontSize: 12, opacity: 0.75, fontWeight: 700 }}>Start</span>
+                <span style={{ fontSize: 12, opacity: 0.75, fontWeight: 700 }}>{COPY.modal.custom.startLabel}</span>
                 <input
                   type="date"
                   value={draftStart}
@@ -185,7 +179,7 @@ export default function TimeframeCard({
               </label>
 
               <label style={{ display: "grid", gap: 6 }}>
-                <span style={{ fontSize: 12, opacity: 0.75, fontWeight: 700 }}>End</span>
+                <span style={{ fontSize: 12, opacity: 0.75, fontWeight: 700 }}>{COPY.modal.custom.endLabel}</span>
                 <input
                   type="date"
                   value={draftEnd}
@@ -206,8 +200,9 @@ export default function TimeframeCard({
             </div>
 
             <div style={{ marginTop: 10, fontSize: 12, opacity: 0.75 }}>
-              Note: The TradingView embed can’t be forced to “show exactly this window”. We use this range to pick a
-              sensible <strong>candle interval</strong>; you can zoom/pan inside the chart.
+              {COPY.modal.note.prefix}
+              <strong>{COPY.modal.note.strong}</strong>
+              {COPY.modal.note.suffix}
             </div>
           </div>
         </div>

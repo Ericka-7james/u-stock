@@ -1,0 +1,112 @@
+/* frontend/src/css/dashboard/WelcomeConnectModal.css */
+
+.welcome-modal {
+  display: grid;
+  gap: 12px;
+}
+
+.welcome-modal-hero {
+  display: grid;
+  place-items: center;
+  padding-top: 4px;
+}
+
+.welcome-modal-img {
+  width: min(210px, 72%);
+  height: auto;
+  filter: drop-shadow(0 16px 22px rgba(0, 0, 0, 0.14));
+  user-select: none;
+}
+
+.welcome-modal-block + .welcome-modal-block {
+  margin-top: 12px;
+}
+
+/* LandingPage modal vibe (pill + readable text) */
+.welcome-modal-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(42, 137, 114, 0.12);
+  border: 1px solid rgba(42, 137, 114, 0.22);
+  color: rgba(42, 137, 114, 0.98);
+  font-size: 11px;
+  font-weight: 800;
+  margin-bottom: 8px;
+}
+
+.welcome-modal-text {
+  color: rgba(31, 42, 51, 0.84);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.theme-dark .welcome-modal-text {
+  color: rgba(226, 232, 240, 0.86);
+}
+
+.welcome-modal-steps {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  color: rgba(31, 42, 51, 0.84);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.theme-dark .welcome-modal-steps {
+  color: rgba(226, 232, 240, 0.86);
+}
+
+.welcome-modal-note {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(32, 64, 80, 0.10);
+  color: rgba(31, 42, 51, 0.72);
+  font-size: 12px;
+}
+
+.theme-dark .welcome-modal-note {
+  border-top-color: rgba(148, 163, 184, 0.18);
+  color: rgba(148, 163, 184, 0.78);
+}
+
+/* Footer buttons (Landing-style) */
+.welcome-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.welcome-modal-btn {
+  border-radius: 12px;
+  padding: 9px 12px;
+  font-size: 13px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.welcome-modal-btn--ghost {
+  border: 1px solid rgba(32, 64, 80, 0.18);
+  background: rgba(255, 255, 255, 0.75);
+  color: rgba(31, 42, 51, 0.85);
+}
+
+.theme-dark .welcome-modal-btn--ghost {
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(15, 23, 42, 0.55);
+  color: rgba(226, 232, 240, 0.88);
+}
+
+.welcome-modal-btn--primary {
+  border: 1px solid rgba(42, 137, 114, 0.35);
+  background: rgba(42, 137, 114, 0.12);
+  color: rgba(42, 137, 114, 0.98);
+}
+
+.theme-dark .welcome-modal-btn--primary {
+  border-color: rgba(42, 137, 114, 0.45);
+  background: rgba(42, 137, 114, 0.16);
+  color: rgba(210, 255, 241, 0.92);
+}

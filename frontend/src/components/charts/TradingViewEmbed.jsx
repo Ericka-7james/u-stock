@@ -1,41 +1,13 @@
 // src/components/charts/TradingViewEmbed.jsx
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ensureTvScriptLoaded } from "./tradingViewLoader.js";
 
-let tvLoadPromise = null;
-
-export function ensureTvScriptLoaded() {
-  if (typeof window === "undefined" || typeof document === "undefined") {
-    return Promise.reject(new Error("TradingViewEmbed requires a browser environment"));
-  }
-
-  if (window.TradingView) return Promise.resolve(true);
-
-  if (tvLoadPromise) return tvLoadPromise;
-
-  tvLoadPromise = new Promise((resolve, reject) => {
-    const src = "https://s3.tradingview.com/tv.js";
-    const existing = document.querySelector(`script[src="${src}"]`);
-
-    if (existing) {
-      const check = () => {
-        if (window.TradingView) resolve(true);
-        else setTimeout(check, 50);
-      };
-      check();
-      return;
-    }
-
-    const script = document.createElement("script");
-    script.src = src;
-    script.async = true;
-
-    script.onload = () => resolve(true);
-    script.onerror = () => reject(new Error("Failed to load TradingView tv.js"));
-
-    document.head.appendChild(script);
-  });
-
-  return tvLoadPromise;
+function randomIdHex(bytesLen = 8) {
+  const bytes = new Uint8Array(bytesLen);
+  window.crypto.getRandomValues(bytes);
+  return Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 }
 
 export default function TradingViewEmbed({
@@ -47,13 +19,10 @@ export default function TradingViewEmbed({
 }) {
   const hostRef = useRef(null);
 
-  const safeHeight = Math.max(120, Number(height) || 420);
+  const safeHeight = useMemo(() => Math.max(120, Number(height) || 420), [height]);
 
-  // Unique container id per component instance
-  const containerId = useMemo(() => {
-    const rand = Math.random().toString(36).slice(2);
-    return `tv_container_${rand}`;
-  }, []);
+  // ✅ random per mount, stable, no Math.random during render, no ref access during render
+  const [containerId] = useState(() => `tv_container_${randomIdHex(8)}`);
 
   useEffect(() => {
     let cancelled = false;
@@ -85,10 +54,12 @@ export default function TradingViewEmbed({
           allow_symbol_change: true,
           container_id: containerId,
         });
-      } catch (e) {
+      } catch {
         if (cancelled) return;
-        hostRef.current.innerHTML =
-          `<div style="padding:12px;font-size:12px;opacity:.8">TradingView failed to load.</div>`;
+        if (hostRef.current) {
+          hostRef.current.innerHTML =
+            `<div style="padding:12px;font-size:12px;opacity:.8">TradingView failed to load.</div>`;
+        }
       }
     }
 
@@ -96,7 +67,6 @@ export default function TradingViewEmbed({
 
     return () => {
       cancelled = true;
-      // Clear DOM (prevents stale widget remnants)
       if (hostRef.current) hostRef.current.innerHTML = "";
     };
   }, [symbol, interval, theme, autosize, containerId]);

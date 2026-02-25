@@ -1,9 +1,6 @@
 // frontend/src/components/dashboard/cards/shared/ConnectedBrokersMiniCard.jsx
+import React from "react";
 import { Link } from "react-router-dom";
-
-function cx(...xs) {
-  return xs.filter(Boolean).join(" ");
-}
 
 export default function ConnectedBrokersMiniCard({
   to = "/connected-apps",
@@ -13,9 +10,9 @@ export default function ConnectedBrokersMiniCard({
   ariaLabel = "Go to Connected Brokers",
 }) {
   return (
-    <Link to={to} className={cx("connected-mini-card", className)} aria-label={ariaLabel}>
+    <Link to={to} className={className} aria-label={ariaLabel}>
       <div className="connected-mini-title">{title}</div>
-      {subtitle ? <div className="connected-mini-sub">{subtitle}</div> : null}
+      <div className="connected-mini-sub">{subtitle}</div>
     </Link>
   );
 }

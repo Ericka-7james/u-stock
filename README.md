@@ -108,6 +108,16 @@ Local dev (optional hot reload):
 ```bash
 python -m uvicorn api.index:app --reload --host 0.0.0.0 --port 8000
 ```
+### Run Frontend
+
+In a separate terminal:
+```bash
+
+cd frontend
+npm run dev
+
+```
+
 ### Run Bot Runner (u-stock-bots)
 
 In a separate terminal (or tmux window):

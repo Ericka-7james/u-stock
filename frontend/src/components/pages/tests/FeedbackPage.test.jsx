@@ -9,8 +9,9 @@ vi.mock("react-turnstile", () => ({
   default: () => null,
 }));
 
-// Mock AuthContext (Feedback is public)
-vi.mock("../../../context/AuthContext", () => ({
+// ✅ Mock auth hook (Feedback is public)
+// NOTE: useAuth now lives in authContextBase.js
+vi.mock("../../../context/authContextBase.js", () => ({
   useAuth: () => ({
     user: null,
     isAuthed: false,
@@ -28,10 +29,12 @@ import FeedbackPage from "../FeedbackPage";
 
 describe("FeedbackPage", () => {
   beforeEach(() => {
-    global.fetch = vi.fn();
+    // Prefer standard globalThis (avoids no-undef on `global`)
+    vi.stubGlobal("fetch", vi.fn());
   });
 
   afterEach(() => {
+    vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
 
@@ -73,7 +76,7 @@ describe("FeedbackPage", () => {
   });
 
   it("submits feedback successfully and shows success message", async () => {
-    fetch.mockResolvedValueOnce({
+    globalThis.fetch.mockResolvedValueOnce({
       ok: true,
       status: 200,
       json: async () => ({ ok: true }),
@@ -94,12 +97,12 @@ describe("FeedbackPage", () => {
 
     fireEvent.click(submit);
 
-    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledTimes(1));
     expect(await screen.findByText(/sent!\s*thank you/i)).toBeInTheDocument();
   });
 
   it("shows server error when submission fails", async () => {
-    fetch.mockResolvedValueOnce({
+    globalThis.fetch.mockResolvedValueOnce({
       ok: false,
       status: 500,
       json: async () => ({ detail: "Server error" }),
@@ -116,7 +119,7 @@ describe("FeedbackPage", () => {
 
     fireEvent.click(submit);
 
-    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledTimes(1));
     expect(await screen.findByText(/server error/i)).toBeInTheDocument();
   });
 

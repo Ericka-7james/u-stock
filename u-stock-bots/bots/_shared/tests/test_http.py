@@ -42,15 +42,34 @@ def test_base_url_normalization_env(monkeypatch):
     api.close()
 
 
-def test_default_headers_include_runner_headers(monkeypatch):
+def test_default_headers_include_runner_auth_and_dev_secret(monkeypatch):
+    # ✅ new behavior: bearer token preferred + optional dev secret
+    monkeypatch.setenv("RUNNER_TOKEN", "runner-token-abc")
     monkeypatch.setenv("BOT_RUNNER_SECRET", "secret123")
-    monkeypatch.setenv("RUNNER_USER_ID", "user_abc")
+
     api = UStockAPI(base_url="http://example.com")
 
     h = api._default_headers()
     assert h["accept"] == "application/json"
+    assert h["Authorization"] == "Bearer runner-token-abc"
     assert h["X-Bot-Runner-Secret"] == "secret123"
-    assert h["X-Runner-User-Id"] == "user_abc"
+
+    api.close()
+
+
+def test_default_headers_work_with_dev_secret_only(monkeypatch):
+    # ✅ no bearer token => only dev secret is sent
+    monkeypatch.delenv("RUNNER_TOKEN", raising=False)
+    monkeypatch.delenv("BOT_RUNNER_TOKEN", raising=False)
+    monkeypatch.setenv("BOT_RUNNER_SECRET", "secret123")
+
+    api = UStockAPI(base_url="http://example.com")
+
+    h = api._default_headers()
+    assert h["accept"] == "application/json"
+    assert "Authorization" not in h
+    assert h["X-Bot-Runner-Secret"] == "secret123"
+
     api.close()
 
 

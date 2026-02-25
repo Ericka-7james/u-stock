@@ -3,11 +3,12 @@ import { useEffect, useMemo, useRef } from "react";
 import HelpTooltip from "../../common/HelpTooltip";
 import "../../../css/dashboard/cards/TopSignalsCard.css";
 
-function toNum(x) {
-  if (x == null) return null;
-  const n = Number(x);
-  return Number.isFinite(n) ? n : null;
-}
+import DashboardCard from "./shared/DashboardCard.jsx";
+
+import { nOrNull } from "../../../lib/format/marketFormat.js";
+import { fmtPct1FromRatio } from "../../../lib/format/number.js";
+
+import { TOP_SIGNALS_CARD_COPY as COPY } from "../../../content/dashboard/cards/topSignalsCard.content.ts";
 
 function normalizeSignalRow(row) {
   // Supports either:
@@ -16,7 +17,7 @@ function normalizeSignalRow(row) {
   const ticker = String(row?.ticker || row?.symbol || "").trim().toUpperCase();
   if (!ticker) return null;
 
-  const score = toNum(row?.score);
+  const score = nOrNull(row?.score);
 
   const daily = row?.components?.daily || row?.daily || {};
   const intraday = row?.components?.intraday || row?.intraday || {};
@@ -27,13 +28,13 @@ function normalizeSignalRow(row) {
     score,
     components: {
       daily: {
-        close_return_1d: toNum(daily?.close_return_1d ?? daily?.return_1d ?? daily?.r1d),
+        close_return_1d: nOrNull(daily?.close_return_1d ?? daily?.return_1d ?? daily?.r1d),
       },
       intraday: {
-        intraday_return: toNum(intraday?.intraday_return ?? intraday?.return_intraday ?? intraday?.rintra),
+        intraday_return: nOrNull(intraday?.intraday_return ?? intraday?.return_intraday ?? intraday?.rintra),
       },
       multiday: {
-        return_5d: toNum(multiday?.return_5d ?? multiday?.close_return_5d ?? multiday?.r5d),
+        return_5d: nOrNull(multiday?.return_5d ?? multiday?.close_return_5d ?? multiday?.r5d),
       },
     },
   };
@@ -62,13 +63,7 @@ export default function TopSignalsCard({
 
   // ---- Logging (non-spam) ----
   useEffect(() => {
-    // build a small "state key" so we log only when it changes
-    const key = loading
-      ? "loading"
-      : topFiveSignals.length === 0
-      ? "empty"
-      : `ok:${topFiveSignals.length}`;
-
+    const key = loading ? "loading" : topFiveSignals.length === 0 ? "empty" : `ok:${topFiveSignals.length}`;
     if (key === lastLogKeyRef.current) return;
     lastLogKeyRef.current = key;
 
@@ -82,47 +77,47 @@ export default function TopSignalsCard({
   }, [loading, topFiveSignals]);
 
   return (
-    <div className="panel filters-card filters-card--index">
-      <div className="filters-card-header">
-        <h3 className="panel-title">Top signals</h3>
+    <DashboardCard className="top-signals-card">
+      <header className="card-header top-signals-card__header">
+        <div className="card-header-left">
+          <h3 className="panel-title">{COPY.title}</h3>
+        </div>
 
-        <HelpTooltip title="How are top signals ranked?">
-          <p>
-            These signals come from your processed datasets (or your backend ranking endpoint).
-            They combine daily, intraday, and multiday indicators to score each ticker.
-          </p>
+        <div className="card-header-right">
+          <HelpTooltip title={COPY.tooltip.title}>
+            <p>{COPY.tooltip.intro}</p>
 
-          <ul>
-            <li><strong>Score:</strong> Combined signal strength.</li>
-            <li><strong>1d:</strong> Daily return factor.</li>
-            <li><strong>Intraday:</strong> Short-term momentum.</li>
-            <li><strong>5d:</strong> Multiday trend strength.</li>
-          </ul>
+            <ul>
+              {COPY.tooltip.bullets.map((b) => (
+                <li key={b.label}>
+                  <strong>{b.label}:</strong> {b.text}
+                </li>
+              ))}
+            </ul>
 
-          <p className="muted">
-            Scores are recalculated each time your data pipeline runs.
-          </p>
-        </HelpTooltip>
-      </div>
+            <p className="muted">{COPY.tooltip.footer}</p>
+          </HelpTooltip>
+        </div>
+      </header>
 
       {loading ? (
-        <p className="muted">Loading signals…</p>
+        <p className="muted">{COPY.states.loading}</p>
       ) : topFiveSignals.length === 0 ? (
         <p className="muted">
-          No signals available yet.
+          {COPY.states.empty.line1}
           <br />
-          If this is unexpected: start your backend ranking endpoint or run your pipeline.
+          {COPY.states.empty.line2}
         </p>
       ) : (
         <>
           <table className="mini-table">
             <thead>
               <tr>
-                <th>Ticker</th>
-                <th>Score</th>
-                <th>1d</th>
-                <th>Intraday</th>
-                <th>5d</th>
+                <th>{COPY.table.headers.ticker}</th>
+                <th>{COPY.table.headers.score}</th>
+                <th>{COPY.table.headers.d1}</th>
+                <th>{COPY.table.headers.intraday}</th>
+                <th>{COPY.table.headers.d5}</th>
               </tr>
             </thead>
             <tbody>
@@ -137,25 +132,13 @@ export default function TopSignalsCard({
                     className={row.ticker === currentTicker ? "mini-table-row--active" : ""}
                     onClick={() => onSelectTicker?.(row.ticker)}
                     style={{ cursor: "pointer" }}
-                    title="Click to load this ticker"
+                    title={COPY.table.rowTitle}
                   >
                     <td>{row.ticker}</td>
                     <td>{row.score != null ? row.score.toFixed(2) : "—"}</td>
-                    <td>
-                      {daily.close_return_1d != null
-                        ? (daily.close_return_1d * 100).toFixed(1) + "%"
-                        : "—"}
-                    </td>
-                    <td>
-                      {intraday.intraday_return != null
-                        ? (intraday.intraday_return * 100).toFixed(1) + "%"
-                        : "—"}
-                    </td>
-                    <td>
-                      {multiday.return_5d != null
-                        ? (multiday.return_5d * 100).toFixed(1) + "%"
-                        : "—"}
-                    </td>
+                    <td>{fmtPct1FromRatio(daily.close_return_1d)}</td>
+                    <td>{fmtPct1FromRatio(intraday.intraday_return)}</td>
+                    <td>{fmtPct1FromRatio(multiday.return_5d)}</td>
                   </tr>
                 );
               })}
@@ -163,12 +146,10 @@ export default function TopSignalsCard({
           </table>
 
           {signalsMeta?.rankingDescription ? (
-            <p className="mini-table-caption muted">
-              {signalsMeta.rankingDescription}
-            </p>
+            <p className="mini-table-caption muted">{signalsMeta.rankingDescription}</p>
           ) : null}
         </>
       )}
-    </div>
+    </DashboardCard>
   );
 }

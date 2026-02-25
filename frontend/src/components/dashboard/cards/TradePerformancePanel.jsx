@@ -1,190 +1,29 @@
 // frontend/src/components/dashboard/cards/TradePerformancePanel.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
 import BotControlCard from "./BotControlCard.jsx";
 import TimeframeCard from "./TimeframeCard.jsx";
 import "../../../css/dashboard/cards/TradePerformancePanel.css";
 
-import { useAuth } from "../../../context/AuthContext";
+import { useAuth } from "../../../context/authContextBase.js";
 
-function n(x) {
-  const v = Number(x);
-  return Number.isFinite(v) ? v : 0;
-}
-function nn(x) {
-  const v = Number(x);
-  return Number.isFinite(v) ? v : null;
-}
-function fmtPct(v) {
-  return `${Math.round(n(v))}%`;
-}
-function fmtMoney(v) {
-  const x = Number(v);
-  return Number.isFinite(x) ? `$${x.toFixed(2)}` : "—";
-}
+import ConnectedBrokersMiniCard from "./shared/ConnectedBrokersMiniCard.jsx";
+import OpportunityTable, { PillRow } from "./shared/OpportunityTable.jsx";
+import { BigStat, MiniStat, CardShell } from "./shared/StatTiles.jsx";
 
-// ✅ STRICT: only A–Z (no dots, dashes, numbers)
-function isAlphaOnlySymbol(sym) {
-  const s = String(sym || "").trim().toUpperCase();
-  return /^[A-Z]+$/.test(s);
-}
+import {
+  nOrZero,
+  nOrNull,
+  fmtMoney,
+  fmtPctWhole,
+  isAlphaOnlySymbol,
+  computePrevFallback,
+} from "../../../lib/format/marketFormat.js";
 
-function computePrevFallback(last, pct) {
-  const L = nn(last);
-  const P = nn(pct);
-  if (L === null || P === null) return null;
-  const denom = 1 + P / 100;
-  if (!Number.isFinite(denom) || denom <= 0) return null;
-  const prev = L / denom;
-  if (!Number.isFinite(prev) || prev <= 0) return null;
-  return prev;
-}
+import { TRADE_PERFORMANCE_PANEL_COPY as COPY } from "../../../content/dashboard/cards/tradePerformancePanel.content.ts";
 
-function ConnectedBrokersMiniCard() {
-  return (
-    <Link to="/connected-apps" className="connected-mini-card" aria-label="Go to Connected Brokers">
-      <div className="connected-mini-title">Connected brokers</div>
-      <div className="connected-mini-sub">Manage Alpaca/Polygon keys and integrations →</div>
-    </Link>
-  );
-}
-
-function CardShell({ title, children, className = "" }) {
-  return (
-    <div className={`tpCard ${className}`}>
-      {title ? <div className="tpCardTitle">{title}</div> : null}
-      {children}
-    </div>
-  );
-}
-
-function BigStat({ label, value, sub, tone = "" }) {
-  return (
-    <CardShell title={label} className={`tpBigCard ${tone}`}>
-      <div className="tpBigValue">{value}</div>
-      {sub ? <div className="tpBigSub">{sub}</div> : null}
-    </CardShell>
-  );
-}
-
-function MiniStat({ label, value, tone = "" }) {
-  return (
-    <div className={`tpMiniCard ${tone}`}>
-      <div className="tpMiniLabel">{label}</div>
-      <div className="tpMiniValue">{value}</div>
-    </div>
-  );
-}
-
-function PillRow({ symbol, score, sub = "", onClick }) {
-  const sym = String(symbol || "").toUpperCase();
-  const scoreStr = Number.isFinite(Number(score)) ? Number(score).toFixed(2) : "—";
-  const tooltip = [sym, `Score: ${scoreStr}`, sub].filter(Boolean).join("\n");
-
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={tooltip}
-      style={{
-        width: "100%",
-        boxSizing: "border-box",
-        border: "1px solid rgba(148,163,184,0.25)",
-        background: "transparent",
-        borderRadius: 12,
-        padding: "10px 12px",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "flex-start",
-        gap: 6,
-        cursor: onClick ? "pointer" : "default",
-        color: "inherit",
-        overflow: "hidden",
-        textAlign: "left",
-      }}
-    >
-      <div
-        className="mono"
-        style={{
-          fontWeight: 900,
-          fontSize: 14,
-          whiteSpace: "nowrap",
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          width: "100%",
-        }}
-      >
-        {sym}
-      </div>
-
-      <div className="mono" style={{ fontSize: 12, opacity: 0.85, whiteSpace: "nowrap" }}>
-        Score {scoreStr}
-      </div>
-    </button>
-  );
-}
-
-function OpportunityTable({ title, rows, emptyMessage, onPickSymbol, sourceLabel }) {
-  const clean = Array.isArray(rows) ? rows : [];
-
-  return (
-    <div className="tpOppMiniTable" style={{ overflow: "hidden", borderRadius: 14 }}>
-      <div
-        className="tpOppMiniTitle"
-        style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10 }}
-      >
-        <span>{title}</span>
-        {sourceLabel ? (
-          <span style={{ fontSize: 12, opacity: 0.7, whiteSpace: "nowrap" }}>Source: {sourceLabel}</span>
-        ) : null}
-      </div>
-
-      <div className="tpOppHead">
-        <div>Symbol</div>
-        <div className="right">Score</div>
-      </div>
-
-      <div className="tpOppBody" style={{ display: "grid", gap: 10 }}>
-        {clean.length ? (
-          clean.slice(0, 6).map((r, i) => {
-            const sym = String(r.symbol || "").toUpperCase();
-            const sub = r.sub ? String(r.sub) : "";
-            if (!isAlphaOnlySymbol(sym)) return null;
-
-            return (
-              <PillRow
-                key={`${sym}-${i}`}
-                symbol={sym}
-                score={r.score}
-                sub={sub}
-                onClick={
-                  onPickSymbol
-                    ? () => {
-                        if (!isAlphaOnlySymbol(sym)) return;
-                        onPickSymbol(sym);
-                      }
-                    : undefined
-                }
-              />
-            );
-          })
-        ) : (
-          <div className="tpEmpty">{emptyMessage || "No results yet."}</div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function fmtTime(epochSec) {
-  const t = Number(epochSec);
-  if (!Number.isFinite(t) || t <= 0) return "—";
-  try {
-    return new Date(t * 1000).toLocaleString();
-  } catch {
-    return "—";
-  }
-}
+import { fmtEpochSeconds } from "../../../lib/format/datetime.js";
+import { computeInclusiveDays } from "../../../lib/time/timeframe.js";
+import { safeStr } from "../../../lib/format/safe.js";
 
 function fmtSide(side) {
   const s = String(side || "").trim().toLowerCase();
@@ -199,7 +38,7 @@ function fmtConf(v) {
 }
 
 function safeSym(it) {
-  return String(it?.symbol || "").trim().toUpperCase();
+  return safeStr(it?.symbol, "").toUpperCase();
 }
 
 /* ----------------------------
@@ -275,7 +114,7 @@ function readRunnerOnline(s) {
 }
 
 function deriveBotUiState(botId, botStatuses) {
-  const id = String(botId || "").trim();
+  const id = safeStr(botId, "");
   if (!id) {
     return { kind: "no_bot", runnerOnline: false, intent: "", eff: "stopped" };
   }
@@ -336,7 +175,7 @@ function BotIntentsCard({ botUi, botId, onPickSymbol }) {
         credentials: "include",
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.detail || "Failed to load intents");
+      if (!res.ok) throw new Error(data?.detail || COPY.cards.intents.errors.loadFail);
 
       const list = Array.isArray(data?.items) ? data.items : [];
       setItems(list);
@@ -377,48 +216,49 @@ function BotIntentsCard({ botUi, botId, onPickSymbol }) {
   }, [botId, botUi?.kind]);
 
   const headerLine = useMemo(() => {
-    if (!botId) return "Select a bot to view intents.";
-    if (!botUi || botUi.kind === "no_bot") return "Select a bot to view intents.";
-    if (botUi.kind === "unknown") return `Loading bot status… showing last known intents for ${botId}.`;
-    if (botUi.kind === "offline") return `Runner offline — showing last known intents for ${botId}.`;
-    if (botUi.kind === "paused") return `Bot paused — showing last intents for ${botId}.`;
-    if (botUi.kind === "waiting") return `Waiting for market — latest intents for ${botId}.`;
-    if (botUi.kind === "starting") return `Starting — latest intents for ${botId}.`;
-    if (botUi.kind === "disarmed") return `Bot disarmed — last intents (if any) for ${botId}.`;
-    if (botUi.kind === "stopped") return `Bot stopped — last intents (if any) for ${botId}.`;
-    return `Showing latest 10 from ${botId}.`;
+    if (!botId) return COPY.cards.intents.headerLines.selectBot;
+    if (!botUi || botUi.kind === "no_bot") return COPY.cards.intents.headerLines.selectBot;
+    if (botUi.kind === "unknown") return COPY.cards.intents.headerLines.unknown(botId);
+    if (botUi.kind === "offline") return COPY.cards.intents.headerLines.offline(botId);
+    if (botUi.kind === "paused") return COPY.cards.intents.headerLines.paused(botId);
+    if (botUi.kind === "waiting") return COPY.cards.intents.headerLines.waiting(botId);
+    if (botUi.kind === "starting") return COPY.cards.intents.headerLines.starting(botId);
+    if (botUi.kind === "disarmed") return COPY.cards.intents.headerLines.disarmed(botId);
+    if (botUi.kind === "stopped") return COPY.cards.intents.headerLines.stopped(botId);
+    return COPY.cards.intents.headerLines.ok(botId);
   }, [botId, botUi]);
 
   return (
-    <CardShell title="Bot Intents" className="tpSpan2">
+    <CardShell title={COPY.cards.intents.title} className="tpSpan2">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 }}>
         <div style={{ fontSize: 12, opacity: 0.75, fontWeight: 800 }}>
-          {headerLine} · Updated <span className="mono">{ts ? fmtTime(ts) : "—"}</span>
+          {headerLine} · {COPY.cards.intents.updatedPrefix}{" "}
+          <span className="mono">{ts ? fmtEpochSeconds(ts) : COPY.cards.intents.updatedFallback}</span>
         </div>
 
         <button className="tpTab" type="button" onClick={refresh} disabled={!botId || busy} style={{ height: 34 }}>
-          Refresh
+          {COPY.cards.intents.refresh}
         </button>
       </div>
 
       {err ? (
         <div className="tpEmpty" style={{ marginTop: 10 }}>
-          Error: {err}
+          {COPY.cards.intents.errors.prefix} {err}
         </div>
       ) : null}
 
       <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
         {busy && !items.length ? (
-          <div className="tpEmpty">Loading intents…</div>
+          <div className="tpEmpty">{COPY.cards.intents.states.loading}</div>
         ) : items.length ? (
           items.map((it, idx) => {
             const sym = safeSym(it);
             if (!isAlphaOnlySymbol(sym)) return null;
 
             const side = fmtSide(it?.side);
-            const entry = nn(it?.entry);
-            const stop = nn(it?.stop);
-            const tp = nn(it?.take_profit ?? it?.takeProfit ?? it?.tp);
+            const entry = nOrNull(it?.entry);
+            const stop = nOrNull(it?.stop);
+            const tp = nOrNull(it?.take_profit ?? it?.takeProfit ?? it?.tp);
             const conf = it?.confidence;
 
             const sub = `Entry ${entry === null ? "—" : fmtMoney(entry)} · Stop ${
@@ -439,13 +279,13 @@ function BotIntentsCard({ botUi, botId, onPickSymbol }) {
           })
         ) : (
           <div className="tpEmpty">
-            {!botId ? "Select a bot to view intents." : "No intents yet. (When bot submits intents, they show here.)"}
+            {!botId ? COPY.cards.intents.states.emptyNoBot : COPY.cards.intents.states.emptyNoIntents}
           </div>
         )}
       </div>
 
       <div className="tpOppFootnote" style={{ marginTop: 12 }}>
-        Click an intent to load the symbol in the chart. Intents are suggestions, not orders.
+        {COPY.cards.intents.footnote}
       </div>
     </CardShell>
   );
@@ -454,24 +294,6 @@ function BotIntentsCard({ botUi, botId, onPickSymbol }) {
 /* ----------------------------
    Timeframe helpers (days)
 ---------------------------- */
-
-function parseDateLoose(v) {
-  const s = String(v || "").trim();
-  if (!s) return null;
-  const d = new Date(s);
-  return Number.isFinite(d?.getTime?.()) ? d : null;
-}
-
-function computeInclusiveDays(start, end) {
-  const a = parseDateLoose(start);
-  const b = parseDateLoose(end);
-  if (!a || !b) return null;
-
-  const ms = b.getTime() - a.getTime();
-  const days = Math.floor(ms / 86400000) + 1;
-  if (!Number.isFinite(days) || days <= 0) return null;
-  return days;
-}
 
 function computeRangeDaysLabel(timeframe) {
   if (!timeframe) return { days: 7, label: "7 days" };
@@ -523,7 +345,7 @@ export default function TradePerformancePanel({
     return raw
       .map((x) => ({
         symbol: String(x?.symbol || "").toUpperCase().trim(),
-        changePct: n(x?.changePct ?? x?.score),
+        changePct: nOrZero(x?.changePct ?? x?.score),
         last: x?.last,
         prevClose: x?.prevClose,
         prevCloseComputed: Boolean(x?.prevCloseComputed),
@@ -536,8 +358,8 @@ export default function TradePerformancePanel({
 
     const rows = [...leadersClean]
       .map((l) => {
-        const last = nn(l.last);
-        let prev = nn(l.prevClose);
+        const last = nOrNull(l.last);
+        let prev = nOrNull(l.prevClose);
         if (prev !== null && prev <= 0) prev = null;
 
         let computedHere = false;
@@ -559,7 +381,7 @@ export default function TradePerformancePanel({
           }`,
         };
       })
-      .sort((a, b) => n(b.score) - n(a.score))
+      .sort((a, b) => nOrZero(b.score) - nOrZero(a.score))
       .slice(0, 6);
 
     return { rows, anyComputed };
@@ -572,7 +394,7 @@ export default function TradePerformancePanel({
     for (const l of leadersClean) {
       const hit = oppSet.get(l.symbol);
       if (hit) {
-        const botScore = n(hit.score);
+        const botScore = nOrZero(hit.score);
         const moveScore = Math.abs(l.changePct);
         out.push({
           symbol: l.symbol,
@@ -582,59 +404,59 @@ export default function TradePerformancePanel({
       }
     }
 
-    out.sort((a, b) => n(b.score) - n(a.score));
+    out.sort((a, b) => nOrZero(b.score) - nOrZero(a.score));
     return out.slice(0, 6);
   }, [leadersClean, oppStocks]);
 
   const safe = data || { start: "", end: "", trades: [] };
   const trades = Array.isArray(safe.trades) ? safe.trades : [];
-  const winRate = trades.length ? (trades.filter((t) => n(t.pnl) > 0).length / trades.length) * 100 : 0;
+  const winRate = trades.length ? (trades.filter((t) => nOrZero(t.pnl) > 0).length / trades.length) * 100 : 0;
 
   const botStatusValue =
     botUi.kind === "no_bot"
-      ? "—"
+      ? COPY.stats.botStatus.values.empty
       : botUi.kind === "unknown"
-      ? "—"
+      ? COPY.stats.botStatus.values.empty
       : botUi.kind === "offline"
-      ? "OFFLINE"
+      ? COPY.stats.botStatus.values.offline
       : botUi.kind === "paused"
-      ? "PAUSED"
+      ? COPY.stats.botStatus.values.paused
       : botUi.kind === "waiting"
-      ? "WAITING"
+      ? COPY.stats.botStatus.values.waiting
       : botUi.kind === "starting"
-      ? "STARTING"
+      ? COPY.stats.botStatus.values.starting
       : botUi.kind === "running"
-      ? "LIVE"
+      ? COPY.stats.botStatus.values.running
       : botUi.kind === "disarmed"
-      ? "DISARMED"
+      ? COPY.stats.botStatus.values.disarmed
       : botUi.kind === "armed"
-      ? "ARMED"
+      ? COPY.stats.botStatus.values.armed
       : botUi.kind === "stopped"
-      ? "STOPPED"
-      : "IDLE";
+      ? COPY.stats.botStatus.values.stopped
+      : COPY.stats.botStatus.values.idle;
 
   const botStatusSub =
     botUi.kind === "no_bot"
-      ? "Select a bot to enable bot-aligned picks."
+      ? COPY.stats.botStatus.subs.noBot
       : botUi.kind === "unknown"
-      ? "Loading status…"
+      ? COPY.stats.botStatus.subs.unknown
       : botUi.kind === "offline"
-      ? "Runner offline — no heartbeat."
+      ? COPY.stats.botStatus.subs.offline
       : botUi.kind === "paused"
-      ? "Paused by user."
+      ? COPY.stats.botStatus.subs.paused
       : botUi.kind === "waiting"
-      ? "Waiting for market open."
+      ? COPY.stats.botStatus.subs.waiting
       : botUi.kind === "starting"
-      ? "Booting up…"
+      ? COPY.stats.botStatus.subs.starting
       : botUi.kind === "running"
-      ? "Using bot alignment"
+      ? COPY.stats.botStatus.subs.running
       : botUi.kind === "disarmed"
-      ? "Bot disabled"
+      ? COPY.stats.botStatus.subs.disarmed
       : botUi.kind === "armed"
-      ? "Ready to run"
+      ? COPY.stats.botStatus.subs.armed
       : botUi.kind === "stopped"
-      ? "Bot stopped."
-      : "Standing by";
+      ? COPY.stats.botStatus.subs.stopped
+      : COPY.stats.botStatus.subs.idle;
 
   const botStatusTone =
     botUi.kind === "running" || botUi.kind === "waiting" || botUi.kind === "starting" || botUi.kind === "paused"
@@ -644,16 +466,16 @@ export default function TradePerformancePanel({
       : "";
 
   const subtitle = useMemo(() => {
-    if (!botId) return "No bot selected — choose a bot to enable bot-aligned picks.";
-    if (botUi.kind === "paused") return `Bot paused: ${botId}`;
-    if (botUi.kind === "running") return `Bot live: ${botId}`;
-    if (botUi.kind === "waiting") return `Bot waiting: ${botId}`;
-    if (botUi.kind === "starting") return `Bot starting: ${botId}`;
-    if (botUi.kind === "offline") return `Bot offline: ${botId}`;
-    if (botUi.kind === "unknown") return `Loading bot: ${botId}`;
-    if (botUi.kind === "disarmed") return `Bot disarmed: ${botId}`;
-    if (botUi.kind === "stopped") return `Bot stopped: ${botId}`;
-    return `Bot: ${botId}`;
+    if (!botId) return COPY.header.subtitles.noBot;
+    if (botUi.kind === "paused") return COPY.header.subtitles.paused(botId);
+    if (botUi.kind === "running") return COPY.header.subtitles.running(botId);
+    if (botUi.kind === "waiting") return COPY.header.subtitles.waiting(botId);
+    if (botUi.kind === "starting") return COPY.header.subtitles.starting(botId);
+    if (botUi.kind === "offline") return COPY.header.subtitles.offline(botId);
+    if (botUi.kind === "unknown") return COPY.header.subtitles.unknown(botId);
+    if (botUi.kind === "disarmed") return COPY.header.subtitles.disarmed(botId);
+    if (botUi.kind === "stopped") return COPY.header.subtitles.stopped(botId);
+    return COPY.header.subtitles.fallback(botId);
   }, [botId, botUi.kind]);
 
   const rangeDays = useMemo(() => computeRangeDaysLabel(timeframe), [timeframe]);
@@ -663,12 +485,25 @@ export default function TradePerformancePanel({
   const { user } = useAuth();
   const storageScope = user?.id ? `user:${user.id}` : "";
 
+  const alignedEmptyMessage =
+    !botId
+      ? COPY.cards.topDayTrades.tables.aligned.empty.noBot
+      : !hasBotOpportunities
+      ? COPY.cards.topDayTrades.tables.aligned.empty.noOpp
+      : botUi.kind === "offline"
+      ? COPY.cards.topDayTrades.tables.aligned.empty.offline
+      : COPY.cards.topDayTrades.tables.aligned.empty.noOverlap;
+
+  const leadersSourceLabel = leadersScored.anyComputed
+    ? COPY.cards.topDayTrades.tables.leaders.sources.computed
+    : COPY.cards.topDayTrades.tables.leaders.sources.plain;
+
   return (
     <section className="tpPanel">
       <div className="tpHeaderBar">
         <div className="tpHeaderLeft">
           <div className="tpTitleRow">
-            <h2 className="tpTitleText">Opportunities</h2>
+            <h2 className="tpTitleText">{COPY.header.title}</h2>
           </div>
 
           <p className="tpSubtitle">{subtitle}</p>
@@ -677,8 +512,9 @@ export default function TradePerformancePanel({
         <div className="tpTabs tpTimeframeStack">
           <TimeframeCard variant="inline" value={timeframe} onChange={onTimeframeChange} />
 
-          <div className="tpActiveRangeDays" aria-label="Active range days">
-            Active range: <strong className="tpActiveRangeStrong">{rangeDays?.label || "—"}</strong>
+          <div className="tpActiveRangeDays" aria-label={COPY.header.range.aria}>
+            {COPY.header.range.labelPrefix}{" "}
+            <strong className="tpActiveRangeStrong">{rangeDays?.label || COPY.header.range.fallbackLabel}</strong>
           </div>
         </div>
       </div>
@@ -695,55 +531,54 @@ export default function TradePerformancePanel({
             />
           </div>
 
-          <BigStat label="Bot Status" value={botStatusValue} sub={botStatusSub} tone={botStatusTone} />
-          <BigStat label="Trades Context" value={`${trades.length}`} sub={`Win rate ${fmtPct(winRate)}`} />
+          <BigStat label={COPY.stats.botStatus.label} value={botStatusValue} sub={botStatusSub} tone={botStatusTone} />
+          <BigStat
+            label={COPY.stats.tradesContext.label}
+            value={`${trades.length}`}
+            sub={`${COPY.stats.tradesContext.winRatePrefix} ${fmtPctWhole(winRate)}`}
+          />
 
           <div className="tpMiniGrid">
-            <MiniStat label="Leaders" value={String(leadersClean.length)} />
-            <MiniStat label="Aligned" value={String(aligned.length)} tone={aligned.length ? "pos" : ""} />
-            <MiniStat label="Internal Picks" value={String(oppStocks.length)} />
+            <MiniStat label={COPY.stats.mini.leaders} value={String(leadersClean.length)} />
+            <MiniStat label={COPY.stats.mini.aligned} value={String(aligned.length)} tone={aligned.length ? "pos" : ""} />
+            <MiniStat label={COPY.stats.mini.internal} value={String(oppStocks.length)} />
           </div>
 
           <BotIntentsCard botUi={botUi} botId={botId} onPickSymbol={onPickSymbol} />
 
-          <CardShell title="Top Day Trades (Opportunity)" className="tpSpan2">
+          <CardShell title={COPY.cards.topDayTrades.title} className="tpSpan2">
             <div className="tpOppGrid">
               <OpportunityTable
-                title="Bot-aligned (leaders ∩ bot)"
+                title={COPY.cards.topDayTrades.tables.aligned.title}
                 rows={hasBotOpportunities ? aligned : []}
-                emptyMessage={
-                  !botId
-                    ? "Select a bot to enable aligned picks."
-                    : !hasBotOpportunities
-                    ? "No bot opportunities yet."
-                    : botUi.kind === "offline"
-                    ? "Runner offline — last alignment may be stale."
-                    : "No overlap yet."
-                }
+                emptyMessage={alignedEmptyMessage}
                 onPickSymbol={onPickSymbol}
+                isValidSymbol={isAlphaOnlySymbol}
               />
 
               <OpportunityTable
-                title="Market leaders (today)"
+                title={COPY.cards.topDayTrades.tables.leaders.title}
                 rows={leadersScored.rows}
-                emptyMessage="No leaders returned yet."
+                emptyMessage={COPY.cards.topDayTrades.tables.leaders.empty}
                 onPickSymbol={onPickSymbol}
-                sourceLabel={leadersScored.anyComputed ? "ALPACA+Computed" : "ALPACA"}
+                sourceLabel={leadersSourceLabel}
+                isValidSymbol={isAlphaOnlySymbol}
               />
 
               <OpportunityTable
-                title="Internal (bot picks)"
+                title={COPY.cards.topDayTrades.tables.internal.title}
                 rows={(oppStocks || []).slice(0, 6).map((r) => ({
                   symbol: r.symbol,
                   score: r.score,
                   sub: r.reason ? String(r.reason) : "",
                 }))}
-                emptyMessage="Bot opportunities not wired yet."
+                emptyMessage={COPY.cards.topDayTrades.tables.internal.empty}
                 onPickSymbol={onPickSymbol}
+                isValidSymbol={isAlphaOnlySymbol}
               />
             </div>
 
-            <div className="tpOppFootnote">Hover any pill to see full details. Prices are USD/share.</div>
+            <div className="tpOppFootnote">{COPY.cards.topDayTrades.footnote}</div>
           </CardShell>
 
           <div className="tpSpan2" style={{ marginTop: 12 }}>

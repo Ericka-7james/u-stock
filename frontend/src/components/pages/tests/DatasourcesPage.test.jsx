@@ -8,8 +8,9 @@ import { MemoryRouter } from "react-router-dom";
  * ✅ Mocks MUST be declared before importing the component under test
  */
 
-// ✅ Mock AuthContext (AppShell/NavBar uses it)
-vi.mock("../../../context/AuthContext", () => ({
+// ✅ Mock auth hook (AppShell/NavBar uses it)
+// NOTE: useAuth now lives in authContextBase.js
+vi.mock("../../../context/authContextBase.js", () => ({
   useAuth: () => ({
     user: null,
     isAuthed: false,
@@ -28,8 +29,6 @@ vi.mock("../../../config/config", () => ({
 
 /**
  * ✅ Mock BotLogsCard so DatasourcesPage tests don't depend on BotLogsCard internals.
- * IMPORTANT: Do NOT use new URL(import.meta.url) here — it can trigger hoisting/init issues.
- * Mock using the literal module path the page imports.
  */
 vi.mock("../../dashboard/cards/BotLogsCard.jsx", () => ({
   default: function MockBotLogsCard(props) {
@@ -38,7 +37,6 @@ vi.mock("../../dashboard/cards/BotLogsCard.jsx", () => ({
         <h2>{props.title || "Bot logs"}</h2>
         <p>{props.subtitle || ""}</p>
 
-        {/* Deterministic preview text for assertions */}
         <ul>
           <li>Retrying submit</li>
           <li>State changed</li>
@@ -68,7 +66,6 @@ describe("DatasourcesPage", () => {
       vi.fn(async (url) => {
         const u = String(url);
 
-        // ✅ endpoint used by useMarketLeaders()
         if (u.includes("/api/market/leaders")) {
           return jsonOk({
             items: [
@@ -100,13 +97,9 @@ describe("DatasourcesPage", () => {
   it("renders the page header + both sections", async () => {
     renderPage();
 
-    // PageHeaderCard title
     expect(await screen.findByRole("heading", { name: /data sources/i })).toBeInTheDocument();
-
-    // Market leaders card title prop is "Market leaders"
     expect(await screen.findByText(/market leaders/i)).toBeInTheDocument();
 
-    // BotLogsCard is mocked
     expect(await screen.findByRole("heading", { name: /bot logs/i })).toBeInTheDocument();
     expect(screen.getByTestId("bot-logs-card")).toBeInTheDocument();
   });
@@ -114,19 +107,16 @@ describe("DatasourcesPage", () => {
   it("renders market leader rows and allows clicking a ticker button", async () => {
     renderPage();
 
-    // ensure leaders loaded
     await waitFor(() =>
-      expect(global.fetch).toHaveBeenCalledWith(
+      expect(globalThis.fetch).toHaveBeenCalledWith(
         expect.stringContaining("/api/market/leaders"),
         expect.any(Object)
       )
     );
 
-    // MarketLeadersCard usually renders the symbol as a button
     const jfbrBtn = await screen.findByRole("button", { name: /jfbr/i });
     fireEvent.click(jfbrBtn);
 
-    // still on the page (not asserting navigation here)
     expect(screen.getByRole("heading", { name: /data sources/i })).toBeInTheDocument();
   });
 

@@ -1,7 +1,8 @@
 // frontend/src/components/dashboard/DashboardPage.jsx
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import AppShell from "../layout/AppShell.jsx";
-import { useAuth } from "../../context/AuthContext";
+import { useAuth } from "../../context/authContextBase.js";
 
 import PriceChartPanel from "./cards/PriceChartPanel.jsx";
 import SentimentCard from "./cards/SentimentCard.jsx";
@@ -17,9 +18,12 @@ import ErrorBanner from "../common/ErrorBanner.jsx";
 import { explainAnyError } from "../../lib/errorMessages.jsx";
 
 import useIsDarkMode from "../../hooks/common/useIsDarkMode.js";
-import useBotOpportunities from "../../hooks/dashboard/useBotOpportunities.js";
+import { useBotOpportunities } from "../../hooks/dashboard/useBotOpportunities.js";
 import useMarketLeaders from "../../hooks/dashboard/useMarketLeaders.js";
 import useConnectBotNudge from "../../hooks/dashboard/useConnectBotNudge.js";
+
+import WelcomeConnectModal from "./WelcomeConnectModal.jsx";
+import welcomeSquirrel from "../../assets/icons/WelcomeSquirrel.png";
 
 import { LS } from "../../lib/storage/keys.js";
 import { lsGet, lsSet } from "../../lib/storage/localStorage.js";
@@ -37,13 +41,40 @@ function loadLastTicker() {
   return s || COPY.defaults.fallbackTicker;
 }
 
+function scopedKey(base, scope) {
+  const s = String(scope || "").trim();
+  return s ? `${base}::${s}` : base;
+}
+
+function ssGet(key) {
+  try {
+    return window.sessionStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function ssSet(key, val) {
+  try {
+    window.sessionStorage.setItem(key, val);
+  } catch {
+    // ignore
+  }
+}
+
+// Must match BotControlCard’s persisted key base:
+const SELECTED_BOT_KEY_BASE = "ustock:selected_bot_id_v1";
+
+// New: per-user, per-login-session guard
+const WELCOME_SHOWN_SESSION_BASE = "ustock:welcome_connect_shown_session_v1";
+
 export default function DashboardPage() {
-  const { isAuthed, loading: authLoading } = useAuth();
+  const navigate = useNavigate();
+  const { isAuthed, loading: authLoading, user } = useAuth();
 
   const [currentTicker, setCurrentTicker] = useState(loadLastTicker);
   const [timeframe, setTimeframe] = useState(null);
 
-  // ✅ Error modal (kept, even if currently unused)
   const [errOpen, setErrOpen] = useState(false);
   const [errPayload, setErrPayload] = useState(null);
 
@@ -52,14 +83,78 @@ export default function DashboardPage() {
     setErrPayload(null);
   };
 
-  // ✅ Connect-bot nudge (hook owns the logic + localStorage flags + navigation)
   const connectNudge = useConnectBotNudge({
     botAvailablePath: "/api/bots/available",
     connectHref: "/bots",
   });
 
-  if (authLoading || !isAuthed) return null;
+  // --------------------------------------------
+  // Welcome modal:
+  // Show when (per user):
+  // - login edge (false -> true)
+  // - no bot selected for that user
+  // - not permanently dismissed for that user
+  // - not already shown in THIS login session for that user
+  //
+  // This prevents showing on route changes back to dashboard.
+  // It WILL show again after logout/login because login edge happens again.
+  // --------------------------------------------
+  const [welcomeOpen, setWelcomeOpen] = useState(false);
+  const prevAuthedRef = useRef(false);
 
+  useEffect(() => {
+    if (authLoading) return;
+
+    const prev = prevAuthedRef.current;
+    const now = Boolean(isAuthed);
+
+    // keep ref updated
+    prevAuthedRef.current = now;
+
+    // Only run on a true login edge
+    if (!now || prev === true) return;
+
+    const uid = String(user?.id || "").trim();
+    if (!uid) return;
+
+    // Permanent dismissal (per-user)
+    const dismissedKey = scopedKey(LS.WELCOME_CONNECT_DISMISSED, uid);
+    const dismissed = String(lsGet(dismissedKey, "") || "") === "1";
+    if (dismissed) return;
+
+    // Session guard (per-user)
+    const shownKey = scopedKey(WELCOME_SHOWN_SESSION_BASE, uid);
+    const alreadyShownThisSession = ssGet(shownKey) === "1";
+    if (alreadyShownThisSession) return;
+
+    // Selected bot (per-user) - must match BotControlCard behavior
+    const selectedBotKey = scopedKey(SELECTED_BOT_KEY_BASE, uid);
+    const selectedBotId = String(lsGet(selectedBotKey, "") || "").trim();
+
+    if (!selectedBotId) {
+      // Avoid react-hooks/set-state-in-effect (schedule it, same UX)
+      queueMicrotask(() => setWelcomeOpen(true));
+      ssSet(shownKey, "1");
+    }
+  }, [authLoading, isAuthed, user?.id]);
+
+  const closeWelcome = () => {
+    const uid = String(user?.id || "").trim();
+    if (uid) {
+      const dismissedKey = scopedKey(LS.WELCOME_CONNECT_DISMISSED, uid);
+      lsSet(dismissedKey, "1");
+    }
+    setWelcomeOpen(false);
+  };
+
+  const goConnect = () => {
+    setWelcomeOpen(false);
+    navigate("/bots");
+  };
+
+  // --------------------------------------------
+  // Dashboard data
+  // --------------------------------------------
   useEffect(() => {
     lsSet(LS.LAST_TICKER, currentTicker);
   }, [currentTicker]);
@@ -85,6 +180,8 @@ export default function DashboardPage() {
 
   const leadersItems = useMemo(() => leadersResp?.items || [], [leadersResp]);
 
+  if (authLoading || !isAuthed) return null;
+
   return (
     <AppShell>
       <ErrorModal open={errOpen} error={errPayload} onClose={closeErr} />
@@ -94,6 +191,13 @@ export default function DashboardPage() {
         error={connectNudge.payload}
         onClose={connectNudge.onClose}
         onAction={connectNudge.onAction}
+      />
+
+      <WelcomeConnectModal
+        open={welcomeOpen}
+        onClose={closeWelcome}
+        onConnect={goConnect}
+        welcomeImage={welcomeSquirrel}
       />
 
       <div className="dashboard-page-wrap">

@@ -3,7 +3,8 @@ import React from "react";
 import { render, screen } from "@testing-library/react";
 import { describe, test, expect, vi, beforeEach } from "vitest";
 
-vi.mock("../TradingViewEmbed", () => ({
+// ✅ PriceChart imports "./TradingViewEmbed.jsx" so from this test (../PriceChart.jsx) it resolves to ../TradingViewEmbed.jsx
+vi.mock("../TradingViewEmbed.jsx", () => ({
   default: ({ symbol, interval, theme, height }) => (
     <div
       data-testid="tv-embed"
@@ -15,15 +16,17 @@ vi.mock("../TradingViewEmbed", () => ({
   ),
 }));
 
-// IMPORTANT: adjust this path if your tests live elsewhere
-import PriceChart, { toTradingViewSymbol } from "../PriceChart.jsx";
+import PriceChart from "../PriceChart.jsx";
+
+// ✅ utils are now the source of truth for symbol mapping
+import { toTradingViewSymbol } from "../priceChart.utils.js";
 
 describe("PriceChart", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("renders loading state with accessible status", () => {
+  test("renders loading state with accessible status", () => {
     render(<PriceChart ticker="AAPL" loading={true} />);
 
     const status = screen.getByRole("status");
@@ -56,25 +59,14 @@ describe("PriceChart", () => {
 
   test("maps crypto pairs BTC/USD and btc-usd to BITSTAMP:BTCUSD", () => {
     render(<PriceChart ticker="BTC/USD" />);
-    expect(screen.getByTestId("tv-embed").getAttribute("data-symbol")).toBe(
-      "BITSTAMP:BTCUSD"
-    );
+    expect(screen.getByTestId("tv-embed").getAttribute("data-symbol")).toBe("BITSTAMP:BTCUSD");
 
     render(<PriceChart ticker="btc-usd" />);
-    expect(screen.getAllByTestId("tv-embed")[1].getAttribute("data-symbol")).toBe(
-      "BITSTAMP:BTCUSD"
-    );
+    expect(screen.getAllByTestId("tv-embed")[1].getAttribute("data-symbol")).toBe("BITSTAMP:BTCUSD");
   });
 
   test("passes interval/theme/height through with normalization + clamping", () => {
-    render(
-      <PriceChart
-        ticker="AAPL"
-        interval={5}
-        theme="dark"
-        height={50} // should clamp up to 180
-      />
-    );
+    render(<PriceChart ticker="AAPL" interval={5} theme="dark" height={50} />); // clamps to 180
 
     const embed = screen.getByTestId("tv-embed");
     expect(embed.getAttribute("data-interval")).toBe("5");
@@ -101,6 +93,7 @@ describe("toTradingViewSymbol", () => {
   test("returns default when falsy ticker", () => {
     expect(toTradingViewSymbol("")).toBe("NASDAQ:AAPL");
     expect(toTradingViewSymbol(null)).toBe("NASDAQ:AAPL");
+    expect(toTradingViewSymbol(undefined)).toBe("NASDAQ:AAPL");
   });
 
   test("maps plain ticker to NASDAQ", () => {

@@ -7,7 +7,7 @@ const mockAuth = {
   authFetch: vi.fn(),
 };
 
-vi.mock("../../../context/AuthContext", () => ({
+vi.mock("../../../context/authContextBase.js", () => ({
   useAuth: () => mockAuth,
 }));
 

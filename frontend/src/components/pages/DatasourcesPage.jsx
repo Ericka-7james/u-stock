@@ -97,8 +97,8 @@ function useMarketLeaders() {
       } catch {
         // keep page clean; MarketLeadersCard can handle empty
       } finally {
-        if (!alive) return;
-        setLoading(false);
+        // ✅ no return in finally (no-unsafe-finally)
+        if (alive) setLoading(false);
       }
     }
 
@@ -120,7 +120,7 @@ export default function DatasourcesPage() {
 
   return (
     <AppShell>
-      <div className="app-page datasources-page">
+      <div className="datasources-page">
         <PageHeaderCard
           title={c.header.title}
           subtitle={
@@ -166,7 +166,9 @@ export default function DatasourcesPage() {
 
                     try {
                       localStorage.setItem("ustock:last_ticker", clean);
-                    } catch {}
+                    } catch {
+                      // ignore storage failures (private mode, blocked storage, etc.)
+                    }
 
                     navigate(`/?ticker=${encodeURIComponent(clean)}`);
                   }}

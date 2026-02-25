@@ -29,14 +29,22 @@ vi.mock("../ConnectProviderModal", () => ({
     ) : null,
 }));
 
-// ✅ mock auth hook
+// ✅ mock auth hook (matches ConnectedAppsPage import)
 const mockAuth = {
   isAuthed: false,
   authFetch: vi.fn(),
   logout: vi.fn(),
 };
 
+vi.mock("../../../context/authContextBase.js", () => ({
+  useAuth: () => mockAuth,
+}));
+
+// (optional) keep these too in case other imports exist in children
 vi.mock("../../../context/AuthContext", () => ({
+  useAuth: () => mockAuth,
+}));
+vi.mock("../../../context/AuthContext.jsx", () => ({
   useAuth: () => mockAuth,
 }));
 
@@ -122,9 +130,17 @@ describe("ConnectedAppsPage", () => {
 
     render(<ConnectedAppsPage />);
 
-    await waitFor(() => expect(mockAuth.authFetch).toHaveBeenCalled());
+    // wait for initial fetch to complete + UI to be interactive
+    await waitFor(() => expect(mockAuth.authFetch).toHaveBeenCalledTimes(1));
 
-    fireEvent.click(screen.getByRole("button", { name: /alpaca docs/i }));
+    const docsBtn = await screen.findByRole("button", { name: /alpaca docs/i });
+
+    await waitFor(() => {
+      expect(docsBtn).not.toBeDisabled();
+    });
+
+    fireEvent.click(docsBtn);
+
     expect(window.open).toHaveBeenCalledWith(
       "https://docs.alpaca.markets/",
       "_blank",
@@ -145,14 +161,19 @@ describe("ConnectedAppsPage", () => {
     );
 
     render(<ConnectedAppsPage />);
-    await waitFor(() => expect(mockAuth.authFetch).toHaveBeenCalled());
 
-    const connectButtons = screen.getAllByRole("button", { name: "Connect" });
+    await waitFor(() => expect(mockAuth.authFetch).toHaveBeenCalledTimes(1));
+
+    const connectButtons = await screen.findAllByRole("button", { name: "Connect" });
+
+    await waitFor(() => {
+      expect(connectButtons[0]).not.toBeDisabled();
+    });
+
     fireEvent.click(connectButtons[0]);
 
-    const modal = screen.getByTestId("connect-modal");
-    expect(modal).toBeInTheDocument();
-    expect(modal).toHaveTextContent(/alpaca/i);
+    expect(await screen.findByTestId("connect-modal")).toBeInTheDocument();
+    expect(screen.getByTestId("connect-modal")).toHaveTextContent(/alpaca/i);
   });
 
   it("shows an error banner if /integrations returns 401", async () => {
@@ -192,7 +213,12 @@ describe("ConnectedAppsPage", () => {
 
     await waitFor(() => expect(mockAuth.authFetch).toHaveBeenCalledTimes(1));
 
-    const refreshButtons = await screen.findAllByRole("button", { name: /Refresh/i });
+    const refreshButtons = await screen.findAllByRole("button", { name: /refresh/i });
+
+    await waitFor(() => {
+      expect(refreshButtons[0]).not.toBeDisabled();
+    });
+
     fireEvent.click(refreshButtons[0]);
 
     await waitFor(() => expect(mockAuth.authFetch).toHaveBeenCalledTimes(2));

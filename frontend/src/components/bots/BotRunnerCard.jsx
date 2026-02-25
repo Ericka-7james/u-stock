@@ -1,6 +1,6 @@
 // frontend/src/components/bots/BotRunnerCard.jsx
 import { useEffect, useMemo, useState } from "react";
-import { useAuth } from "../../context/AuthContext";
+import { useAuth } from "../../context/authContextBase.js";
 import { useNavigate } from "react-router-dom";
 
 import HelpTooltip from "../common/HelpTooltip";
@@ -74,7 +74,6 @@ export default function BotRunnerCard() {
 
   // Logs modal state
   const [logsOpen, setLogsOpen] = useState(false);
-  const [logsBotId, setLogsBotId] = useState("");
   const [logsBotName, setLogsBotName] = useState("");
   const [logsText, setLogsText] = useState("");
   const [logsUpdatedAt, setLogsUpdatedAt] = useState("");
@@ -284,7 +283,6 @@ export default function BotRunnerCard() {
     const s = botStatuses?.[bot.id] || {};
     const msg = String(s.message || "").trim();
 
-    setLogsBotId(bot.id);
     setLogsBotName(bot.name);
     setLogsText(msg || "No logs yet for this bot.");
     setLogsUpdatedAt(formatUpdatedAtEpoch(s.heartbeatAt || s.heartbeat_at || 0));

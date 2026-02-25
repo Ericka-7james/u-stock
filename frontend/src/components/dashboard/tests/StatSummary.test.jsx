@@ -1,43 +1,64 @@
-// src/components/dashboard/tests/StatSummary.test.jsx
-import { render, screen, within } from "@testing-library/react";
+// frontend/src/components/dashboard/tests/StatSummary.test.jsx
+import React from "react";
+import { render, screen, within, cleanup } from "@testing-library/react";
 import { describe, it, expect, vi, afterEach } from "vitest";
-import StatSummary from "../cards/StatSummary.jsx";
+
+/**
+ * StatSummary imports:
+ *   "../../lib/format/datetime.js"
+ *
+ * From THIS test file location (src/components/dashboard/tests),
+ * that resolves to:
+ *   "../../../lib/format/datetime.js"
+ *
+ * Mock that resolved path so the named imports exist.
+ */
+vi.mock("../../../lib/format/datetime.js", () => {
+  const toValidDate = (x) => {
+    if (!x) return null;
+    const d = new Date(x);
+    return Number.isNaN(d.getTime()) ? null : d;
+  };
+
+  const maxDate = (dates) => {
+    const ds = (Array.isArray(dates) ? dates : []).filter(Boolean);
+    if (!ds.length) return null;
+    return ds.reduce((best, d) => (d.getTime() > best.getTime() ? d : best), ds[0]);
+  };
+
+  return {
+    toValidDate,
+    maxDate,
+    fmtTimeHHMM: () => "12:00",
+    fmtDateShort: () => "1/1/2024",
+  };
+});
+
+// Correct import for the actual file you showed:
+// frontend/src/components/dashboard/StatSummary.jsx
+import StatSummary from "../StatSummary.jsx";
 
 describe("StatSummary", () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    cleanup();
   });
 
   it("renders fallback values when signals + meta are empty", () => {
-    render(
-      <StatSummary
-        signalsMeta={null}
-        signalsData={null}
-        pricesMeta={null}
-        priceSymbols={[]}
-      />
-    );
+    render(<StatSummary signalsMeta={null} signalsData={null} pricesMeta={null} priceSymbols={[]} />);
 
-    const signalsCard = screen
-      .getByText(/signals universe/i)
-      .closest(".stat-card");
+    const signalsCard = screen.getByText(/signals universe/i).closest(".stat-card");
     expect(signalsCard).not.toBeNull();
     expect(within(signalsCard).getByText("0")).toBeInTheDocument();
 
-    const pricesCard = screen
-      .getByText(/price coverage/i)
-      .closest(".stat-card");
+    const pricesCard = screen.getByText(/price coverage/i).closest(".stat-card");
     expect(pricesCard).not.toBeNull();
     expect(within(pricesCard).getByText("0")).toBeInTheDocument();
 
-    const refreshCard = screen
-      .getByText(/last data refresh/i)
-      .closest(".stat-card");
+    const refreshCard = screen.getByText(/last data refresh/i).closest(".stat-card");
     expect(refreshCard).not.toBeNull();
     expect(within(refreshCard).getAllByText("—").length).toBeGreaterThan(0);
-    expect(
-      within(refreshCard).getByText(/run fetchers \+ indicators/i)
-    ).toBeInTheDocument();
+    expect(within(refreshCard).getByText(/run fetchers \+ indicators/i)).toBeInTheDocument();
   });
 
   it("uses meta.universe sizes when present (signals + prices)", () => {
@@ -63,13 +84,8 @@ describe("StatSummary", () => {
       />
     );
 
-    const signalsCard = screen
-      .getByText(/signals universe/i)
-      .closest(".stat-card");
-    const pricesCard = screen
-      .getByText(/price coverage/i)
-      .closest(".stat-card");
-
+    const signalsCard = screen.getByText(/signals universe/i).closest(".stat-card");
+    const pricesCard = screen.getByText(/price coverage/i).closest(".stat-card");
     expect(signalsCard).not.toBeNull();
     expect(pricesCard).not.toBeNull();
 
@@ -90,13 +106,8 @@ describe("StatSummary", () => {
       />
     );
 
-    const signalsCard = screen
-      .getByText(/signals universe/i)
-      .closest(".stat-card");
-    const pricesCard = screen
-      .getByText(/price coverage/i)
-      .closest(".stat-card");
-
+    const signalsCard = screen.getByText(/signals universe/i).closest(".stat-card");
+    const pricesCard = screen.getByText(/price coverage/i).closest(".stat-card");
     expect(signalsCard).not.toBeNull();
     expect(pricesCard).not.toBeNull();
 
@@ -105,27 +116,16 @@ describe("StatSummary", () => {
   });
 
   it("renders last refresh time/date using the latest generatedAt across signals + prices (deterministic)", () => {
-    vi.spyOn(Date.prototype, "toLocaleTimeString").mockReturnValue("12:00 PM");
-    vi.spyOn(Date.prototype, "toLocaleDateString").mockReturnValue("1/1/2024");
-
     const signalsMeta = { generatedAt: "2024-01-01T07:00:00Z" };
     const pricesMeta = { generatedAt: "2024-01-01T12:00:00Z" }; // later
 
-    render(
-      <StatSummary
-        signalsMeta={signalsMeta}
-        signalsData={[]}
-        pricesMeta={pricesMeta}
-        priceSymbols={[]}
-      />
-    );
+    render(<StatSummary signalsMeta={signalsMeta} signalsData={[]} pricesMeta={pricesMeta} priceSymbols={[]} />);
 
-    const refreshCard = screen
-      .getByText(/last data refresh/i)
-      .closest(".stat-card");
+    const refreshCard = screen.getByText(/last data refresh/i).closest(".stat-card");
     expect(refreshCard).not.toBeNull();
 
-    expect(within(refreshCard).getByText("12:00 PM")).toBeInTheDocument();
+    // from mocked fmtTimeHHMM / fmtDateShort
+    expect(within(refreshCard).getByText("12:00")).toBeInTheDocument();
     expect(within(refreshCard).getByText("1/1/2024")).toBeInTheDocument();
   });
 });

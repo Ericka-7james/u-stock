@@ -508,3 +508,25 @@ body.ustock-dark .side-nav-footer-divider {
   .theme-toggle-thumb { width: 14px; height: 14px; }
   .theme-toggle--on .theme-toggle-thumb { transform: translateX(10px); }
 }
+
+/* ====== BRAND LABEL SWAP (MUST BE LAST) ============================ */
+
+/* Default (desktop): show full name, hide short */
+.topbar-home-label--full {
+  display: inline !important;
+}
+
+.topbar-home-label--short {
+  display: none !important;
+}
+
+/* Smaller screens: hide full, show short */
+@media (max-width: 900px) {
+  .topbar-home-label--full {
+    display: none !important;
+  }
+
+  .topbar-home-label--short {
+    display: inline !important;
+  }
+}

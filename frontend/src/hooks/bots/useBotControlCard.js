@@ -287,7 +287,7 @@ export default function useBotControlCard({
     writeStoredBotId(storageKey, propId);
   }, [activeBotId, storageKey]);
 
-  const hasSelection = useMemo(() => !!safeStr(selected, ""), [selected]);
+  const hasSelection = useMemo(() => safeStr(selected, "") !== "", [selected]);
 
   const selectedMeta = useMemo(() => {
     const bid = safeStr(selected, "");
@@ -305,7 +305,7 @@ export default function useBotControlCard({
   const desiredState = useMemo(() => safeStr(snapshot?.desired_state, ""), [snapshot?.desired_state]);
   const message = useMemo(() => safeStr(snapshot?.message, ""), [snapshot?.message]);
 
-  const isOpen = useMemo(() => Boolean(snapshot?.market?.is_open), [snapshot?.market?.is_open]);
+  const isOpen = useMemo(() => snapshot?.market?.is_open === true, [snapshot?.market?.is_open]);
   const nextOpenEpoch = useMemo(() => {
     const v = snapshot?.market?.next_open_epoch;
     return Number.isFinite(Number(v)) ? Number(v) : null;
@@ -321,7 +321,7 @@ export default function useBotControlCard({
   const runtimeTone = useMemo(() => runtimeToneFromEffective(eff), [eff]);
   const runtimeLabel = useMemo(() => runtimeLabelFromEffective(eff, intent), [eff, intent]);
 
-  const isArmed = useMemo(() => Boolean(snapshot?.armed), [snapshot?.armed]);
+  const isArmed = useMemo(() => snapshot?.armed === true, [snapshot?.armed]);
 
   const isRunningEff = useMemo(() => String(eff || "").toLowerCase().includes("running"), [eff]);
   const isWaiting = useMemo(() => String(eff || "").toLowerCase().includes("waiting"), [eff]);
@@ -333,7 +333,7 @@ export default function useBotControlCard({
 
   const marketClosedBlocksStart = useMemo(() => {
     if (!hasSelection) return false;
-    if (Boolean(snapshot?.market?.blocks_start)) return true;
+    if (snapshot?.market?.blocks_start === true) return true;
     if (snapshot?.market && snapshot.market.is_open === false) return true;
     return false;
   }, [hasSelection, snapshot]);
@@ -615,7 +615,9 @@ export default function useBotControlCard({
       const alreadyShown = sessionStorage.getItem(selectPromptKey) === "1";
       if (alreadyShown) return;
       sessionStorage.setItem(selectPromptKey, "1");
-    } catch {}
+    } catch {
+      // ignore (sessionStorage may be unavailable)
+    }
 
     setSelectPromptOpen(true);
   }, [activeBotId, selected, available, selectPromptOpen, selectPromptKey]);

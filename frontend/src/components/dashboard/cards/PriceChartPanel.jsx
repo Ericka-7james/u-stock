@@ -1,9 +1,11 @@
 // frontend/src/components/dashboard/cards/PriceChartPanel.jsx
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import HelpTooltip from "../../common/HelpTooltip.jsx";
 
 import { normalizeSymbol } from "../../../lib/symbols.js";
 import { prettyTvInterval } from "../../../lib/format/tradingview.js";
+
+import { PRICE_CHART_PANEL_COPY as COPY } from "../../../content/dashboard/cards/priceChartPanel.content.ts";
 
 import "../../../css/dashboard/cards/PriceChartPanel.css";
 
@@ -28,14 +30,23 @@ function loadTradingViewScript() {
   });
 }
 
+function randomIdHex(bytesLen = 8) {
+  const bytes = new Uint8Array(bytesLen);
+  window.crypto.getRandomValues(bytes);
+  return Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
 export default function PriceChartPanel({
-  currentTicker = "AAPL",
+  currentTicker = COPY.fallbacks.symbol,
   isDarkMode = false,
-  timeframeLabel = "Past week",
   activeRangeLabel = "",
-  interval = "60",
+  interval = COPY.fallbacks.interval,
 }) {
-  const containerIdRef = useRef(`tv-${Math.random().toString(16).slice(2)}`);
+  // ✅ random, stable per mount, no ref access during render
+  const [containerId] = useState(() => `tv-${randomIdHex(8)}`);
+
   const widgetRef = useRef(null);
 
   const intervalLabel = useMemo(() => prettyTvInterval(interval), [interval]);
@@ -48,16 +59,16 @@ export default function PriceChartPanel({
         await loadTradingViewScript();
         if (!alive) return;
 
-        const symbol = normalizeSymbol(currentTicker) || "AAPL";
+        const symbol = normalizeSymbol(currentTicker) || COPY.fallbacks.symbol;
 
-        const containerEl = document.getElementById(containerIdRef.current);
+        const containerEl = document.getElementById(containerId);
         if (containerEl) containerEl.innerHTML = "";
         widgetRef.current = null;
 
         widgetRef.current = new window.TradingView.widget({
-          container_id: containerIdRef.current,
+          container_id: containerId,
           symbol,
-          interval: String(interval || "60"),
+          interval: String(interval || COPY.fallbacks.interval),
           autosize: true,
           theme: isDarkMode ? "dark" : "light",
           locale: "en",
@@ -68,14 +79,14 @@ export default function PriceChartPanel({
           save_image: false,
         });
       } catch (e) {
-        console.error("TradingView init failed:", e);
+        console.error(COPY.errors.initFailedPrefix, e);
       }
     })();
 
     return () => {
       alive = false;
     };
-  }, [isDarkMode, currentTicker, interval]);
+  }, [isDarkMode, currentTicker, interval, containerId]);
 
   return (
     <section className="panel panel-chart">
@@ -83,23 +94,22 @@ export default function PriceChartPanel({
         <div className="card-header">
           <div className="card-header-left">
             <div className="card-title-row">
-              <h2 className="card-title-text">Price action viewer</h2>
+              <h2 className="card-title-text">{COPY.title}</h2>
 
-              <HelpTooltip title="What is the Price action viewer?">
-                <p>This chart is powered by TradingView.</p>
-                <p className="help-popover__note">
-                  The free embed supports changing candle interval (e.g., 15m/1h/1D). It does not let us force the visible
-                  date window. Use the chart controls to zoom/pan.
-                </p>
+              <HelpTooltip title={COPY.tooltip.title}>
+                {COPY.tooltip.body.map((p, i) => (
+                  <p key={i}>{p}</p>
+                ))}
+                <p className="help-popover__note">{COPY.tooltip.note}</p>
               </HelpTooltip>
             </div>
 
             <p className="card-subtitle">
-              Candle interval: <strong>{intervalLabel}</strong>
+              {COPY.subtitle.candleIntervalPrefix} <strong>{intervalLabel}</strong>
               {activeRangeLabel ? (
                 <>
-                  {" "}
-                  · <span style={{ opacity: 0.85 }}>{activeRangeLabel}</span>
+                  {COPY.subtitle.dot}
+                  <span style={{ opacity: 0.85 }}>{activeRangeLabel}</span>
                 </>
               ) : null}
             </p>
@@ -107,7 +117,7 @@ export default function PriceChartPanel({
         </div>
 
         <div className="tv-chart-wrapper">
-          <div id={containerIdRef.current} className="tv-chart-inner" />
+          <div id={containerId} className="tv-chart-inner" />
         </div>
       </div>
     </section>

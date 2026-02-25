@@ -99,14 +99,12 @@ def test_runner_opportunities_requires_secret_when_configured_query(client, monk
 
 
 def test_bot_top_opportunities_placeholder(client, monkeypatch):
-    monkeypatch.setattr(mod, "_now_epoch", lambda: 123)
+    # ✅ bypass cookie auth
+    monkeypatch.setattr(mod, "require_user", lambda req, resp: {"id": "user-1"})
 
     resp = client.get("/api/opportunities/bot/top", params={"limit": 9})
     assert resp.status_code == 200
     body = resp.json()
 
-    assert body["ok"] is True
-    assert body["requiresBotRunning"] is True
-    assert body["items"] == []
-    assert body["limit"] == 9
-    assert body["asOf"] == 123
+    # ✅ new safe placeholder shape
+    assert body == {"stocks": [], "crypto": [], "funds": []}

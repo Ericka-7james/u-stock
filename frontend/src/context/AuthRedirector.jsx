@@ -1,16 +1,10 @@
 // src/context/AuthRedirector.jsx
 import { useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { useAuth } from "./AuthContext";
+import { useAuth } from "./authContextBase.js"; // ✅ FIX
 
 // Public routes that should NEVER be redirected
-const PUBLIC_PATHS = new Set([
-  "/",
-  "/about",
-  "/feedback",
-  "/auth",
-  "/auth/signup",
-]);
+const PUBLIC_PATHS = new Set(["/", "/about", "/feedback", "/auth", "/auth/signup"]);
 
 export default function AuthRedirector() {
   const { user, loading } = useAuth();
@@ -22,13 +16,9 @@ export default function AuthRedirector() {
 
     const path = location.pathname;
 
-    // Allow public pages always
     if (PUBLIC_PATHS.has(path)) return;
-
-    // Allow anything under /auth to be safe
     if (path.startsWith("/auth")) return;
 
-    // If not logged in and trying to access protected pages → kick to home
     if (!user) {
       navigate("/", { replace: true });
     }

@@ -7,9 +7,10 @@ const CURRENT_YEAR = new Date().getFullYear();
 export default function Footer() {
   return (
     <footer className="app-footer">
-      © {START_YEAR}
-      {CURRENT_YEAR > START_YEAR && `–${CURRENT_YEAR}`} Lucent Financial. All rights reserved.
+      <div className="app-footer-inner">
+        © {START_YEAR}
+        {CURRENT_YEAR > START_YEAR && ` – ${CURRENT_YEAR}`} Lucent Financial. All rights reserved.
+      </div>
     </footer>
   );
 }
-

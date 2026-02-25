@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
 from runner import api_client as ac
 
@@ -11,8 +11,10 @@ class FakeAPI:
         self.boom = boom
         self.calls = []
 
-    def get(self, path: str, params=None):
-        self.calls.append((path, params))
+    # api_client.market_session calls api.get(..., params={}, headers={})
+    # so accept headers too to avoid signature mismatches.
+    def get(self, path: str, params=None, headers=None):
+        self.calls.append((path, params, headers))
         if self.boom:
             raise RuntimeError("down")
         return self.resp
@@ -20,18 +22,23 @@ class FakeAPI:
 
 def test_market_session_returns_dict_when_ok():
     api = FakeAPI({"ok": True, "is_open": True})
-    out = ac.market_session(api)
-    assert out["ok"] is True
-    assert out["is_open"] is True
+    out = ac.market_session(api, bot_id="bot_123")
+
+    assert out == {"ok": True, "is_open": True}
+    assert api.calls[0][0] == "/api/market/us/session"
 
 
 def test_market_session_returns_ok_false_when_non_dict():
     api = FakeAPI(["not", "a", "dict"])
-    out = ac.market_session(api)
+    out = ac.market_session(api, bot_id="bot_123")
+
     assert out == {"ok": False}
+    assert api.calls[0][0] == "/api/market/us/session"
 
 
 def test_market_session_returns_ok_false_on_exception():
     api = FakeAPI(boom=True)
-    out = ac.market_session(api)
+    out = ac.market_session(api, bot_id="bot_123")
+
     assert out == {"ok": False}
+    assert api.calls[0][0] == "/api/market/us/session"
