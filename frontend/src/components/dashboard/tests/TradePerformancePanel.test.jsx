@@ -308,12 +308,6 @@ describe("TradePerformancePanel", () => {
     return titleEl.closest(".tpOppMiniTable");
   };
 
-  const getBigStatByLabel = (labelTextOrRegex) => {
-    const label =
-      labelTextOrRegex instanceof RegExp ? labelTextOrRegex : new RegExp(String(labelTextOrRegex), "i");
-    return screen.getByTestId(`bigstat:Bot Status`) || screen.getByText(label).closest(".tpCard");
-  };
-
   it("sanity: component import resolves", () => {
     expect(TradePerformancePanel).toBeTypeOf("function");
   });

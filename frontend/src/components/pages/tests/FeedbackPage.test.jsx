@@ -1,5 +1,5 @@
 // frontend/src/components/pages/tests/FeedbackPage.test.jsx
-import React, { useEffect } from "react";
+import React from "react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
@@ -10,10 +10,11 @@ import { MemoryRouter } from "react-router-dom";
  *   so token isn't required and turnstile_token will be "" in the POST body.
  */
 vi.mock("react-turnstile", () => ({
-  default: (props) => {
-    useEffect(() => {
-      props?.onVerify?.("test-token");
-    }, []);
+  default: function TurnstileMock(props) {
+    // Call onVerify without hooks to satisfy eslint rules-of-hooks
+    if (typeof props?.onVerify === "function") {
+      queueMicrotask(() => props.onVerify("test-token"));
+    }
     return <div data-testid="turnstile" />;
   },
 }));

@@ -36,7 +36,10 @@ vi.mock("../../../context/authContextBase.js", () => ({
 
 // ✅ Mock DashboardCard wrapper (keep children + basic semantics)
 vi.mock("../../dashboard/cards/shared/DashboardCard.jsx", () => ({
-  default: ({ as: Tag = "section", className = "", children }) => <Tag className={className}>{children}</Tag>,
+  default: (props) => {
+    const Comp = props.as || "section";
+    return React.createElement(Comp, { className: props.className || "" }, props.children);
+  },
 }));
 
 // ✅ Make Modal test-friendly (render title + footer + children when open)
