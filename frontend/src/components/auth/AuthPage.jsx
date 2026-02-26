@@ -9,11 +9,16 @@ import { useAuth } from "../../context/authContextBase.js";
 import { explainAnyError } from "../../lib/errorMessages";
 
 import { AUTH_PAGE_COPY } from "../../content/landing/authpage.content.ts";
+import { ERROR_KEYS, ERROR_PRESETS } from "../../content/error/errorCatalog";
 
 import "../../css/auth/AuthPage.css";
 
 function normalizeEmail(input) {
   return String(input || "").trim().toLowerCase();
+}
+
+function msg(key, fallback) {
+  return ERROR_PRESETS?.[key]?.body || fallback || "Something went wrong.";
 }
 
 export default function AuthPage() {
@@ -39,8 +44,10 @@ export default function AuthPage() {
     const friendly = explainAnyError(anyErr, { feature });
 
     setErrModal({
-      title: friendly?.title || "Error",
-      body: friendly?.body || COPY?.errors?.fallback || "Something went wrong.",
+      title: friendly?.title || ERROR_PRESETS?.[ERROR_KEYS.LOGIN_FALLBACK]?.title || "Error",
+      body:
+        friendly?.body ||
+        msg(ERROR_KEYS.LOGIN_FALLBACK, COPY?.errors?.fallback),
       subtitle: friendly?.subtitle || "",
       image: friendly?.image || null,
       action: friendly?.action || null,

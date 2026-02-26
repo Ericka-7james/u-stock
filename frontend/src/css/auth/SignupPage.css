@@ -129,25 +129,30 @@
   margin-bottom: 8px;
 }
 
+/* ✅ switch to grid so centering is perfect + responsive control */
 .signup-avatar-strip-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)); /* desktop: 3 per row */
+  gap: 10px;
+  align-items: stretch;
 }
 
+/* ✅ make each pill a fixed “tile”, and center the icon inside */
 .signup-avatar-pill {
-  border: 1px solid var(--ustock-border-card);
-  background: var(--ustock-bg-card);
-  color: var(--ustock-text-main);
+  width: 100%;
+  height: 56px;
 
-  border-radius: 999px;
-  padding: 8px 12px;
+  display: grid;
+  place-items: center; /* dead center */
 
-  font-size: 16px;
-  line-height: 1;
+  border-radius: 14px;
+  padding: 0;
+
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(255, 255, 255, 0.7);
   cursor: pointer;
 
-  transition: transform 0.12s ease, background 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+  transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease, background 120ms ease;
 }
 
 .signup-avatar-pill:hover {
@@ -157,8 +162,16 @@
 
 .signup-avatar-pill--active {
   background: rgba(15, 118, 110, 0.10);
-  border-color: rgba(15, 118, 110, 0.55);
-  box-shadow: 0 12px 24px rgba(15, 118, 110, 0.16);
+  border: 2px solid var(--ustock-green-main);
+  box-shadow: 0 10px 20px rgba(42, 137, 114, 0.2);
+}
+
+/* ✅ icon sizing + centering stays stable */
+.signup-avatar-img {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+  pointer-events: none;
 }
 
 /* Primary button */
@@ -293,5 +306,26 @@ body.ustock-dark .signup-error {
 
   .signup-social {
     grid-template-columns: 1fr;
+  }
+
+  /* ✅ small view: always at least 2 icons per row */
+  .signup-avatar-strip-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Even smaller: still 2 per row, just slightly tighter */
+@media (max-width: 360px) {
+  .signup-avatar-strip-grid {
+    gap: 8px;
+  }
+
+  .signup-avatar-pill {
+    height: 52px;
+  }
+
+  .signup-avatar-img {
+    width: 36px;
+    height: 36px;
   }
 }
