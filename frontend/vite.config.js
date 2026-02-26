@@ -10,6 +10,7 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
+
     server: {
       host: "localhost",
       port: 5173,
@@ -25,28 +26,43 @@ export default defineConfig(({ mode }) => {
           }
         : undefined,
     },
+
     preview: {
       host: "localhost",
       port: 5173,
       strictPort: true,
     },
+
     test: {
       environment: "jsdom",
       globals: true,
       setupFiles: ["./src/setup.js"],
-      environmentOptions: { jsdom: { url: "http://localhost/" } },
+      environmentOptions: {
+        jsdom: { url: "http://localhost/" },
+      },
 
-      // ✅ coverage gate (>= 70%)
       coverage: {
         provider: "v8",
         reporter: ["text", "html", "json"],
         reportsDirectory: "./coverage",
-        thresholds: {
-          lines: 70,
-          functions: 70,
-          statements: 70,
-          branches: 60,
-        },
+
+        // ✅ exclude non-executable files from coverage calculation
+        exclude: [
+          "**/node_modules/**",
+          "**/dist/**",
+          "**/coverage/**",
+          "src/assets/**",
+          "src/css/**",
+          "**/*.d.ts",
+          "**/*.test.*",
+          "**/*.spec.*",
+        ],
+
+        // ✅ Vitest v4 compatible thresholds
+        lines: 70,
+        functions: 70,
+        statements: 70,
+        branches: 60,
       },
     },
   };

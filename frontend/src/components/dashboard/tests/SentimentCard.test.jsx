@@ -4,7 +4,7 @@ import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import { describe, it, expect, vi, afterEach } from "vitest";
 
 /* ---------------------------------------------------------
-   MOCK DashboardCard (fixes "Element type is invalid" crash)
+   MOCK DashboardCard
    SentimentCard imports: "./shared/DashboardCard.jsx"
    From this test file, that resolves to: "../cards/shared/DashboardCard.jsx"
 ---------------------------------------------------------- */
@@ -74,29 +74,15 @@ vi.mock("../../../content/dashboard/cards/sentimentCard.content.ts", () => ({
     sections: {
       price: {
         title: "Price-based Sentiment",
-        metricLabels: {
-          change1d: "1d",
-          change5d: "5d",
-          change20d: "20d",
-          rank20d: "20d rank",
-        },
+        metricLabels: { change1d: "1d", change5d: "5d", change20d: "20d", rank20d: "20d rank" },
       },
       vol: {
         title: "Volatility Sentiment",
-        metricLabels: {
-          realizedVol: "Realized vol",
-          volRank: "Vol rank",
-        },
+        metricLabels: { realizedVol: "Realized vol", volRank: "Vol rank" },
       },
       tech: {
         title: "Technical Pattern Sentiment",
-        metricLabels: {
-          lastClose: "Last close",
-          ma20: "MA20",
-          ma50: "MA50",
-          rsi14: "RSI14",
-          bbPos: "BB pos",
-        },
+        metricLabels: { lastClose: "Last close", ma20: "MA20", ma50: "MA50", rsi14: "RSI14", bbPos: "BB pos" },
       },
     },
 
@@ -137,9 +123,7 @@ vi.mock("../../../content/dashboard/cards/sentimentCard.content.ts", () => ({
       },
     },
 
-    misc: {
-      pctileSuffix: " pctile",
-    },
+    misc: { pctileSuffix: " pctile" },
   },
 }));
 
@@ -182,42 +166,50 @@ describe("SentimentCard", () => {
 
     expect(screen.getByText(/overall:/i)).toBeInTheDocument();
     expect(screen.getByText(/strongly bullish/i)).toBeInTheDocument();
+
+    // style/risk chips only show when source=backend AND style exists
     expect(screen.getByText(/growth/i)).toBeInTheDocument();
     expect(screen.getByText(/moderate/i)).toBeInTheDocument();
 
+    // sections (default mode is ALL)
     expect(screen.getByRole("heading", { level: 3, name: /price-based sentiment/i })).toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 3, name: /volatility sentiment/i })).toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 3, name: /technical pattern sentiment/i })).toBeInTheDocument();
   });
 
-  it("opens and closes the help modal (close button + Escape)", () => {
+  it("opens and closes the help modal (Escape + close button)", () => {
     render(<SentimentCard symbol="AAPL" historyBySymbol={{}} loading={false} backendSnapshot={null} />);
 
-    fireEvent.click(screen.getByLabelText(/explain this sentiment card/i));
+    // open
+    fireEvent.click(screen.getByRole("button", { name: /explain this sentiment card/i }));
     expect(screen.getByRole("dialog", { name: /sentiment explanation/i })).toBeInTheDocument();
 
+    // escape closes
     fireEvent.keyDown(window, { key: "Escape" });
     expect(screen.queryByRole("dialog", { name: /sentiment explanation/i })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByLabelText(/explain this sentiment card/i));
-    fireEvent.click(screen.getByLabelText(/close explanation/i));
+    // open again, close button closes
+    fireEvent.click(screen.getByRole("button", { name: /explain this sentiment card/i }));
+    fireEvent.click(screen.getByRole("button", { name: /close explanation/i }));
     expect(screen.queryByRole("dialog", { name: /sentiment explanation/i })).not.toBeInTheDocument();
   });
 
   it("closes help modal when clicking backdrop, but not when clicking inside popover", () => {
     render(<SentimentCard symbol="AAPL" historyBySymbol={{}} loading={false} backendSnapshot={null} />);
 
-    fireEvent.click(screen.getByLabelText(/explain this sentiment card/i));
+    fireEvent.click(screen.getByRole("button", { name: /explain this sentiment card/i }));
     const dialog = screen.getByRole("dialog", { name: /sentiment explanation/i });
 
-    fireEvent.click(screen.getByText(/not advice/i));
+    // clicking inside popover should NOT close
+    fireEvent.click(screen.getByText(/not advice\./i));
     expect(screen.getByRole("dialog", { name: /sentiment explanation/i })).toBeInTheDocument();
 
+    // clicking the backdrop (dialog wrapper) closes
     fireEvent.click(dialog);
     expect(screen.queryByRole("dialog", { name: /sentiment explanation/i })).not.toBeInTheDocument();
   });
 
-  it("mode control filters sections when selecting Volatility Sentiment", () => {
+  it("mode dropdown filters sections (select VOL)", () => {
     const backendSnapshot = {
       price_based: { label: "Bullish", change_1d: 1.23, change_5d: 3.45, change_20d: 5.67 },
       volatility: { label: "Calm", realized_vol: 15.2 },
@@ -229,9 +221,13 @@ describe("SentimentCard", () => {
 
     render(<SentimentCard symbol="AAPL" historyBySymbol={{}} loading={false} backendSnapshot={backendSnapshot} />);
 
+    // open dropdown (use aria-label, which is the accessible name)
     fireEvent.click(screen.getByRole("button", { name: /sentiment view mode/i }));
+
+    // choose VOL option
     fireEvent.click(screen.getByRole("option", { name: /volatility sentiment/i }));
 
+    // only vol section remains
     expect(screen.queryByRole("heading", { level: 3, name: /price-based sentiment/i })).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 3, name: /volatility sentiment/i })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { level: 3, name: /technical pattern sentiment/i })).not.toBeInTheDocument();

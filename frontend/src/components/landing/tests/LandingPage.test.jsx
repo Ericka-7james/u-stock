@@ -34,6 +34,11 @@ vi.mock("../../../context/authContextBase.js", () => ({
   useAuth: () => mockAuth,
 }));
 
+// ✅ Mock DashboardCard wrapper (keep children + basic semantics)
+vi.mock("../../dashboard/cards/shared/DashboardCard.jsx", () => ({
+  default: ({ as: Tag = "section", className = "", children }) => <Tag className={className}>{children}</Tag>,
+}));
+
 // ✅ Make Modal test-friendly (render title + footer + children when open)
 vi.mock("../../common/Modal", () => ({
   default: ({ open, title, onClose, footer, children }) =>
@@ -49,6 +54,14 @@ vi.mock("../../common/Modal", () => ({
     ) : null,
 }));
 
+// ✅ Mock all imported images so tests don't fail on asset imports
+vi.mock("../../../assets/ericka-headshot.jpeg", () => ({ default: "headshot.jpg" }));
+vi.mock("../../../assets/trusted-logos/jpmorgan-chase-trusted-gray.png", () => ({ default: "jpm.png" }));
+vi.mock("../../../assets/trusted-logos/spelman-innovation-lab-trusted-gray.png", () => ({ default: "spelman.png" }));
+vi.mock("../../../assets/trusted-logos/gpc-trusted-gray.png", () => ({ default: "gpc.png" }));
+vi.mock("../../../assets/trusted-logos/mlt-trusted-gray.png", () => ({ default: "mlt.png" }));
+vi.mock("../../../assets/icons/LucentAppIcon.png", () => ({ default: "lucent.png" }));
+
 // ✅ Stabilize content so tests don’t break when copy changes
 vi.mock("../../../content/landing/landingpage.content.ts", () => ({
   LANDING_PAGE_CONTENT: {
@@ -57,7 +70,22 @@ vi.mock("../../../content/landing/landingpage.content.ts", () => ({
         subtitle: "U-Stock helps everyday users trade and invest with clarity.",
         ctas: {
           primary: "Sign in / Sign up",
-          secondary: "Learn more",
+          secondary: "About",
+          roadmap: "See roadmap",
+        },
+        metrics: [
+          { top: "3", bottom: "Bots shipped" },
+          { top: "120+", bottom: "Backtests run" },
+        ],
+      },
+      workedAt: {
+        ariaLabel: "Places I’ve worked",
+        caption: "Trusted by teams and programs I’ve worked with.",
+        tooltips: {
+          jpm: "JPMorgan Chase",
+          spelman: "Spelman Innovation Lab",
+          gpc: "GPC",
+          mlt: "MLT",
         },
       },
       why: {
@@ -128,13 +156,28 @@ describe("LandingPage", () => {
     expect(screen.getByText(/u-stock helps everyday users trade and invest with clarity/i)).toBeInTheDocument();
 
     expect(screen.getByRole("button", { name: /sign in \/ sign up/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /watch demo/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /learn more/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /see roadmap/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /about/i })).toBeInTheDocument();
   });
 
-  it("renders the illustration image (headshot)", () => {
+  it("renders the headshot image", () => {
     renderLanding();
     expect(screen.getByAltText(/ericka james headshot/i)).toBeInTheDocument();
+  });
+
+  it("renders the worked-at logo strip with tooltips", () => {
+    renderLanding();
+
+    // strip is labeled by ariaLabel from content
+    expect(screen.getByLabelText(/places i’ve worked/i)).toBeInTheDocument();
+
+    // logos are present by tooltip text (used as alt)
+    expect(screen.getByAltText(/jpmorgan chase/i)).toBeInTheDocument();
+    expect(screen.getByAltText(/spelman innovation lab/i)).toBeInTheDocument();
+    expect(screen.getByAltText(/^gpc$/i)).toBeInTheDocument();
+    expect(screen.getByAltText(/^mlt$/i)).toBeInTheDocument();
+
+    expect(screen.getByText(/trusted by teams and programs/i)).toBeInTheDocument();
   });
 
   it("renders the 'Why U-Stock?' section and feature cards", () => {
@@ -153,6 +196,7 @@ describe("LandingPage", () => {
     expect(screen.getByText(/where this is going/i)).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /level up your investments with/i })).toBeInTheDocument();
 
+    // Strong label + text are split nodes, so assert separately
     expect(screen.getByText(/^now:$/i)).toBeInTheDocument();
     expect(screen.getByText(/charts,\s*snapshots,\s*bot status \+ logs/i)).toBeInTheDocument();
 
@@ -166,27 +210,36 @@ describe("LandingPage", () => {
     expect(screen.getByRole("button", { name: /^roadmap$/i })).toBeInTheDocument();
   });
 
-  it("navigates to /auth when 'Sign in / Sign up' is clicked", () => {
+  it("navigates to /auth when primary CTA is clicked", () => {
     renderLanding();
     fireEvent.click(screen.getByRole("button", { name: /sign in \/ sign up/i }));
     expect(mockNavigate).toHaveBeenCalledWith("/auth");
   });
 
-  it("navigates to /auth when 'Get Started' is clicked", () => {
+  it("navigates to /about when About CTA is clicked", () => {
     renderLanding();
-    fireEvent.click(screen.getByRole("button", { name: /get started/i }));
-    expect(mockNavigate).toHaveBeenCalledWith("/auth");
+    fireEvent.click(screen.getByRole("button", { name: /about/i }));
+    expect(mockNavigate).toHaveBeenCalledWith("/about");
   });
 
-  it("opens the Roadmap modal, then navigates to /auth when 'Get early access' is clicked", () => {
+  it("opens the Roadmap modal from the hero CTA, then navigates to /auth when 'Get early access' is clicked", () => {
     renderLanding();
 
-    fireEvent.click(screen.getByRole("button", { name: /^roadmap$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /see roadmap/i }));
 
     const modal = screen.getByRole("dialog", { name: /u-stock roadmap/i });
     expect(modal).toBeInTheDocument();
 
     fireEvent.click(within(modal).getByRole("button", { name: /get early access/i }));
     expect(mockNavigate).toHaveBeenCalledWith("/auth");
+  });
+
+  it("opens the Roadmap modal from the big card CTA", () => {
+    renderLanding();
+
+    fireEvent.click(screen.getByRole("button", { name: /^roadmap$/i }));
+
+    expect(screen.getByRole("dialog", { name: /u-stock roadmap/i })).toBeInTheDocument();
+    expect(screen.getByText(/dashboards and visibility/i)).toBeInTheDocument();
   });
 });
