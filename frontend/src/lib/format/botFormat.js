@@ -39,19 +39,21 @@ export function pillTone(kind) {
   return "neg";
 }
 
+/**
+ * Normalize effective_state-like values for UI.
+ * Keep this aligned with your backend contract.
+ * NOTE: intentionally excludes "degraded" if it isn't part of your contract.
+ */
 export function normalizeEff(x) {
   const v = String(x || "").trim().toLowerCase();
   const ok = new Set([
     "running",
     "waiting_for_market",
     "starting",
+    "paused",
     "stopped",
     "offline",
     "error",
-    "degraded",
-
-    // backwards-compat (older rows/UI)
-    "paused",
     "idle",
     "armed",
     "disarmed",
@@ -59,13 +61,15 @@ export function normalizeEff(x) {
   return ok.has(v) ? v : v || "stopped";
 }
 
+/**
+ * Normalize desired/intent values into a small stable set.
+ * Canonical: running | stopped | paused | armed | disarmed
+ */
 export function normalizeIntent(x) {
   const v = String(x || "").trim().toLowerCase();
-  // New canonical lifecycle intents:
-  if (v === "running" || v === "stopped") return v;
-
-  // Backwards-compat:
-  if (v === "paused") return "stopped";
-
+  if (v === "running") return "running";
+  if (v === "paused") return "paused";
+  if (v === "armed") return "armed";
+  if (v === "disarmed") return "disarmed";
   return "stopped";
 }

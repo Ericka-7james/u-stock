@@ -1,5 +1,5 @@
 // frontend/src/components/dashboard/cards/TradePerformancePanel.jsx
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import BotControlCard from "./BotControlCard.jsx";
 import TimeframeCard from "./TimeframeCard.jsx";
 import "../../../css/dashboard/cards/TradePerformancePanel.css";
@@ -7,7 +7,8 @@ import "../../../css/dashboard/cards/TradePerformancePanel.css";
 import { useAuth } from "../../../context/authContextBase.js";
 
 import ConnectedBrokersMiniCard from "./shared/ConnectedBrokersMiniCard.jsx";
-import OpportunityTable, { PillRow } from "./shared/OpportunityTable.jsx";
+import OpportunityTable from "./shared/OpportunityTable.jsx";
+import BotIntentsCard from "./shared/BotIntentsCard.jsx";
 import { BigStat, MiniStat, CardShell } from "./shared/StatTiles.jsx";
 
 import {
@@ -21,25 +22,8 @@ import {
 
 import { TRADE_PERFORMANCE_PANEL_COPY as COPY } from "../../../content/dashboard/cards/tradePerformancePanel.content.ts";
 
-import { fmtEpochSeconds } from "../../../lib/format/datetime.js";
-import { computeInclusiveDays } from "../../../lib/time/timeframe.js";
+import { computeRangeDaysLabel } from "../../../lib/time/timeframe.js";
 import { safeStr } from "../../../lib/format/safe.js";
-
-function fmtSide(side) {
-  const s = String(side || "").trim().toLowerCase();
-  if (s === "buy") return "BUY";
-  if (s === "sell") return "SELL";
-  return (String(side || "—") || "—").toUpperCase();
-}
-
-function fmtConf(v) {
-  const x = Number(v);
-  return Number.isFinite(x) ? x.toFixed(2) : "—";
-}
-
-function safeSym(it) {
-  return safeStr(it?.symbol, "").toUpperCase();
-}
 
 /* ----------------------------
    ✅ Bot state normalization
@@ -101,7 +85,7 @@ function readRunnerOnline(s) {
     s?.heartbeatAge ??
     null;
 
-  // ✅ FIX: "no heartbeat yet" is only a problem if bot is supposed to be active
+  // ✅ "no heartbeat yet" is only a problem if bot is supposed to be active
   if (raw === null || raw === undefined) {
     const activeish = eff === "running" || eff === "waiting_for_market" || eff === "starting";
     return !activeish; // stopped-ish => OK, active-ish => not OK
@@ -148,165 +132,6 @@ function deriveBotUiState(botId, botStatuses) {
   return { kind: "idle", runnerOnline, intent, eff };
 }
 
-function isBotActiveForUi(ui) {
-  if (!ui) return false;
-  if (ui.kind === "no_bot") return false;
-  if (ui.kind === "offline") return false;
-  if (ui.kind === "unknown") return false;
-  return true;
-}
-
-function BotIntentsCard({ botUi, botId, onPickSymbol }) {
-  const [items, setItems] = useState([]);
-  const [ts, setTs] = useState(0);
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState("");
-
-  const lastBotIdRef = useRef("");
-
-  async function refresh() {
-    const id = String(botId || "").trim();
-    if (!id) return;
-
-    setErr("");
-    setBusy(true);
-    try {
-      const res = await fetch(`/api/bots/intents?bot_id=${encodeURIComponent(id)}&limit=10`, {
-        credentials: "include",
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.detail || COPY.cards.intents.errors.loadFail);
-
-      const list = Array.isArray(data?.items) ? data.items : [];
-      setItems(list);
-      setTs(Number(data?.ts) || 0);
-    } catch (e) {
-      setErr(String(e?.message || e));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  useEffect(() => {
-    const id = String(botId || "").trim();
-
-    if (!id) {
-      setItems([]);
-      setTs(0);
-      setErr("");
-      lastBotIdRef.current = "";
-      return;
-    }
-
-    if (lastBotIdRef.current && lastBotIdRef.current !== id) {
-      setItems([]);
-      setTs(0);
-      setErr("");
-    }
-    lastBotIdRef.current = id;
-
-    refresh();
-
-    const shouldPoll = isBotActiveForUi(botUi);
-    if (!shouldPoll) return;
-
-    const t = setInterval(() => refresh(), 7000);
-    return () => clearInterval(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [botId, botUi?.kind]);
-
-  const headerLine = useMemo(() => {
-    if (!botId) return COPY.cards.intents.headerLines.selectBot;
-    if (!botUi || botUi.kind === "no_bot") return COPY.cards.intents.headerLines.selectBot;
-    if (botUi.kind === "unknown") return COPY.cards.intents.headerLines.unknown(botId);
-    if (botUi.kind === "offline") return COPY.cards.intents.headerLines.offline(botId);
-    if (botUi.kind === "paused") return COPY.cards.intents.headerLines.paused(botId);
-    if (botUi.kind === "waiting") return COPY.cards.intents.headerLines.waiting(botId);
-    if (botUi.kind === "starting") return COPY.cards.intents.headerLines.starting(botId);
-    if (botUi.kind === "disarmed") return COPY.cards.intents.headerLines.disarmed(botId);
-    if (botUi.kind === "stopped") return COPY.cards.intents.headerLines.stopped(botId);
-    return COPY.cards.intents.headerLines.ok(botId);
-  }, [botId, botUi]);
-
-  return (
-    <CardShell title={COPY.cards.intents.title} className="tpSpan2">
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 }}>
-        <div style={{ fontSize: 12, opacity: 0.75, fontWeight: 800 }}>
-          {headerLine} · {COPY.cards.intents.updatedPrefix}{" "}
-          <span className="mono">{ts ? fmtEpochSeconds(ts) : COPY.cards.intents.updatedFallback}</span>
-        </div>
-
-        <button className="tpTab" type="button" onClick={refresh} disabled={!botId || busy} style={{ height: 34 }}>
-          {COPY.cards.intents.refresh}
-        </button>
-      </div>
-
-      {err ? (
-        <div className="tpEmpty" style={{ marginTop: 10 }}>
-          {COPY.cards.intents.errors.prefix} {err}
-        </div>
-      ) : null}
-
-      <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
-        {busy && !items.length ? (
-          <div className="tpEmpty">{COPY.cards.intents.states.loading}</div>
-        ) : items.length ? (
-          items.map((it, idx) => {
-            const sym = safeSym(it);
-            if (!isAlphaOnlySymbol(sym)) return null;
-
-            const side = fmtSide(it?.side);
-            const entry = nOrNull(it?.entry);
-            const stop = nOrNull(it?.stop);
-            const tp = nOrNull(it?.take_profit ?? it?.takeProfit ?? it?.tp);
-            const conf = it?.confidence;
-
-            const sub = `Entry ${entry === null ? "—" : fmtMoney(entry)} · Stop ${
-              stop === null ? "—" : fmtMoney(stop)
-            } · TP ${tp === null ? "—" : fmtMoney(tp)} · Conf ${fmtConf(conf)}`;
-
-            const score = Number.isFinite(Number(conf)) ? Number(conf) : null;
-
-            return (
-              <PillRow
-                key={`${sym}-${idx}`}
-                symbol={`${sym} · ${side}`}
-                score={score}
-                sub={sub}
-                onClick={onPickSymbol ? () => onPickSymbol(sym) : undefined}
-              />
-            );
-          })
-        ) : (
-          <div className="tpEmpty">
-            {!botId ? COPY.cards.intents.states.emptyNoBot : COPY.cards.intents.states.emptyNoIntents}
-          </div>
-        )}
-      </div>
-
-      <div className="tpOppFootnote" style={{ marginTop: 12 }}>
-        {COPY.cards.intents.footnote}
-      </div>
-    </CardShell>
-  );
-}
-
-/* ----------------------------
-   Timeframe helpers (days)
----------------------------- */
-
-function computeRangeDaysLabel(timeframe) {
-  if (!timeframe) return { days: 7, label: "7 days" };
-
-  const start = timeframe?.start ?? timeframe?.from ?? timeframe?.date_from ?? timeframe?.time_min;
-  const end = timeframe?.end ?? timeframe?.to ?? timeframe?.date_to ?? timeframe?.time_max;
-
-  const d = computeInclusiveDays(start, end);
-  if (d !== null) return { days: d, label: `${d} day${d === 1 ? "" : "s"}` };
-
-  return { days: null, label: "—" };
-}
-
 export default function TradePerformancePanel({
   data,
   opportunities = null,
@@ -330,7 +155,6 @@ export default function TradePerformancePanel({
   }, [activeBot?.id]);
 
   const botId = String(selectedBotId || "").trim();
-
   const botUi = useMemo(() => deriveBotUiState(botId, botStatuses), [botId, botStatuses]);
 
   const oppStocks = useMemo(() => {

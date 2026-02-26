@@ -42,6 +42,20 @@ export function parseDateLoose(v) {
   return Number.isFinite(d?.getTime?.()) ? d : null;
 }
 
+// add to: frontend/src/lib/time/timeframe.js
+
+export function computeRangeDaysLabel(timeframe) {
+  if (!timeframe) return { days: 7, label: "7 days" };
+
+  const start = timeframe?.start ?? timeframe?.from ?? timeframe?.date_from ?? timeframe?.time_min;
+  const end = timeframe?.end ?? timeframe?.to ?? timeframe?.date_to ?? timeframe?.time_max;
+
+  const d = computeInclusiveDays(start, end);
+  if (d !== null) return { days: d, label: `${d} day${d === 1 ? "" : "s"}` };
+
+  return { days: null, label: "—" };
+}
+
 // inclusive days: Jan 28 -> Feb 1 = 5 days
 export function computeInclusiveDays(start, end) {
   const a = parseDateLoose(start);
