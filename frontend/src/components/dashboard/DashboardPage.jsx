@@ -29,7 +29,7 @@ import { LS } from "../../lib/storage/keys.js";
 import { lsGet, lsSet } from "../../lib/storage/localStorage.js";
 import { normalizeSymbol, isTvSafe } from "../../lib/symbols.js";
 
-import { DASHBOARD_PAGE_COPY as COPY } from "../../content/dashboard.content.ts";
+import { DASHBOARD_PAGE_COPY as COPY } from "../../content/pages/dashboard.content.ts";
 
 import "../../css/dashboard/DashboardPage.css";
 import "../../css/dashboard/cards/ChartControls.css";

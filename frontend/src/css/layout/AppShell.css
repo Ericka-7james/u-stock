@@ -19,11 +19,15 @@
 
   --ustock-card-chip-bg: rgba(37, 118, 98, 0.10);
 
-  /* Shared radii + shadows (site-wide cohesion) */
+  /* Shared radii + shadows */
   --ustock-radius-xl: 24px;
   --ustock-radius-lg: 18px;
   --ustock-shadow-lg: 0 18px 55px rgba(15, 23, 42, 0.10), 0 2px 8px rgba(15, 23, 42, 0.06);
   --ustock-shadow-md: 0 12px 32px rgba(15, 23, 42, 0.08);
+
+  /* 🔥 NEW: shared content lanes */
+  --lane-default: 1280px;
+  --lane-narrow: 1100px;
 }
 
 /* Base document background */
@@ -84,9 +88,9 @@ body {
 /* Shared page wrapper: controls max width + padding for ALL pages */
 .app-page {
   width: 100%;
-  max-width: 1280px;
+  max-width: var(--lane-default);
   margin: 0 auto;
-  padding: 24px 48px 48px; /* top | sides | bottom */
+  padding: 24px 48px 48px;
   box-sizing: border-box;
 }
 

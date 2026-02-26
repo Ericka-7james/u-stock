@@ -1,57 +1,81 @@
-// src/content/feedbackpage.content.ts
+// frontend/src/content/feedbackpage.content.ts
 export const FEEDBACK_PAGE_COPY = {
+  config: {
+    // endpoint path only (component can prefix with API_BASE/API_PREFIX)
+    endpointPath: "/feedback",
+
+    // word count validation
+    wordLimit: 250,
+    minWords: 3,
+
+    // request safety
+    requestTimeoutMs: 12_000,
+
+    // captcha behavior
+    captcha: {
+      siteKeyEnv: "VITE_TURNSTILE_SITE_KEY",
+      // require captcha in non-dev + non-test
+      requireInProdOnly: true,
+    },
+
+    // ui defaults
+    defaults: {
+      feedbackType: "feature",
+    },
+  },
+
   header: {
     title: "Feedback",
-    subtitle:
-      "Share ideas, report issues, or ask questions about how U-Stock works. Messages here will be routed straight to my inbox.",
+    subtitle: "Found a bug, have a question, or want a feature? Send it here.",
   },
 
   fields: {
-    honeypotLabel: "Do not fill this out:",
+    honeypotLabel: "Website",
     name: {
-      label: "Name",
+      label: "Name (optional)",
       placeholder: "Your name",
     },
     email: {
-      label: "Contact email",
+      label: "Email (optional)",
       placeholder: "you@example.com",
-      hint: "I'll use this if I need to follow up about your feedback.",
+      hint: "If you want a reply, include an email.",
     },
     type: {
-      label: "Feedback type",
+      label: "Type",
       options: {
-        feature: "Feature idea",
+        feature: "Feature request",
         bug: "Bug report",
         question: "Question",
-        other: "Something else",
+        other: "Other",
       },
     },
     message: {
       label: "Message",
-      placeholder: "Tell me what you’d like to learn, improve, or fix in U-Stock.",
-      footerHint: "Think of this as your suggestion box. I use these notes to decide what to build next.",
-      minWarnPrefix: "Add a bit more detail (min ",
-      minWarnSuffix: " words).",
-      maxWarnPrefix: "Please shorten your message (max ",
-      maxWarnSuffix: " words).",
+      placeholder: "Tell me what you’re trying to do, what happened, and what you expected.",
+      footerHint: "Please avoid sensitive info (passwords, keys, etc.).",
+      minWarnPrefix: "Add at least ",
+      minWarnSuffix: " words.",
+      maxWarnPrefix: "Keep it under ",
+      maxWarnSuffix: " words.",
+      counterSuffix: "words",
     },
   },
 
   buttons: {
     submitIdle: "Send feedback",
-    submitLoading: "Sending...",
+    submitLoading: "Sending…",
     clear: "Clear",
   },
 
   status: {
-    sent: "Sent! Thank you.",
-    minWordsPrefix: "Please enter at least ",
-    minWordsSuffix: " words.",
-    maxWordsPrefix: "Please keep your message under ",
-    maxWordsSuffix: " words.",
+    sent: "Sent. Thank you!",
+    failed: "Couldn’t send feedback. Please try again.",
+    timeout: "Timed out. Please try again.",
     captchaIncomplete: "Please complete the captcha.",
-    captchaMissingKey: "Captcha is required in production but VITE_TURNSTILE_SITE_KEY is missing.",
-    timeout: "Request timed out. Backend didn’t respond.",
-    failed: "Failed to send feedback.",
+    captchaMissingKey: "Captcha misconfigured: missing VITE_TURNSTILE_SITE_KEY.",
+    minWordsPrefix: "Please write at least ",
+    minWordsSuffix: " words.",
+    maxWordsPrefix: "Please keep it under ",
+    maxWordsSuffix: " words.",
   },
 } as const;

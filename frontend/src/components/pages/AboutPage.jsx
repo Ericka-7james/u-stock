@@ -8,7 +8,8 @@ import AboutPageSquirrel from "../../assets/pages/AboutPageSquirrel.png";
 import { Link } from "react-router-dom";
 import PageHeaderCard from "../common/PageHeaderCard";
 
-import { ABOUT_PAGE_COPY } from "../../content/aboutpage.content";
+// ✅ content moved here
+import { ABOUT_PAGE_COPY } from "../../content/pages/aboutPage.content.ts";
 
 export default function AboutPage() {
   const c = ABOUT_PAGE_COPY;
@@ -60,6 +61,18 @@ export default function AboutPage() {
               ))}
             </ul>
           </article>
+
+          {/* ✅ NEW: safety section (only renders if present) */}
+          {c.sections.safety ? (
+            <article className="about-card">
+              <h2>{c.sections.safety.title}</h2>
+              <ul className="about-list">
+                {c.sections.safety.items.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </article>
+          ) : null}
 
           <article className="about-card">
             <h2>{c.sections.techStack.title}</h2>

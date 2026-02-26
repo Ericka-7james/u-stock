@@ -4,9 +4,24 @@ export const DATASOURCES_PAGE_COPY = {
     title: "Data Sources",
     subtitle:
       "This page is for market context + observability — view today’s top movers and filter bot logs to validate behavior. (Start/Stop controls live on the Dashboard.)",
+    highlight: "market context + observability",
     actions: {
       backToDashboardLabel: "← Back to dashboard",
       connectedAppsLabel: "Connected apps →",
+    },
+  },
+
+  config: {
+    cacheTtlMs: 60_000,
+    lastTickerKey: "ustock:last_ticker",
+
+    marketLeaders: {
+      endpoint: "/api/market/leaders?market=stocks&direction=up&limit=8",
+      fallbackSource: {
+        code: "alpaca_movers",
+        label: "Alpaca market movers (today)",
+      },
+      fallbackMeta: { source: "alpaca_movers" },
     },
   },
 

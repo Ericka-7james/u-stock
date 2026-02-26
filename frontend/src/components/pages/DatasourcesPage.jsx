@@ -13,19 +13,18 @@ import DatasourcesSquirrel from "../../assets/pages/DatasourcesSquirrel.png";
 import "../../css/pages/DatasourcesPage.css";
 import "../../css/dashboard/cards/CardShared.css";
 
-import { DATASOURCES_PAGE_COPY } from "../../content/datasources.content.ts";
+import { DATASOURCES_PAGE_COPY } from "../../content/pages/datasources.content.js";
 
 // -------- Small in-memory cache (stale-while-revalidate) --------
-const CACHE_TTL_MS = 60_000;
-
 const leadersCache = {
   ts: 0,
   items: [],
-  meta: { source: "alpaca_movers" },
+  meta: DATASOURCES_PAGE_COPY.config.marketLeaders.fallbackMeta,
 };
 
 function isFresh(ts) {
-  return Date.now() - Number(ts || 0) < CACHE_TTL_MS;
+  const ttl = DATASOURCES_PAGE_COPY.config.cacheTtlMs;
+  return Date.now() - Number(ts || 0) < ttl;
 }
 
 async function apiGet(url, { signal } = {}) {
@@ -58,9 +57,11 @@ function isTvSafe(sym) {
 }
 
 function useMarketLeaders() {
+  const c = DATASOURCES_PAGE_COPY;
+
   const [items, setItems] = useState(() => (isFresh(leadersCache.ts) ? leadersCache.items : []));
   const [meta, setMeta] = useState(() =>
-    isFresh(leadersCache.ts) ? leadersCache.meta : { source: "alpaca_movers" }
+    isFresh(leadersCache.ts) ? leadersCache.meta : c.config.marketLeaders.fallbackMeta
   );
   const [loading, setLoading] = useState(false);
 
@@ -73,18 +74,12 @@ function useMarketLeaders() {
       if (!hasFresh) setLoading(true);
 
       try {
-        const json = await apiGetWithRetry("/api/market/leaders?market=stocks&direction=up&limit=8", {
-          signal: ac.signal,
-        });
+        const json = await apiGetWithRetry(c.config.marketLeaders.endpoint, { signal: ac.signal });
         if (!alive || ac.signal.aborted) return;
 
         const nextItems = Array.isArray(json?.items) ? json.items : [];
         const nextMeta = {
-          source:
-            json?.source || {
-              code: "alpaca_movers",
-              label: "Alpaca market movers (today)",
-            },
+          source: json?.source || c.config.marketLeaders.fallbackSource,
           asOf: json?.asOf || null,
         };
 
@@ -97,7 +92,6 @@ function useMarketLeaders() {
       } catch {
         // keep page clean; MarketLeadersCard can handle empty
       } finally {
-        // ✅ no return in finally (no-unsafe-finally)
         if (alive) setLoading(false);
       }
     }
@@ -107,7 +101,7 @@ function useMarketLeaders() {
       alive = false;
       ac.abort();
     };
-  }, []);
+  }, [c]);
 
   return { items, meta, loading };
 }
@@ -125,11 +119,11 @@ export default function DatasourcesPage() {
           title={c.header.title}
           subtitle={
             <>
-              {c.header.subtitle.split("market context + observability").map((part, i, arr) =>
+              {c.header.subtitle.split(c.header.highlight).map((part, i, arr) =>
                 i < arr.length - 1 ? (
                   <span key={i}>
                     {part}
-                    <strong>market context + observability</strong>
+                    <strong>{c.header.highlight}</strong>
                   </span>
                 ) : (
                   <span key={i}>{part}</span>
@@ -165,9 +159,9 @@ export default function DatasourcesPage() {
                     if (!isTvSafe(clean)) return;
 
                     try {
-                      localStorage.setItem("ustock:last_ticker", clean);
+                      localStorage.setItem(c.config.lastTickerKey, clean);
                     } catch {
-                      // ignore storage failures (private mode, blocked storage, etc.)
+                      // ignore storage failures
                     }
 
                     navigate(`/?ticker=${encodeURIComponent(clean)}`);

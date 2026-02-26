@@ -25,6 +25,16 @@ export const DASHBOARD_PAGE_COPY = {
     alpacaFetchedPrefix: "Alpaca fetched:",
   },
 
+  // ✅ DataSnapshotsCard
+  dataSnapshots: {
+    title: "Data snapshots",
+    signalsLabel: "Signals:",
+    pricesLabel: "Prices:",
+    universeLabel: "Universe size (prices):",
+    empty: "—",
+    emptyUniverse: "---",
+  },
+
   defaults: {
     fallbackTicker: "AAPL",
   },

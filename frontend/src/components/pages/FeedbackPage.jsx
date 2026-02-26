@@ -1,5 +1,5 @@
 // src/components/pages/FeedbackPage.jsx
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import Turnstile from "react-turnstile";
 import AppShell from "../layout/AppShell";
 import "../../css/pages/FeedbackPage.css";
@@ -10,10 +10,6 @@ import PageHeaderCard from "../common/PageHeaderCard";
 import { FEEDBACK_PAGE_COPY } from "../../content/feedbackpage.content.ts";
 
 const SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY;
-
-// word count UI + validation
-const WORD_LIMIT = 250;
-const MIN_WORDS = 3;
 
 async function safeJson(res) {
   try {
@@ -29,13 +25,18 @@ function countWords(s) {
 
 export default function FeedbackPage() {
   const { user, isAuthed, refreshSession } = useAuth();
+
   const copy = FEEDBACK_PAGE_COPY;
+  const cfg = copy.config;
+
+  const WORD_LIMIT = cfg.wordLimit;
+  const MIN_WORDS = cfg.minWords;
 
   const [honeypot, setHoneypot] = useState("");
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [feedbackType, setFeedbackType] = useState("feature");
+  const [feedbackType, setFeedbackType] = useState(cfg.defaults.feedbackType);
   const [message, setMessage] = useState("");
 
   const [token, setToken] = useState(null);
@@ -64,87 +65,108 @@ export default function FeedbackPage() {
   const underMin = wordCount > 0 && wordCount < MIN_WORDS;
 
   const isTest = import.meta.env.MODE === "test";
-  const captchaRequired = !(import.meta.env.DEV || isTest);
+  const captchaRequired = cfg.captcha.requireInProdOnly ? !(import.meta.env.DEV || isTest) : true;
+
   const captchaOk = captchaRequired ? (SITE_KEY ? !!token : false) : true;
 
   const canSubmit = useMemo(() => {
     const messageOk = wordCount >= MIN_WORDS && !overLimit;
     return messageOk && captchaOk && !submitting;
-  }, [wordCount, overLimit, captchaOk, submitting]);
+  }, [wordCount, overLimit, captchaOk, submitting, MIN_WORDS]);
 
-  const resetForm = () => {
-    setFeedbackType("feature");
+  const resetForm = useCallback(() => {
+    setFeedbackType(cfg.defaults.feedbackType);
     setMessage("");
     setToken(null);
     setStatus("");
-  };
+  }, [cfg.defaults.feedbackType]);
 
-  const onSubmit = async (e) => {
-    e.preventDefault();
-    setStatus("");
+  const onSubmit = useCallback(
+    async (e) => {
+      e.preventDefault();
+      setStatus("");
 
-    if (honeypot.trim()) {
-      setStatus(copy.status.sent);
-      return;
-    }
-    if (wordCount < MIN_WORDS) {
-      setStatus(`${copy.status.minWordsPrefix}${MIN_WORDS}${copy.status.minWordsSuffix}`);
-      return;
-    }
-    if (overLimit) {
-      setStatus(`${copy.status.maxWordsPrefix}${WORD_LIMIT}${copy.status.maxWordsSuffix}`);
-      return;
-    }
-
-    if (captchaRequired && SITE_KEY && !token) {
-      setStatus(copy.status.captchaIncomplete);
-      return;
-    }
-    if (captchaRequired && !SITE_KEY) {
-      setStatus(copy.status.captchaMissingKey);
-      return;
-    }
-
-    setSubmitting(true);
-
-    let timeoutId = null;
-
-    try {
-      const controller = new AbortController();
-      timeoutId = setTimeout(() => controller.abort(), 12000);
-
-      const res = await fetch(`${API_BASE}${API_PREFIX}/feedback`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        signal: controller.signal,
-        body: JSON.stringify({
-          name: name.trim() || null,
-          email: email.trim() || null,
-          feedback_type: feedbackType,
-          message: message.trim(),
-          turnstile_token: captchaRequired && SITE_KEY ? token : "",
-          honeypot,
-        }),
-      });
-
-      const data = await safeJson(res);
-      if (!res.ok) {
-        setStatus(data?.detail || copy.status.failed);
+      if (honeypot.trim()) {
+        setStatus(copy.status.sent);
+        return;
+      }
+      if (wordCount < MIN_WORDS) {
+        setStatus(`${copy.status.minWordsPrefix}${MIN_WORDS}${copy.status.minWordsSuffix}`);
+        return;
+      }
+      if (overLimit) {
+        setStatus(`${copy.status.maxWordsPrefix}${WORD_LIMIT}${copy.status.maxWordsSuffix}`);
         return;
       }
 
-      setStatus(copy.status.sent);
-      setMessage("");
-      setToken(null);
-    } catch (err) {
-      if (err?.name === "AbortError") setStatus(copy.status.timeout);
-      else setStatus(err?.message || copy.status.failed);
-    } finally {
-      if (timeoutId) clearTimeout(timeoutId);
-      setSubmitting(false);
-    }
-  };
+      if (captchaRequired && SITE_KEY && !token) {
+        setStatus(copy.status.captchaIncomplete);
+        return;
+      }
+      if (captchaRequired && !SITE_KEY) {
+        setStatus(copy.status.captchaMissingKey);
+        return;
+      }
+
+      setSubmitting(true);
+
+      let timeoutId = null;
+
+      try {
+        const controller = new AbortController();
+        timeoutId = setTimeout(() => controller.abort(), cfg.requestTimeoutMs);
+
+        const res = await fetch(`${API_BASE}${API_PREFIX}${cfg.endpointPath}`, {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          signal: controller.signal,
+          body: JSON.stringify({
+            name: name.trim() || null,
+            email: email.trim() || null,
+            feedback_type: feedbackType,
+            message: message.trim(),
+            turnstile_token: captchaRequired && SITE_KEY ? token : "",
+            honeypot,
+          }),
+        });
+
+        const data = await safeJson(res);
+        if (!res.ok) {
+          setStatus(data?.detail || copy.status.failed);
+          return;
+        }
+
+        setStatus(copy.status.sent);
+        setMessage("");
+        setToken(null);
+      } catch (err) {
+        if (err?.name === "AbortError") setStatus(copy.status.timeout);
+        else setStatus(err?.message || copy.status.failed);
+      } finally {
+        if (timeoutId) clearTimeout(timeoutId);
+        setSubmitting(false);
+      }
+    },
+    [
+      API_BASE,
+      API_PREFIX,
+      cfg.endpointPath,
+      cfg.requestTimeoutMs,
+      captchaRequired,
+      token,
+      honeypot,
+      name,
+      email,
+      feedbackType,
+      message,
+      wordCount,
+      overLimit,
+      MIN_WORDS,
+      WORD_LIMIT,
+      copy.status,
+    ]
+  );
 
   return (
     <AppShell>
@@ -222,7 +244,7 @@ export default function FeedbackPage() {
                   {copy.fields.message.label}
                 </label>
                 <div className={`feedback-counter ${overLimit ? "is-over" : ""}`}>
-                  {wordCount}/{WORD_LIMIT} words
+                  {wordCount}/{WORD_LIMIT} {copy.fields.message.counterSuffix}
                 </div>
               </div>
 
@@ -242,6 +264,7 @@ export default function FeedbackPage() {
                   {copy.fields.message.minWarnSuffix}
                 </p>
               ) : null}
+
               {overLimit ? (
                 <p className="feedback-hint feedback-hint--warn">
                   {copy.fields.message.maxWarnPrefix}
@@ -265,8 +288,8 @@ export default function FeedbackPage() {
                   />
                 ) : (
                   <p className="feedback-hint feedback-hint--warn">
-                    {copy.status.captchaMissingKey.replace("VITE_TURNSTILE_SITE_KEY", "")}
-                    <code>VITE_TURNSTILE_SITE_KEY</code> is missing.
+                    {copy.status.captchaMissingKey.replace(cfg.captcha.siteKeyEnv, "")}
+                    <code>{cfg.captcha.siteKeyEnv}</code> is missing.
                   </p>
                 )}
               </div>
@@ -287,7 +310,12 @@ export default function FeedbackPage() {
                 {submitting ? copy.buttons.submitLoading : copy.buttons.submitIdle}
               </button>
 
-              <button type="button" className="feedback-btn feedback-btn--ghost" onClick={resetForm} disabled={submitting}>
+              <button
+                type="button"
+                className="feedback-btn feedback-btn--ghost"
+                onClick={resetForm}
+                disabled={submitting}
+              >
                 {copy.buttons.clear}
               </button>
             </div>

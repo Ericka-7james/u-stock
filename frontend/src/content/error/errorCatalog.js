@@ -53,7 +53,7 @@ export const ERROR_PRESETS = {
   [ERROR_KEYS.SERVER_ERROR]: {
     title: "Server hiccup",
     body: "Something went wrong on our side.",
-    subtitle: "Refresh and try again. If it keeps happening, sign out/in or restart the backend.",
+    subtitle: "Refresh and try again. If it keeps happening, sign out/in or write feedback",
     image: errorSquirrel,
     action: null,
   },
