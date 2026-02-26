@@ -1,6 +1,6 @@
 // frontend/src/components/common/tests/ErrorMessages.test.js
 import { describe, it, expect, vi } from "vitest";
-import { explainAnyError, explainResponseError } from "../../../lib/ErrorMessages.jsx";
+import { explainAnyError, explainResponseError } from "../../../lib/errorMessages.jsx";
 
 /* ---------------------------------------------------------
    Mock the error catalog (stable + predictable)

@@ -9,7 +9,7 @@ import { Link } from "react-router-dom";
 import PageHeaderCard from "../common/PageHeaderCard";
 
 // ✅ content moved here
-import { ABOUT_PAGE_COPY } from "../../content/pages/aboutpage.content.ts";
+import { ABOUT_PAGE_COPY } from "../../content/pages/aboutPage.content.ts";
 
 export default function AboutPage() {
   const c = ABOUT_PAGE_COPY;
