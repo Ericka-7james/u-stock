@@ -95,13 +95,11 @@ describe("TopDayTradesCard", () => {
 
     render(<TopDayTradesCard loading={false} items={items} />);
 
-    // table headers (from COPY mock)
     expect(screen.getByText("Symbol")).toBeInTheDocument();
     expect(screen.getByText("Price")).toBeInTheDocument();
     expect(screen.getByText("Chg%")).toBeInTheDocument();
     expect(screen.getByText("Volume")).toBeInTheDocument();
 
-    // row values formatted
     expect(screen.getByText("AAPL")).toBeInTheDocument();
     expect(screen.getByText("$100.00")).toBeInTheDocument();
     expect(screen.getByText("1.23%")).toBeInTheDocument();
@@ -123,7 +121,6 @@ describe("TopDayTradesCard", () => {
 
     render(<TopDayTradesCard loading={false} items={items} />);
 
-    // SYM0..SYM9 should appear, SYM10..SYM11 should not
     for (let i = 0; i < 10; i++) {
       expect(screen.getByText(`SYM${i}`)).toBeInTheDocument();
     }
@@ -150,7 +147,6 @@ describe("TopDayTradesCard", () => {
     const mostActive = screen.getByRole("button", { name: /most active/i });
     const topGainers = screen.getByRole("button", { name: /top gainers/i });
 
-    // active has background "white" per component
     expect(mostActive).toHaveStyle({ background: "white" });
     expect(topGainers).not.toHaveStyle({ background: "white" });
 
@@ -163,15 +159,12 @@ describe("TopDayTradesCard", () => {
 
     render(<TopDayTradesCard loading={false} items={items} />);
 
-    // Find the row for AAPL
     const row = screen.getByText("AAPL").closest("tr");
     expect(row).not.toBeNull();
 
     const cells = row.querySelectorAll("td");
-    // [0]=symbol, [1]=price, [2]=chg%, [3]=volume
     expect(cells.length).toBeGreaterThanOrEqual(4);
 
-    // Expect "missing" placeholders (accept either em dash or empty-ish fallback)
     const priceText = cells[1].textContent?.trim();
     const chgText = cells[2].textContent?.trim();
     const volText = cells[3].textContent?.trim();
@@ -179,5 +172,37 @@ describe("TopDayTradesCard", () => {
     expect(["—", "", "–"]).toContain(priceText);
     expect(["—", "", "–"]).toContain(chgText);
     expect(["—", "", "–"]).toContain(volText);
+  });
+
+  // ✅ NEW: branch coverage for Array.isArray(items) guard
+  test("treats non-array items as empty and shows empty state", () => {
+    render(<TopDayTradesCard loading={false} items={{ not: "an array" }} />);
+
+    expect(screen.getByText(/no results yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/connected apps/i)).toBeInTheDocument();
+    expect(screen.queryByText("Symbol")).not.toBeInTheDocument();
+  });
+
+  // ✅ NEW: branch coverage for ternary priority (loading wins)
+  test("loading state wins even if items are provided", () => {
+    const items = [{ symbol: "AAPL", price: 100, changePct: 1, volume: 10 }];
+
+    render(<TopDayTradesCard loading={true} items={items} />);
+
+    expect(screen.getByText(/loading top tickers/i)).toBeInTheDocument();
+    expect(screen.queryByText("AAPL")).not.toBeInTheDocument();
+  });
+
+  // ✅ NEW: optional chaining onChangeList?.(...) (no handler)
+  test("toggle clicks do not throw when onChangeList is missing", async () => {
+    const user = userEvent.setup();
+
+    render(<TopDayTradesCard list="most_active" onChangeList={undefined} />);
+
+    await user.click(screen.getByRole("button", { name: /top gainers/i }));
+    await user.click(screen.getByRole("button", { name: /most active/i }));
+
+    // Just proving: no crash + still renders
+    expect(screen.getByRole("heading", { name: /top day trades/i })).toBeInTheDocument();
   });
 });

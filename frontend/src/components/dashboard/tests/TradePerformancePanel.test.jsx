@@ -133,17 +133,30 @@ vi.mock("../../../context/authContextBase.js", () => ({
   useAuth: () => ({ user: { id: "u1" } }),
 }));
 
-// (Optional safety if other children use AuthContext)
+// (Optional safety if some children still import AuthContext)
 vi.mock("../../../context/AuthContext", () => ({
   useAuth: () => ({ user: { id: "u1" } }),
 }));
 
 /* -----------------------------------------
-   Prevent BotControlCard side-effects
+   Prevent child components from adding side-effects
+   (IMPORTANT: path is relative to THIS test file)
 ------------------------------------------ */
 vi.mock("../cards/BotControlCard.jsx", () => ({
   default: function BotControlCardMock() {
     return <div data-testid="bot-control-card" />;
+  },
+}));
+
+vi.mock("../cards/shared/ConnectedBrokersMiniCard.jsx", () => ({
+  default: function ConnectedBrokersMiniCardMock() {
+    return <div data-testid="connected-brokers" />;
+  },
+}));
+
+vi.mock("../cards/shared/BotIntentsCard.jsx", () => ({
+  default: function BotIntentsCardMock() {
+    return <div data-testid="bot-intents-card" />;
   },
 }));
 
@@ -169,15 +182,6 @@ vi.mock("../cards/TimeframeCard.jsx", () => ({
 }));
 
 /* -----------------------------------------
-   Connected brokers mini card mock
------------------------------------------- */
-vi.mock("../cards/shared/ConnectedBrokersMiniCard.jsx", () => ({
-  default: function ConnectedBrokersMiniCardMock() {
-    return <div data-testid="connected-brokers" />;
-  },
-}));
-
-/* -----------------------------------------
    StatTiles mock (predictable DOM)
 ------------------------------------------ */
 vi.mock("../cards/shared/StatTiles.jsx", () => ({
@@ -190,9 +194,9 @@ vi.mock("../cards/shared/StatTiles.jsx", () => ({
     );
   },
 
-  BigStat: function BigStat({ label, value, sub }) {
+  BigStat: function BigStat({ label, value, sub, tone }) {
     return (
-      <div className="tpCard" data-testid={`bigstat:${label}`}>
+      <div className="tpCard" data-testid={`bigstat:${label}`} data-tone={tone || ""}>
         <div>{label}</div>
         <div>{String(value)}</div>
         {sub ? <div>{sub}</div> : null}
@@ -241,10 +245,6 @@ vi.mock("../cards/shared/OpportunityTable.jsx", () => ({
       </div>
     );
   },
-
-  PillRow: function PillRowMock() {
-    return <div data-testid="pill-row" />;
-  },
 }));
 
 /* -----------------------------------------
@@ -262,19 +262,10 @@ describe("TradePerformancePanel", () => {
       if (msg.includes("not wrapped in act")) return;
       originalConsoleError(...args);
     };
-
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => ({
-        ok: true,
-        json: async () => ({ items: [], ts: 0 }),
-      }))
-    );
   });
 
   afterEach(() => {
     console.error = originalConsoleError;
-    vi.unstubAllGlobals();
     cleanup();
   });
 
@@ -317,10 +308,10 @@ describe("TradePerformancePanel", () => {
     return titleEl.closest(".tpOppMiniTable");
   };
 
-  const getCardByTitle = (titleRegexOrText) => {
-    const titleEl =
-      titleRegexOrText instanceof RegExp ? screen.getByText(titleRegexOrText) : screen.getByText(String(titleRegexOrText));
-    return titleEl.closest(".tpCard");
+  const getBigStatByLabel = (labelTextOrRegex) => {
+    const label =
+      labelTextOrRegex instanceof RegExp ? labelTextOrRegex : new RegExp(String(labelTextOrRegex), "i");
+    return screen.getByTestId(`bigstat:Bot Status`) || screen.getByText(label).closest(".tpCard");
   };
 
   it("sanity: component import resolves", () => {
@@ -365,7 +356,7 @@ describe("TradePerformancePanel", () => {
       })
     );
 
-    const tradesCard = getCardByTitle(/trades context/i);
+    const tradesCard = screen.getByTestId("bigstat:Trades Context").closest(".tpCard");
     expect(tradesCard).not.toBeNull();
 
     expect(within(tradesCard).getByText("Trades Context")).toBeInTheDocument();
@@ -401,12 +392,13 @@ describe("TradePerformancePanel", () => {
     expect(text).toMatch(/Source:\s*ALPACA\+Computed/i);
   });
 
-  it("renders leaders rows when leaders are provided", () => {
+  it("renders leaders rows when leaders are provided (filters out non-alpha symbols)", () => {
     renderWithRouter(
       baseProps({
         leaders: [
           { symbol: "AAPL", changePct: 2.5, last: 100, prevClose: 98 },
           { symbol: "MSFT", changePct: 1.0, last: 50, prevClose: 49 },
+          { symbol: "BRK.B", changePct: 1.0, last: 500, prevClose: 495 }, // should be filtered out by isAlphaOnlySymbol
         ],
       })
     );
@@ -417,6 +409,7 @@ describe("TradePerformancePanel", () => {
     const text = normalize(leadersTable.textContent);
     expect(text).toMatch(/AAPL/i);
     expect(text).toMatch(/MSFT/i);
+    expect(text).not.toMatch(/BRK\.B/i);
   });
 
   it("internal shows picks when opportunities provided; aligned still locked with no bot", () => {
@@ -441,6 +434,39 @@ describe("TradePerformancePanel", () => {
     const internalText = normalize(internalTable.textContent);
     expect(internalText).toMatch(/AAPL/i);
     expect(internalText).toMatch(/TSLA/i);
+  });
+
+  it("aligned table shows 'No bot opportunities yet' when bot selected but has zero opportunities", () => {
+    renderWithRouter(
+      baseProps({
+        activeBot: { id: "bot1" },
+        botStatuses: {
+          bot1: { effective_state: "stopped" }, // has keys => not unknown
+        },
+        opportunities: { stocks: [] },
+      })
+    );
+
+    const alignedTable = getOppTableByTitle(/bot-aligned/i);
+    expect(alignedTable).not.toBeNull();
+    expect(normalize(alignedTable.textContent)).toMatch(/No bot opportunities yet/i);
+  });
+
+  it("bot status card shows empty + 'No status yet' when bot selected but status payload missing", () => {
+    renderWithRouter(
+      baseProps({
+        activeBot: { id: "bot1" },
+        botStatuses: {}, // missing bot1 => unknown
+      })
+    );
+
+    const botStatusCard = screen.getByTestId("bigstat:Bot Status").closest(".tpCard");
+    expect(botStatusCard).not.toBeNull();
+
+    const text = normalize(botStatusCard.textContent);
+    expect(text).toMatch(/Bot Status/i);
+    expect(text).toMatch(/—/); // value empty
+    expect(text).toMatch(/No status yet/i); // sub unknown
   });
 
   it("leaders table contains Symbol/Score headings (structure)", () => {
