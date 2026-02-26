@@ -6,6 +6,9 @@ import "../../css/landing/LandingPage.css";
 import AppShell from "../layout/AppShell";
 import Modal from "../common/Modal";
 
+// ✅ reuse shared card wrapper
+import DashboardCard from "../dashboard/cards/shared/DashboardCard.jsx";
+
 import { LANDING_PAGE_CONTENT } from "../../content/landing/landingpage.content.ts";
 
 // Headshot (optional)
@@ -18,7 +21,6 @@ import gpcLogo from "../../assets/trusted-logos/gpc-trusted-gray.png";
 import mltLogo from "../../assets/trusted-logos/mlt-trusted-gray.png";
 
 // ✅ Replace ▲ with WelcomeSquirrel asset
-// If your filename/extension differs, update this import path.
 import welcomeSquirrel from "../../assets/icons/LucentAppIcon.png";
 
 export default function LandingPage() {
@@ -28,7 +30,6 @@ export default function LandingPage() {
   const goAbout = useCallback(() => navigate("/about"), [navigate]);
 
   const [roadmapOpen, setRoadmapOpen] = useState(false);
-  const [demoOpen, setDemoOpen] = useState(false);
 
   const COPY = LANDING_PAGE_CONTENT.copy;
   const ASSETS = LANDING_PAGE_CONTENT.assets;
@@ -37,33 +38,41 @@ export default function LandingPage() {
 
   const workedAt = useMemo(
     () => [
-      { src: jpmLogo, alt: "JPMorgan Chase & Co", zoom: 1.95, y: 1 },
-      { src: spelmanLogo, alt: "Spelman Innovation Lab", zoom: 1.85, y: 0 },
-      { src: gpcLogo, alt: "Genuine Parts Company", zoom: 2.05, y: 0 },
-      { src: mltLogo, alt: "MLT", zoom: 2.15, y: 1 },
+      { src: jpmLogo, alt: COPY.workedAt.tooltips.jpm, zoom: 1.95, y: 1 },
+      { src: spelmanLogo, alt: COPY.workedAt.tooltips.spelman, zoom: 1.85, y: 0 },
+      { src: gpcLogo, alt: COPY.workedAt.tooltips.gpc, zoom: 2.05, y: 0 },
+      { src: mltLogo, alt: COPY.workedAt.tooltips.mlt, zoom: 2.15, y: 1 },
     ],
-    []
+    [COPY.workedAt.tooltips]
   );
 
-  const projectMetrics = useMemo(
-    () => [
+  // Prefer content-driven metrics; fall back to your previous 5 if needed.
+  const projectMetrics = useMemo(() => {
+    const fromContent = COPY?.hero?.metrics;
+    if (Array.isArray(fromContent) && fromContent.length) {
+      return fromContent.map((m) => ({
+        top: m.top,
+        bottom: m.bottom,
+        sub: "project metric",
+      }));
+    }
+
+    return [
       { top: "3", bottom: "Bots shipped", sub: "project metric" },
       { top: "120+", bottom: "Backtests run", sub: "project metric" },
       { top: "~350ms", bottom: "Pipeline latency", sub: "project metric" },
       { top: "AWS", bottom: "Cloud deployed", sub: "project metric" },
       { top: "6", bottom: "Dashboards built", sub: "project metric" },
-    ],
-    []
-  );
+    ];
+  }, [COPY?.hero?.metrics]);
+
+  const openRoadmap = useCallback(() => setRoadmapOpen(true), []);
+  const closeRoadmap = useCallback(() => setRoadmapOpen(false), []);
 
   const roadmapFooter = useMemo(() => {
     return (
       <div className="landing-modal-footer">
-        <button
-          className="landing-modal-btn landing-modal-btn--ghost"
-          type="button"
-          onClick={() => setRoadmapOpen(false)}
-        >
+        <button className="landing-modal-btn landing-modal-btn--ghost" type="button" onClick={closeRoadmap}>
           {COPY.modal.footer.close}
         </button>
 
@@ -72,126 +81,121 @@ export default function LandingPage() {
         </button>
       </div>
     );
-  }, [goAuth, COPY.modal.footer.close, COPY.modal.footer.earlyAccess]);
-
-  // ✅ Demo "coming soon" modal footer
-  const demoFooter = useMemo(() => {
-    return (
-      <div className="landing-modal-footer">
-        <button className="landing-modal-btn landing-modal-btn--ghost" type="button" onClick={() => setDemoOpen(false)}>
-          Close
-        </button>
-
-        <button className="landing-modal-btn landing-modal-btn--primary" type="button" onClick={goAuth}>
-          Sign in / Sign up
-        </button>
-      </div>
-    );
-  }, [goAuth]);
+  }, [goAuth, closeRoadmap, COPY.modal.footer.close, COPY.modal.footer.earlyAccess]);
 
   return (
     <AppShell>
-      {/* HERO */}
-      <section className="landing-hero landing-hero--portfolio">
-        <div className="landing-hero-inner landing-hero-inner--portfolio">
-          <div className="landing-hero-left">
-            {/* Brand line */}
-            <div className="landing-brandline">
-              <img
-                src={welcomeSquirrel}
-                alt=""
-                aria-hidden="true"
-                className="landing-brandicon"
-              />
-              <div className="landing-brandtext">
-                <div className="landing-brandtop">U-STOCK</div>
-                <div className="landing-brandsub">Lucent Financial</div>
+      {/* ✅ No extra padding wrapper here (AppShell/.app-page already pads). */}
+      <div className="landing-page-wrap">
+        {/* HERO (uses DashboardCard as the outer element) */}
+        <DashboardCard
+          as="section"
+          className="landing-hero landing-hero--portfolio"
+          title={null}
+          subtitle={null}
+          headerClassName=""
+          headerLeftClassName=""
+        >
+          <div className="landing-hero-inner landing-hero-inner--portfolio">
+            <div className="landing-hero-left">
+              {/* Brand line */}
+              <div className="landing-brandline">
+                <img src={welcomeSquirrel} alt="" aria-hidden="true" className="landing-brandicon" />
+                <div className="landing-brandtext">
+                  <div className="landing-brandtop">U-STOCK</div>
+                  <div className="landing-brandsub">Lucent Financial</div>
+                </div>
+              </div>
+
+              {/* Headline */}
+              <h1 className="landing-hero-title landing-hero-title--portfolio">
+                Hello, I’m <span className="landing-name">Ericka James</span>
+                <br />
+                <span className="landing-role">Software Engineer</span>
+              </h1>
+
+              <p className="landing-hero-subtitle landing-hero-subtitle--portfolio">{COPY.hero.subtitle}</p>
+
+              {/* CTAs */}
+              <div className="landing-hero-ctas landing-hero-ctas--portfolio">
+                <button className="landing-btn landing-btn--primary" type="button" onClick={goAuth}>
+                  {COPY.hero.ctas?.primary}
+                </button>
+
+                <button className="landing-btn landing-btn--ghost" type="button" onClick={openRoadmap}>
+                  {COPY.hero.ctas?.roadmap || "See roadmap"}
+                </button>
+
+                <button className="landing-btn landing-btn--ghost landing-btn--thin" type="button" onClick={goAbout}>
+                  {COPY.hero.ctas?.secondary}
+                </button>
+              </div>
+
+              {/* Metrics */}
+              <div className="landing-hero-metrics landing-hero-metrics--portfolio" aria-label="Project metrics">
+                {projectMetrics.map((m) => (
+                  <div className="landing-metric landing-metric--portfolio" key={`${m.top}-${m.bottom}`}>
+                    <div className="landing-metric-top">{m.top}</div>
+                    <div className="landing-metric-bottom">{m.bottom}</div>
+                    <div className="landing-metric-sub">{m.sub}</div>
+                  </div>
+                ))}
               </div>
             </div>
 
-            {/* Headline */}
-            <h1 className="landing-hero-title landing-hero-title--portfolio">
-              Hello, I’m <span className="landing-name">Ericka James</span>
-              <br />
-              <span className="landing-role">Software Engineer</span>
-            </h1>
+            {/* RIGHT: headshot */}
+            <div className="landing-hero-right landing-hero-right--portfolio">
+              <div className="landing-hero-shapes" aria-hidden="true">
+                <div className="landing-shape landing-shape--a" />
+                <div className="landing-shape landing-shape--b" />
+                <div className="landing-shape landing-shape--c" />
+              </div>
 
-            <p className="landing-hero-subtitle landing-hero-subtitle--portfolio">{COPY.hero.subtitle}</p>
-
-            {/* CTAs */}
-            <div className="landing-hero-ctas landing-hero-ctas--portfolio">
-              {/* ✅ Orange primary like original: goAuth */}
-              <button className="landing-btn landing-btn--primary" type="button" onClick={goAuth}>
-                {COPY.hero.ctas?.primary || "Sign in / Sign up"}
-              </button>
-
-              {/* ✅ Watch Demo opens “coming soon” modal */}
-              <button className="landing-btn landing-btn--ghost" type="button" onClick={() => setDemoOpen(true)}>
-                Watch Demo
-              </button>
-
-              <button className="landing-btn landing-btn--ghost landing-btn--thin" type="button" onClick={goAbout}>
-                {COPY.hero.ctas?.secondary || "Learn more"}
-              </button>
-            </div>
-
-            {/* Metrics */}
-            <div className="landing-hero-metrics landing-hero-metrics--portfolio" aria-label="Project metrics">
-              {projectMetrics.map((m) => (
-                <div className="landing-metric landing-metric--portfolio" key={m.bottom}>
-                  <div className="landing-metric-top">{m.top}</div>
-                  <div className="landing-metric-bottom">{m.bottom}</div>
-                  <div className="landing-metric-sub">{m.sub}</div>
-                </div>
-              ))}
+              <div className="landing-photo-frame">
+                <img
+                  src={heroImageSrc}
+                  alt="Ericka James headshot"
+                  className="landing-hero-img landing-hero-img--portfolio"
+                  loading="eager"
+                  decoding="async"
+                />
+              </div>
             </div>
           </div>
+        </DashboardCard>
 
-          {/* RIGHT: headshot (✅ removed play button overlay) */}
-          <div className="landing-hero-right landing-hero-right--portfolio">
-            <div className="landing-hero-shapes" aria-hidden="true">
-              <div className="landing-shape landing-shape--a" />
-              <div className="landing-shape landing-shape--b" />
-              <div className="landing-shape landing-shape--c" />
-            </div>
+        {/* Places I’ve worked strip */}
+        <section className="landing-logo-strip landing-logo-strip--hug" aria-label={COPY.workedAt.ariaLabel}>
+          <div className="landing-logo-strip-inner">
+            {workedAt.map((x) => (
+              <div
+                className="landing-logo-slot"
+                key={x.alt}
+                data-tooltip={x.alt}
+                style={{
+                  "--z": x.zoom,
+                  "--y": `${x.y || 0}px`,
+                }}
+              >
+                <img className="landing-trusted-logo" src={x.src} alt={x.alt} loading="lazy" decoding="async" />
+              </div>
+            ))}
 
-            <div className="landing-photo-frame">
-              <img
-                src={heroImageSrc}
-                alt="Ericka James headshot"
-                className="landing-hero-img landing-hero-img--portfolio"
-                loading="eager"
-                decoding="async"
-              />
-            </div>
+            <div className="landing-logo-strip-caption">{COPY.workedAt.caption}</div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Trusted / Worked at strip */}
-      <section className="landing-logo-strip landing-logo-strip--hug" aria-label="Trusted by / Experience">
-        <div className="landing-logo-strip-inner">
-          {workedAt.map((x) => (
-            <div
-              className="landing-logo-slot"
-              key={x.alt}
-              title={x.alt}
-              style={{
-                "--z": x.zoom,
-                "--y": `${x.y || 0}px`,
-              }}
-            >
-              <img className="landing-trusted-logo" src={x.src} alt={x.alt} loading="lazy" decoding="async" />
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <div className="landing-page">
-        {/* WHY SECTION */}
+        {/* WHY SECTION (uses DashboardCard as the card shell) */}
         <section className="landing-section landing-about">
           <div className="landing-section-inner">
-            <div className="landing-about-shell">
+            <DashboardCard
+              as="section"
+              className="landing-about-shell"
+              title={null}
+              subtitle={null}
+              headerClassName=""
+              headerLeftClassName=""
+            >
               <div className="landing-about-head">
                 <h2 className="landing-section-title landing-about-title">{COPY.why.title}</h2>
                 <p className="landing-section-text landing-about-text">{COPY.why.body}</p>
@@ -206,14 +210,21 @@ export default function LandingPage() {
                   </div>
                 ))}
               </div>
-            </div>
+            </DashboardCard>
           </div>
         </section>
 
-        {/* BIG MARKETING CARD */}
+        {/* BIG MARKETING CARD (uses DashboardCard as the card shell) */}
         <section className="landing-section landing-bigcard">
           <div className="landing-section-inner">
-            <div className="landing-bigcard-shell">
+            <DashboardCard
+              as="section"
+              className="landing-bigcard-shell"
+              title={null}
+              subtitle={null}
+              headerClassName=""
+              headerLeftClassName=""
+            >
               <div className="landing-bigcard-left">
                 <div className="landing-bigcard-eyebrow">{COPY.bigCard.eyebrow}</div>
 
@@ -238,7 +249,7 @@ export default function LandingPage() {
                     {COPY.bigCard.ctas.primary}
                   </button>
 
-                  <button className="landing-cta-pill" type="button" onClick={() => setRoadmapOpen(true)}>
+                  <button className="landing-cta-pill" type="button" onClick={openRoadmap}>
                     {COPY.bigCard.ctas.roadmap}
                   </button>
                 </div>
@@ -255,13 +266,13 @@ export default function LandingPage() {
                   />
                 </div>
               </div>
-            </div>
+            </DashboardCard>
           </div>
         </section>
       </div>
 
       {/* Roadmap modal */}
-      <Modal open={roadmapOpen} title={COPY.modal.title} onClose={() => setRoadmapOpen(false)} footer={roadmapFooter}>
+      <Modal open={roadmapOpen} title={COPY.modal.title} onClose={closeRoadmap} footer={roadmapFooter}>
         {COPY.modal.blocks.map((b) => (
           <div className="landing-modal-block" key={b.pill}>
             <div className="landing-modal-pill">{b.pill}</div>
@@ -270,22 +281,6 @@ export default function LandingPage() {
         ))}
 
         <div className="landing-modal-note">{COPY.modal.note}</div>
-      </Modal>
-
-      {/* ✅ Demo “coming soon” modal */}
-      <Modal open={demoOpen} title="Demo on the way" onClose={() => setDemoOpen(false)} footer={demoFooter}>
-        <div className="landing-modal-block">
-          <div className="landing-modal-pill">Coming soon</div>
-          <div className="landing-modal-text">
-            The demo is being packaged up now.
-            <br />
-            In the meantime, you can sign in or sign up to get early access when it drops.
-          </div>
-        </div>
-
-        <div className="landing-modal-note">
-          Tip: if you want, we can replace this with an embedded Loom/YouTube video later.
-        </div>
       </Modal>
     </AppShell>
   );

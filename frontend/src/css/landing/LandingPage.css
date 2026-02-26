@@ -42,14 +42,14 @@
 
 /* Keep your original vertical spacing, but make horizontal padding responsive */
 .landing-section {
-  padding: 64px var(--landing-side-pad);
+  padding: 64px 0; /* was: 64px var(--landing-side-pad) */
 }
 
-/* Standard centered lane */
+/* 2) Make the inner lane match HERO centering exactly */
 .landing-section-inner {
   max-width: var(--landing-lane);
+  width: calc(100% - (var(--landing-side-pad) * 2)); /* ✅ match hero */
   margin: 0 auto;
-  width: 100%;
   box-sizing: border-box;
   min-width: 0;
 }
@@ -557,9 +557,9 @@ body.ustock-dark .landing-shape--c {
 
 .landing-logo-strip {
   max-width: var(--landing-lane);
-  padding: 0 var(--landing-side-pad);
-  box-sizing: border-box;
+  width: calc(100% - (var(--landing-side-pad) * 2));
   margin: 12px auto 0;
+  box-sizing: border-box;
   min-width: 0;
 }
 
@@ -587,6 +587,10 @@ body.ustock-dark .landing-shape--c {
   backdrop-filter: blur(6px);
 
   overflow: hidden;
+
+  /* ✅ caption lives inside this container */
+  position: relative;
+  padding-bottom: 22px; /* room for caption */
 }
 
 /* Slot */
@@ -603,6 +607,9 @@ body.ustock-dark .landing-shape--c {
 
   --z: var(--logo-zoom);
   --y: 0px;
+
+  /* needed for tooltip positioning */
+  position: relative;
 }
 
 /* Image */
@@ -616,6 +623,87 @@ body.ustock-dark .landing-shape--c {
 
   opacity: 0.82;
   filter: grayscale(100%);
+}
+
+/* Caption INSIDE the logo strip (bottom center) */
+.landing-logo-strip-caption {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 6px;
+
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+
+  /* ✅ light gray */
+  color: rgba(15, 23, 42, 0.40);
+  pointer-events: none;
+}
+
+body.ustock-dark .landing-logo-strip-caption {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+/* Tooltip on hover using data-tooltip */
+.landing-logo-slot::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 10px);
+  transform: translateX(-50%) translateY(6px);
+
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 750;
+  white-space: nowrap;
+
+  background: rgba(15, 23, 42, 0.92);
+  color: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.18);
+
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease, transform 120ms ease;
+  z-index: 10;
+}
+
+.landing-logo-slot::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 4px);
+  transform: translateX(-50%);
+
+  width: 0;
+  height: 0;
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+  border-top: 7px solid rgba(15, 23, 42, 0.92);
+
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+  z-index: 10;
+}
+
+.landing-logo-slot:hover::after,
+.landing-logo-slot:focus-within::after {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.landing-logo-slot:hover::before,
+.landing-logo-slot:focus-within::before {
+  opacity: 1;
+}
+
+/* Optional: make the hovered logo feel “alive” */
+.landing-logo-slot:hover .landing-trusted-logo {
+  opacity: 0.96;
 }
 
 /* Dark theme logo strip */
@@ -644,9 +732,7 @@ body.ustock-dark .landing-trusted-logo {
     0 18px 55px rgba(15, 23, 42, 0.10),
     0 2px 8px rgba(15, 23, 42, 0.06);
 
-  max-width: var(--landing-lane);
   width: 100%;
-  margin: 0 auto;
   box-sizing: border-box;
   min-width: 0;
 }
@@ -762,9 +848,7 @@ body.ustock-dark .landing-trusted-logo {
     0 18px 55px rgba(15, 23, 42, 0.10),
     0 2px 8px rgba(15, 23, 42, 0.06);
 
-  max-width: var(--landing-lane);
   width: 100%;
-  margin: 0 auto;
   box-sizing: border-box;
   min-width: 0;
 }
@@ -949,7 +1033,7 @@ body.ustock-dark .landing-trusted-logo {
   .landing-logo-strip-inner {
     flex-wrap: wrap;
     height: auto;
-    padding: 12px 16px;
+    padding: 12px 16px 26px; /* keep room for caption */
   }
 
   .landing-logo-slot {
@@ -1002,12 +1086,26 @@ body.ustock-dark .landing-trusted-logo {
     font-size: 30px;
   }
 
+  /* ✅ 2 logos per row on mobile */
   .landing-logo-strip-inner {
-    gap: 14px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: center;
+    justify-items: center;
+
+    height: auto;
+    padding: 12px 14px 26px; /* keep bottom space for caption */
+    gap: 12px 16px;
   }
 
   .landing-logo-slot {
-    height: 40px;
+    width: 100%;
+    height: 42px;
+  }
+
+  .landing-trusted-logo {
+    height: 100%;
+    width: auto;
   }
 
   .landing-brandicon {

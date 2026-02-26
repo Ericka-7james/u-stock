@@ -1,14 +1,13 @@
-// frontend/src/content/landing/landingPage.content.ts
-
+// frontend/src/content/landing/landingpage.content.ts
 import heroIllustration from "../../assets/icons/LucentLandingEducation.png";
 import visionImage from "../../assets/icons/LucentLandingTrust.png";
-
 
 export const LANDING_PAGE_CONTENT = {
   assets: {
     heroIllustration,
     visionImage,
   },
+
   copy: {
     hero: {
       kicker: "Beginner-friendly • Risk-first • Transparent by design",
@@ -18,12 +17,24 @@ export const LANDING_PAGE_CONTENT = {
       ctas: {
         primary: "Sign in / Sign up",
         secondary: "Learn more",
+        roadmap: "See roadmap",
       },
       metrics: [
         { top: "Made for beginners", bottom: "Start guided + paper first" },
         { top: "Risk-first", bottom: "Guardrails before automation" },
         { top: "Explainable", bottom: "Clarity without exposing IP" },
       ],
+    },
+
+    workedAt: {
+      ariaLabel: "Places I’ve worked",
+      caption: "Places I’ve worked",
+      tooltips: {
+        jpm: "JPMorgan Chase & Co",
+        spelman: "Spelman Innovation Lab",
+        gpc: "Genuine Parts Company",
+        mlt: "MLT",
+      },
     },
 
     why: {
@@ -58,9 +69,18 @@ export const LANDING_PAGE_CONTENT = {
       subtitle:
         "U-Stock is built for everyday users who want clearer decisions — with transparent signals, visible risk, and a guided path from learning → paper → supervised automation.",
       roadmap: [
-        { label: "Now", text: "Charts, market snapshots, bot status + logs, and a decision-ready cockpit." },
-        { label: "Next", text: "Paper trading + journaling (wins/losses, R-multiples, screenshots, notes)." },
-        { label: "Soon", text: "Guided automation: scanning + broker execution with strict safety gates." },
+        {
+          label: "Now",
+          text: "Charts, market snapshots, bot status + logs, and a decision-ready cockpit.",
+        },
+        {
+          label: "Next",
+          text: "Paper trading + journaling (wins/losses, R-multiples, screenshots, notes).",
+        },
+        {
+          label: "Soon",
+          text: "Guided automation: scanning + broker execution with strict safety gates.",
+        },
       ],
       ctas: {
         primary: "Get Started",
