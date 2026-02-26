@@ -8,13 +8,16 @@ import "../../css/pages/IndexFundsPage.css";
 
 import MarketBaselinesSquirrel from "../../assets/pages/MarketBaselinesSquirrel.png";
 
-import { INDEX_FUNDS_PAGE_COPY } from "../../content/indexfundspage.content.ts";
+import { INDEX_FUNDS_PAGE_COPY } from "../../content/pages/indexfundspage.content.ts";
 
 export default function IndexFundsPage() {
   const copy = INDEX_FUNDS_PAGE_COPY;
 
-  const [activeTab, setActiveTab] = useState("baselines"); // "baselines" | "universe"
+  const [activeTab, setActiveTab] = useState(copy.tabs.defaultKey); // "baselines" | "universe"
   const baselines = useMemo(() => copy.baselines, [copy.baselines]);
+
+  const isBaselines = activeTab === copy.tabs.keys.baselines;
+  const isUniverse = activeTab === copy.tabs.keys.universe;
 
   return (
     <AppShell>
@@ -22,12 +25,9 @@ export default function IndexFundsPage() {
         <PageHeaderCard
           title={copy.header.title}
           subtitle={<span className="index-tagline">{copy.header.subtitle}</span>}
-          right={<img src={MarketBaselinesSquirrel} alt="Lucent Financial logo" className="index-hero-logo" />}
+          right={<img src={MarketBaselinesSquirrel} alt={copy.header.heroAlt} className="index-hero-logo" />}
         >
-          <p className="muted">
-            These ETFs act as Lucent’s “system context.” They don’t pick trades by themselves — they help interpret the
-            environment so bots can behave more safely.
-          </p>
+          <p className="muted">{copy.header.body}</p>
 
           <div className="index-hero-meta">
             {copy.header.metaPrefix} <span>{copy.header.metaStatus}</span> {copy.header.metaSuffix}
@@ -38,7 +38,6 @@ export default function IndexFundsPage() {
           </Link>
         </PageHeaderCard>
 
-        {/* ✅ Content lane aligned with header width (same idea as connected-page-wrap) */}
         <div className="index-page-wrap">
           {/* Tabs */}
           <div className="index-tabs-row">
@@ -46,27 +45,27 @@ export default function IndexFundsPage() {
               <button
                 type="button"
                 role="tab"
-                aria-selected={activeTab === "baselines"}
-                className={"tab-btn " + (activeTab === "baselines" ? "tab-btn--active" : "")}
-                onClick={() => setActiveTab("baselines")}
+                aria-selected={isBaselines}
+                className={"tab-btn " + (isBaselines ? "tab-btn--active" : "")}
+                onClick={() => setActiveTab(copy.tabs.keys.baselines)}
               >
-                {copy.tabs.baselines}
+                {copy.tabs.labels.baselines}
               </button>
 
               <button
                 type="button"
                 role="tab"
-                aria-selected={activeTab === "universe"}
-                className={"tab-btn " + (activeTab === "universe" ? "tab-btn--active" : "")}
-                onClick={() => setActiveTab("universe")}
+                aria-selected={isUniverse}
+                className={"tab-btn " + (isUniverse ? "tab-btn--active" : "")}
+                onClick={() => setActiveTab(copy.tabs.keys.universe)}
               >
-                {copy.tabs.universe}
+                {copy.tabs.labels.universe}
               </button>
             </div>
           </div>
 
           {/* Content */}
-          {activeTab === "baselines" ? (
+          {isBaselines ? (
             <>
               <section className="panel index-about-panel">
                 <h3>{copy.sections.whatMeans.title}</h3>
@@ -86,11 +85,11 @@ export default function IndexFundsPage() {
 
                 <div className="fundamentals-explain">
                   <p className="muted">
-                    {copy.sections.connects.lead.split("intents").map((part, i, arr) =>
+                    {copy.sections.connects.lead.split(copy.sections.connects.boldWord).map((part, i, arr) =>
                       i < arr.length - 1 ? (
                         <span key={i}>
                           {part}
-                          <strong>intents</strong>
+                          <strong>{copy.sections.connects.boldWord}</strong>
                         </span>
                       ) : (
                         <span key={i}>{part}</span>
@@ -126,13 +125,13 @@ export default function IndexFundsPage() {
 
                     <div className="fund-metrics-row">
                       <div className="fund-metric">
-                        <span className="fund-metric-label">Role:</span>
-                        <span className="fund-metric-value">System context</span>
+                        <span className="fund-metric-label">{copy.universeCard.labels.role}</span>
+                        <span className="fund-metric-value">{copy.universeCard.values.role}</span>
                       </div>
 
                       <div className="fund-metric">
-                        <span className="fund-metric-label">Used for:</span>
-                        <span className="fund-metric-value">{b.use.join(" • ")}</span>
+                        <span className="fund-metric-label">{copy.universeCard.labels.usedFor}</span>
+                        <span className="fund-metric-value">{b.use.join(copy.universeCard.useJoiner)}</span>
                       </div>
                     </div>
                   </article>

@@ -7,7 +7,7 @@ import { API_BASE, API_PREFIX } from "../../config/config";
 import { useAuth } from "../../context/authContextBase.js";
 import PageHeaderCard from "../common/PageHeaderCard";
 
-import { FEEDBACK_PAGE_COPY } from "../../content/feedbackpage.content.ts";
+import { FEEDBACK_PAGE_COPY } from "../../content/pages/feedbackpage.content.ts";
 
 const SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY;
 
@@ -64,8 +64,8 @@ export default function FeedbackPage() {
   const overLimit = wordCount > WORD_LIMIT;
   const underMin = wordCount > 0 && wordCount < MIN_WORDS;
 
-  const isTest = import.meta.env.MODE === "test";
-  const captchaRequired = cfg.captcha.requireInProdOnly ? !(import.meta.env.DEV || isTest) : true;
+  const isProd = import.meta.env.PROD;
+  const captchaRequired = cfg.captcha.requireInProdOnly ? isProd : true;
 
   const captchaOk = captchaRequired ? (SITE_KEY ? !!token : false) : true;
 
