@@ -8,7 +8,7 @@ export const ABOUT_PAGE_COPY = {
 
   intro: {
     primary:
-      "Lucent Financial (aka U-Stock) is a market intelligence workspace designed to turn noisy price action into a clean decision workflow: discover what’s moving, add context, then act with intent.",
+      "Lucent Financial (aka ~ U-Stock) is a market intelligence workspace designed to turn noisy price action into a clean decision workflow: discover what’s moving, add context, then act with intent.",
     secondary:
       "The priority is inspectability. Signals and states are readable, sources are visible, and automation is designed to be supervised instead of “hands-off.”",
     tertiary:
