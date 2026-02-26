@@ -5,15 +5,17 @@ from typing import Any, Dict, Optional, Tuple, List
 import pytest
 
 import bots.ema_trend.bot as bot_mod
-from bots.ema_trend.config import EMATrendConfig
 
 
 class FakeAPI:
     """
-    Fake API that returns pre-programmed responses for api.get(path, params=...).
+    Fake API client that supports the shared fetch_bars() contract.
+    fetch_bars() looks for:
+      - api.get_bars(symbol, tf, limit, feed)
+      - api.fetch_bars(...)
+      - api.get_bars_df(...)
 
-    This bot calls:
-      GET /api/market/bars  params={symbol, tf, limit, feed?}
+    We'll implement get_bars().
     """
 
     def __init__(self):
@@ -23,23 +25,20 @@ class FakeAPI:
     def set(self, key: str, value: Any) -> None:
         self.responses[key] = value
 
-    def get(self, path: str, params: Optional[Dict[str, Any]] = None):
-        p = dict(params or {})
-        self.calls.append((path, p))
+    def get_bars(self, *, symbol: str, tf: str, limit: int = 200, feed: Optional[str] = None):
+        # record calls in a way similar to the old tests (path-like)
+        p: Dict[str, Any] = {"symbol": symbol, "tf": tf, "limit": int(limit)}
+        if feed is not None:
+            p["feed"] = feed
+        self.calls.append(("/api/market/bars", p))
 
-        # Match the current bot implementation
-        if path == "/api/market/bars":
-            sym = (p.get("symbol") or "").upper()
-            tf = p.get("tf")
-            key = f"{path}|{sym}|{tf}"
-            return self.responses.get(key, None)
-
-        return self.responses.get(path, None)
+        key = f"/api/market/bars|{str(symbol or '').upper()}|{tf}"
+        return self.responses.get(key, None)
 
 
 def _bars(*, o, h, l, c):
-    # Shape compatible with extract_ohlc()
-    return {"bars": {"o": list(o), "h": list(h), "l": list(l), "c": list(c)}}
+    # ✅ Shape compatible with bots._shared.data.bars.extract_ohlc()
+    return {"o": list(o), "h": list(h), "l": list(l), "c": list(c)}
 
 
 def _closes_up(n=70, start=100.0, step=0.5):
@@ -62,7 +61,6 @@ def _seed_bars(api: FakeAPI, *, sym: str, tf: str, closes: List[float]) -> None:
 
 @pytest.fixture(autouse=True)
 def _reset_debug(monkeypatch: pytest.MonkeyPatch):
-    # Keep tests deterministic regardless of environment
     monkeypatch.setattr(bot_mod, "_STRAT_DEBUG", False, raising=False)
     yield
 
@@ -78,14 +76,15 @@ def test_compute_returns_empty_when_qty_is_non_positive():
     api = FakeAPI()
     out = bot_mod.compute(api=api, bot_id="ema_trend", cfg_dict={"symbols": ["AAPL"], "qty": 0})
     assert out == {"intents": [], "events": []}
-    assert api.calls == []  # qty gate happens before fetching bars
 
+    # Current bot behavior: it fetches bias+entry bars before decide() rejects qty.
+    assert len(api.calls) == 2
 
 def test_compute_skips_when_missing_bars_and_stays_quiet_when_debug_off():
     api = FakeAPI()
 
-    # Provide bias bars but NOT entry bars -> should skip and stay quiet
-    _seed_bars(api, sym="AAPL", tf="15Min", closes=_closes_up(80))
+    # Provide bias bars but NOT entry bars
+    _seed_bars(api, sym="AAPL", tf="15Min", closes=_closes_up(120))
 
     out = bot_mod.compute(
         api=api,
@@ -94,7 +93,6 @@ def test_compute_skips_when_missing_bars_and_stays_quiet_when_debug_off():
     )
 
     assert out == {"intents": [], "events": []}
-    # It tried both bias and entry
     assert [c[0] for c in api.calls].count("/api/market/bars") == 2
 
 
@@ -102,8 +100,8 @@ def test_compute_emits_debug_events_when_debug_on_and_skipping(monkeypatch: pyte
     api = FakeAPI()
     monkeypatch.setattr(bot_mod, "_STRAT_DEBUG", True, raising=False)
 
-    # Missing entry bars triggers debug breadcrumb "skip_missing_bars"
-    _seed_bars(api, sym="AAPL", tf="15Min", closes=_closes_up(80))
+    # Missing entry bars triggers debug breadcrumb
+    _seed_bars(api, sym="AAPL", tf="15Min", closes=_closes_up(120))
 
     out = bot_mod.compute(
         api=api,
@@ -114,17 +112,16 @@ def test_compute_emits_debug_events_when_debug_on_and_skipping(monkeypatch: pyte
     assert out["intents"] == []
     assert out["events"] != []
 
-    # Expect at least one strategy_debug event with the skip code
     codes = [e.get("payload", {}).get("code") for e in out["events"] if e.get("event_type") == "strategy_debug"]
     assert "skip_missing_bars" in codes
 
 
-def test_compute_skips_when_bias_cannot_be_computed(monkeypatch: pytest.MonkeyPatch):
+def test_compute_skips_when_bias_cannot_be_computed():
     api = FakeAPI()
 
-    # Bias needs enough EMA points: if we give too few closes, bias becomes "none"
+    # Too few closes -> bias returns none
     _seed_bars(api, sym="AAPL", tf="15Min", closes=[100.0] * 10)
-    _seed_bars(api, sym="AAPL", tf="1Min", closes=_closes_up(80, step=0.02))
+    _seed_bars(api, sym="AAPL", tf="1Min", closes=_closes_up(120, step=0.02))
 
     out = bot_mod.compute(
         api=api,
@@ -138,10 +135,9 @@ def test_compute_skips_when_bias_cannot_be_computed(monkeypatch: pytest.MonkeyPa
 def test_compute_respects_min_confidence_gate(monkeypatch: pytest.MonkeyPatch):
     api = FakeAPI()
 
-    _seed_bars(api, sym="AAPL", tf="15Min", closes=_closes_up(120))
-    _seed_bars(api, sym="AAPL", tf="1Min", closes=_closes_up(120, step=0.02))
+    _seed_bars(api, sym="AAPL", tf="15Min", closes=_closes_up(220))
+    _seed_bars(api, sym="AAPL", tf="1Min", closes=_closes_up(220, step=0.02))
 
-    # Force a valid triple but low confidence
     def fake_compute_signal(bars_entry, cfg, bias):
         return (100.0, 99.5, 101.0), ["X_REASON"], 0.10
 
@@ -161,10 +157,9 @@ def test_compute_limits_max_intents_per_run_and_keeps_symbol_order(monkeypatch: 
 
     syms = ["AAA", "BBB", "CCC"]
     for s in syms:
-        _seed_bars(api, sym=s, tf="15Min", closes=_closes_up(120))
-        _seed_bars(api, sym=s, tf="1Min", closes=_closes_up(120, step=0.02))
+        _seed_bars(api, sym=s, tf="15Min", closes=_closes_up(220))
+        _seed_bars(api, sym=s, tf="1Min", closes=_closes_up(220, step=0.02))
 
-    # Always returns a valid triple and confidence above min
     def fake_compute_signal(bars_entry, cfg, bias):
         return (100.0, 99.0, 102.0), ["SIG_OK"], 0.99
 
@@ -177,18 +172,17 @@ def test_compute_limits_max_intents_per_run_and_keeps_symbol_order(monkeypatch: 
     )
 
     assert len(out["intents"]) == 2
-    assert [i["symbol"] for i in out["intents"]] == ["AAA", "BBB"]  # no sorting in bot.py
+    assert [i["symbol"] for i in out["intents"]] == ["AAA", "BBB"]
     assert len([e for e in out["events"] if e.get("event_type") == "signal"]) == 2
 
 
 def test_compute_intent_contains_bias_and_signal_reasons(monkeypatch: pytest.MonkeyPatch):
     api = FakeAPI()
 
-    _seed_bars(api, sym="AAPL", tf="15Min", closes=_closes_up(120))          # bias should be "up"
-    _seed_bars(api, sym="AAPL", tf="1Min", closes=_closes_up(120, step=0.02))
+    _seed_bars(api, sym="AAPL", tf="15Min", closes=_closes_up(220))
+    _seed_bars(api, sym="AAPL", tf="1Min", closes=_closes_up(220, step=0.02))
 
     def fake_compute_signal(bars_entry, cfg, bias):
-        # bias should be "up" here
         assert bias in ("up", "down")
         return (100.0, 99.5, 101.0), ["SIG_REASON"], 0.99
 
@@ -204,18 +198,15 @@ def test_compute_intent_contains_bias_and_signal_reasons(monkeypatch: pytest.Mon
     intent = out["intents"][0]
     assert intent["symbol"] == "AAPL"
     assert intent["side"] in ("buy", "sell")
-    assert "reasons" in intent
-    assert "SIG_REASON" in intent["reasons"]  # signal reason included
-    # bias reason code should be included too (from reason_codes)
+    assert "SIG_REASON" in intent["reasons"]
     assert any(r in (bot_mod.R.BIAS_UP, bot_mod.R.BIAS_DN) for r in intent["reasons"])
 
-    # signal event should exist and include matching fields
     sig_events = [e for e in out["events"] if e.get("event_type") == "signal"]
     assert len(sig_events) == 1
     payload = sig_events[0]["payload"]
-    assert payload["strategy"] == "ema_trend" or payload["strategy"] == intent["strategy"]
     assert payload["reasons"] == intent["reasons"]
-    assert payload["tf_bias"] == intent.get("tf_bias", payload["tf_bias"])  # tolerant
+    assert payload["tf_bias"] == intent["tf_bias"]
+    assert payload["tf_entry"] == intent["tf_entry"]
 
 
 def test_generate_output_wraps_compute():

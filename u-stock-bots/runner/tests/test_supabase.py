@@ -90,7 +90,7 @@ def test_mask():
 def test_deadletter_path_uses_runtime_dir(monkeypatch, tmp_path: Path):
     monkeypatch.setenv("RUNNER_RUNTIME_DIR", str(tmp_path))
     p = sb._deadletter_path()
-    assert str(p).endswith("runtime/deadletter/supabase_events.jsonl")
+    assert str(p).replace("\\", "/").endswith("runtime/deadletter/supabase_events.jsonl")
     assert p.parent.exists()
 
 
