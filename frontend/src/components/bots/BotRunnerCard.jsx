@@ -4,7 +4,7 @@ import { useAuth } from "../../context/authContextBase.js";
 import { useNavigate } from "react-router-dom";
 
 import HelpTooltip from "../common/HelpTooltip";
-import "../../css/bots/botRunnerCard.css";
+import "../../css/bots/BotRunnerCard.css";
 
 async function safeErrorMessage(res) {
   const ct = res.headers.get("content-type") || "";
