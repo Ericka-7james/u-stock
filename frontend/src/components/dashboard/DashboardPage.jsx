@@ -15,7 +15,7 @@ import { useAlpacaTradeSummary } from "../../hooks/useAlpacaTradeSummary.js";
 
 import ErrorModal from "../common/ErrorModal.jsx";
 import ErrorBanner from "../common/ErrorBanner.jsx";
-import { explainAnyError } from "../../lib/errorMessages.jsx";
+import { explainAnyError } from "../../lib/ErrorMessages.jsx";
 
 import useIsDarkMode from "../../hooks/common/useIsDarkMode.js";
 import { useBotOpportunities } from "../../hooks/dashboard/useBotOpportunities.js";

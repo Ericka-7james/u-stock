@@ -2,15 +2,15 @@
 export const BACKTEST_PRACTICE_PAGE_COPY = {
   header: {
     title: "Backtest Practice Lab",
-    tagline: "A front-facing sandbox for scan backtests (configs in, insights out).",
-    hint: "Frontend stub today. Backend job runner next.",
+    tagline: "Test ideas safely. No real trades. Just receipts.",
+    hint: "Mock run right now. Real job runner soon.",
   },
 
   intro: {
     primary:
-      "Use this page to practice the scan backtest workflow without touching the CLI. You’ll enter a config, start a run, then review summary stats and download artifacts.",
+      "Pick a few symbols, choose your timeframes, and press Run. You’ll get a quick performance snapshot to help you learn what a strategy would have done.",
     secondary:
-      "For now the run is mocked so the UI wiring is real. Once the backend endpoints exist, this becomes a live job-based backtester.",
+      "New here? Start with the defaults, then change one thing at a time (like the date range or timeframes) and watch what moves.",
   },
 
   status: {
@@ -23,27 +23,31 @@ export const BACKTEST_PRACTICE_PAGE_COPY = {
 
   sections: {
     config: {
-      title: "Configuration",
-      subtitle: "Set your scan backtest inputs.",
+      title: "1) Set it up",
+      subtitle: "Think of this as your “experiment settings.”",
       note:
-        "Guardrails will be enforced in the backend too (rate limits, max steps, date range caps).",
+        "Tip: Keep symbols small (3–5) and use a shorter date range while you’re learning. Faster runs, clearer lessons.",
     },
+
     preview: {
-      title: "Preview",
-      subtitle: "A quick glance at what will be sent to the backend.",
-    },
-    results: {
-      title: "Results",
+      title: "3) What you’re sending",
       subtitle:
-        "When connected, this section will reflect the job status and show a user-friendly report.",
+        "This is the exact config the backend will receive. If something looks weird here, fix it before running.",
     },
+
+    results: {
+      title: "2) Run + read the snapshot",
+      subtitle:
+        "After a run, you’ll see a simple summary: how many trades happened, how often they won, and the overall profit/loss for the test period.",
+    },
+
     safety: {
-      title: "Safety defaults",
+      title: "Safety (why this won’t blow up your account)",
       items: [
-        "Auth required to run backtests.",
-        "Backend will validate configs (no arbitrary commands).",
-        "Caps on steps, date range, and symbol count to protect compute.",
-        "Artifacts downloadable only for your own jobs.",
+        "This page does not place real trades.",
+        "Server validation will reject unsafe configs (too many symbols, extreme steps, bad dates).",
+        "Backtests run in your account context only, with access controls.",
+        "Artifacts will only be downloadable for jobs you created.",
       ],
     },
   },
@@ -52,19 +56,47 @@ export const BACKTEST_PRACTICE_PAGE_COPY = {
     symbols: {
       label: "Symbols",
       placeholder: "SPY,QQQ,AAPL",
-      help: "Comma-separated. Example: SPY,QQQ,AAPL,MSFT,NVDA",
+      help: "Comma-separated tickers. Beginner-friendly starter: SPY, QQQ, AAPL.",
     },
-    tfEntry: { label: "Entry timeframe" },
-    tfBias: { label: "Bias timeframe" },
-    start: { label: "Start date" },
-    end: { label: "End date" },
-    warmup: { label: "Warmup bars" },
-    steps: { label: "Max steps" },
-    qty: { label: "Qty" },
+
+    tfEntry: {
+      label: "Entry timeframe",
+      help: "How often we look for entries (smaller = more trades).",
+    },
+
+    tfBias: {
+      label: "Bias timeframe",
+      help: "The “bigger picture” trend filter (bigger = smoother).",
+    },
+
+    start: {
+      label: "Start date",
+      help: "Beginning of the historical test window.",
+    },
+
+    end: {
+      label: "End date",
+      help: "End of the historical test window.",
+    },
+
+    warmup: {
+      label: "Warmup bars",
+      help: "Extra candles to ‘warm up’ indicators before counting results.",
+    },
+
+    steps: {
+      label: "Max steps",
+      help: "A compute limit. Lower is faster. Higher tests more history.",
+    },
+
+    qty: {
+      label: "Qty",
+      help: "Position size for the simulation (paper math only).",
+    },
   },
 
   buttons: {
-    run: "Run backtest",
+    run: "Run (paper backtest)",
     running: "Running…",
     reset: "Reset",
   },
@@ -77,18 +109,18 @@ export const BACKTEST_PRACTICE_PAGE_COPY = {
   },
 
   validation: {
-    title: "Fix these before running:",
-    ok: "Config looks valid.",
+    title: "Quick fixes:",
+    ok: "Looks good. Ready to run.",
   },
 
   empty: {
-    title: "No runs yet",
-    body: "Run a backtest to see a summary and downloadable artifacts here.",
+    title: "Nothing yet",
+    body: "Hit Run to generate a sample snapshot and see how the results area works.",
   },
 
   progress: {
-    title: "Run in progress",
-    body: "Tracking job:",
+    title: "Working…",
+    body: "Job id:",
   },
 
   metrics: {
@@ -96,22 +128,22 @@ export const BACKTEST_PRACTICE_PAGE_COPY = {
     winRate: "Win rate",
     pnl: "PnL",
     maxDD: "Max drawdown",
-    avgTrade: "Avg trade",
+    avgTrade: "Avg per trade",
     exposure: "Exposure",
   },
 
   artifacts: {
-    title: "Artifacts",
-    report: "Download report.txt",
-    json: "Download run.json",
-    csv: "Download trades.csv",
-    note: "Downloads will enable once the backend returns artifact URLs.",
+    title: "Downloads (coming soon)",
+    report: "report.txt",
+    json: "run.json",
+    csv: "trades.csv",
+    note: "Once the backend is connected, these buttons will download real files from your run.",
   },
 
   errors: {
     invalid: {
-      title: "Config needs a quick fix",
-      body: "Please correct the fields below and try again.",
+      title: "Fix a couple things",
+      body: "Update the fields below, then try again.",
     },
   },
 } as const;

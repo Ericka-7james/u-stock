@@ -3,75 +3,84 @@
 export const ABOUT_PAGE_COPY = {
   header: {
     title: "About Lucent Financial",
-    tagline: "Market clarity with risk-first guardrails.",
+    tagline: "Transparent automation. Community-centered access.",
   },
 
   intro: {
     primary:
-      "Lucent Financial (aka ~ U-Stock) is a market intelligence workspace designed to turn noisy price action into a clean decision workflow: discover what’s moving, add context, then act with intent.",
+      "Lucent Financial (formerly U-Stock) is a transparent market intelligence and automation workspace built to give everyday investors clearer control over their money — especially those historically excluded from institutional tools.",
     secondary:
-      "The priority is inspectability. Signals and states are readable, sources are visible, and automation is designed to be supervised instead of “hands-off.”",
+      "The platform separates analysis from execution. Strategies generate intents first. You inspect them. You decide whether to route to paper or live. No mystery trades. No hidden automation.",
     tertiary:
-      "Paper trading is the default. Live execution only happens when you explicitly connect a broker and enable a strategy.",
+      "Lucent is designed for hands-on learning and hands-off scaling — but always with visibility, audit trails, and guardrails first.",
   },
 
   sections: {
+    mission: {
+      title: "Why Lucent exists",
+      body:
+        "Access to automation shouldn’t require institutional capital or blind trust. Many communities — especially people of color — have been excluded from transparent financial tooling or pushed toward high-risk speculation without context.",
+      note:
+        "Lucent is built to close that gap: clear signals, readable states, supervised automation, and infrastructure you can actually understand.",
+    },
+
     howItWorks: {
       title: "How it works",
       items: [
-        "A chart-first dashboard for discovery, context, and quick inspection",
-        "Backend APIs for market data, integrations, and runtime status",
-        "A runner loop that produces intents and applies safety gates",
-        "An execution path that logs events end-to-end for auditability",
+        "Chart-first discovery with strict symbol validation",
+        "Backend APIs serving market data, runtime health, and strategy state",
+        "A modular runner loop that produces trade intents — not direct orders",
+        "Execution routing (paper or live) with event logging end-to-end",
       ],
     },
 
     transparency: {
       title: "Designed to be inspectable",
       body:
-        "Lucent treats “doing nothing” as a valid output. Waiting for the market is a healthy state, not a failure. Every suggestion should be reviewable: what changed, what triggered it, and what the bot would do next.",
+        "Lucent treats waiting as a valid output. If the correct action is to do nothing, the system says so. Signals are traceable. Strategy states are visible. Logs are readable.",
       note:
-        "Keeping analysis separate from execution makes automation safer and easier to trust.",
+        "Automation is supervised by design. Analysis and execution are intentionally separated to reduce risk and increase trust.",
     },
 
     coreFeatures: {
       title: "Core features",
       items: [
-        "Market leaders and movers with strict symbol validation",
-        "Fast chart + context workflow (select a symbol, inspect instantly)",
-        "Bot control surface + runner health/status states",
-        "Intent-first automation: suggestions you can audit before action",
+        "Intent-first strategy architecture (suggestions before execution)",
+        "Backtesting infrastructure with historical replay support",
+        "Observable runner states (Running, Waiting, Paused, Offline)",
+        "Strict input validation and safety gates before automation",
       ],
     },
 
     safety: {
       title: "Risk-first defaults",
       items: [
-        "Paper-first progression (learn, test, then scale responsibly)",
-        "Guardrails before automation (sizing, gates, and explicit enablement)",
-        "Clear states (Running, Waiting, Paused, Offline) instead of silent failure",
+        "Paper trading as the default mode",
+        "Explicit broker connection required for live routing",
+        "Sizing gates and configurable safeguards",
+        "Clear system states instead of silent failures",
       ],
     },
 
     techStack: {
       title: "Tech stack",
       items: [
-        "React (Vite)",
-        "Python (FastAPI)",
-        "Runner loop + execution engine",
-        "APIs + data pipelines",
-        "Vitest + Pytest",
-        "GitHub + Vercel",
+        "React (Vite) frontend with modular UI architecture",
+        "Python (FastAPI) backend services",
+        "Strategy runner + execution engine (intent-driven design)",
+        "Market data integrations and structured logging",
+        "Vitest + Pytest with coverage thresholds",
+        "GitHub Actions CI + Vercel deployment",
       ],
     },
 
     provides: {
       title: "What Lucent provides",
       items: [
-        "A clean, explainable view of market movement and context",
-        "Bot intents (suggestions) before execution, not mystery trades",
-        "Observable runner states and logs you can inspect",
-        "Paper vs live routing with events tracked from signal to outcome",
+        "Transparent strategy outputs you can audit before acting",
+        "Clear separation between strategy logic and order execution",
+        "Paper-first learning progression before scaling capital",
+        "End-to-end observability from signal to trade event",
       ],
     },
 
@@ -79,15 +88,17 @@ export const ABOUT_PAGE_COPY = {
       title: "Defaults",
       kv: [
         { k: "Default mode", v: "Paper trading" },
-        { k: "Automation style", v: "Intent-first and reviewable" },
-        { k: "Design goal", v: "Clarity over hype" },
+        { k: "Automation style", v: "Intent-first and supervised" },
+        { k: "Primary value", v: "Transparency over speculation" },
       ],
     },
 
     builder: {
       title: "About the builder",
       bio:
-        "Built by Ericka James (Software Engineer). Focused on clear UX, transparent automation, and production-grade workflows in risk-aware environments.",
+        "Ericka James is a Software Engineer with experience building production-grade systems in regulated financial environments. Her background spans backend services, automation pipelines, API design, testing infrastructure, and risk-aware system architecture.",
+      extended:
+        "Lucent Financial is an independent build focused on modular strategy design, historical backtesting infrastructure, observable automation states, and community-centered access to financial tooling. The goal is to make automation understandable — not mysterious — and to create infrastructure that empowers individuals to participate confidently in markets.",
       links: [
         { label: "GitHub → ericka-7james", href: "https://github.com/ericka-7james" },
         { label: "LinkedIn → erickasmileyjames", href: "https://www.linkedin.com/in/erickasmileyjames" },

@@ -5,39 +5,16 @@ import "../../css/apps/ConnectedAppsPage.css";
 import { useAuth } from "../../context/authContextBase.js";
 import ConnectProviderModal from "./ConnectProviderModal";
 import { useNavigate } from "react-router-dom";
-import { explainResponseError } from "../../lib/errorMessages";
+import { explainResponseError } from "../../lib/ErrorMessages";
 
 import ConnectedAppsSquirrel from "../../assets/pages/ConnectedAppsSquirrel.png";
 import TermsModal from "../common/TermsModal";
 import PageHeaderCard from "../common/PageHeaderCard";
 import LoadingOverlay from "../common/LoadingOverlay";
 
-const PROVIDERS = [
-  {
-    key: "alpaca",
-    name: "Alpaca",
-    desc: "Broker integration for paper trading and market data.",
-    tags: ["Paper trading", "Broker API", "Market data"],
-    docsUrl: "https://docs.alpaca.markets/",
-    learnMoreLabel: "Alpaca docs",
-  },
-  {
-    key: "polygon",
-    name: "Polygon.io",
-    desc: "Market data provider for aggregates and intraday pricing.",
-    tags: ["Intraday candles", "Aggregates", "Real-time"],
-    docsUrl: "https://polygon.io/docs",
-    learnMoreLabel: "Polygon docs",
-  },
-  {
-    key: "tradingview",
-    name: "TradingView",
-    desc: "Charting + alerts. Often used via webhooks and notifications.",
-    tags: ["Charts", "Alerts", "Webhooks"],
-    docsUrl: "https://www.tradingview.com/rest-api-spec/",
-    learnMoreLabel: "TradingView API",
-  },
-];
+import { CONNECTED_APPS_PAGE_COPY } from "../../content/pages/connectedAppsPage.content.ts";
+
+const PROVIDERS = CONNECTED_APPS_PAGE_COPY.providers;
 
 function fmtTime(ts) {
   try {
@@ -149,8 +126,8 @@ export default function ConnectedAppsPage() {
         setError(ui ? `${ui.title}\n\n${ui.body}` : e?.message || "Could not load connected apps.");
       });
     } finally {
-    if (myReqId === reqIdRef.current) safeSet(() => setLoading(false));
-  }
+      if (myReqId === reqIdRef.current) safeSet(() => setLoading(false));
+    }
   }, [authFetch, isAuthed, safeSet]);
 
   useEffect(() => {
@@ -178,8 +155,11 @@ export default function ConnectedAppsPage() {
   const providerCount = PROVIDERS.length;
   const notSignedInCopy =
     providerCount === 1
-      ? `You’re not signed in. Sign in to connect ${PROVIDERS[0].name}.`
-      : "You’re not signed in. Sign in to connect and manage your integrations.";
+      ? CONNECTED_APPS_PAGE_COPY.banners.notSignedIn.singleProviderTemplate.replace(
+          "{provider}",
+          PROVIDERS[0].name
+        )
+      : CONNECTED_APPS_PAGE_COPY.banners.notSignedIn.multiProvider;
 
   const openConnectModal = (providerKey) => {
     setActiveProviderKey(providerKey);
@@ -209,14 +189,16 @@ export default function ConnectedAppsPage() {
 
   const handleDisconnect = async (providerKey) => {
     const p = PROVIDERS.find((x) => x.key === providerKey);
-    const ok = window.confirm(
-      `Disconnect ${p?.name || providerKey}?\n\nThis removes the connection from Lucent. You can reconnect anytime.`
+
+    const title = CONNECTED_APPS_PAGE_COPY.confirmations.disconnectTitleTemplate.replace(
+      "{provider}",
+      p?.name || providerKey
     );
+
+    const ok = window.confirm(`${title}\n\n${CONNECTED_APPS_PAGE_COPY.confirmations.disconnectBody}`);
     if (!ok) return;
 
-    alert(
-      "Disconnect flow will be wired next (backend endpoint). For now, reconnecting is available via Connect."
-    );
+    alert(CONNECTED_APPS_PAGE_COPY.confirmations.disconnectNotYetWired);
   };
 
   return (
@@ -225,31 +207,27 @@ export default function ConnectedAppsPage() {
 
       <div className="connected-page" aria-busy={loading}>
         <PageHeaderCard
-          title="Connected Apps"
-          subtitle="Connect brokers and market data providers to power charts and strategies."
+          title={CONNECTED_APPS_PAGE_COPY.header.title}
+          subtitle={CONNECTED_APPS_PAGE_COPY.header.subtitle}
           right={<img src={ConnectedAppsSquirrel} alt="Lucent Financial logo" className="connected-hero-logo" />}
         >
-          <p className="muted">
-            Add integrations like Alpaca or Polygon so Lucent can fetch pricing data and (optionally) run strategies you
-            choose to enable.
-          </p>
+          <p className="muted">{CONNECTED_APPS_PAGE_COPY.hero.primary}</p>
 
-          <p className="muted small">
-            Your API keys stay on the server and are never stored in the browser. You remain in control: nothing trades
-            unless you explicitly turn a strategy on.
-          </p>
+          <p className="muted small">{CONNECTED_APPS_PAGE_COPY.hero.secondary}</p>
 
           <div className="connected-header-actions">
             <button type="button" className="connected-link-pill" onClick={() => setTermsOpen(true)}>
-              Terms &amp; usage
+              {CONNECTED_APPS_PAGE_COPY.hero.termsCta}
             </button>
           </div>
 
           <div className="connected-hero-meta">
             {isAuthed && lastRefreshedAt ? (
-              <>Last refreshed: {fmtTime(lastRefreshedAt)}</>
+              <>
+                {CONNECTED_APPS_PAGE_COPY.hero.refreshedLabel} {fmtTime(lastRefreshedAt)}
+              </>
             ) : (
-              <>Tip: Connect at least one provider to unlock market data features.</>
+              <>{CONNECTED_APPS_PAGE_COPY.hero.tipWhenNotRefreshed}</>
             )}
           </div>
 
@@ -263,7 +241,7 @@ export default function ConnectedAppsPage() {
                     className="connected-btn connected-btn--primary"
                     onClick={() => navigate("/auth")}
                   >
-                    Sign in
+                    {CONNECTED_APPS_PAGE_COPY.banners.notSignedIn.cta}
                   </button>
                 </div>
               </CloseableBanner>
@@ -310,7 +288,7 @@ export default function ConnectedAppsPage() {
                       className={"connected-status " + (isConnected ? "connected-status--on" : "connected-status--off")}
                       title={`Status: ${status}`}
                     >
-                      {isConnected ? "Connected" : "Not connected"}
+                      {isConnected ? CONNECTED_APPS_PAGE_COPY.statuses.connected : CONNECTED_APPS_PAGE_COPY.statuses.notConnected}
                     </span>
                   </div>
 
@@ -332,7 +310,7 @@ export default function ConnectedAppsPage() {
                           disabled={!isAuthed || loading}
                           title={!isAuthed ? "Sign in to manage connections" : ""}
                         >
-                          Disconnect
+                          {CONNECTED_APPS_PAGE_COPY.actions.disconnect}
                         </button>
                         <button
                           type="button"
@@ -341,7 +319,7 @@ export default function ConnectedAppsPage() {
                           disabled={!isAuthed || loading}
                           title={!isAuthed ? "Sign in first" : ""}
                         >
-                          Refresh
+                          {CONNECTED_APPS_PAGE_COPY.actions.refresh}
                         </button>
                       </>
                     ) : (
@@ -352,7 +330,7 @@ export default function ConnectedAppsPage() {
                           onClick={() => openConnectModal(p.key)}
                           disabled={loading}
                         >
-                          Connect
+                          {p.connectLabel || "Connect"}
                         </button>
 
                         <button
@@ -361,7 +339,7 @@ export default function ConnectedAppsPage() {
                           onClick={() => openDocs(p.key)}
                           disabled={loading}
                         >
-                          {p.learnMoreLabel || "Learn more"}
+                          {p.learnMoreLabel || CONNECTED_APPS_PAGE_COPY.actions.learnMoreFallback}
                         </button>
                       </>
                     )}
@@ -372,36 +350,29 @@ export default function ConnectedAppsPage() {
           </div>
 
           {!loading && isAuthed && !hasAnyConnected && (
-            <div className="connected-emptyHint">
-              No providers connected yet. Start with <strong>Alpaca</strong> for paper trading, or{" "}
-              <strong>Polygon</strong> for dedicated market data.
-            </div>
+            <div className="connected-emptyHint">{CONNECTED_APPS_PAGE_COPY.emptyState.hint}</div>
           )}
 
           <section className="connected-note">
-            <h4 className="connected-note-title">How connections are used</h4>
+            <h4 className="connected-note-title">{CONNECTED_APPS_PAGE_COPY.info.howTitle}</h4>
             <ul className="connected-note-list">
-              <li>Data providers power charts, price history, and intraday moves.</li>
-              <li>Broker connections allow strategies to simulate or place trades when you enable them.</li>
-              <li>You stay in control — nothing trades unless you explicitly turn a strategy on.</li>
+              {CONNECTED_APPS_PAGE_COPY.info.howItems.map((x) => (
+                <li key={x}>{x}</li>
+              ))}
             </ul>
           </section>
 
           <section className="connected-note connected-note--tight">
-            <h4 className="connected-note-title">Next steps</h4>
+            <h4 className="connected-note-title">{CONNECTED_APPS_PAGE_COPY.info.nextTitle}</h4>
             <ul className="connected-note-list connected-note-list--spaced">
-              <li>
-                Start/pause strategies in{" "}
-                <button type="button" className="connected-pill" onClick={() => navigate("/bots")}>
-                  Bot Runner
-                </button>
-              </li>
-              <li>
-                View recent activity in{" "}
-                <button type="button" className="connected-pill" onClick={() => navigate("/datasources")}>
-                  Bot Logs
-                </button>
-              </li>
+              {CONNECTED_APPS_PAGE_COPY.info.nextItems.map((it) => (
+                <li key={it.to}>
+                  {it.prefix}{" "}
+                  <button type="button" className="connected-pill" onClick={() => navigate(it.to)}>
+                    {it.ctaLabel}
+                  </button>
+                </li>
+              ))}
             </ul>
           </section>
 

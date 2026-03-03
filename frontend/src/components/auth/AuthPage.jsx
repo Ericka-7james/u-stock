@@ -6,7 +6,7 @@ import AppShell from "../layout/AppShell";
 import ErrorModal from "../common/ErrorModal";
 
 import { useAuth } from "../../context/authContextBase.js";
-import { explainAnyError } from "../../lib/errorMessages";
+import { explainAnyError } from "../../lib/ErrorMessages.jsx";
 
 import { AUTH_PAGE_COPY } from "../../content/landing/authpage.content.ts";
 import { ERROR_KEYS, ERROR_PRESETS } from "../../content/error/errorCatalog";

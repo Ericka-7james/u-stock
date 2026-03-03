@@ -112,16 +112,16 @@ export default function IndexFundsPage() {
           ) : (
             <section className="panel">
               <div className="fund-grid">
-                {baselines.map((b) => (
-                  <article key={b.ticker} className="fund-card">
+                {copy.sections.learn.cards.map((c) => (
+                  <article key={c.title} className="fund-card">
                     <header className="fund-card-header">
                       <div>
-                        <div className="fund-ticker">{b.ticker}</div>
-                        <div className="fund-name">{b.name}</div>
+                        <div className="fund-ticker">{c.title}</div>
+                        <div className="fund-name">{c.tag}</div>
                       </div>
                     </header>
 
-                    <p className="fund-blurb">{b.blurb}</p>
+                    <p className="fund-blurb">{c.blurb}</p>
 
                     <div className="fund-metrics-row">
                       <div className="fund-metric">
@@ -131,7 +131,7 @@ export default function IndexFundsPage() {
 
                       <div className="fund-metric">
                         <span className="fund-metric-label">{copy.universeCard.labels.usedFor}</span>
-                        <span className="fund-metric-value">{b.use.join(copy.universeCard.useJoiner)}</span>
+                        <span className="fund-metric-value">{c.bullets.join(copy.universeCard.useJoiner)}</span>
                       </div>
                     </div>
                   </article>

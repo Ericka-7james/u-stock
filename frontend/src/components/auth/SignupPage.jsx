@@ -5,7 +5,7 @@ import { Link, useNavigate } from "react-router-dom";
 import AppShell from "../layout/AppShell";
 import ErrorModal from "../common/ErrorModal";
 import { useAuth } from "../../context/authContextBase.js";
-import { explainAnyError } from "../../lib/errorMessages.jsx";
+import { explainAnyError } from "../../lib/ErrorMessages.jsx";
 
 import { SIGNUP_PAGE_CONTENT } from "../../content/landing/signuppage.content.ts";
 
