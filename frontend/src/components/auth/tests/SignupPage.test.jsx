@@ -36,7 +36,7 @@ vi.mock("../../common/ErrorModal", () => ({
     ) : null,
 }));
 
-vi.mock("../../../lib/errorMessages.jsx", () => ({
+vi.mock("../../../lib/ErrorMessages.jsx", () => ({
   explainAnyError: (err) => ({
     title: "Error",
     body: String(err?.message || err || "Something went wrong."),

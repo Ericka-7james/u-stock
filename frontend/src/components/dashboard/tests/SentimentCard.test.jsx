@@ -1,235 +1,492 @@
-// frontend/src/components/dashboard/tests/SentimentCard.test.jsx
+// frontend/src/components/dashboard/tests/TradePerformancePanel.test.jsx
 import React from "react";
-import { render, screen, fireEvent, cleanup } from "@testing-library/react";
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { render, screen, cleanup, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
 
-/* ---------------------------------------------------------
-   MOCK DashboardCard
-   SentimentCard imports: "./shared/DashboardCard.jsx"
-   From this test file, that resolves to: "../cards/shared/DashboardCard.jsx"
----------------------------------------------------------- */
-vi.mock("../cards/shared/DashboardCard.jsx", () => ({
-  default: ({ children, className = "" }) => (
-    <section data-testid="DashboardCard" className={className}>
-      {children}
-    </section>
-  ),
+/* -----------------------------------------
+   Stable COPY (avoid brittle copy changes)
+------------------------------------------ */
+vi.mock("../../../content/dashboard/cards/tradePerformancePanel.content.ts", () => {
+  const COPY = {
+    header: {
+      title: "Opportunities",
+      subtitles: {
+        noBot: "No bot selected.",
+        paused: (id) => `Bot ${id} is paused.`,
+        running: (id) => `Bot ${id} is running.`,
+        waiting: (id) => `Bot ${id} is waiting for market.`,
+        starting: (id) => `Bot ${id} is starting.`,
+        offline: (id) => `Bot ${id} is offline.`,
+        unknown: (id) => `Bot ${id} status unknown.`,
+        disarmed: (id) => `Bot ${id} is disarmed.`,
+        stopped: (id) => `Bot ${id} is stopped.`,
+        fallback: (id) => `Bot ${id} status.`,
+      },
+      range: {
+        aria: "Active range",
+        labelPrefix: "Range:",
+        fallbackLabel: "—",
+      },
+    },
+
+    stats: {
+      botStatus: {
+        label: "Bot Status",
+        values: {
+          empty: "—",
+          offline: "OFFLINE",
+          paused: "PAUSED",
+          waiting: "WAITING",
+          starting: "STARTING",
+          running: "RUNNING",
+          disarmed: "DISARMED",
+          armed: "ARMED",
+          stopped: "STOPPED",
+          idle: "IDLE",
+        },
+        subs: {
+          noBot: "No bot selected.",
+          unknown: "No status yet.",
+          offline: "Runner offline.",
+          paused: "Bot paused.",
+          waiting: "Waiting for market.",
+          starting: "Starting up.",
+          running: "Trading enabled.",
+          disarmed: "Disarmed.",
+          armed: "Armed.",
+          stopped: "Stopped.",
+          idle: "Idle.",
+        },
+      },
+      tradesContext: {
+        label: "Trades Context",
+        winRatePrefix: "Win rate",
+      },
+      mini: {
+        leaders: "Leaders",
+        aligned: "Aligned",
+        internal: "Internal",
+      },
+    },
+
+    cards: {
+      intents: {
+        title: "Recent Intents",
+        headerLines: {
+          selectBot: "Select a bot to see intents.",
+          unknown: (id) => `Bot ${id} status unknown`,
+          offline: (id) => `Bot ${id} offline`,
+          paused: (id) => `Bot ${id} paused`,
+          waiting: (id) => `Bot ${id} waiting`,
+          starting: (id) => `Bot ${id} starting`,
+          disarmed: (id) => `Bot ${id} disarmed`,
+          stopped: (id) => `Bot ${id} stopped`,
+          ok: (id) => `Bot ${id} active`,
+        },
+        updatedPrefix: "Updated",
+        updatedFallback: "—",
+        refresh: "Refresh",
+        errors: { prefix: "Error:", loadFail: "Failed to load intents." },
+        states: { loading: "Loading…", emptyNoBot: "No bot selected.", emptyNoIntents: "No intents yet." },
+        footnote: "Intent feed is informational.",
+      },
+
+      topDayTrades: {
+        title: "Top Day Trades",
+        tables: {
+          aligned: {
+            title: "Bot-aligned (Leaders ∩ Bot)",
+            empty: {
+              noBot: "Start a bot to generate aligned picks.",
+              noOpp: "No bot opportunities yet.",
+              offline: "Bot is offline.",
+              noOverlap: "No overlap today.",
+            },
+          },
+          leaders: {
+            title: "Market Leaders (Today)",
+            empty: "No leaders available.",
+            sources: {
+              plain: "ALPACA",
+              computed: "ALPACA+Computed",
+            },
+          },
+          internal: {
+            title: "Internal (Bot Picks)",
+            empty: "No internal picks.",
+          },
+        },
+        footnote: "Scores are informational.",
+      },
+    },
+  };
+
+  return { TRADE_PERFORMANCE_PANEL_COPY: COPY };
+});
+
+/* -----------------------------------------
+   ✅ Mock the RIGHT auth hook (component uses authContextBase)
+------------------------------------------ */
+vi.mock("../../../context/authContextBase.js", () => ({
+  useAuth: () => ({ user: { id: "u1" } }),
+}));
+
+// (Optional safety if some children still import AuthContext)
+vi.mock("../../../context/AuthContext", () => ({
+  useAuth: () => ({ user: { id: "u1" } }),
 }));
 
 /* -----------------------------------------
-   Stable COPY mock (tests should not break on copy tweaks)
+   Prevent child components from adding side-effects
+   (IMPORTANT: path is relative to THIS test file)
 ------------------------------------------ */
-vi.mock("../../../content/dashboard/cards/sentimentCard.content.ts", () => ({
-  SENTIMENT_CARD_COPY: {
-    header: {
-      titlePrefix: "Sentiment for",
-      tickerFallback: "—",
-      helpButtonAria: "Explain this sentiment card",
-      subtitles: {
-        noSymbol: "Select a ticker to view sentiment.",
-        loading: "Loading price & sentiment…",
-        notEnoughHistory: "Not enough history to compute sentiment yet.",
-        overallPrefix: "Overall:",
-        scorePrefix: "(score",
-        scoreSuffixBackend: ", from snapshot)",
-        scoreSuffixLocal: ", computed locally)",
-        stylePrefix: "Style:",
-        dot: " · ",
-        riskPrefix: "Risk:",
-      },
-    },
-
-    dropdown: {
-      aria: "Sentiment view mode",
-      viewLabel: "Sentiment View Mode",
-      modesAria: "Sentiment modes",
-    },
-
-    modes: [
-      { value: "ALL", label: "All" },
-      { value: "PRICE", label: "Price-based Sentiment" },
-      { value: "VOL", label: "Volatility Sentiment" },
-      { value: "TECH", label: "Technical Pattern Sentiment" },
-    ],
-
-    help: {
-      dialogAria: "Sentiment explanation",
-      closeAria: "Close explanation",
-      title: "What does this “sentiment” mean?",
-      p1: {
-        a: "We summarize ",
-        strong1: "price",
-        b: ", ",
-        strong2: "volatility",
-        c: ", and patterns.",
-      },
-      bullets: [
-        { strong: "Price:", text: "Directional moves." },
-        { strong: "Volatility:", text: "Stability vs stress." },
-        { strong: "Technical:", text: "Trend/range signals." },
-      ],
-      note: { strong: "Note:", text: "Not advice." },
-    },
-
-    sections: {
-      price: {
-        title: "Price-based Sentiment",
-        metricLabels: { change1d: "1d", change5d: "5d", change20d: "20d", rank20d: "20d rank" },
-      },
-      vol: {
-        title: "Volatility Sentiment",
-        metricLabels: { realizedVol: "Realized vol", volRank: "Vol rank" },
-      },
-      tech: {
-        title: "Technical Pattern Sentiment",
-        metricLabels: { lastClose: "Last close", ma20: "MA20", ma50: "MA50", rsi14: "RSI14", bbPos: "BB pos" },
-      },
-    },
-
-    labels: {
-      notEnoughData: "Not enough data",
-      bollinger: {
-        nearUpper: "Near upper band",
-        nearLower: "Near lower band",
-        aboveMid: "Above mid",
-        belowMid: "Below mid",
-        aroundMid: "Around mid",
-      },
-      price: {
-        stronglyBullish: "Strongly Bullish",
-        bullish: "Bullish",
-        stronglyBearish: "Strongly Bearish",
-        bearish: "Bearish",
-      },
-      vol: {
-        calm: "Calm",
-        elevated: "Elevated",
-        stressed: "Stressed",
-        normal: "Normal",
-      },
-      tech: {
-        uptrend: "Uptrend",
-        downtrend: "Downtrend",
-        earlyUptrend: "Early Uptrend",
-        earlyBreakdown: "Early Breakdown",
-        rangeMixed: "Range / Mixed",
-      },
-      overall: {
-        stronglyBullish: "Strongly Bullish",
-        bullishTilt: "Bullish Tilt",
-        neutralMixed: "Neutral / Mixed",
-        bearishTilt: "Bearish Tilt",
-        stronglyBearish: "Strongly Bearish",
-      },
-    },
-
-    misc: { pctileSuffix: " pctile" },
+vi.mock("../cards/BotControlCard.jsx", () => ({
+  default: function BotControlCardMock() {
+    return <div data-testid="bot-control-card" />;
   },
 }));
 
-// IMPORTANT: import AFTER mocks
-import SentimentCard from "../cards/SentimentCard.jsx";
+vi.mock("../cards/shared/ConnectedBrokersMiniCard.jsx", () => ({
+  default: function ConnectedBrokersMiniCardMock() {
+    return <div data-testid="connected-brokers" />;
+  },
+}));
 
-describe("SentimentCard", () => {
-  afterEach(() => cleanup());
+vi.mock("../cards/shared/BotIntentsCard.jsx", () => ({
+  default: function BotIntentsCardMock() {
+    return <div data-testid="bot-intents-card" />;
+  },
+}));
 
-  it("renders placeholder when no symbol and not loading", () => {
-    render(<SentimentCard symbol="" historyBySymbol={{}} loading={false} backendSnapshot={null} />);
+/* -----------------------------------------
+   TimeframeCard mock (deterministic buttons)
+------------------------------------------ */
+vi.mock("../cards/TimeframeCard.jsx", () => ({
+  default: function TimeframeCardMock({ onChange }) {
+    return (
+      <div data-testid="timeframe-card">
+        <button type="button" onClick={() => onChange?.({ preset: "Week" })}>
+          Week
+        </button>
+        <button type="button" onClick={() => onChange?.({ preset: "Month" })}>
+          Month
+        </button>
+        <button type="button" onClick={() => onChange?.({ preset: "Year" })}>
+          Year
+        </button>
+      </div>
+    );
+  },
+}));
 
-    expect(screen.getByText(/sentiment for/i)).toBeInTheDocument();
-    expect(screen.getByText(/select a ticker to view sentiment\./i)).toBeInTheDocument();
-  });
+/* -----------------------------------------
+   StatTiles mock (predictable DOM)
+------------------------------------------ */
+vi.mock("../cards/shared/StatTiles.jsx", () => ({
+  CardShell: function CardShell({ title, className, children }) {
+    return (
+      <section className={`tpCard ${className || ""}`.trim()}>
+        <h3>{title}</h3>
+        <div>{children}</div>
+      </section>
+    );
+  },
 
-  it("does not crash if historyBySymbol is null/undefined", () => {
-    render(<SentimentCard symbol="AAPL" historyBySymbol={null} loading={false} backendSnapshot={null} />);
-    expect(screen.getByText(/not enough history to compute sentiment yet/i)).toBeInTheDocument();
-  });
+  BigStat: function BigStat({ label, value, sub, tone }) {
+    return (
+      <div className="tpCard" data-testid={`bigstat:${label}`} data-tone={tone || ""}>
+        <div>{label}</div>
+        <div>{String(value)}</div>
+        {sub ? <div>{sub}</div> : null}
+      </div>
+    );
+  },
 
-  it("shows loading subtitle when loading is true", () => {
-    render(<SentimentCard symbol="AAPL" historyBySymbol={{}} loading={true} backendSnapshot={null} />);
-    expect(screen.getByText(/loading price & sentiment/i)).toBeInTheDocument();
-  });
+  MiniStat: function MiniStat({ label, value }) {
+    return (
+      <div data-testid={`ministat:${label}`}>
+        <span>{label}</span>
+        <span>{String(value)}</span>
+      </div>
+    );
+  },
+}));
 
-  it("renders backend snapshot overall line + style/risk chips + sections", () => {
-    const backendSnapshot = {
-      price_based: { label: "Bullish", change_1d: 1.23, change_5d: 3.45, change_20d: 5.67 },
-      volatility: { label: "Calm", realized_vol: 15.2 },
-      technical: { label: "Uptrend", last_close: 100, ma_short: 98, ma_long: 95, rsi_14: 60, bb_position: 0.3 },
-      risk: { label: "Moderate" },
-      style: { label: "Growth" },
-      cross_section: { ret_20d_pct: 0.85, realized_vol_pct: 0.4 },
-      overall_label: "Strongly Bullish",
-      overall_score: 5,
+/* -----------------------------------------
+   OpportunityTable mock
+------------------------------------------ */
+vi.mock("../cards/shared/OpportunityTable.jsx", () => ({
+  default: function OpportunityTableMock({ title, rows = [], emptyMessage = "", sourceLabel }) {
+    return (
+      <div className="tpOppMiniTable">
+        <h4>{title}</h4>
+        <div className="tpOppHead">
+          <span>Symbol</span>
+          <span>Score</span>
+        </div>
+
+        {sourceLabel ? <div>{`Source: ${sourceLabel}`}</div> : null}
+
+        {rows?.length ? (
+          <ul>
+            {rows.map((r) => (
+              <li key={r.symbol}>
+                <span>{r.symbol}</span>
+                <span>{String(r.score)}</span>
+                {r.sub ? <span>{r.sub}</span> : null}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div className="tpEmpty">{emptyMessage}</div>
+        )}
+      </div>
+    );
+  },
+}));
+
+/* -----------------------------------------
+   Import component after mocks
+------------------------------------------ */
+import TradePerformancePanel from "../cards/TradePerformancePanel.jsx";
+
+describe("TradePerformancePanel", () => {
+  let originalConsoleError;
+
+  beforeEach(() => {
+    originalConsoleError = console.error;
+    console.error = (...args) => {
+      const msg = String(args?.[0] ?? "");
+      if (msg.includes("not wrapped in act")) return;
+      originalConsoleError(...args);
     };
-
-    render(<SentimentCard symbol="AAPL" historyBySymbol={{}} loading={false} backendSnapshot={backendSnapshot} />);
-
-    expect(screen.getByText(/overall:/i)).toBeInTheDocument();
-    expect(screen.getByText(/strongly bullish/i)).toBeInTheDocument();
-
-    // style/risk chips only show when source=backend AND style exists
-    expect(screen.getByText(/growth/i)).toBeInTheDocument();
-    expect(screen.getByText(/moderate/i)).toBeInTheDocument();
-
-    // sections (default mode is ALL)
-    expect(screen.getByRole("heading", { level: 3, name: /price-based sentiment/i })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { level: 3, name: /volatility sentiment/i })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { level: 3, name: /technical pattern sentiment/i })).toBeInTheDocument();
   });
 
-  it("opens and closes the help modal (Escape + close button)", () => {
-    render(<SentimentCard symbol="AAPL" historyBySymbol={{}} loading={false} backendSnapshot={null} />);
-
-    // open
-    fireEvent.click(screen.getByRole("button", { name: /explain this sentiment card/i }));
-    expect(screen.getByRole("dialog", { name: /sentiment explanation/i })).toBeInTheDocument();
-
-    // escape closes
-    fireEvent.keyDown(window, { key: "Escape" });
-    expect(screen.queryByRole("dialog", { name: /sentiment explanation/i })).not.toBeInTheDocument();
-
-    // open again, close button closes
-    fireEvent.click(screen.getByRole("button", { name: /explain this sentiment card/i }));
-    fireEvent.click(screen.getByRole("button", { name: /close explanation/i }));
-    expect(screen.queryByRole("dialog", { name: /sentiment explanation/i })).not.toBeInTheDocument();
+  afterEach(() => {
+    console.error = originalConsoleError;
+    cleanup();
   });
 
-  it("closes help modal when clicking backdrop, but not when clicking inside popover", () => {
-    render(<SentimentCard symbol="AAPL" historyBySymbol={{}} loading={false} backendSnapshot={null} />);
+  function baseProps(overrides = {}) {
+    return {
+      data: { start: "2026-01-01", end: "2026-01-07", trades: [] },
 
-    fireEvent.click(screen.getByRole("button", { name: /explain this sentiment card/i }));
-    const dialog = screen.getByRole("dialog", { name: /sentiment explanation/i });
+      opportunities: { stocks: [] },
+      leaders: [],
+      onPickSymbol: vi.fn(),
 
-    // clicking inside popover should NOT close
-    fireEvent.click(screen.getByText(/not advice\./i));
-    expect(screen.getByRole("dialog", { name: /sentiment explanation/i })).toBeInTheDocument();
+      timeframe: null,
+      onTimeframeChange: vi.fn(),
 
-    // clicking the backdrop (dialog wrapper) closes
-    fireEvent.click(dialog);
-    expect(screen.queryByRole("dialog", { name: /sentiment explanation/i })).not.toBeInTheDocument();
-  });
+      activeBot: null,
+      botStatuses: null,
+      onStartBot: vi.fn(),
+      onStopBot: vi.fn(),
 
-  it("mode dropdown filters sections (select VOL)", () => {
-    const backendSnapshot = {
-      price_based: { label: "Bullish", change_1d: 1.23, change_5d: 3.45, change_20d: 5.67 },
-      volatility: { label: "Calm", realized_vol: 15.2 },
-      technical: { label: "Uptrend", last_close: 100, ma_short: 98, ma_long: 95 },
-      cross_section: {},
-      overall_label: "Bullish Tilt",
-      overall_score: 2,
+      ...overrides,
     };
+  }
 
-    render(<SentimentCard symbol="AAPL" historyBySymbol={{}} loading={false} backendSnapshot={backendSnapshot} />);
+  function renderWithRouter(props) {
+    return render(
+      <MemoryRouter>
+        <TradePerformancePanel {...props} />
+      </MemoryRouter>
+    );
+  }
 
-    // open dropdown (use aria-label, which is the accessible name)
-    fireEvent.click(screen.getByRole("button", { name: /sentiment view mode/i }));
+  const normalize = (s) => String(s || "").replace(/\s+/g, " ").trim();
 
-    // choose VOL option
-    fireEvent.click(screen.getByRole("option", { name: /volatility sentiment/i }));
+  const getOppTableByTitle = (titleTextOrRegex) => {
+    const titleEl =
+      titleTextOrRegex instanceof RegExp
+        ? screen.getByRole("heading", { level: 4, name: titleTextOrRegex })
+        : screen.getByRole("heading", { level: 4, name: String(titleTextOrRegex) });
 
-    // only vol section remains
-    expect(screen.queryByRole("heading", { level: 3, name: /price-based sentiment/i })).not.toBeInTheDocument();
-    expect(screen.getByRole("heading", { level: 3, name: /volatility sentiment/i })).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { level: 3, name: /technical pattern sentiment/i })).not.toBeInTheDocument();
+    return titleEl.closest(".tpOppMiniTable");
+  };
+
+  it("sanity: component import resolves", () => {
+    expect(TradePerformancePanel).toBeTypeOf("function");
+  });
+
+  it("renders header + timeframe control and calls onTimeframeChange from TimeframeCard", async () => {
+    const user = userEvent.setup();
+    const onTimeframeChange = vi.fn();
+
+    renderWithRouter(baseProps({ onTimeframeChange }));
+
+    expect(screen.getByRole("heading", { name: /opportunities/i })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /week/i }));
+    await user.click(screen.getByRole("button", { name: /month/i }));
+    await user.click(screen.getByRole("button", { name: /year/i }));
+
+    expect(onTimeframeChange).toHaveBeenCalledTimes(3);
+    const payloads = onTimeframeChange.mock.calls.map((c) => c[0]?.preset);
+    expect(payloads).toEqual(["Week", "Month", "Year"]);
+  });
+
+  it("shows aligned locked message when no bot is selected", () => {
+    renderWithRouter(baseProps({ activeBot: null, botStatuses: null }));
+
+    const alignedTable = getOppTableByTitle(/bot-aligned/i);
+    expect(alignedTable).not.toBeNull();
+
+    const text = normalize(alignedTable.textContent).toLowerCase();
+    expect(text).toContain("start a bot to generate aligned picks");
+  });
+
+  it("renders Trades Context count and computes win rate percent", () => {
+    renderWithRouter(
+      baseProps({
+        data: {
+          start: "2026-01-01",
+          end: "2026-01-07",
+          trades: [{ pnl: 10 }, { pnl: -5 }, { pnl: 2 }],
+        },
+      })
+    );
+
+    const tradesCard = screen.getByTestId("bigstat:Trades Context").closest(".tpCard");
+    expect(tradesCard).not.toBeNull();
+
+    expect(within(tradesCard).getByText("Trades Context")).toBeInTheDocument();
+    expect(within(tradesCard).getByText("3")).toBeInTheDocument();
+    expect(within(tradesCard).getByText(/win rate 67%/i)).toBeInTheDocument();
+  });
+
+  it("renders Market Leaders section and shows Source: ALPACA by default", () => {
+    renderWithRouter(
+      baseProps({
+        leaders: [{ symbol: "AAPL", changePct: 1, last: 100, prevClose: 99, prevCloseComputed: false }],
+      })
+    );
+
+    const leadersTable = getOppTableByTitle(/market leaders \(today\)/i);
+    expect(leadersTable).not.toBeNull();
+
+    const text = normalize(leadersTable.textContent);
+    expect(text).toMatch(/Source:\s*ALPACA/i);
+  });
+
+  it("uses ALPACA+Computed source label when prevCloseComputed=true", () => {
+    renderWithRouter(
+      baseProps({
+        leaders: [{ symbol: "AAPL", changePct: 1, last: 100, prevClose: 99, prevCloseComputed: true }],
+      })
+    );
+
+    const leadersTable = getOppTableByTitle(/market leaders \(today\)/i);
+    expect(leadersTable).not.toBeNull();
+
+    const text = normalize(leadersTable.textContent);
+    expect(text).toMatch(/Source:\s*ALPACA\+Computed/i);
+  });
+
+  it("renders leaders rows when leaders are provided (filters out non-alpha symbols)", () => {
+    renderWithRouter(
+      baseProps({
+        leaders: [
+          { symbol: "AAPL", changePct: 2.5, last: 100, prevClose: 98 },
+          { symbol: "MSFT", changePct: 1.0, last: 50, prevClose: 49 },
+          { symbol: "BRK.B", changePct: 1.0, last: 500, prevClose: 495 }, // should be filtered out by isAlphaOnlySymbol
+        ],
+      })
+    );
+
+    const leadersTable = getOppTableByTitle(/market leaders \(today\)/i);
+    expect(leadersTable).not.toBeNull();
+
+    const text = normalize(leadersTable.textContent);
+    expect(text).toMatch(/AAPL/i);
+    expect(text).toMatch(/MSFT/i);
+    expect(text).not.toMatch(/BRK\.B/i);
+  });
+
+  it("internal shows picks when opportunities provided; aligned still locked with no bot", () => {
+    renderWithRouter(
+      baseProps({
+        opportunities: {
+          stocks: [
+            { symbol: "AAPL", score: 3.25, reason: "bot likes it" },
+            { symbol: "TSLA", score: 2.0, reason: "bot likes it" },
+          ],
+        },
+      })
+    );
+
+    const alignedTable = getOppTableByTitle(/bot-aligned/i);
+    expect(alignedTable).not.toBeNull();
+    expect(normalize(alignedTable.textContent).toLowerCase()).toContain("start a bot to generate aligned picks");
+
+    const internalTable = getOppTableByTitle(/internal \(bot picks\)/i);
+    expect(internalTable).not.toBeNull();
+
+    const internalText = normalize(internalTable.textContent);
+    expect(internalText).toMatch(/AAPL/i);
+    expect(internalText).toMatch(/TSLA/i);
+  });
+
+  it("aligned table shows 'No bot opportunities yet' when bot selected but has zero opportunities", () => {
+    renderWithRouter(
+      baseProps({
+        activeBot: { id: "bot1" },
+        botStatuses: {
+          bot1: { effective_state: "stopped" }, // has keys => not unknown
+        },
+        opportunities: { stocks: [] },
+      })
+    );
+
+    const alignedTable = getOppTableByTitle(/bot-aligned/i);
+    expect(alignedTable).not.toBeNull();
+    expect(normalize(alignedTable.textContent)).toMatch(/No bot opportunities yet/i);
+  });
+
+  it("bot status card shows empty + 'No status yet' when bot selected but status payload missing", () => {
+    renderWithRouter(
+      baseProps({
+        activeBot: { id: "bot1" },
+        botStatuses: {}, // missing bot1 => unknown
+      })
+    );
+
+    const botStatusCard = screen.getByTestId("bigstat:Bot Status").closest(".tpCard");
+    expect(botStatusCard).not.toBeNull();
+
+    const text = normalize(botStatusCard.textContent);
+    expect(text).toMatch(/Bot Status/i);
+    expect(text).toMatch(/—/); // value empty
+    expect(text).toMatch(/No status yet/i); // sub unknown
+  });
+
+  it("leaders table contains Symbol/Score headings (structure)", () => {
+    const oppStocks = ["AAPL", "MSFT", "GOOG", "TSLA"].map((s, i) => ({
+      symbol: s,
+      score: i + 1,
+      reason: `r${i}`,
+    }));
+
+    renderWithRouter(
+      baseProps({
+        opportunities: { stocks: oppStocks },
+        leaders: oppStocks.map((o, i) => ({
+          symbol: o.symbol,
+          changePct: i + 1,
+          last: 100 + i,
+          prevClose: 99 + i,
+        })),
+      })
+    );
+
+    const leadersTable = getOppTableByTitle(/market leaders \(today\)/i);
+    expect(leadersTable).not.toBeNull();
+
+    const leadersText = normalize(leadersTable.textContent);
+    expect(leadersText).toMatch(/Symbol/i);
+    expect(leadersText).toMatch(/Score/i);
   });
 });

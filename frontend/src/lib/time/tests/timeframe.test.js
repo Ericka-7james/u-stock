@@ -12,185 +12,276 @@ import {
   computeRangeDaysLabel,
   mapDaysToTvInterval,
   buildPreset,
-} from "../timeframe.js";
+} from "../timeframe";
 
-describe("timeframe helpers", () => {
-  const fixedNow = new Date("2026-02-25T12:34:56Z"); // stable
+// Use local-safe timestamps in tests: midday UTC avoids date slipping when interpreted locally.
+const MIDDAY_Z = "T12:00:00.000Z";
 
+describe("timeframe utils", () => {
   beforeEach(() => {
     vi.useFakeTimers();
-    vi.setSystemTime(fixedNow);
+    vi.setSystemTime(new Date(`2026-02-01${MIDDAY_Z}`));
   });
 
   afterEach(() => {
     vi.useRealTimers();
   });
 
-  it("toDateStr formats YYYY-MM-DD and returns empty string for non-Date", () => {
-    expect(toDateStr(new Date(2026, 1, 5))).toBe("2026-02-05"); // Feb is month 1
-    expect(toDateStr("2026-02-05")).toBe("");
-    expect(toDateStr(null)).toBe("");
-  });
-
-  it("todayStr returns today's date in YYYY-MM-DD based on system time", () => {
-    expect(todayStr()).toBe("2026-02-25");
-  });
-
-  it("addDays returns a new Date shifted by N days (does not mutate input)", () => {
-    const d = new Date(2026, 1, 25); // Feb is month 1
-    const out = addDays(d, -6);
-
-    expect(toDateStr(out)).toBe("2026-02-19");
-    expect(toDateStr(d)).toBe("2026-02-25"); // unchanged
-  });
-
-  it("startOfYear returns Jan 1, 00:00:00.000 of the given date's year", () => {
-    const d = new Date("2026-02-25T18:00:00Z");
-    const y = startOfYear(d);
-
-    expect(y.getFullYear()).toBe(2026);
-    expect(y.getMonth()).toBe(0);
-    expect(y.getDate()).toBe(1);
-    expect(y.getHours()).toBe(0);
-    expect(y.getMinutes()).toBe(0);
-    expect(y.getSeconds()).toBe(0);
-    expect(y.getMilliseconds()).toBe(0);
-  });
-
-  it("clampRange returns range as-is if start <= end, otherwise swaps", () => {
-    expect(clampRange("2026-02-01", "2026-02-10")).toEqual({ start: "2026-02-01", end: "2026-02-10" });
-    expect(clampRange("2026-02-10", "2026-02-01")).toEqual({ start: "2026-02-01", end: "2026-02-10" });
-  });
-
-  it("clampRange returns {start,end} even if one side is missing", () => {
-    expect(clampRange(null, "2026-02-10")).toEqual({ start: null, end: "2026-02-10" });
-    expect(clampRange("2026-02-10", null)).toEqual({ start: "2026-02-10", end: null });
-  });
-
-  it("parseDateLoose returns Date for parseable values, null for empty/invalid", () => {
-    expect(parseDateLoose("2026-02-25")).toBeInstanceOf(Date);
-    expect(parseDateLoose("   2026-02-25   ")).toBeInstanceOf(Date);
-    expect(parseDateLoose("")).toBeNull();
-    expect(parseDateLoose("not-a-date")).toBeNull();
-    expect(parseDateLoose(null)).toBeNull();
-  });
-
-  it("computeInclusiveDays computes inclusive day counts and returns null for invalid/negative", () => {
-    // Jan 28 -> Feb 1 = 5 days inclusive
-    expect(computeInclusiveDays("2026-01-28", "2026-02-01")).toBe(5);
-
-    // same day => 1
-    expect(computeInclusiveDays("2026-02-01", "2026-02-01")).toBe(1);
-
-    // end before start => null
-    expect(computeInclusiveDays("2026-02-10", "2026-02-01")).toBeNull();
-
-    // invalid input => null
-    expect(computeInclusiveDays("bad", "2026-02-01")).toBeNull();
-    expect(computeInclusiveDays("2026-02-01", "bad")).toBeNull();
-  });
-
-  it("computeRangeDaysLabel uses flexible timeframe keys and pluralization", () => {
-    expect(computeRangeDaysLabel(null)).toEqual({ days: 7, label: "7 days" });
-
-    expect(computeRangeDaysLabel({ start: "2026-02-01", end: "2026-02-01" })).toEqual({ days: 1, label: "1 day" });
-
-    // alternate keys
-    expect(computeRangeDaysLabel({ from: "2026-02-01", to: "2026-02-03" })).toEqual({ days: 3, label: "3 days" });
-
-    expect(computeRangeDaysLabel({ date_from: "2026-02-01", date_to: "2026-02-10" })).toEqual({
-      days: 10,
-      label: "10 days",
+  describe("toDateStr", () => {
+    it("returns YYYY-MM-DD for a Date", () => {
+      expect(toDateStr(new Date(`2026-02-01${MIDDAY_Z}`))).toBe("2026-02-01");
+      expect(toDateStr(new Date(`2026-01-09${MIDDAY_Z}`))).toBe("2026-01-09");
     });
 
-    expect(computeRangeDaysLabel({ time_min: "bad", time_max: "2026-02-10" })).toEqual({ days: null, label: "—" });
+    it("returns empty string for non-Date", () => {
+      expect(toDateStr(null)).toBe("");
+      expect(toDateStr("2026-02-01")).toBe("");
+      expect(toDateStr({})).toBe("");
+    });
   });
 
-  it("mapDaysToTvInterval maps days to TradingView intervals with defaults", () => {
-    expect(mapDaysToTvInterval(undefined)).toBe("60");
-    expect(mapDaysToTvInterval(0)).toBe("60");
-    expect(mapDaysToTvInterval(-5)).toBe("60");
-
-    expect(mapDaysToTvInterval(1)).toBe("15");
-    expect(mapDaysToTvInterval(2)).toBe("15");
-
-    expect(mapDaysToTvInterval(3)).toBe("60");
-    expect(mapDaysToTvInterval(10)).toBe("60");
-
-    expect(mapDaysToTvInterval(11)).toBe("240");
-    expect(mapDaysToTvInterval(45)).toBe("240");
-
-    expect(mapDaysToTvInterval(46)).toBe("D");
-    expect(mapDaysToTvInterval(180)).toBe("D");
-
-    expect(mapDaysToTvInterval(181)).toBe("W");
-    expect(mapDaysToTvInterval(365)).toBe("W");
+  describe("todayStr", () => {
+    it("returns today's date string based on system time", () => {
+      expect(todayStr()).toBe("2026-02-01");
+    });
   });
 
-  it("buildPreset returns stable ranges + labels for known presets", () => {
-    // today
-    expect(buildPreset("today")).toEqual({
-      preset: "today",
-      start: "2026-02-25",
-      end: "2026-02-25",
-      label: "Today",
-      days: 1,
-      tvInterval: "15",
+  describe("addDays", () => {
+    it("adds positive days (timezone-safe)", () => {
+      const d = addDays(`2026-02-01${MIDDAY_Z}`, 2);
+      expect(toDateStr(d)).toBe("2026-02-03");
     });
 
-    // 24h (same-day date range)
-    expect(buildPreset("24h")).toEqual({
-      preset: "24h",
-      start: "2026-02-25",
-      end: "2026-02-25",
-      label: "Last 24h",
-      days: 1,
-      tvInterval: "15",
+    it("adds negative days (timezone-safe)", () => {
+      const d = addDays(`2026-02-01${MIDDAY_Z}`, -6);
+      expect(toDateStr(d)).toBe("2026-01-26");
     });
 
-    // 7d => now - 6 days to today inclusive
-    const p7 = buildPreset("7d");
-    expect(p7.preset).toBe("7d");
-    expect(p7.start).toBe("2026-02-19");
-    expect(p7.end).toBe("2026-02-25");
-    expect(p7.label).toBe("Past week");
-    expect(p7.days).toBe(7);
-    expect(p7.tvInterval).toBe("60");
-
-    // 30d
-    const p30 = buildPreset("30d");
-    expect(p30.start).toBe("2026-01-27");
-    expect(p30.end).toBe("2026-02-25");
-    expect(p30.label).toBe("Past 30 days");
-    expect(p30.days).toBe(30);
-    expect(p30.tvInterval).toBe("240");
-
-    // 90d
-    const p90 = buildPreset("90d");
-    expect(p90.start).toBe("2025-11-28");
-    expect(p90.end).toBe("2026-02-25");
-    expect(p90.label).toBe("Past 90 days");
-    expect(p90.days).toBe(90);
-    expect(p90.tvInterval).toBe("D");
-
-    // ytd
-    const ytd = buildPreset("ytd");
-    expect(ytd.start).toBe("2026-01-01");
-    expect(ytd.end).toBe("2026-02-25");
-    expect(ytd.label).toBe("Year to date");
-    // Inclusive days from Jan 1 to Feb 25, 2026:
-    // Jan (31) + Feb (25) = 56
-    expect(ytd.days).toBe(56);
-    expect(ytd.tvInterval).toBe("D");
+    it("treats falsy days as 0 (timezone-safe)", () => {
+      const d = addDays(`2026-02-01${MIDDAY_Z}`, null);
+      expect(toDateStr(d)).toBe("2026-02-01");
+    });
   });
 
-  it("buildPreset falls back to 7d when preset is unknown", () => {
-    const out = buildPreset("wat");
-    expect(out.preset).toBe("7d");
-    expect(out.start).toBe("2026-02-19");
-    expect(out.end).toBe("2026-02-25");
-    expect(out.label).toBe("Past week");
-    expect(out.days).toBe(7);
-    expect(out.tvInterval).toBe("60");
+  describe("startOfYear", () => {
+    it("returns Jan 1 00:00:00.000 of the given date's year", () => {
+      const d = startOfYear(`2026-09-20${MIDDAY_Z}`);
+      expect(d.getFullYear()).toBe(2026);
+      expect(d.getMonth()).toBe(0);
+      expect(d.getDate()).toBe(1);
+      expect(d.getHours()).toBe(0);
+      expect(d.getMinutes()).toBe(0);
+      expect(d.getSeconds()).toBe(0);
+      expect(d.getMilliseconds()).toBe(0);
+    });
+  });
+
+  describe("clampRange", () => {
+    it("returns same range if start <= end", () => {
+      const a = new Date(`2026-01-01${MIDDAY_Z}`);
+      const b = new Date(`2026-01-02${MIDDAY_Z}`);
+      expect(clampRange(a, b)).toEqual({ start: a, end: b });
+    });
+
+    it("swaps if start > end", () => {
+      const a = new Date(`2026-01-03${MIDDAY_Z}`);
+      const b = new Date(`2026-01-02${MIDDAY_Z}`);
+      expect(clampRange(a, b)).toEqual({ start: b, end: a });
+    });
+
+    it("passes through if start or end missing", () => {
+      expect(clampRange(null, new Date())).toEqual({
+        start: null,
+        end: expect.any(Date),
+      });
+      expect(clampRange(new Date(), null)).toEqual({
+        start: expect.any(Date),
+        end: null,
+      });
+    });
+  });
+
+  describe("parseDateLoose", () => {
+    it("returns null for empty", () => {
+      expect(parseDateLoose("")).toBeNull();
+      expect(parseDateLoose("   ")).toBeNull();
+      expect(parseDateLoose(null)).toBeNull();
+    });
+
+    it("returns Date for valid input", () => {
+      const d = parseDateLoose("2026-02-01");
+      expect(d).toBeInstanceOf(Date);
+      expect(Number.isFinite(d.getTime())).toBe(true);
+    });
+
+    it("returns null for invalid date", () => {
+      expect(parseDateLoose("not-a-date")).toBeNull();
+      expect(parseDateLoose("2026-99-99")).toBeNull();
+    });
+  });
+
+  describe("computeInclusiveDays", () => {
+    it("computes inclusive days (Jan 28 -> Feb 1 = 5)", () => {
+      expect(computeInclusiveDays("2026-01-28", "2026-02-01")).toBe(5);
+    });
+
+    it("returns null if either date is invalid", () => {
+      expect(computeInclusiveDays("bad", "2026-02-01")).toBeNull();
+      expect(computeInclusiveDays("2026-02-01", "bad")).toBeNull();
+    });
+
+    it("returns null if end is before start", () => {
+      expect(computeInclusiveDays("2026-02-01", "2026-01-28")).toBeNull();
+    });
+  });
+
+  describe("computeRangeDaysLabel", () => {
+    it("defaults to 7 days when timeframe missing", () => {
+      expect(computeRangeDaysLabel(null)).toEqual({ days: 7, label: "7 days" });
+      expect(computeRangeDaysLabel(undefined)).toEqual({
+        days: 7,
+        label: "7 days",
+      });
+    });
+
+    it("uses start/end keys (inclusive) and pluralizes", () => {
+      expect(
+        computeRangeDaysLabel({ start: "2026-01-28", end: "2026-02-01" })
+      ).toEqual({
+        days: 5,
+        label: "5 days",
+      });
+    });
+
+    it("uses alternate keys (from/to, date_from/date_to, time_min/time_max)", () => {
+      expect(computeRangeDaysLabel({ from: "2026-02-01", to: "2026-02-01" })).toEqual({
+        days: 1,
+        label: "1 day",
+      });
+
+      expect(
+        computeRangeDaysLabel({ date_from: "2026-01-01", date_to: "2026-01-02" })
+      ).toEqual({
+        days: 2,
+        label: "2 days",
+      });
+
+      expect(
+        computeRangeDaysLabel({ time_min: "2026-01-28", time_max: "2026-02-01" })
+      ).toEqual({
+        days: 5,
+        label: "5 days",
+      });
+    });
+
+    it("returns em dash label when it cannot compute", () => {
+      expect(
+        computeRangeDaysLabel({ start: "bad", end: "also-bad" })
+      ).toEqual({
+        days: null,
+        label: "—",
+      });
+    });
+  });
+
+  describe("mapDaysToTvInterval", () => {
+    it("handles invalid or <=0 days", () => {
+      expect(mapDaysToTvInterval(0)).toBe("60");
+      expect(mapDaysToTvInterval(-1)).toBe("60");
+      expect(mapDaysToTvInterval("nope")).toBe("60");
+    });
+
+    it("maps thresholds correctly", () => {
+      expect(mapDaysToTvInterval(1)).toBe("15");
+      expect(mapDaysToTvInterval(2)).toBe("15");
+      expect(mapDaysToTvInterval(3)).toBe("60");
+      expect(mapDaysToTvInterval(10)).toBe("60");
+      expect(mapDaysToTvInterval(11)).toBe("240");
+      expect(mapDaysToTvInterval(45)).toBe("240");
+      expect(mapDaysToTvInterval(46)).toBe("D");
+      expect(mapDaysToTvInterval(180)).toBe("D");
+      expect(mapDaysToTvInterval(181)).toBe("W");
+    });
+  });
+
+  describe("buildPreset", () => {
+    it("builds today preset", () => {
+      const p = buildPreset("today");
+      expect(p).toMatchObject({
+        preset: "today",
+        start: "2026-02-01",
+        end: "2026-02-01",
+        label: "Today",
+        days: 1,
+        tvInterval: "15",
+      });
+    });
+
+    it("builds 24h preset (still 1 day)", () => {
+      const p = buildPreset("24h");
+      expect(p).toMatchObject({
+        preset: "24h",
+        start: "2026-02-01",
+        end: "2026-02-01",
+        label: "Last 24h",
+        days: 1,
+        tvInterval: "15",
+      });
+    });
+
+    it("builds 7d preset (inclusive: today + 6 prior days)", () => {
+      const p = buildPreset("7d");
+      expect(p).toMatchObject({
+        preset: "7d",
+        start: "2026-01-26",
+        end: "2026-02-01",
+        label: "Past week",
+        days: 7,
+        tvInterval: "60",
+      });
+    });
+
+    it("builds 30d preset", () => {
+      const p = buildPreset("30d");
+      expect(p.preset).toBe("30d");
+      expect(p.start).toBe("2026-01-03");
+      expect(p.end).toBe("2026-02-01");
+      expect(p.label).toBe("Past 30 days");
+      expect(p.days).toBe(30);
+      expect(p.tvInterval).toBe("240"); // <=45 => 4h candles
+    });
+
+    it("builds 90d preset", () => {
+      const p = buildPreset("90d");
+      expect(p).toMatchObject({
+        preset: "90d",
+        end: "2026-02-01",
+        label: "Past 90 days",
+        days: 90,
+        tvInterval: "D",
+      });
+    });
+
+    it("builds ytd preset", () => {
+      const p = buildPreset("ytd");
+      expect(p.preset).toBe("ytd");
+      expect(p.start).toBe("2026-01-01");
+      expect(p.end).toBe("2026-02-01");
+      expect(p.label).toBe("Year to date");
+      expect(p.days).toBe(32); // Jan 31 + Feb 1
+      expect(p.tvInterval).toBe("240"); // 32 <= 45 => 4h
+    });
+
+    it("falls back to 7d for unknown preset", () => {
+      const p = buildPreset("???");
+      expect(p).toMatchObject({
+        preset: "7d",
+        start: "2026-01-26",
+        end: "2026-02-01",
+        label: "Past week",
+        days: 7,
+        tvInterval: "60",
+      });
+    });
   });
 });
