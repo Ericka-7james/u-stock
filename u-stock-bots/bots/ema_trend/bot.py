@@ -20,7 +20,13 @@ def _env_bool(name: str, default: bool = False) -> bool:
     return raw in ("1", "true", "t", "yes", "y", "on")
 
 
-_STRAT_DEBUG = _env_bool("USTOCK_STRATEGY_DEBUG", False)
+def _is_debug() -> bool:
+    """
+    IMPORTANT:
+    Debug is evaluated at runtime, not import time.
+    This prevents "I set env but nothing changed" confusion across different entrypoints/tests.
+    """
+    return _env_bool("USTOCK_STRATEGY_DEBUG", False)
 
 
 def _s(x: Any) -> str:
@@ -39,6 +45,21 @@ def _f(x: Any, default: float) -> float:
         return float(x)
     except Exception:
         return float(default)
+
+
+def _get(cfg: Dict[str, Any], key: str, default: Any) -> Any:
+    """
+    Safe getter that preserves valid falsy values like 0 / 0.0 / False.
+    Treats None and "" as missing.
+    """
+    if not isinstance(cfg, dict):
+        return default
+    v = cfg.get(key, default)
+    if v is None:
+        return default
+    if isinstance(v, str) and v.strip() == "":
+        return default
+    return v
 
 
 def _unique_upper(symbols: List[Any]) -> List[str]:
@@ -129,45 +150,6 @@ def get_market_inputs(api: Any, symbol: str, cfg: EMATrendConfig) -> Optional[Di
 
 
 # ---------------------------------------------------
-# Decision Layer (pure)
-# ---------------------------------------------------
-def decide(symbol: str, inputs: Dict[str, Any], cfg: EMATrendConfig, qty: int) -> Optional[Dict[str, Any]]:
-    bars_bias = inputs["bias"]
-    bars_entry = inputs["entry"]
-
-    bias, bias_reasons, bias_score = compute_bias(bars_bias, cfg)
-    if bias == "none":
-        return None
-
-    triple, reasons, conf = compute_signal(bars_entry, cfg, bias=bias)
-    if triple is None:
-        return None
-
-    if float(conf) < float(cfg.min_confidence):
-        return None
-
-    entry, stop, take_profit = triple
-    side = "buy" if bias == "up" else "sell"
-
-    # include bias score in payload for observability (events include it)
-    intent = {
-        "symbol": symbol,
-        "side": side,
-        "qty": int(qty),
-        "confidence": float(conf),
-        "entry": float(entry),
-        "stop": float(stop),
-        "take_profit": float(take_profit),
-        "reasons": bias_reasons + reasons,
-        "strategy": cfg.bot_id,
-        "bias_score": float(bias_score),
-        "tf_bias": cfg.tf_bias,
-        "tf_entry": cfg.tf_entry,
-    }
-    return intent
-
-
-# ---------------------------------------------------
 # Runner Entry
 # ---------------------------------------------------
 def generate_output(*, api: Any, config: Dict[str, Any]) -> Dict[str, Any]:
@@ -190,25 +172,25 @@ def compute(api: Any, bot_id: str, cfg_dict: Dict[str, Any]) -> Dict[str, Any]:
     """
     cfg_dict = cfg_dict or {}
 
-    # ✅ Filter cfg_dict to only fields accepted by EMATrendConfig
+    # Filter cfg_dict to only fields accepted by EMATrendConfig
     allowed = set(getattr(EMATrendConfig, "__annotations__", {}).keys())
     cfg_kwargs = {k: v for k, v in cfg_dict.items() if k in allowed}
 
-    cfg_kwargs["bot_id"] = _s(cfg_dict.get("bot_id") or bot_id or "ema_trend") or "ema_trend"
+    cfg_kwargs["bot_id"] = _s(_get(cfg_dict, "bot_id", bot_id or "ema_trend")) or "ema_trend"
 
-    # Provide defaults to keep behavior stable even if keys omitted
-    cfg_kwargs.setdefault("tf_bias", _s(cfg_dict.get("tf_bias") or "15Min") or "15Min")
-    cfg_kwargs.setdefault("tf_entry", _s(cfg_dict.get("tf_entry") or "1Min") or "1Min")
+    # Defaults (preserve falsy values properly)
+    cfg_kwargs.setdefault("tf_bias", _s(_get(cfg_dict, "tf_bias", "15Min")) or "15Min")
+    cfg_kwargs.setdefault("tf_entry", _s(_get(cfg_dict, "tf_entry", "1Min")) or "1Min")
 
-    cfg_kwargs.setdefault("ema_bias", _i(cfg_dict.get("ema_bias") or 50, 50))
-    cfg_kwargs.setdefault("bias_slope_lookback", _i(cfg_dict.get("bias_slope_lookback") or 4, 4))
-    cfg_kwargs.setdefault("min_slope_pct", _f(cfg_dict.get("min_slope_pct") or 0.03, 0.03))
+    cfg_kwargs.setdefault("ema_bias", _i(_get(cfg_dict, "ema_bias", 50), 50))
+    cfg_kwargs.setdefault("bias_slope_lookback", _i(_get(cfg_dict, "bias_slope_lookback", 4), 4))
+    cfg_kwargs.setdefault("min_slope_pct", _f(_get(cfg_dict, "min_slope_pct", 0.03), 0.03))
 
-    cfg_kwargs.setdefault("min_confidence", _f(cfg_dict.get("min_confidence") or 0.62, 0.62))
-    cfg_kwargs.setdefault("max_intents_per_run", _i(cfg_dict.get("max_intents_per_run") or 3, 3))
+    cfg_kwargs.setdefault("min_confidence", _f(_get(cfg_dict, "min_confidence", 0.50), 0.50))
+    cfg_kwargs.setdefault("max_intents_per_run", _i(_get(cfg_dict, "max_intents_per_run", 3), 3))
 
     # allow feed override from cfg_dict even if not in dataclass fields
-    feed = _s(cfg_dict.get("feed")) or None
+    feed = _s(_get(cfg_dict, "feed", None)) or None
     if "feed" in allowed:
         cfg_kwargs["feed"] = feed
 
@@ -218,7 +200,7 @@ def compute(api: Any, bot_id: str, cfg_dict: Dict[str, Any]) -> Dict[str, Any]:
     if not symbols:
         return {"intents": [], "events": []}
 
-    qty = _i(cfg_dict.get("qty") or cfg_dict.get("default_qty") or 1, 1)
+    qty = _i(_get(cfg_dict, "qty", _get(cfg_dict, "default_qty", 1)), 1)
     if qty <= 0:
         return {"intents": [], "events": []}
 
@@ -228,7 +210,7 @@ def compute(api: Any, bot_id: str, cfg_dict: Dict[str, Any]) -> Dict[str, Any]:
     events: List[Dict[str, Any]] = []
 
     def _debug_event(sym: Optional[str], code: str, payload: Dict[str, Any]) -> None:
-        if not _STRAT_DEBUG:
+        if not _is_debug():
             return
         events.append(
             {
@@ -248,15 +230,60 @@ def compute(api: Any, bot_id: str, cfg_dict: Dict[str, Any]) -> Dict[str, Any]:
             _debug_event(sym, "skip_missing_bars", {"tf_bias": cfg.tf_bias, "tf_entry": cfg.tf_entry})
             continue
 
-        intent = decide(sym, inputs, cfg, qty)
-        if not intent:
-            # add a little more debug signal when enabled
-            _debug_event(sym, "skip_no_intent", {})
+        bias, bias_reasons, bias_score = compute_bias(inputs["bias"], cfg)
+        if bias == "none":
+            _debug_event(
+                sym,
+                "skip_bias_none",
+                {"tf_bias": cfg.tf_bias, "ema_bias": int(cfg.ema_bias), "lookback": int(cfg.bias_slope_lookback)},
+            )
             continue
+
+        triple, reasons, conf = compute_signal(inputs["entry"], cfg, bias=bias)
+        if triple is None:
+            be = inputs["entry"] or {}
+            _debug_event(
+                sym,
+                "skip_signal_none",
+                {
+                    "reasons": reasons,  # ✅ include compute_signal reasons even when no triple
+                    "keys": sorted(list(be.keys()))[:20],
+                    "len_t": len(be.get("t") or []),
+                    "len_o": len(be.get("o") or []),
+                    "len_h": len(be.get("h") or []),
+                    "len_l": len(be.get("l") or []),
+                    "len_c": len(be.get("c") or []),
+                    "len_v": len(be.get("v") or []),
+                    "tf_entry": cfg.tf_entry,
+                    "bias": bias,
+                },
+            )
+            continue
+
+        if float(conf) < float(cfg.min_confidence):
+            _debug_event(sym, "skip_conf_low", {"conf": float(conf), "min_conf": float(cfg.min_confidence)})
+            continue
+
+        entry, stop, take_profit = triple
+        side = "buy" if bias == "up" else "sell"
+
+        intent = {
+            "symbol": sym,
+            "side": side,
+            "qty": int(qty),
+            "confidence": float(conf),
+            "entry": float(entry),
+            "stop": float(stop),
+            "take_profit": float(take_profit),
+            "reasons": bias_reasons + reasons,
+            "strategy": cfg.bot_id,
+            "bias_score": float(bias_score),
+            "tf_bias": cfg.tf_bias,
+            "tf_entry": cfg.tf_entry,
+        }
 
         intents.append(intent)
 
-        # Only emit signal event when we actually have an intent
         events.append(
             {
                 "event_type": "signal",
@@ -279,7 +306,7 @@ def compute(api: Any, bot_id: str, cfg_dict: Dict[str, Any]) -> Dict[str, Any]:
         )
 
     # Keep quiet policy: if no intents and debug is off, return no events
-    if not intents and not _STRAT_DEBUG:
+    if not intents and not _is_debug():
         return {"intents": [], "events": []}
 
     return {"intents": intents, "events": events}

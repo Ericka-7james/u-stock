@@ -25,13 +25,16 @@ class EMATrendConfig:
 
     # ATR
     atr_n: int = 14
-    min_atr_pct: float = 0.25
+    # Middle ground: still avoids dead chop, but not so strict it rejects everything
+    min_atr_pct: float = 0.12
 
     # Chop filters (entry timeframe)
-    min_sep_pct: float = 0.10     # EMA separation threshold (% of price)
-    min_slope_pct: float = 0.03   # EMA slope threshold (% of price)
+    # Slightly looser so valid trends aren't rejected as often
+    min_sep_pct: float = 0.08     # EMA separation threshold (% of price)
+    min_slope_pct: float = 0.02   # EMA slope threshold (% of price)
 
     # Setup controls
+    # Keep confirmation for safety (reduces false starts)
     require_confirm_candle: bool = True
 
     # Risk / targets
@@ -41,7 +44,8 @@ class EMATrendConfig:
     max_stop_pct: float = 1.20
 
     # Selection controls
-    min_confidence: float = 0.62
+    # Middle ground: not overly permissive, but not choking the strategy
+    min_confidence: float = 0.55
     max_intents_per_run: int = 3
 
     # Data feed passthrough (backend optional)
