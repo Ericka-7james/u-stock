@@ -22,6 +22,8 @@ from api.routes.opportunities import router as opportunities_router
 from api.routes.trade_fills import router as trade_fills_router
 from api.routes.trade_fills_ingest import router as trade_fills_ingest_router
 
+from api.routes.backtests import router as backtests_router
+
 from api.routes.bots import router as bots_router
 
 try:
@@ -58,3 +60,4 @@ def register_routers(app: FastAPI, api: APIRouter) -> None:
     app.include_router(trade_fills_ingest_router)
 
     app.include_router(integrations_runner_router)
+    app.include_router(backtests_router, prefix="/api")
