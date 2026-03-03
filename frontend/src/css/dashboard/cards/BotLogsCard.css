@@ -33,6 +33,7 @@
   overflow: hidden;
 }
 
+
 /* If your app uses theme hooks, these will win */
 .theme-dark .blog-card,
 [data-theme="dark"] .blog-card {
@@ -120,6 +121,121 @@
   justify-content: flex-end;
   gap: 10px;
   min-width: 0;
+}
+
+/* =========================================================
+   Header: keep title + help + status pill together
+========================================================= */
+
+.blog-titleGroup {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex-wrap: nowrap;          /* ✅ do not let the pill break away */
+}
+
+.blog-titleGroup .blog-pill,
+.blog-titleGroup .blog-pillLink {
+  flex: 0 0 auto;             /* ✅ pill never shrinks away */
+}
+
+.blog-titleGroup .blog-title {
+  min-width: 0;
+}
+
+/* Make offline pill behave like a pill, but clickable */
+.blog-pillLink {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+/* Slight hover affordance (subtle, theme-safe) */
+.blog-pillLink:hover {
+  filter: brightness(1.05);
+}
+
+/* Counts live on their own row so the top never feels cramped */
+.blog-metricsRow {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+/* =========================================================
+   Prevent “card shrink” when side/nav (“av bar”) appears
+   Match MarketLeaders behavior: card keeps a sensible min width
+========================================================= */
+
+.blog-card {
+  min-width: 360px; /* ✅ prevents the squish */
+}
+
+@media (max-width: 900px) {
+  .blog-card {
+    min-width: 0;   /* ✅ allow normal stacking on smaller layouts */
+  }
+}
+
+/* When it gets tight, truncate title so the pill stays glued */
+@media (max-width: 520px) {
+  .blog-title {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+/* ================================
+   BotLogsCard: de-cluster header
+================================ */
+
+/* New row for the count chips */
+.blog-metricsRow {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+/* Keep the help icon visually aligned with title */
+.blog-help {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Smaller screens: stop the header right-side pill from fighting the title */
+@media (max-width: 640px) {
+  .blog-headerActions {
+    width: 100%;
+    justify-content: flex-start;
+    margin-top: 10px;
+  }
+
+  .blog-titleRow {
+    gap: 8px;
+  }
+
+  /* Optional: subtitle becomes less dominant on small widths */
+  .blog-subtitle {
+    margin-top: 8px;
+  }
+}
+
+/* Really small screens: chips still wrap nicely and stay readable */
+@media (max-width: 420px) {
+  .blog-chip,
+  .blog-pill {
+    padding: 6px 9px;
+    font-size: 11px;
+  }
 }
 
 /* ------------------------------------------
@@ -210,6 +326,94 @@
 .blog-pill--soft {
   border-color: rgba(15, 23, 42, 0.10);              /* rebased */
   background: rgba(15, 23, 42, 0.03);                /* rebased */
+}
+
+/* =========================================================
+   ✅ Pills in BotLogsCard: match theme (chips + back-link-pill)
+   Scope to .blog-card so we don't change pills globally
+========================================================= */
+
+/* Quick link pill (Connected apps →) */
+.blog-card .back-link-pill {
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-weight: 900;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+
+  border: 1px solid var(--blog-border);
+  background: rgba(15, 23, 42, 0.03);
+  color: var(--blog-text-main);
+
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.12s ease;
+}
+
+.blog-card .back-link-pill:hover {
+  border-color: rgba(34, 197, 94, 0.30);
+  background: rgba(34, 197, 94, 0.10);
+}
+
+.blog-card .back-link-pill:active {
+  transform: scale(0.99);
+}
+
+/* Make header chips/pills feel consistent (slightly more "pill button" vibe) */
+.blog-card .blog-chip,
+.blog-card .blog-pill {
+  border-color: var(--blog-border);
+  background: rgba(15, 23, 42, 0.03);
+}
+
+/* Dark mode: keep them from turning into light slabs */
+.theme-dark .blog-card .back-link-pill,
+[data-theme="dark"] .blog-card .back-link-pill {
+  border-color: rgba(148, 163, 184, 0.22);
+  background: rgba(148, 163, 184, 0.10);
+  color: rgba(226, 232, 240, 0.92);
+}
+
+.theme-dark .blog-card .blog-chip,
+[data-theme="dark"] .blog-card .blog-chip,
+.theme-dark .blog-card .blog-pill,
+[data-theme="dark"] .blog-card .blog-pill {
+  border-color: rgba(148, 163, 184, 0.22);
+  background: rgba(148, 163, 184, 0.10);
+  color: rgba(226, 232, 240, 0.90);
+}
+
+/* Keep the semantic variants intact in dark mode */
+.theme-dark .blog-card .blog-pill--on,
+[data-theme="dark"] .blog-card .blog-pill--on {
+  border-color: rgba(34, 197, 94, 0.30);
+  background: rgba(34, 197, 94, 0.16);
+}
+
+.theme-dark .blog-card .blog-pill--warn,
+[data-theme="dark"] .blog-card .blog-pill--warn {
+  border-color: rgba(245, 158, 11, 0.30);
+  background: rgba(245, 158, 11, 0.16);
+}
+
+.theme-dark .blog-card .blog-pill--off,
+[data-theme="dark"] .blog-card .blog-pill--off,
+.theme-dark .blog-card .blog-pill--bad,
+[data-theme="dark"] .blog-card .blog-pill--bad {
+  border-color: rgba(239, 68, 68, 0.30);
+  background: rgba(239, 68, 68, 0.16);
+}
+
+.theme-dark .blog-card .blog-chip--ok,
+[data-theme="dark"] .blog-card .blog-chip--ok {
+  border-color: rgba(34, 197, 94, 0.30);
+  background: rgba(34, 197, 94, 0.14);
+}
+
+.theme-dark .blog-card .blog-chip--warn,
+[data-theme="dark"] .blog-card .blog-chip--warn {
+  border-color: rgba(245, 158, 11, 0.30);
+  background: rgba(245, 158, 11, 0.14);
 }
 
 /* ------------------------------------------
@@ -327,6 +531,100 @@
   justify-content: flex-end;
   flex-wrap: wrap;
   min-width: 0;
+}
+
+/* =========================================================
+   ✅ NEW: Dropdown + button theming (scoped)
+   This does NOT touch .blog-evt--error/.blog-evt--warn visuals.
+========================================================= */
+
+/* Helps native selects/inputs pick appropriate system styling */
+.blog-card { color-scheme: light; }
+.theme-dark .blog-card,
+[data-theme="dark"] .blog-card { color-scheme: dark; }
+
+/* Make the selects/inputs follow the dark theme */
+.theme-dark .blog-card .blog-input,
+[data-theme="dark"] .blog-card .blog-input {
+  border-color: rgba(148, 163, 184, 0.22);
+  background: rgba(2, 6, 23, 0.35);
+  color: rgba(226, 232, 240, 0.92);
+}
+
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme]) .blog-card .blog-input,
+  :root:not([data-theme]) .blog-card .blog-input {
+    border-color: rgba(148, 163, 184, 0.22);
+    background: rgba(2, 6, 23, 0.35);
+    color: rgba(226, 232, 240, 0.92);
+  }
+}
+
+/* Dropdown options (browser-dependent, but usually fixes bright option sheets) */
+.theme-dark .blog-card select.blog-input option,
+[data-theme="dark"] .blog-card select.blog-input option {
+  background: #0b1220;
+  color: rgba(226, 232, 240, 0.92);
+}
+
+.blog-card .blog-input:disabled {
+  opacity: 0.75;
+  cursor: not-allowed;
+}
+
+/* Buttons inside BotLogsCard only */
+.blog-card .mBtn {
+  border-radius: 14px;
+  border: 1px solid var(--blog-border);
+  background: rgba(15, 23, 42, 0.03);
+  color: var(--blog-text-main);
+  font-weight: 900;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.12s ease;
+}
+
+.blog-card .mBtn:hover {
+  border-color: rgba(34, 197, 94, 0.28);
+  background: rgba(34, 197, 94, 0.10);
+}
+
+.blog-card .mBtn:active {
+  transform: scale(0.99);
+}
+
+.blog-card .mBtn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+/* Primary stays primary (but scoped) */
+.blog-card .mBtnPrimary {
+  border-color: rgba(34, 197, 94, 0.35);
+  background: var(--ustock-green-main, #22c55e);
+  color: #06120b;
+}
+
+.blog-card .mBtnPrimary:hover {
+  border-color: rgba(34, 197, 94, 0.45);
+  background: rgba(34, 197, 94, 0.92);
+}
+
+/* Dark mode button surfaces (still scoped, doesn't affect error cards) */
+.theme-dark .blog-card .mBtn,
+[data-theme="dark"] .blog-card .mBtn {
+  border-color: rgba(148, 163, 184, 0.22);
+  background: rgba(148, 163, 184, 0.10);
+  color: rgba(226, 232, 240, 0.92);
+}
+
+.theme-dark .blog-card .mBtn:hover,
+[data-theme="dark"] .blog-card .mBtn:hover {
+  border-color: rgba(34, 197, 94, 0.30);
+  background: rgba(34, 197, 94, 0.14);
+}
+
+.theme-dark .blog-card .mBtnPrimary,
+[data-theme="dark"] .blog-card .mBtnPrimary {
+  color: rgba(2, 6, 23, 0.92);
 }
 
 /* ------------------------------------------

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import Modal from "../../common/Modal.jsx";
 import ErrorBanner from "../../common/ErrorBanner.jsx";
+import HelpTooltip from "../../common/HelpTooltip.jsx";
 
 import { apiGetWithRetry } from "../../../lib/api/http.js";
 import { createSWRCache, isFresh } from "../../../lib/cache/swrCache.js";
@@ -240,11 +241,10 @@ function effectiveExplainer(eff, nextOpenEpoch) {
 }
 
 export default function BotLogsCard({
-  title = "Bot logs",
-  subtitle = "Understand what the bot is doing — filter by day, outcome, and search terms.",
+  title = "System logs",
+  subtitle = "Filter by day, status, and search terms. Logs help you validate decisions, runner states, and intent generation.",
   defaultBotId = "ema_trend",
   maxPreview = 4,
-  showQuickLink = true,
   timeframe = null,
   mode = "paper",
 }) {
@@ -419,18 +419,50 @@ export default function BotLogsCard({
     return "blog-evt";
   }
 
+  const statusNode =
+    eff === "offline" ? (
+      <Link to="/connected-apps" className={`${pill.cls} blog-pillLink`} title="Runner offline — open Connected apps">
+        {pill.label}
+      </Link>
+    ) : (
+      <span className={pill.cls} title="Bot effective state">
+        {pill.label}
+      </span>
+    );
+
   return (
     <>
       <section className="panel blog-card">
         <div className="card-header blog-header">
           <div className="card-header-left">
             <div className="blog-titleRow">
-              <h2 className="blog-title">{title}</h2>
+              <div className="blog-titleGroup">
+                <h2 className="blog-title">{title}</h2>
 
-              <span className={pill.cls} title="Bot effective state">
-                {pill.label}
-              </span>
+                <span className="blog-help">
+                  <HelpTooltip title="System logs help">
+                    <div style={{ display: "grid", gap: 10 }}>
+                      <div>
+                        <b>Status pill</b>: running, waiting for market, paused, offline, error.
+                      </div>
+                      <div>
+                        <b>Events</b>: log count after your filters.
+                      </div>
+                      <div>
+                        <b>Issues</b>: warnings/errors in the filtered range.
+                      </div>
+                      <div style={{ opacity: 0.9 }}>
+                        Tip: set Outcome to “Issues”, then search “risk”, “order”, or “heartbeat”.
+                      </div>
+                    </div>
+                  </HelpTooltip>
+                </span>
 
+                {statusNode}
+              </div>
+            </div>
+
+            <div className="blog-metricsRow" aria-label="Log counts">
               <span className="blog-chip" title="Filtered events">
                 {counts.total} events
               </span>
@@ -448,14 +480,6 @@ export default function BotLogsCard({
 
             <p className="card-subtitle blog-subtitle">{subtitle}</p>
           </div>
-
-          {showQuickLink ? (
-            <div className="blog-headerActions">
-              <Link to="/connected-apps" className="back-link-pill">
-                Connected apps →
-              </Link>
-            </div>
-          ) : null}
         </div>
 
         <div className={`blog-statusBanner blog-statusBanner--${explain.tone}`}>

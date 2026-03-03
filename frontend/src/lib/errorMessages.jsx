@@ -395,7 +395,7 @@ export function explainAnyError(err, { feature = "request" } = {}) {
     status: 0,
     code: ERROR_KEYS.SERVER_ERROR,
     feature,
-    statusText: "",
+    statusText: " ",
     detail: null,
     raw: err,
   });

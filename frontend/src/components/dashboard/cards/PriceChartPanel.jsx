@@ -38,18 +38,108 @@ function randomIdHex(bytesLen = 8) {
     .join("");
 }
 
+const THEME_KEYS = [
+  // add your real key here if you have one
+  "lucent:theme",
+  "lucent:ui_theme",
+  "ustock:theme",
+  "ustock:ui_theme",
+  "theme",
+];
+
+function readThemeFromStorage() {
+  try {
+    for (const k of THEME_KEYS) {
+      const raw = String(window.localStorage.getItem(k) || "").trim().toLowerCase();
+      if (raw === "dark" || raw === "light") return raw;
+      if (raw === "true") return "dark";
+      if (raw === "false") return "light";
+    }
+  } catch {
+    // ignore
+  }
+  return "";
+}
+
+function readThemeFromDom() {
+  try {
+    const el = document.documentElement;
+    const dt = String(el?.dataset?.theme || "").trim().toLowerCase();
+    if (dt === "dark" || dt === "light") return dt;
+
+    const cls = el?.classList;
+    if (cls?.contains("dark")) return "dark";
+    if (cls?.contains("light")) return "light";
+
+    // common variants
+    const classStr = String(el?.className || "").toLowerCase();
+    if (classStr.includes("theme-dark")) return "dark";
+    if (classStr.includes("theme-light")) return "light";
+  } catch {
+    // ignore
+  }
+  return "";
+}
+
+function detectTheme(isDarkMode) {
+  const dom = readThemeFromDom();
+  if (dom) return dom;
+
+  const stored = readThemeFromStorage();
+  if (stored) return stored;
+
+  if (typeof isDarkMode === "boolean") return isDarkMode ? "dark" : "light";
+
+  // fallback
+  try {
+    if (window.matchMedia?.("(prefers-color-scheme: dark)")?.matches) return "dark";
+  } catch {
+    // ignore
+  }
+  return "light";
+}
+
 export default function PriceChartPanel({
   currentTicker = COPY.fallbacks.symbol,
-  isDarkMode = false,
+  isDarkMode, // <-- no default; we will detect from DOM/storage if undefined or stale
   activeRangeLabel = "",
   interval = COPY.fallbacks.interval,
 }) {
-  // ✅ random, stable per mount, no ref access during render
   const [containerId] = useState(() => `tv-${randomIdHex(8)}`);
-
   const widgetRef = useRef(null);
 
   const intervalLabel = useMemo(() => prettyTvInterval(interval), [interval]);
+
+  // Theme that survives refresh and updates when your app toggles theme classes/data-theme.
+  const [theme, setTheme] = useState(() => detectTheme(isDarkMode));
+
+  // Sync when prop changes (if your app passes it)
+  useEffect(() => {
+    setTheme((prev) => {
+      const next = detectTheme(isDarkMode);
+      return prev === next ? prev : next;
+    });
+  }, [isDarkMode]);
+
+  // Watch DOM theme changes (critical for "refresh then hydrate" cases)
+  useEffect(() => {
+    const el = document.documentElement;
+    if (!el || !window.MutationObserver) return;
+
+    const obs = new MutationObserver(() => {
+      setTheme((prev) => {
+        const next = detectTheme(isDarkMode);
+        return prev === next ? prev : next;
+      });
+    });
+
+    obs.observe(el, {
+      attributes: true,
+      attributeFilter: ["class", "data-theme"],
+    });
+
+    return () => obs.disconnect();
+  }, [isDarkMode]);
 
   useEffect(() => {
     let alive = true;
@@ -70,7 +160,7 @@ export default function PriceChartPanel({
           symbol,
           interval: String(interval || COPY.fallbacks.interval),
           autosize: true,
-          theme: isDarkMode ? "dark" : "light",
+          theme, // ✅ source-of-truth theme
           locale: "en",
           allow_symbol_change: true,
           hide_top_toolbar: false,
@@ -86,7 +176,7 @@ export default function PriceChartPanel({
     return () => {
       alive = false;
     };
-  }, [isDarkMode, currentTicker, interval, containerId]);
+  }, [theme, currentTicker, interval, containerId]);
 
   return (
     <section className="panel panel-chart">
