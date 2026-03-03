@@ -39,7 +39,7 @@ export default function BotControlCard({
   onActiveBotChange,
   onStartBot,
   onStopBot,
-  storageScope, // ✅ NEW (optional)
+  storageScope, // ✅ optional
 }) {
   const ui = useBotControlCard({
     activeBotId,
@@ -47,7 +47,7 @@ export default function BotControlCard({
     onStartBot,
     onStopBot,
     COPY,
-    storageScope, // ✅ NEW: lets hook persist per-user
+    storageScope,
   });
 
   const {
@@ -146,13 +146,9 @@ export default function BotControlCard({
   const selectionExistsInAvailable =
     !!selectedId && (available || []).some((b) => safeStr(b?.id, "") === selectedId);
 
-  // Only consider it a selection if BOTH the hook says we have one AND it's in available
   const hasValidSelection = !!hasSelection && selectionExistsInAvailable;
-
-  // Force select value to "" if stale so UI doesn't look selected after refresh
   const selectedValue = hasValidSelection ? selectedId : "";
 
-  // If list loaded and the hook thinks there was a selection but it's stale, show a gentle hint
   const showStaleSelectionHint =
     Array.isArray(available) && available.length > 0 && !!hasSelection && !selectionExistsInAvailable;
 
@@ -171,18 +167,32 @@ export default function BotControlCard({
 
   useEffect(() => {
     const next = String(selectedValue || "").trim();
-
-    // Avoid redundant writes
     if (lastPersistedRef.current === next) return;
     lastPersistedRef.current = next;
 
     try {
-      // Store "" when none selected (keeps dashboard logic simple)
       lsSet(selectedBotLsKey, next);
     } catch {
       // ignore
     }
   }, [selectedValue, selectedBotLsKey]);
+
+  // ---------------------------------------------------------------------------
+  // ✅ Keep parent-controlled activeBotId in sync with the card selection.
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    if (!hasValidSelection) return;
+
+    const a = safeStr(activeBotId, "");
+    const s = safeStr(selectedValue, "");
+
+    if (!s) return;
+    if (a === s) return;
+
+    if (typeof onActiveBotChange === "function") {
+      onActiveBotChange(s);
+    }
+  }, [hasValidSelection, selectedValue, activeBotId, onActiveBotChange]);
   // ---------------------------------------------------------------------------
 
   return (
@@ -207,7 +217,6 @@ export default function BotControlCard({
           <div className="botCardSoftSpinner" aria-label="Refreshing bot status" title="Refreshing…" />
         ) : null}
 
-        {/* ✅ Use shared header layout classes; keep BotControl visuals via botCardHead */}
         <header className="card-header botCardHead">
           <div className="card-header-left">
             <div className="botCardTitleRow">
@@ -266,11 +275,12 @@ export default function BotControlCard({
             </div>
 
             <div className="botActions">
-              <button className="botBtn" type="button" onClick={openLog} disabled={busy || !hasValidSelection}>
+              {/* ✅ FIX: Do NOT disable these during arm/start/stop. Only require a selection. */}
+              <button className="botBtn" type="button" onClick={openLog} disabled={!hasValidSelection}>
                 {COPY.actions.viewLog}
               </button>
 
-              <button className="botBtn" type="button" onClick={openRisk} disabled={busy || !hasValidSelection}>
+              <button className="botBtn" type="button" onClick={openRisk} disabled={!hasValidSelection}>
                 {COPY.actions.risk}
               </button>
 
@@ -363,7 +373,7 @@ export default function BotControlCard({
         </div>
       </div>
 
-      {/* everything below unchanged (modals) */}
+      {/* Modals */}
       <Modal
         open={armConfirmOpen}
         title={COPY.modals.arm.title}

@@ -140,15 +140,104 @@ function normalizeAvailableBots(data) {
 
 // Detect “bot unavailable / not wired” from backend errors
 function isBotUnavailableError(err) {
-  const msg = String(err?.message || err || "").toLowerCase();
-  if (msg.includes("404")) return true;
-  if (msg.includes("not found")) return true;
-  if (msg.includes("unavailable")) return true;
-  if (msg.includes("unknown bot")) return true;
-  if (msg.includes("bot not registered")) return true;
-  if (msg.includes("not wired")) return true;
-  if (msg.includes("not hooked")) return true;
+  const status = Number(err?.status || 0);
+  const msg = String(err?.message || "").toLowerCase();
+  const detailMsg = String(err?.detail?.message || err?.detail?.detail || "").toLowerCase();
+
+  const blob = `${msg} ${detailMsg}`.trim();
+
+  // Only treat as bot-unavailable if the server explicitly indicates that.
+  const explicit =
+    blob.includes("unknown bot") ||
+    blob.includes("bot not registered") ||
+    blob.includes("not wired") ||
+    blob.includes("not hooked") ||
+    blob.includes("bot unavailable") ||
+    blob.includes("bot not found");
+
+  // A plain 404 from risk/log routes should NOT unselect the bot.
+  if (status === 404) return explicit;
+
+  // Also allow explicit language regardless of status.
+  if (explicit) return true;
+
   return false;
+}
+
+function normalizeStatusPayload(data) {
+  const root = _asDict(data);
+
+  // allow common nesting patterns
+  const status = _asDict(root.status) || _asDict(root.snapshot) || _asDict(root.data) || root;
+
+  // merge so both root and status fields are available
+  const merged = { ...root, ...status };
+
+  // keep market merged too
+  merged.market = _asDict(status.market) || _asDict(root.market) || {};
+
+  return merged;
+}
+
+function _truthy(v) {
+  if (v === true) return true;
+  if (v === 1) return true;
+  const s = String(v ?? "").trim().toLowerCase();
+  return s === "true" || s === "armed" || s === "1" || s === "yes";
+}
+
+function readArmedFlag(snap) {
+  if (!snap || typeof snap !== "object") return false;
+
+  // direct flags
+  if (_truthy(snap.armed)) return true;
+  if (_truthy(snap.is_armed)) return true;
+  if (_truthy(snap.isArmed)) return true;
+
+  // common state strings
+  const armedState = String(snap.armed_state ?? snap.armedState ?? snap.arm_state ?? "")
+    .trim()
+    .toLowerCase();
+  if (armedState === "armed") return true;
+
+  return false;
+}
+
+function isNotFoundError(err) {
+  const status = Number(err?.status || 0);
+  if (status === 404) return true;
+  const msg = String(err?.message || err || "").toLowerCase();
+  return msg.includes("404") || msg.includes("not found");
+}
+
+async function apiGetWithFallback(paths, params) {
+  let lastErr = null;
+
+  for (const p of paths) {
+    try {
+      return await apiGet(p, params);
+    } catch (e) {
+      lastErr = e;
+      if (!isNotFoundError(e)) break; // non-404 should not fall through
+    }
+  }
+
+  throw lastErr;
+}
+
+async function apiPostWithFallback(paths, body) {
+  let lastErr = null;
+
+  for (const p of paths) {
+    try {
+      return await apiPost(p, body);
+    } catch (e) {
+      lastErr = e;
+      if (!isNotFoundError(e)) break;
+    }
+  }
+
+  throw lastErr;
 }
 
 // ---------- persistence helpers ----------
@@ -189,22 +278,19 @@ export default function useBotControlCard({
   onStartBot,
   onStopBot,
   COPY,
-  storageScope = "", // ✅ NEW (pass `user:${user.id}` from caller)
+  storageScope = "",
 }) {
   const storageKey = useMemo(() => buildStorageKey(storageScope), [storageScope]);
 
   const [available, setAvailable] = useState([]);
-  const [availableLoaded, setAvailableLoaded] = useState(false); // ✅ NEW: prevents premature "bot disappeared"
+  const [availableLoaded, setAvailableLoaded] = useState(false);
 
-  // selected starts from prop; we also restore from storage on mount (later effect)
   const [selected, setSelected] = useState(safeStr(activeBotId, ""));
-
   const [snapshot, setSnapshot] = useState(null);
 
   const [hardLoading, setHardLoading] = useState(false);
   const [softLoading, setSoftLoading] = useState(false);
 
-  // Track “have we successfully loaded status for this bot id yet?”
   const loadedBotsRef = useRef(new Set());
   const initialStatusLoadedRef = useRef(false);
 
@@ -235,10 +321,8 @@ export default function useBotControlCard({
   });
   const [riskErrors, setRiskErrors] = useState({});
 
-  // ✅ “select a bot” prompt modal
   const [selectPromptOpen, setSelectPromptOpen] = useState(false);
   const selectPromptKey = useMemo(() => {
-    // per-user session key so two users on same browser don't suppress each other
     const scope = String(storageScope || "").trim();
     return scope ? `ustock_select_bot_prompt_shown_v1:${scope}` : "ustock_select_bot_prompt_shown_v1";
   }, [storageScope]);
@@ -246,7 +330,6 @@ export default function useBotControlCard({
   const pollTimer = useRef(null);
   const lastStatusFetch = useRef(0);
 
-  // stop modal spam for same bot
   const lastUnavailableBotRef = useRef("");
 
   // ✅ Restore selection from localStorage (only if parent didn’t already pick one)
@@ -254,36 +337,24 @@ export default function useBotControlCard({
     const propId = safeStr(activeBotId, "");
     const sel = safeStr(selected, "");
 
-    // If parent provided one, don't restore from storage.
     if (propId) return;
-
-    // If we already have a selection, don't override it.
     if (sel) return;
 
     const stored = readStoredBotId(storageKey);
     if (!stored) return;
 
-    // We set selected AND inform parent so rest of UI stays consistent.
     setSelected(stored);
     if (typeof onActiveBotChange === "function") onActiveBotChange(stored);
 
-    // Force status hard-load for restored selection
     loadedBotsRef.current.delete(stored);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeBotId, storageKey]);
 
-  // If activeBotId becomes available (parent-driven), let it fill selected if empty.
-  // Also persist it so refreshes stick.
   useEffect(() => {
     const propId = safeStr(activeBotId, "");
     if (!propId) return;
 
-    setSelected((prev) => {
-      const next = prev ? prev : propId;
-      return next;
-    });
-
-    // Persist parent-provided activeBotId as the "last selected"
+    setSelected((prev) => (prev ? prev : propId));
     writeStoredBotId(storageKey, propId);
   }, [activeBotId, storageKey]);
 
@@ -321,7 +392,7 @@ export default function useBotControlCard({
   const runtimeTone = useMemo(() => runtimeToneFromEffective(eff), [eff]);
   const runtimeLabel = useMemo(() => runtimeLabelFromEffective(eff, intent), [eff, intent]);
 
-  const isArmed = useMemo(() => snapshot?.armed === true, [snapshot?.armed]);
+  const isArmed = useMemo(() => readArmedFlag(snapshot), [snapshot]);
 
   const isRunningEff = useMemo(() => String(eff || "").toLowerCase().includes("running"), [eff]);
   const isWaiting = useMemo(() => String(eff || "").toLowerCase().includes("waiting"), [eff]);
@@ -331,23 +402,27 @@ export default function useBotControlCard({
     [hasSelection, isRunningEff, isWaiting, isStarting]
   );
 
+  // ✅ CHANGE: Market hours should NOT block Start. We only block if server explicitly says so.
   const marketClosedBlocksStart = useMemo(() => {
     if (!hasSelection) return false;
-    if (snapshot?.market?.blocks_start === true) return true;
-    if (snapshot?.market && snapshot.market.is_open === false) return true;
-    return false;
+    return snapshot?.market?.blocks_start === true;
   }, [hasSelection, snapshot]);
 
+  // ✅ Keep note informational. Still shows when market is closed (but doesn’t block).
   const showMarketClosedNote = useMemo(() => {
     if (!hasSelection) return false;
-    return Boolean(snapshot?.market?.show_note || marketClosedBlocksStart);
+    if (snapshot?.market?.show_note) return true;
+    if (snapshot?.market?.is_open === false) return true; // informational
+    if (marketClosedBlocksStart) return true; // explicit block
+    return false;
   }, [hasSelection, snapshot, marketClosedBlocksStart]);
 
   const startBlockedReason = useMemo(() => {
     if (!hasSelection) return "";
     const r = safeStr(snapshot?.market?.reason, "");
     if (r) return r;
-    if (marketClosedBlocksStart) return "Market is closed.";
+    if (marketClosedBlocksStart) return "Start blocked by server.";
+    if (snapshot?.market?.is_open === false) return "Market is closed."; // informational
     return "";
   }, [hasSelection, snapshot, marketClosedBlocksStart]);
 
@@ -367,23 +442,27 @@ export default function useBotControlCard({
     [hasSelection, busy, isArmed, isRunningEff, isWaiting, isStarting]
   );
 
+  // ✅ CHANGE: remove marketClosedBlocksStart from canStart gating
   const canStart = useMemo(() => {
     if (!hasSelection) return false;
     if (busy || isStarting) return false;
     if (!isArmed) return false;
     if (isRunningEff || isWaiting) return false;
+
+    // Market hours do NOT block start. Server may still deny on /start if it wants.
+    // We only block if the server explicitly sets blocks_start.
     if (marketClosedBlocksStart) return false;
+
     return true;
   }, [hasSelection, busy, isStarting, isArmed, isRunningEff, isWaiting, marketClosedBlocksStart]);
 
-  // ✅ updated to match ErrorModal schema: { title, body, subtitle, image, action }
   const fail = useCallback((title, body, action = null, image = null, subtitle = "") => {
     setErrModal({
       title: title || "Something went wrong",
       body: body || "Unexpected error.",
       subtitle: subtitle || "",
       image: image || null,
-      action: action || null, // { label, kind?, href? }
+      action: action || null,
     });
     setErrModalOpen(true);
   }, []);
@@ -399,7 +478,6 @@ export default function useBotControlCard({
       setSnapshot(null);
       lastUnavailableBotRef.current = "";
 
-      // ✅ clear persisted selection for this scope so we don't auto-reselect a dead bot next refresh
       writeStoredBotId(storageKey, "");
 
       loadedBotsRef.current = new Set();
@@ -414,12 +492,7 @@ export default function useBotControlCard({
       setRiskOpen(false);
 
       if (reason) {
-        fail(
-          COPY?.errors?.botUnavailableTitle || "Bot unavailable",
-          reason,
-          null,
-          botUnavailableSquirrel
-        );
+        fail(COPY?.errors?.botUnavailableTitle || "Bot unavailable", reason, null, botUnavailableSquirrel);
       }
     },
     [onActiveBotChange, fail, COPY, storageKey]
@@ -432,7 +505,7 @@ export default function useBotControlCard({
     } catch {
       setAvailable([]);
     } finally {
-      setAvailableLoaded(true); // ✅ NEW
+      setAvailableLoaded(true);
     }
   }, []);
 
@@ -446,8 +519,6 @@ export default function useBotControlCard({
       lastStatusFetch.current = now;
 
       const hasLoadedThisBot = loadedBotsRef.current.has(bid);
-
-      // only show the full overlay once per session (first-ever status load)
       const isHard = !initialStatusLoadedRef.current && (force || !hasLoadedThisBot);
 
       if (isHard) setHardLoading(true);
@@ -455,10 +526,9 @@ export default function useBotControlCard({
 
       try {
         const data = await apiGet("/api/bots/status", { bot_id: bid });
-        setSnapshot(_asDict(data));
+        setSnapshot(normalizeStatusPayload(data));
         loadedBotsRef.current.add(bid);
 
-        // after first successful status load, never show the full overlay again
         initialStatusLoadedRef.current = true;
 
         if (lastUnavailableBotRef.current === bid) lastUnavailableBotRef.current = "";
@@ -498,7 +568,6 @@ export default function useBotControlCard({
     [errModal, closeErrorModal, hasSelection, fetchStatus]
   );
 
-  // NOTE: your backend route is /api/bots/log (singular). If you keep /logs in UI, add an alias route.
   const fetchLog = useCallback(async () => {
     const bid = safeStr(selected, "");
     if (!bid) return;
@@ -506,7 +575,10 @@ export default function useBotControlCard({
     setLogBusy(true);
 
     try {
-      const data = await apiGet("/api/bots/log", { bot_id: bid, limit: 80, mode: "paper" });
+      const data = await apiGetWithFallback(
+        ["/api/bots/log", "/api/bots/logs", "/api/bots/events"],
+        { bot_id: bid, limit: 80, mode: "paper" }
+      );
       const incoming = _asList(data?.items || data || []).filter((x) => x && typeof x === "object");
 
       const keyOf = (it) => {
@@ -519,8 +591,8 @@ export default function useBotControlCard({
           typeof it?.payload?.message === "string"
             ? it.payload.message.trim()
             : typeof it?.message === "string"
-            ? it.message.trim()
-            : "";
+              ? it.message.trim()
+              : "";
         return `fb:${ts}|${et}|${lvl}|${msg}`;
       };
 
@@ -555,7 +627,10 @@ export default function useBotControlCard({
 
     setRiskBusy(true);
     try {
-      const data = await apiGet("/api/bots/risk", { bot_id: bid });
+      const data = await apiGetWithFallback(
+        ["/api/bots/risk", "/api/bots/risk_settings", "/api/bots/risk-controls"],
+        { bot_id: bid }
+      );
       const d = _asDict(data);
       const next = {
         risk_per_trade: _toNumStr(d.risk_per_trade ?? d.riskPerTrade ?? ""),
@@ -598,7 +673,6 @@ export default function useBotControlCard({
     [onActiveBotChange, storageKey]
   );
 
-  // open “select a bot” prompt once per session when none is selected
   useEffect(() => {
     const propId = safeStr(activeBotId, "");
     const sel = safeStr(selected, "");
@@ -616,15 +690,14 @@ export default function useBotControlCard({
       if (alreadyShown) return;
       sessionStorage.setItem(selectPromptKey, "1");
     } catch {
-      // ignore (sessionStorage may be unavailable)
+      // ignore
     }
 
     setSelectPromptOpen(true);
   }, [activeBotId, selected, available, selectPromptOpen, selectPromptKey]);
 
-  // ✅ FIXED: Only enforce “selected disappeared” AFTER available has loaded at least once
   useEffect(() => {
-    if (!availableLoaded) return; // ✅ NEW GUARD
+    if (!availableLoaded) return;
 
     const bid = safeStr(selected, "");
     if (!bid) return;
@@ -636,20 +709,27 @@ export default function useBotControlCard({
     }
   }, [availableLoaded, available, selected, unselectBot, COPY]);
 
+  const openRisk = useCallback(async () => {
+    if (!hasSelection) return;
+    try {
+      await fetchRisk();
+      setRiskOpen(true);
+    } catch {
+      // fetchRisk already calls fail()
+    }
+  }, [hasSelection, fetchRisk]);
+
   const openLog = useCallback(async () => {
     if (!hasSelection) return;
-    setLogOpen(true);
-    await fetchLog();
+    try {
+      await fetchLog();
+      setLogOpen(true);
+    } catch {
+      // fetchLog already calls fail()
+    }
   }, [hasSelection, fetchLog]);
 
   const closeLog = useCallback(() => setLogOpen(false), []);
-
-  const openRisk = useCallback(async () => {
-    if (!hasSelection) return;
-    setRiskOpen(true);
-    await fetchRisk();
-  }, [hasSelection, fetchRisk]);
-
   const closeRisk = useCallback(() => setRiskOpen(false), []);
 
   const requestArm = useCallback(() => {
@@ -665,6 +745,9 @@ export default function useBotControlCard({
     try {
       await apiPost("/api/bots/arm", { bot_id: bid });
       setArmConfirmOpen(false);
+
+      await fetchStatus({ force: true });
+      await _sleep(250);
       await fetchStatus({ force: true });
     } catch (e) {
       fail("Failed to arm bot", String(e?.message || e || "Unknown error"));
@@ -762,7 +845,7 @@ export default function useBotControlCard({
 
     setRiskBusy(true);
     try {
-      await apiPost("/api/bots/risk", {
+      await apiPostWithFallback(["/api/bots/risk", "/api/bots/risk_settings", "/api/bots/risk-controls"], {
         bot_id: bid,
         risk_per_trade: Number(riskDraft.risk_per_trade),
         max_trades_per_day: Number(riskDraft.max_trades_per_day),
@@ -846,6 +929,8 @@ export default function useBotControlCard({
     canArm,
     canStart,
     canPause,
+
+    // still returned so UI can show note / title, but it no longer blocks on is_open=false
     marketClosedBlocksStart,
 
     openLog,
