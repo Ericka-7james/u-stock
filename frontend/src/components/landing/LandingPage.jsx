@@ -1,4 +1,5 @@
 // src/components/landing/LandingPage.jsx
+
 import { useCallback, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "../../css/landing/LandingPage.css";
@@ -7,68 +8,125 @@ import AppShell from "../layout/AppShell";
 import Modal from "../common/Modal";
 import AppImage from "../common/AppImage.jsx";
 import PillButton from "../common/PillButton.jsx";
-
-// reuse shared card wrapper
 import DashboardCard from "../dashboard/cards/shared/DashboardCard.jsx";
 
 import { LANDING_PAGE_CONTENT } from "../../content/landing/landingpage.content.ts";
 
-// Headshot (optional)
 import headshotImg from "../../assets/ericka-headshot.jpeg";
-
-// Trusted logos
 import jpmLogo from "../../assets/trusted-logos/jpmorgan-chase-trusted-gray.png";
 import spelmanLogo from "../../assets/trusted-logos/spelman-innovation-lab-trusted-gray.png";
 import gpcLogo from "../../assets/trusted-logos/gpc-trusted-gray.png";
 import mltLogo from "../../assets/trusted-logos/mlt-trusted-gray.png";
-
-// Replace ▲ with WelcomeSquirrel asset
 import welcomeSquirrel from "../../assets/icons/LucentAppIcon.png";
 
+/**
+ * Returns normalized logo metadata for the trusted-work strip.
+ *
+ * The CSS classes control scale and vertical alignment so the component
+ * avoids inline styles and remains easier to maintain.
+ *
+ * @param {Object} tooltips Landing content tooltip strings.
+ * @return {Array<{src: string, alt: string, slotClassName: string}>}
+ */
+function buildWorkedAtLogos(tooltips) {
+  return [
+    {
+      src: jpmLogo,
+      alt: tooltips.jpm,
+      slotClassName: "landing-logo-slot landing-logo-slot--jpm",
+    },
+    {
+      src: spelmanLogo,
+      alt: tooltips.spelman,
+      slotClassName: "landing-logo-slot landing-logo-slot--spelman",
+    },
+    {
+      src: gpcLogo,
+      alt: tooltips.gpc,
+      slotClassName: "landing-logo-slot landing-logo-slot--gpc",
+    },
+    {
+      src: mltLogo,
+      alt: tooltips.mlt,
+      slotClassName: "landing-logo-slot landing-logo-slot--mlt",
+    },
+  ];
+}
+
+/**
+ * Normalizes hero metric content from static landing-page content.
+ *
+ * If content-driven metrics are missing, this returns a safe fallback so
+ * the page remains stable in production.
+ *
+ * @param {Array<{top: string, bottom: string}> | undefined} metrics
+ * @return {Array<{top: string, bottom: string, sub: string}>}
+ */
+function buildProjectMetrics(metrics) {
+  if (Array.isArray(metrics) && metrics.length > 0) {
+    return metrics.map((metric) => ({
+      top: metric.top,
+      bottom: metric.bottom,
+      sub: "project metric",
+    }));
+  }
+
+  return [
+    { top: "3", bottom: "Bots shipped", sub: "project metric" },
+    { top: "120+", bottom: "Backtests run", sub: "project metric" },
+    { top: "~350ms", bottom: "Pipeline latency", sub: "project metric" },
+    { top: "AWS", bottom: "Cloud deployed", sub: "project metric" },
+    { top: "6", bottom: "Dashboards built", sub: "project metric" },
+  ];
+}
+
+/**
+ * Renders the U-Stock landing page.
+ *
+ * This page serves as the portfolio-style public landing experience for
+ * U-Stock / Lucent Financial. It presents the hero section, trust strip,
+ * feature summary, roadmap teaser, and roadmap modal.
+ *
+ * Responsibilities:
+ * - Read content from `LANDING_PAGE_CONTENT`
+ * - Handle navigation to auth and about pages
+ * - Manage roadmap modal visibility
+ * - Render production-safe fallback content where needed
+ *
+ * @return {JSX.Element} Landing page view.
+ */
 export default function LandingPage() {
   const navigate = useNavigate();
-
-  const goAuth = useCallback(() => navigate("/auth"), [navigate]);
-  const goAbout = useCallback(() => navigate("/about"), [navigate]);
-
   const [roadmapOpen, setRoadmapOpen] = useState(false);
 
   const COPY = LANDING_PAGE_CONTENT.copy;
   const ASSETS = LANDING_PAGE_CONTENT.assets;
 
+  const goAuth = useCallback(() => {
+    navigate("/auth");
+  }, [navigate]);
+
+  const goAbout = useCallback(() => {
+    navigate("/about");
+  }, [navigate]);
+
+  const openRoadmap = useCallback(() => {
+    setRoadmapOpen(true);
+  }, []);
+
+  const closeRoadmap = useCallback(() => {
+    setRoadmapOpen(false);
+  }, []);
+
   const heroImageSrc = headshotImg || ASSETS.heroIllustration;
 
-  const workedAt = useMemo(
-    () => [
-      { src: jpmLogo, alt: COPY.workedAt.tooltips.jpm, zoom: 1.95, y: 1 },
-      { src: spelmanLogo, alt: COPY.workedAt.tooltips.spelman, zoom: 1.85, y: 0 },
-      { src: gpcLogo, alt: COPY.workedAt.tooltips.gpc, zoom: 2.05, y: 0 },
-      { src: mltLogo, alt: COPY.workedAt.tooltips.mlt, zoom: 2.15, y: 1 },
-    ],
-    [COPY.workedAt.tooltips]
-  );
+  const workedAt = useMemo(() => {
+    return buildWorkedAtLogos(COPY.workedAt.tooltips);
+  }, [COPY.workedAt.tooltips]);
 
   const projectMetrics = useMemo(() => {
-    const fromContent = COPY?.hero?.metrics;
-    if (Array.isArray(fromContent) && fromContent.length) {
-      return fromContent.map((m) => ({
-        top: m.top,
-        bottom: m.bottom,
-        sub: "project metric",
-      }));
-    }
-
-    return [
-      { top: "3", bottom: "Bots shipped", sub: "project metric" },
-      { top: "120+", bottom: "Backtests run", sub: "project metric" },
-      { top: "~350ms", bottom: "Pipeline latency", sub: "project metric" },
-      { top: "AWS", bottom: "Cloud deployed", sub: "project metric" },
-      { top: "6", bottom: "Dashboards built", sub: "project metric" },
-    ];
+    return buildProjectMetrics(COPY?.hero?.metrics);
   }, [COPY?.hero?.metrics]);
-
-  const openRoadmap = useCallback(() => setRoadmapOpen(true), []);
-  const closeRoadmap = useCallback(() => setRoadmapOpen(false), []);
 
   const roadmapFooter = useMemo(() => {
     return (
@@ -90,13 +148,12 @@ export default function LandingPage() {
         </button>
       </div>
     );
-  }, [goAuth, closeRoadmap, COPY.modal.footer.close, COPY.modal.footer.earlyAccess]);
+  }, [COPY.modal.footer.close, COPY.modal.footer.earlyAccess, closeRoadmap, goAuth]);
 
   return (
     <AppShell>
       <div className="landing-page">
         <div className="landing-page-wrap">
-          {/* HERO */}
           <DashboardCard
             as="section"
             className="landing-hero landing-hero--portfolio"
@@ -116,6 +173,7 @@ export default function LandingPage() {
                     loading="eager"
                     decoding="async"
                   />
+
                   <div className="landing-brandtext">
                     <div className="landing-brandtop">U-STOCK</div>
                     <div className="landing-brandsub">Lucent Financial</div>
@@ -162,14 +220,14 @@ export default function LandingPage() {
                   className="landing-hero-metrics landing-hero-metrics--portfolio"
                   aria-label="Project metrics"
                 >
-                  {projectMetrics.map((m) => (
+                  {projectMetrics.map((metric) => (
                     <div
                       className="landing-metric landing-metric--portfolio"
-                      key={`${m.top}-${m.bottom}`}
+                      key={`${metric.top}-${metric.bottom}`}
                     >
-                      <div className="landing-metric-top">{m.top}</div>
-                      <div className="landing-metric-bottom">{m.bottom}</div>
-                      <div className="landing-metric-sub">{m.sub}</div>
+                      <div className="landing-metric-top">{metric.top}</div>
+                      <div className="landing-metric-bottom">{metric.bottom}</div>
+                      <div className="landing-metric-sub">{metric.sub}</div>
                     </div>
                   ))}
                 </div>
@@ -195,24 +253,19 @@ export default function LandingPage() {
             </div>
           </DashboardCard>
 
-          {/* Places I’ve worked strip */}
           <section
             className="landing-logo-strip landing-logo-strip--hug"
             aria-label={COPY.workedAt.ariaLabel}
           >
             <div className="landing-logo-strip-inner">
-              {workedAt.map((x) => (
+              {workedAt.map((logo) => (
                 <AppImage
-                  key={x.alt}
-                  src={x.src}
-                  alt={x.alt}
+                  key={logo.alt}
+                  src={logo.src}
+                  alt={logo.alt}
                   className="landing-trusted-logo"
-                  wrapperClassName="landing-logo-slot"
-                  style={{
-                    "--z": x.zoom,
-                    "--y": `${x.y || 0}px`,
-                  }}
-                  data-tooltip={x.alt}
+                  wrapperClassName={logo.slotClassName}
+                  wrapperProps={{ "data-tooltip": logo.alt }}
                   loading="lazy"
                   decoding="async"
                 />
@@ -222,7 +275,6 @@ export default function LandingPage() {
             </div>
           </section>
 
-          {/* WHY SECTION */}
           <section className="app-section landing-section landing-about">
             <div className="app-section-inner landing-section-inner">
               <DashboardCard
@@ -243,10 +295,10 @@ export default function LandingPage() {
                 </div>
 
                 <div className="landing-grid-3 landing-grid-3--about">
-                  {COPY.why.cards.map((c) => (
+                  {COPY.why.cards.map((card) => (
                     <div
                       className="surface-card interactive-lift landing-feature-card landing-feature-card--green"
-                      key={c.title}
+                      key={card.title}
                     >
                       <PillButton
                         as="span"
@@ -254,10 +306,11 @@ export default function LandingPage() {
                         size="sm"
                         className="landing-feature-tag"
                       >
-                        {c.tag}
+                        {card.tag}
                       </PillButton>
-                      <h3>{c.title}</h3>
-                      <p>{c.body}</p>
+
+                      <h3>{card.title}</h3>
+                      <p>{card.body}</p>
                     </div>
                   ))}
                 </div>
@@ -265,7 +318,6 @@ export default function LandingPage() {
             </div>
           </section>
 
-          {/* BIG MARKETING CARD */}
           <section className="app-section landing-section landing-bigcard">
             <div className="app-section-inner landing-section-inner">
               <DashboardCard
@@ -290,9 +342,9 @@ export default function LandingPage() {
                   <p className="landing-bigcard-subtitle">{COPY.bigCard.subtitle}</p>
 
                   <ul className="landing-roadmap-list landing-roadmap-list--card">
-                    {COPY.bigCard.roadmap.map((r) => (
-                      <li key={r.label}>
-                        <strong>{r.label}:</strong> {r.text}
+                    {COPY.bigCard.roadmap.map((item) => (
+                      <li key={item.label}>
+                        <strong>{item.label}:</strong> {item.text}
                       </li>
                     ))}
                   </ul>
@@ -335,17 +387,18 @@ export default function LandingPage() {
           onClose={closeRoadmap}
           footer={roadmapFooter}
         >
-          {COPY.modal.blocks.map((b) => (
-            <div className="landing-modal-block" key={b.pill}>
+          {COPY.modal.blocks.map((block) => (
+            <div className="landing-modal-block" key={block.pill}>
               <PillButton
                 as="span"
                 variant="accent"
                 size="sm"
                 className="landing-modal-pill"
               >
-                {b.pill}
+                {block.pill}
               </PillButton>
-              <div className="landing-modal-text">{b.text}</div>
+
+              <div className="landing-modal-text">{block.text}</div>
             </div>
           ))}
 

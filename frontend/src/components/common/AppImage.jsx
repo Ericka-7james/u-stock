@@ -1,42 +1,51 @@
 // src/components/common/AppImage.jsx
+
 import React from "react";
 
 /**
- * Reusable image wrapper.
+ * Shared image wrapper component used across the application.
  *
- * Use when you want one common image component across the app
- * without changing page-specific layout/styling.
+ * This component standardizes image rendering while allowing optional wrapper
+ * markup for layout, styling, and container-level attributes. It is intended
+ * to be a lightweight UI primitive that keeps page-level image usage consistent.
  *
- * Examples:
+ * Supported behaviors:
+ * - Render a plain image element when no wrapper is needed.
+ * - Render an optional wrapper for layout and presentation concerns.
+ * - Forward image-specific props to the underlying rendered image element.
+ * - Support custom image element types through the `as` prop.
  *
- * <AppImage
- *   src={heroImageSrc}
- *   alt="Ericka James headshot"
- *   className="landing-hero-img landing-hero-img--portfolio"
- *   loading="eager"
- * />
+ * Typical use cases:
+ * - Hero images
+ * - Brand icons
+ * - Logo strips
+ * - Clickable decorative or content images
  *
- * <AppImage
- *   src={welcomeSquirrel}
- *   alt=""
- *   ariaHidden
- *   className="landing-brandicon"
- * />
- *
- * <AppImage
- *   src={logo.src}
- *   alt={logo.alt}
- *   wrapperClassName="landing-logo-slot"
- *   className="landing-trusted-logo"
- *   wrapperStyle={{ "--z": logo.zoom, "--y": `${logo.y || 0}px` }}
- * />
+ * @param {Object} props Component props.
+ * @param {string} props.src Image source URL or imported asset.
+ * @param {string} [props.alt=""] Accessible alternative text.
+ * @param {string} [props.className=""] Class name applied to the image element.
+ * @param {string} [props.wrapperClassName=""] Class name applied to the wrapper element.
+ * @param {React.CSSProperties} [props.wrapperStyle] Inline styles applied to the wrapper element.
+ * @param {React.CSSProperties} [props.imgStyle] Inline styles applied to the image element.
+ * @param {"lazy"|"eager"} [props.loading="lazy"] Native image loading behavior.
+ * @param {"sync"|"async"|"auto"} [props.decoding="async"] Native image decoding hint.
+ * @param {boolean} [props.ariaHidden=false] Whether the image should be hidden from assistive technology.
+ * @param {boolean} [props.draggable=false] Whether the image is draggable.
+ * @param {Function} [props.onClick] Click handler for the image element.
+ * @param {Function} [props.onLoad] Load handler for the image element.
+ * @param {Function} [props.onError] Error handler for the image element.
+ * @param {string|React.ElementType} [props.as="img"] Element or component used to render the image.
+ * @param {Object} [props.wrapperProps] Additional props spread onto the wrapper element.
+ * @param {Object} [props.rest] Additional props spread onto the rendered image element.
+ * @return {JSX.Element} Rendered image or wrapped image element.
  */
 export default function AppImage({
   src,
   alt = "",
   className = "",
   wrapperClassName = "",
-  style,
+  wrapperStyle,
   imgStyle,
   loading = "lazy",
   decoding = "async",
@@ -45,12 +54,11 @@ export default function AppImage({
   onClick,
   onLoad,
   onError,
-  as = "img",
+  as: Component = "img",
+  wrapperProps = {},
   ...rest
 }) {
-  const Component = as;
-
-  const imageEl = (
+  const imageElement = (
     <Component
       src={src}
       alt={alt}
@@ -67,13 +75,19 @@ export default function AppImage({
     />
   );
 
-  if (!wrapperClassName && !style) {
-    return imageEl;
+  const shouldWrap = Boolean(wrapperClassName || wrapperStyle || Object.keys(wrapperProps).length);
+
+  if (!shouldWrap) {
+    return imageElement;
   }
 
   return (
-    <div className={wrapperClassName} style={style}>
-      {imageEl}
+    <div
+      className={wrapperClassName}
+      style={wrapperStyle}
+      {...wrapperProps}
+    >
+      {imageElement}
     </div>
   );
 }
