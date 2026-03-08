@@ -7,7 +7,6 @@ import ErrorModal from "../../common/ErrorModal.jsx";
 
 import { BOT_CONTROL_CARD_CONTENT as COPY } from "../../../content/dashboard/botControlCard.content.js";
 
-// ✅ Reuse BotLogsCard styling for the log modal rows
 import "../../../css/dashboard/cards/BotLogsCard.css";
 import "../../../css/dashboard/cards/BotControlCard.css";
 
@@ -24,7 +23,7 @@ import { lsSet } from "../../../lib/storage/localStorage.js";
  * Example usage from parent:
  *   <BotControlCard storageScope={user?.id} ... />
  *
- * ✅ Also persist "selected bot" (for dashboard welcome modal logic):
+ * Also persist "selected bot" (for dashboard welcome modal logic):
  *   ustock:selected_bot_id_v1::<storageScope>
  */
 const SELECTED_BOT_KEY_BASE = "ustock:selected_bot_id_v1";
@@ -39,7 +38,7 @@ export default function BotControlCard({
   onActiveBotChange,
   onStartBot,
   onStopBot,
-  storageScope, // ✅ optional
+  storageScope,
 }) {
   const ui = useBotControlCard({
     activeBotId,
@@ -75,6 +74,9 @@ export default function BotControlCard({
 
     // buttons
     busy,
+    armBusy,
+    startBusy,
+    pauseBusy,
     isRunningEff,
     isWaiting,
     isStarting,
@@ -137,11 +139,6 @@ export default function BotControlCard({
     mode,
   } = ui;
 
-  // ---------------------------------------------------------------------------
-  // ✅ VALIDATION PATCH (minimal, UI-only)
-  // If the selected id is stale (e.g., restored from storage after refresh),
-  // treat it as "no selection" until it exists in `available`.
-  // ---------------------------------------------------------------------------
   const selectedId = safeStr(selected, "");
   const selectionExistsInAvailable =
     !!selectedId && (available || []).some((b) => safeStr(b?.id, "") === selectedId);
@@ -157,11 +154,7 @@ export default function BotControlCard({
     /bot unavailable|bot not found|unavailable/i.test(
       String(errModal?.title || errModal?.message || errModal?.detail || "")
     );
-  // ---------------------------------------------------------------------------
 
-  // ---------------------------------------------------------------------------
-  // ✅ Persist "selected bot" (for dashboard welcome modal logic)
-  // ---------------------------------------------------------------------------
   const selectedBotLsKey = scopedKey(SELECTED_BOT_KEY_BASE, storageScope);
   const lastPersistedRef = useRef(null);
 
@@ -177,9 +170,6 @@ export default function BotControlCard({
     }
   }, [selectedValue, selectedBotLsKey]);
 
-  // ---------------------------------------------------------------------------
-  // ✅ Keep parent-controlled activeBotId in sync with the card selection.
-  // ---------------------------------------------------------------------------
   useEffect(() => {
     if (!hasValidSelection) return;
 
@@ -193,7 +183,6 @@ export default function BotControlCard({
       onActiveBotChange(s);
     }
   }, [hasValidSelection, selectedValue, activeBotId, onActiveBotChange]);
-  // ---------------------------------------------------------------------------
 
   return (
     <>
@@ -237,15 +226,15 @@ export default function BotControlCard({
                   !hasValidSelection
                     ? COPY.pills.armed.titleNone
                     : isArmed
-                    ? COPY.pills.armed.titleArmed
-                    : COPY.pills.armed.titleDisarmed
+                      ? COPY.pills.armed.titleArmed
+                      : COPY.pills.armed.titleDisarmed
                 }
               >
                 {!hasValidSelection
                   ? COPY.pills.armed.none
                   : isArmed
-                  ? COPY.pills.armed.armed
-                  : COPY.pills.armed.disarmed}
+                    ? COPY.pills.armed.armed
+                    : COPY.pills.armed.disarmed}
               </div>
 
               <div className={`botCardStatePill status ${pillTone(runtimeTone)}`}>{runtimeLabel}</div>
@@ -275,7 +264,6 @@ export default function BotControlCard({
             </div>
 
             <div className="botActions">
-              {/* ✅ FIX: Do NOT disable these during arm/start/stop. Only require a selection. */}
               <button className="botBtn" type="button" onClick={openLog} disabled={!hasValidSelection}>
                 {COPY.actions.viewLog}
               </button>
@@ -310,10 +298,10 @@ export default function BotControlCard({
                     !hasValidSelection
                       ? COPY.actions.startTitleNone
                       : !isArmed
-                      ? COPY.actions.startTitleNotArmed
-                      : marketClosedBlocksStart
-                      ? COPY.actions.startTitleMarketClosed
-                      : COPY.actions.startTitleOk
+                        ? COPY.actions.startTitleNotArmed
+                        : marketClosedBlocksStart
+                          ? COPY.actions.startTitleMarketClosed
+                          : COPY.actions.startTitleOk
                   }
                 >
                   {COPY.actions.start}
@@ -373,17 +361,21 @@ export default function BotControlCard({
         </div>
       </div>
 
-      {/* Modals */}
       <Modal
         open={armConfirmOpen}
         title={COPY.modals.arm.title}
         onClose={() => setArmConfirmOpen(false)}
         footer={
           <>
-            <button className="mBtn" type="button" onClick={() => setArmConfirmOpen(false)} disabled={busy}>
+            <button className="mBtn" type="button" onClick={() => setArmConfirmOpen(false)} disabled={armBusy}>
               {COPY.modals.arm.cancel}
             </button>
-            <button className="mBtn mBtnPrimary" type="button" onClick={confirmArm} disabled={busy || !hasValidSelection}>
+            <button
+              className="mBtn mBtnPrimary"
+              type="button"
+              onClick={confirmArm}
+              disabled={armBusy || !hasValidSelection}
+            >
               {COPY.modals.arm.confirm}
             </button>
           </>
@@ -408,10 +400,15 @@ export default function BotControlCard({
         onClose={() => setStartConfirmOpen(false)}
         footer={
           <>
-            <button className="mBtn" type="button" onClick={() => setStartConfirmOpen(false)} disabled={busy}>
+            <button className="mBtn" type="button" onClick={() => setStartConfirmOpen(false)} disabled={startBusy}>
               {COPY.modals.start.cancel}
             </button>
-            <button className="mBtn mBtnPrimary" type="button" onClick={confirmStart} disabled={busy || !hasValidSelection}>
+            <button
+              className="mBtn mBtnPrimary"
+              type="button"
+              onClick={confirmStart}
+              disabled={startBusy || !hasValidSelection}
+            >
               {COPY.modals.start.confirm}
             </button>
           </>

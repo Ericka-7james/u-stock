@@ -1,16 +1,14 @@
-// frontend/src/components/pages/BacktestPracticePage.jsx
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
 import AppShell from "../layout/AppShell";
 import PageHeaderCard from "../common/PageHeaderCard";
+import Modal from "../common/Modal.jsx";
 
 import "../../css/pages/BacktestPracticePage.css";
 
-// content moved out (same pattern as AboutPage)
 import { BACKTEST_PRACTICE_PAGE_COPY } from "../../content/pages/backtestPracticePage.content.ts";
 
-// ✅ common utils (extracted for modularity + unit tests)
 import {
   TF_OPTIONS,
   asInt,
@@ -20,13 +18,51 @@ import {
   validateBacktestConfig,
 } from "../../lib/backtests/backtestPracticeUtils.js";
 
-// Optional: if you have a page mascot asset, wire it here later
-// import PracticeSquirrel from "../../assets/pages/PracticeSquirrel.png";
+const BT_LAST_DONE_DAY_KEY = "bt_practice_last_done_day";
+const BT_LAST_DONE_JOB_KEY = "bt_practice_last_done_job";
+
+async function apiJson(url, options = {}) {
+  const res = await fetch(url, {
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+    },
+    ...options,
+  });
+
+  let data = null;
+  try {
+    data = await res.json();
+  } catch {
+    data = null;
+  }
+
+  if (!res.ok) {
+    const detail =
+      data?.detail ||
+      data?.error?.message ||
+      data?.message ||
+      `Request failed (${res.status})`;
+    throw new Error(String(detail));
+  }
+
+  return data;
+}
+
+function fmtMaybeCurrency(v) {
+  if (v == null || Number.isNaN(Number(v))) return "—";
+  return `$${v}`;
+}
+
+function fmtMaybePctFromRatio(v) {
+  if (v == null || Number.isNaN(Number(v))) return "—";
+  return `${Math.round(Number(v) * 1000) / 10}%`;
+}
 
 export default function BacktestPracticePage() {
   const c = BACKTEST_PRACTICE_PAGE_COPY;
 
-  // ---------- form state ----------
   const [symbolsRaw, setSymbolsRaw] = useState("SPY,QQQ,AAPL,MSFT,NVDA");
   const [tfEntry, setTfEntry] = useState("5Min");
   const [tfBias, setTfBias] = useState("15Min");
@@ -38,21 +74,43 @@ export default function BacktestPracticePage() {
   const [steps, setSteps] = useState(200000);
   const [qty, setQty] = useState(1);
 
-  // ---------- run state (frontend-only stub for now) ----------
-  const [job, setJob] = useState(null); // {id, status, createdAt, config, result?}
+  const [job, setJob] = useState(null);
+  const [latestCompletedJob, setLatestCompletedJob] = useState(null);
   const [running, setRunning] = useState(false);
   const [err, setErr] = useState(null);
 
-  // ✅ prevent setState after unmount (esp. when you later swap stubs for polling)
-  const timersRef = useRef([]);
+  const [isResultsModalOpen, setIsResultsModalOpen] = useState(false);
+
+  const pollRef = useRef(null);
   const isMountedRef = useRef(true);
 
   useEffect(() => {
     isMountedRef.current = true;
+
+    const today = todayISO();
+    const savedDay = window.localStorage.getItem(BT_LAST_DONE_DAY_KEY);
+    const savedJobRaw = window.localStorage.getItem(BT_LAST_DONE_JOB_KEY);
+
+    if (savedDay === today && savedJobRaw) {
+      try {
+        const parsed = JSON.parse(savedJobRaw);
+        if (parsed?.status === "done") {
+          setLatestCompletedJob(parsed);
+        }
+      } catch {
+        window.localStorage.removeItem(BT_LAST_DONE_JOB_KEY);
+      }
+    } else {
+      window.localStorage.removeItem(BT_LAST_DONE_DAY_KEY);
+      window.localStorage.removeItem(BT_LAST_DONE_JOB_KEY);
+    }
+
     return () => {
       isMountedRef.current = false;
-      timersRef.current.forEach((t) => clearTimeout(t));
-      timersRef.current = [];
+      if (pollRef.current) {
+        window.clearTimeout(pollRef.current);
+        pollRef.current = null;
+      }
     };
   }, []);
 
@@ -85,10 +143,13 @@ export default function BacktestPracticePage() {
     });
   }, [symbols, tfEntry, tfBias, startDate, endDate, warmup, steps, qty]);
 
+  const hasCompletedRunToday = Boolean(latestCompletedJob?.status === "done");
+
   const onReset = useCallback(() => {
-    // clear timers for stub lifecycle
-    timersRef.current.forEach((t) => clearTimeout(t));
-    timersRef.current = [];
+    if (pollRef.current) {
+      window.clearTimeout(pollRef.current);
+      pollRef.current = null;
+    }
 
     setSymbolsRaw("SPY,QQQ,AAPL,MSFT,NVDA");
     setTfEntry("5Min");
@@ -103,6 +164,54 @@ export default function BacktestPracticePage() {
     setRunning(false);
   }, []);
 
+  const pollJob = useCallback(async (jobId) => {
+    try {
+      const data = await apiJson(`/api/backtests/${jobId}`);
+
+      if (!isMountedRef.current) return;
+
+      setJob(data);
+
+      if (data.status === "done") {
+        setLatestCompletedJob(data);
+        setRunning(false);
+        setIsResultsModalOpen(true);
+
+        window.localStorage.setItem(BT_LAST_DONE_DAY_KEY, todayISO());
+        window.localStorage.setItem(BT_LAST_DONE_JOB_KEY, JSON.stringify(data));
+
+        pollRef.current = null;
+        return;
+      }
+
+      if (data.status === "failed") {
+        setRunning(false);
+        setErr({
+          title: "Backtest failed",
+          body:
+            data?.error?.message ||
+            data?.error?.stderr_tail ||
+            "The backtest did not complete successfully.",
+        });
+        pollRef.current = null;
+        return;
+      }
+
+      pollRef.current = window.setTimeout(() => {
+        pollJob(jobId);
+      }, 1500);
+    } catch (e) {
+      if (!isMountedRef.current) return;
+
+      setRunning(false);
+      setErr({
+        title: "Unable to fetch backtest status",
+        body: e?.message || "Polling failed.",
+      });
+      pollRef.current = null;
+    }
+  }, []);
+
   const onRun = useCallback(async () => {
     if (running) return;
 
@@ -113,63 +222,38 @@ export default function BacktestPracticePage() {
       return;
     }
 
-    // Frontend-only stub:
-    // Later this becomes POST /api/backtests/run and returns job_id.
-    setRunning(true);
+    try {
+      setRunning(true);
+      setIsResultsModalOpen(true);
 
-    const newJob = {
-      id: `local_${Date.now()}`,
-      status: "queued",
-      createdAt: new Date().toISOString(),
-      config,
-    };
-    setJob(newJob);
-
-    // Fake a job lifecycle (so UI is wired and feels real)
-    const t1 = setTimeout(() => {
-      if (!isMountedRef.current) return;
-      setJob((prev) => (prev ? { ...prev, status: "running" } : prev));
-    }, 450);
-
-    const t2 = setTimeout(() => {
-      if (!isMountedRef.current) return;
-
-      setJob((prev) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          status: "done",
-          result: {
-            headline: "Mock backtest complete (frontend stub)",
-            summary: {
-              trades: 42,
-              win_rate: 0.57,
-              pnl: 812.35,
-              max_drawdown: -0.043,
-              avg_trade: 19.34,
-              exposure: 0.28,
-            },
-            notes: [
-              "This is placeholder data until the backend job runner is connected.",
-              "Next: wire POST /api/backtests/run + polling GET /api/backtests/{job_id}.",
-            ],
-            artifacts: {
-              report_txt: null,
-              run_json: null,
-              trades_csv: null,
-            },
-          },
-        };
+      const res = await apiJson("/api/backtests/run", {
+        method: "POST",
+        body: JSON.stringify({
+          kind: "ema_scan",
+          config,
+        }),
       });
 
-      setRunning(false);
-    }, 1450);
+      const nextJob = {
+        id: res.job_id,
+        status: "queued",
+        createdAt: new Date().toISOString(),
+        config,
+      };
+      setJob(nextJob);
 
-    timersRef.current.push(t1, t2);
-  }, [running, c.errors.invalid.title, c.errors.invalid.body, config, validation.ok, validation.issues]);
+      pollJob(res.job_id);
+    } catch (e) {
+      setRunning(false);
+      setErr({
+        title: "Unable to start backtest",
+        body: e?.message || "Request failed.",
+      });
+    }
+  }, [running, validation.ok, validation.issues, c.errors.invalid.title, config, pollJob]);
 
   const statusPill = useMemo(() => {
-    const s = job?.status || "idle";
+    const s = running ? job?.status || "queued" : latestCompletedJob?.status || job?.status || "idle";
     const map = {
       idle: { label: c.status.idle, cls: "pill idle" },
       queued: { label: c.status.queued, cls: "pill queued" },
@@ -178,7 +262,151 @@ export default function BacktestPracticePage() {
       failed: { label: c.status.failed, cls: "pill failed" },
     };
     return map[s] || map.idle;
-  }, [job?.status, c.status]);
+  }, [running, job?.status, latestCompletedJob?.status, c.status]);
+
+  const renderResultsContent = (sourceJob) => {
+    if (!sourceJob) {
+      return (
+        <div className="bt-empty">
+          <div className="bt-emptyTitle">{c.empty.title}</div>
+          <div className="muted small">{c.empty.body}</div>
+        </div>
+      );
+    }
+
+    if (sourceJob.status !== "done") {
+      return (
+        <div className="bt-progress">
+          <div className="bt-progressTitle">{c.progress.title}</div>
+          <div className="muted small">
+            {c.progress.body} <span className="bt-mono">{sourceJob.id}</span>
+          </div>
+        </div>
+      );
+    }
+
+    const result = sourceJob.result || {};
+    const summary = result.summary || {};
+    const artifacts = result.artifacts || result.downloads || {};
+    const overview = result.overview || {};
+    const configLine = overview.config_line || {};
+
+    return (
+      <div className="bt-resultsWrap">
+        <div className="bt-resultsHeadline">{result.headline || "Backtest complete"}</div>
+
+        <div className="bt-overviewCard">
+          <div className="bt-overviewTitle">Run overview</div>
+
+          <div className="bt-kv">
+            <div className="bt-kv-row">
+              <span className="k">Job</span>
+              <span className="v bt-mono">{sourceJob.id || "—"}</span>
+            </div>
+            <div className="bt-kv-row">
+              <span className="k">Universe</span>
+              <span className="v">
+                {Array.isArray(overview.universe) ? overview.universe.join(", ") : overview.universe || "—"}
+              </span>
+            </div>
+            <div className="bt-kv-row">
+              <span className="k">Timeframes</span>
+              <span className="v">
+                {configLine.tf_bias || "—"} → {configLine.tf_entry || "—"}
+              </span>
+            </div>
+            <div className="bt-kv-row">
+              <span className="k">Date range</span>
+              <span className="v">
+                {configLine.start || "—"} to {configLine.end || "—"}
+              </span>
+            </div>
+            <div className="bt-kv-row">
+              <span className="k">Feed</span>
+              <span className="v">{configLine.feed || "None"}</span>
+            </div>
+            <div className="bt-kv-row">
+              <span className="k">Errors</span>
+              <span className="v">{overview.errors ?? "—"}</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="bt-metrics">
+          <div className="bt-metric">
+            <div className="k">{c.metrics.trades}</div>
+            <div className="v">{summary.trades ?? "—"}</div>
+          </div>
+          <div className="bt-metric">
+            <div className="k">{c.metrics.winRate}</div>
+            <div className="v">{fmtMaybePctFromRatio(summary.win_rate)}</div>
+          </div>
+          <div className="bt-metric">
+            <div className="k">{c.metrics.pnl}</div>
+            <div className="v">{fmtMaybeCurrency(summary.pnl)}</div>
+          </div>
+          <div className="bt-metric">
+            <div className="k">{c.metrics.maxDD}</div>
+            <div className="v">{fmtMaybePctFromRatio(summary.max_drawdown)}</div>
+          </div>
+          <div className="bt-metric">
+            <div className="k">{c.metrics.avgTrade}</div>
+            <div className="v">{fmtMaybeCurrency(summary.avg_trade)}</div>
+          </div>
+          <div className="bt-metric">
+            <div className="k">{c.metrics.exposure}</div>
+            <div className="v">{fmtMaybePctFromRatio(summary.exposure)}</div>
+          </div>
+        </div>
+
+        {Array.isArray(overview.top_intents) && overview.top_intents.length > 0 ? (
+          <div className="bt-block">
+            <div className="bt-blockTitle">Top 5 best intents</div>
+            <pre className="bt-pre">{overview.top_intents.join("\n")}</pre>
+          </div>
+        ) : null}
+
+        {Array.isArray(overview.summary_lines) && overview.summary_lines.length > 0 ? (
+          <div className="bt-block">
+            <div className="bt-blockTitle">Summary tail</div>
+            <pre className="bt-pre">{overview.summary_lines.join("\n")}</pre>
+          </div>
+        ) : null}
+
+        {Array.isArray(overview.confidence_breakdown) && overview.confidence_breakdown.length > 0 ? (
+          <div className="bt-block">
+            <div className="bt-blockTitle">Confidence breakdown</div>
+            <pre className="bt-pre">{overview.confidence_breakdown.join("\n")}</pre>
+          </div>
+        ) : null}
+
+        <div className="bt-notes">
+          {Array.isArray(result.notes)
+            ? result.notes.map((n) => (
+                <p className="muted small" key={n} style={{ margin: "8px 0 0" }}>
+                  {n}
+                </p>
+              ))
+            : null}
+        </div>
+
+        <div className="bt-artifacts">
+          <div className="bt-artifactsTitle">{c.artifacts.title}</div>
+          <div className="bt-artifactsBtns">
+            <a className="bt-btn" href={artifacts.report_txt || "#"} aria-disabled={!artifacts.report_txt}>
+              {c.artifacts.report}
+            </a>
+            <a className="bt-btn" href={artifacts.run_json_gz || "#"} aria-disabled={!artifacts.run_json_gz}>
+              {c.artifacts.json}
+            </a>
+          </div>
+          <div className="muted small">{c.artifacts.note}</div>
+        </div>
+      </div>
+    );
+  };
+
+  const canReopenResults = hasCompletedRunToday;
 
   return (
     <AppShell>
@@ -206,7 +434,7 @@ export default function BacktestPracticePage() {
         </div>
 
         <section className="bt-grid">
-          <article className="bt-card bt-span2">
+          <article className="bt-card bt-card-config bt-span2">
             <h2>{c.sections.config.title}</h2>
             <p className="muted small" style={{ marginTop: 0 }}>
               {c.sections.config.subtitle}
@@ -343,12 +571,22 @@ export default function BacktestPracticePage() {
                   {c.buttons.reset}
                 </button>
 
+                {canReopenResults ? (
+                  <button
+                    className="bt-btn secondary"
+                    type="button"
+                    onClick={() => setIsResultsModalOpen(true)}
+                  >
+                    Reopen latest results
+                  </button>
+                ) : null}
+
                 <div className="bt-actionsNote muted small">{c.sections.config.note}</div>
               </div>
             </div>
           </article>
 
-          <article className="bt-card">
+          <article className="bt-card bt-card-preview bt-span2">
             <h2>{c.sections.preview.title}</h2>
             <p className="muted small" style={{ marginTop: 0 }}>
               {c.sections.preview.subtitle}
@@ -393,103 +631,7 @@ export default function BacktestPracticePage() {
             )}
           </article>
 
-          <article className="bt-card bt-span2">
-            <h2>{c.sections.results.title}</h2>
-            <p className="muted small" style={{ marginTop: 0 }}>
-              {c.sections.results.subtitle}
-            </p>
-
-            {!job ? (
-              <div className="bt-empty">
-                <div className="bt-emptyTitle">{c.empty.title}</div>
-                <div className="muted small">{c.empty.body}</div>
-              </div>
-            ) : job.status !== "done" ? (
-              <div className="bt-progress">
-                <div className="bt-progressTitle">{c.progress.title}</div>
-                <div className="muted small">
-                  {c.progress.body} <span className="bt-mono">{job.id}</span>
-                </div>
-              </div>
-            ) : (
-              <div className="bt-resultsWrap">
-                <div className="bt-resultsHeadline">{job.result?.headline}</div>
-
-                <div className="bt-metrics">
-                  <div className="bt-metric">
-                    <div className="k">{c.metrics.trades}</div>
-                    <div className="v">{job.result?.summary?.trades ?? "—"}</div>
-                  </div>
-                  <div className="bt-metric">
-                    <div className="k">{c.metrics.winRate}</div>
-                    <div className="v">
-                      {job.result?.summary?.win_rate != null
-                        ? `${Math.round(job.result.summary.win_rate * 100)}%`
-                        : "—"}
-                    </div>
-                  </div>
-                  <div className="bt-metric">
-                    <div className="k">{c.metrics.pnl}</div>
-                    <div className="v">
-                      {job.result?.summary?.pnl != null ? `$${job.result.summary.pnl}` : "—"}
-                    </div>
-                  </div>
-                  <div className="bt-metric">
-                    <div className="k">{c.metrics.maxDD}</div>
-                    <div className="v">
-                      {job.result?.summary?.max_drawdown != null
-                        ? `${Math.round(job.result.summary.max_drawdown * 1000) / 10}%`
-                        : "—"}
-                    </div>
-                  </div>
-                  <div className="bt-metric">
-                    <div className="k">{c.metrics.avgTrade}</div>
-                    <div className="v">
-                      {job.result?.summary?.avg_trade != null
-                        ? `$${job.result.summary.avg_trade}`
-                        : "—"}
-                    </div>
-                  </div>
-                  <div className="bt-metric">
-                    <div className="k">{c.metrics.exposure}</div>
-                    <div className="v">
-                      {job.result?.summary?.exposure != null
-                        ? `${Math.round(job.result.summary.exposure * 100)}%`
-                        : "—"}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bt-notes">
-                  {Array.isArray(job.result?.notes)
-                    ? job.result.notes.map((n) => (
-                        <p className="muted small" key={n} style={{ margin: "8px 0 0" }}>
-                          {n}
-                        </p>
-                      ))
-                    : null}
-                </div>
-
-                <div className="bt-artifacts">
-                  <div className="bt-artifactsTitle">{c.artifacts.title}</div>
-                  <div className="bt-artifactsBtns">
-                    <button className="bt-btn" type="button" disabled>
-                      {c.artifacts.report}
-                    </button>
-                    <button className="bt-btn" type="button" disabled>
-                      {c.artifacts.json}
-                    </button>
-                    <button className="bt-btn" type="button" disabled>
-                      {c.artifacts.csv}
-                    </button>
-                  </div>
-                  <div className="muted small">{c.artifacts.note}</div>
-                </div>
-              </div>
-            )}
-          </article>
-
-          <article className="bt-card">
+          <article className="bt-card bt-card-safety bt-span4">
             <h2>{c.sections.safety.title}</h2>
             <ul className="bt-list">
               {c.sections.safety.items.map((x) => (
@@ -498,6 +640,21 @@ export default function BacktestPracticePage() {
             </ul>
           </article>
         </section>
+
+        <Modal
+          open={isResultsModalOpen}
+          title={c.sections.results.title}
+          onClose={() => setIsResultsModalOpen(false)}
+          footer={
+            <button className="mBtn" type="button" onClick={() => setIsResultsModalOpen(false)}>
+              Close
+            </button>
+          }
+        >
+          {running || (job && job.status !== "done")
+            ? renderResultsContent(job)
+            : renderResultsContent(latestCompletedJob)}
+        </Modal>
       </div>
     </AppShell>
   );

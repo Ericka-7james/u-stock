@@ -5,15 +5,14 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 
+from api.core.bots.service import BotService
+from api.core.bots.validators import clean_bot_id, normalize_mode, parse_ts_to_epoch_seconds
+from api.db import get_supabase_service
 from api.deps import require_user
 from api.security.bot_runner_dep import (
-    enforce_runner_user,
     require_bot_runner,
     require_bot_runner_claims,
 )
-from api.core.bots.validators import clean_bot_id, normalize_mode, parse_ts_to_epoch_seconds
-from api.core.bots.service import BotService
-from api.db import get_supabase_service
 
 router = APIRouter(prefix="/api/bots", tags=["bots"])
 
@@ -51,26 +50,31 @@ def _require_cookie_user_id(request: Request, response: Response) -> str:
     return uid
 
 
-def _runner_effective_user_id(*, claims: Dict[str, Any], fallback_user_id: Optional[str]) -> str:
-    """
-    Runner endpoints: prefer uid from claims (authoritative).
-    Use fallback only if token doesn't include uid.
-    """
-    uid_claims = _claims_user_id(claims)
-    uid_fallback = str(fallback_user_id or "").strip()
-    uid = uid_claims or uid_fallback
+def _require_uid_from_claims(claims: Dict[str, Any]) -> str:
+    uid = _claims_user_id(claims)
     if not uid:
-        raise HTTPException(status_code=400, detail="user_id required")
-
-    # If token contains a uid, enforce it matches the requested uid
-    if uid_claims:
-        enforce_runner_user(payload_user_id=uid, claims=claims)
-
+        raise HTTPException(status_code=401, detail="runner token missing uid")
     return uid
+
+
+def _runner_effective_user_id(*, claims: Dict[str, Any], fallback_user_id: Any = None) -> str:
+    """
+    Prefer signed runner claims. Allow fallback only if claims path did not carry uid.
+    """
+    uid = _claims_user_id(claims)
+    if uid:
+        return uid
+
+    fb = str(fallback_user_id or "").strip()
+    if fb:
+        return fb
+
+    raise HTTPException(status_code=401, detail="runner token missing uid")
 
 
 def _epoch_to_iso_z(ep: int) -> str:
     import time as _t
+
     return _t.strftime("%Y-%m-%dT%H:%M:%SZ", _t.gmtime(int(ep)))
 
 
@@ -235,11 +239,11 @@ def events_feed(
     bid = _require_bot_id(bot_id)
 
     m = normalize_mode(mode)
-    svc = get_supabase_service()
+    sb = get_supabase_service()
 
     try:
         q = (
-            svc.table("bot_events")
+            sb.table("bot_events")
             .select("ts,level,event_type,symbol,payload,event_id,bot_id,mode")
             .eq("user_id", user_id)
             .eq("bot_id", bid)
@@ -284,7 +288,13 @@ def events_feed(
         return {"ok": True, "bot_id": bid, "mode": m, "items": items, "next_before_ts": next_before}
 
     except Exception as e:
-        return {"ok": False, "bot_id": bid, "mode": m, "items": [], "error": f"{type(e).__name__}"}
+        return {
+            "ok": False,
+            "bot_id": bid,
+            "mode": m,
+            "items": [],
+            "error": f"{type(e).__name__}: {e}",
+        }
 
 
 # -----------------------------
@@ -298,32 +308,25 @@ def heartbeat(
     svc: BotService = Depends(get_bot_service),
 ):
     payload = _require_payload_obj(payload)
-
     bid = _require_bot_id(payload.get("bot_id"))
-
-    # Prefer claims uid, fallback to payload user_id
-    uid = _runner_effective_user_id(claims=claims, fallback_user_id=payload.get("user_id"))
+    uid = _require_uid_from_claims(claims)
 
     out = dict(payload)
     out["bot_id"] = bid
     out["runner_id"] = runner_id
-
-    # Ensure stored user_id matches effective uid
-    out["user_id"] = uid
+    out["user_id"] = uid  # server-sourced, not trusted from client
     return svc.heartbeat(uid, out)
 
 
 @router.get("/status_runner")
 def status_runner(
     bot_id: str = Query(...),
-    user_id: Optional[str] = Query(None),  # fallback when token doesn't include uid
     runner_id: str = Depends(require_bot_runner),
     claims: Dict[str, Any] = Depends(require_bot_runner_claims),
     svc: BotService = Depends(get_bot_service),
 ):
     bid = _require_bot_id(bot_id)
-
-    uid = _runner_effective_user_id(claims=claims, fallback_user_id=user_id)
+    uid = _require_uid_from_claims(claims)
 
     out = svc.status(uid, bid)
     if isinstance(out, dict):
@@ -341,10 +344,7 @@ def submit_intents(
     svc: BotService = Depends(get_bot_service),
 ):
     payload = _require_payload_obj(payload)
-
     bid = _require_bot_id(payload.get("bot_id"))
-
-    # Prefer claims uid, fallback to payload user_id
     uid = _runner_effective_user_id(claims=claims, fallback_user_id=payload.get("user_id"))
 
     ts = payload.get("ts")
@@ -357,6 +357,7 @@ def submit_intents(
     if not isinstance(items, list):
         raise HTTPException(status_code=400, detail="items must be a list")
 
+    # expose runner_id to service only if it wants to log later via payload/event tables
     return svc.submit_intents(uid, bid, ts_int, items)
 
 

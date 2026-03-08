@@ -1,7 +1,7 @@
-# backend/api/routes/backtests.py
 from __future__ import annotations
 
 import os
+import re
 import threading
 from typing import Any, Dict, List, Optional
 
@@ -63,9 +63,242 @@ def _alpaca_env_inject_for_runner(*, user_id: str) -> Dict[str, str]:
         "ALPACA_API_KEY": api_key,
         "ALPACA_API_SECRET": api_secret,
         "ALPACA_MODE": mode,
-        # common naming too
         "ALPACA_API_KEY_ID": api_key,
         "ALPACA_API_SECRET_KEY": api_secret,
+    }
+
+
+def _read_text_if_exists(path: Optional[str]) -> str:
+    if not path or not os.path.exists(path):
+        return ""
+    try:
+        with open(path, "r", encoding="utf-8", errors="ignore") as f:
+            return f.read()
+    except Exception:
+        return ""
+
+
+def _find_first_number(patterns: List[str], text: str, cast=float):
+    for pat in patterns:
+        m = re.search(pat, text, flags=re.IGNORECASE | re.MULTILINE)
+        if m:
+            raw = (m.group(1) or "").strip().replace(",", "")
+            try:
+                return cast(raw)
+            except Exception:
+                continue
+    return None
+
+
+def _parse_report_summary(report_path: Optional[str]) -> Dict[str, Any]:
+    text = _read_text_if_exists(report_path)
+    if not text:
+        return {
+            "trades": None,
+            "win_rate": None,
+            "pnl": None,
+            "max_drawdown": None,
+            "avg_trade": None,
+            "exposure": None,
+        }
+
+    trades = _find_first_number(
+        [
+            r"^\s*trades\s*[:=]\s*([-+]?\d+)",
+            r"^\s*total\s+trades\s*[:=]\s*([-+]?\d+)",
+            r"^\s*#\s*trades\s*[:=]\s*([-+]?\d+)",
+        ],
+        text,
+        cast=int,
+    )
+
+    win_rate_pct = _find_first_number(
+        [
+            r"^\s*win[_\s-]*rate\s*[:=]\s*([-+]?\d*\.?\d+)\s*%",
+            r"^\s*win\s*rate\s*[:=]\s*([-+]?\d*\.?\d+)\s*%",
+        ],
+        text,
+        cast=float,
+    )
+    win_rate_ratio = _find_first_number(
+        [
+            r"^\s*win[_\s-]*rate\s*[:=]\s*([-+]?\d*\.?\d+)",
+            r"^\s*win\s*rate\s*[:=]\s*([-+]?\d*\.?\d+)",
+        ],
+        text,
+        cast=float,
+    )
+
+    pnl = _find_first_number(
+        [
+            r"^\s*(?:net\s+)?pnl\s*[:=]\s*\$?\s*([-+]?\d[\d,]*\.?\d*)",
+            r"^\s*profit(?:/loss)?\s*[:=]\s*\$?\s*([-+]?\d[\d,]*\.?\d*)",
+            r"^\s*net\s+profit\s*[:=]\s*\$?\s*([-+]?\d[\d,]*\.?\d*)",
+        ],
+        text,
+        cast=float,
+    )
+
+    max_drawdown_pct = _find_first_number(
+        [
+            r"^\s*max[_\s-]*drawdown\s*[:=]\s*([-+]?\d*\.?\d+)\s*%",
+            r"^\s*max\s+dd\s*[:=]\s*([-+]?\d*\.?\d+)\s*%",
+        ],
+        text,
+        cast=float,
+    )
+    max_drawdown_ratio = _find_first_number(
+        [
+            r"^\s*max[_\s-]*drawdown\s*[:=]\s*([-+]?\d*\.?\d+)",
+            r"^\s*max\s+dd\s*[:=]\s*([-+]?\d*\.?\d+)",
+        ],
+        text,
+        cast=float,
+    )
+
+    avg_trade = _find_first_number(
+        [
+            r"^\s*avg[_\s-]*trade\s*[:=]\s*\$?\s*([-+]?\d[\d,]*\.?\d*)",
+            r"^\s*average\s+trade\s*[:=]\s*\$?\s*([-+]?\d[\d,]*\.?\d*)",
+        ],
+        text,
+        cast=float,
+    )
+
+    exposure_pct = _find_first_number(
+        [
+            r"^\s*exposure\s*[:=]\s*([-+]?\d*\.?\d+)\s*%",
+        ],
+        text,
+        cast=float,
+    )
+    exposure_ratio = _find_first_number(
+        [
+            r"^\s*exposure\s*[:=]\s*([-+]?\d*\.?\d+)",
+        ],
+        text,
+        cast=float,
+    )
+
+    win_rate = None
+    if win_rate_pct is not None:
+        win_rate = win_rate_pct / 100.0
+    elif win_rate_ratio is not None:
+        win_rate = win_rate_ratio if win_rate_ratio <= 1.0 else win_rate_ratio / 100.0
+
+    max_drawdown = None
+    if max_drawdown_pct is not None:
+        max_drawdown = max_drawdown_pct / 100.0
+    elif max_drawdown_ratio is not None:
+        max_drawdown = (
+            max_drawdown_ratio if abs(max_drawdown_ratio) <= 1.0 else max_drawdown_ratio / 100.0
+        )
+
+    exposure = None
+    if exposure_pct is not None:
+        exposure = exposure_pct / 100.0
+    elif exposure_ratio is not None:
+        exposure = exposure_ratio if abs(exposure_ratio) <= 1.0 else exposure_ratio / 100.0
+
+    return {
+        "trades": trades,
+        "win_rate": win_rate,
+        "pnl": pnl,
+        "max_drawdown": max_drawdown,
+        "avg_trade": avg_trade,
+        "exposure": exposure,
+    }
+
+
+def _extract_block(text: str, start_pat: str, end_pat: Optional[str] = None) -> str:
+    m = re.search(start_pat, text, flags=re.IGNORECASE | re.MULTILINE)
+    if not m:
+        return ""
+    start = m.end()
+    tail = text[start:]
+    if end_pat:
+        m2 = re.search(end_pat, tail, flags=re.IGNORECASE | re.MULTILINE)
+        if m2:
+            return tail[: m2.start()].strip()
+    return tail.strip()
+
+
+def _clean_lines(block: str) -> List[str]:
+    return [ln.rstrip() for ln in block.splitlines() if ln.strip()]
+
+
+def _parse_stdout_overview(stdout_tail: Optional[str], *, job_id: str, cfg: Dict[str, Any]) -> Dict[str, Any]:
+    text = str(stdout_tail or "").strip()
+
+    universe_raw = None
+    m_universe = re.search(r"^\s*universe:\s*(.+)$", text, flags=re.IGNORECASE | re.MULTILINE)
+    if m_universe:
+        universe_raw = m_universe.group(1).strip()
+
+    tf_line = None
+    m_tf = re.search(
+        r"^\s*tf_entry=(.+?)\s+tf_bias=(.+?)\s+start=(.+?)\s+end=(.+?)\s+feed=(.+?)\s*$",
+        text,
+        flags=re.IGNORECASE | re.MULTILINE,
+    )
+    if m_tf:
+        tf_line = {
+            "tf_entry": m_tf.group(1).strip(),
+            "tf_bias": m_tf.group(2).strip(),
+            "start": m_tf.group(3).strip(),
+            "end": m_tf.group(4).strip(),
+            "feed": m_tf.group(5).strip(),
+        }
+
+    top_intents_block = _extract_block(
+        text,
+        r"^\s*\(top\s+5\s+best\s+intents\)\s*$",
+        r"^\s*===\s*SUMMARY\s*===\s*$",
+    )
+    top_intents_lines = _clean_lines(top_intents_block)
+
+    summary_block = _extract_block(text, r"^\s*===\s*SUMMARY\s*===\s*$")
+    summary_lines = _clean_lines(summary_block)
+
+    confidence_breakdown: List[str] = []
+    summary_lines_no_conf: List[str] = []
+
+    conf_started = False
+    for ln in summary_lines:
+        if re.search(r"^\s*confidence\s+breakdown", ln, flags=re.IGNORECASE):
+            conf_started = True
+            continue
+
+        if conf_started:
+            confidence_breakdown.append(ln)
+        else:
+            summary_lines_no_conf.append(ln)
+
+    errors_count = _find_first_number([r"^\s*errors\s*:\s*([-+]?\d+)"], text, cast=int)
+
+    last_lines: List[str] = []
+    all_lines = _clean_lines(text)
+    if all_lines:
+        last_lines = all_lines[-10:]
+
+    return {
+        "job_id": job_id,
+        "universe": cfg.get("symbols") or universe_raw,
+        "config_line": {
+            "tf_entry": cfg.get("tf_entry"),
+            "tf_bias": cfg.get("tf_bias"),
+            "start": cfg.get("start"),
+            "end": cfg.get("end"),
+            "feed": cfg.get("feed"),
+        }
+        if cfg
+        else tf_line,
+        "top_intents": top_intents_lines[:12],
+        "last_lines": last_lines,
+        "summary_lines": summary_lines_no_conf[:16],
+        "confidence_breakdown": confidence_breakdown[:8],
+        "errors": errors_count,
+        "stdout_tail": text,
     }
 
 
@@ -225,6 +458,13 @@ def _run_job(job_id: str) -> None:
             )
             return
 
+        summary = _parse_report_summary(report_path)
+        overview = _parse_stdout_overview(
+            out.get("stdout_tail"),
+            job_id=job_id,
+            cfg=cfg,
+        )
+
         update_job(
             job_id,
             status="done",
@@ -233,7 +473,13 @@ def _run_job(job_id: str) -> None:
             report_path=report_path,
             result={
                 "headline": "Backtest complete",
-                "downloads": {
+                "summary": summary,
+                "overview": overview,
+                "notes": [
+                    "Backtest finished successfully.",
+                    "Download the report or raw run log below for deeper inspection.",
+                ],
+                "artifacts": {
                     "report_txt": f"/api/backtests/{job_id}/artifact/report.txt",
                     "run_json_gz": f"/api/backtests/{job_id}/artifact/run.json.gz",
                 },

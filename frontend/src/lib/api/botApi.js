@@ -34,7 +34,6 @@ function toErrorPayload(res, data) {
 function withQuery(url, params) {
   if (!params || typeof params !== "object") return url;
 
-  // Works for "/api/..." relative URLs too
   const u = new URL(url, window.location.origin);
 
   for (const [k, v] of Object.entries(params)) {
@@ -44,19 +43,23 @@ function withQuery(url, params) {
     u.searchParams.set(k, s);
   }
 
-  // Return relative if caller provided relative (keeps logs tidy)
   if (String(url).startsWith("/")) return u.pathname + (u.search ? u.search : "");
   return u.toString();
 }
 
-// ✅ NEW SIGNATURE: apiGet(url, params?, options?)
+// apiGet(url, params?, options?)
 export async function apiGet(url, params = {}, { signal } = {}) {
   const finalUrl = withQuery(url, params);
 
   const res = await fetch(finalUrl, {
     credentials: "include",
     signal,
-    headers: { Accept: "application/json" },
+    cache: "no-store",
+    headers: {
+      Accept: "application/json",
+      "Cache-Control": "no-cache, no-store, max-age=0",
+      Pragma: "no-cache",
+    },
   });
 
   const { json, text } = await safeRead(res);
@@ -66,16 +69,22 @@ export async function apiGet(url, params = {}, { signal } = {}) {
   return typeof data === "object" ? data : { ok: true, raw: data };
 }
 
-// ✅ NEW SIGNATURE: apiPost(url, body, params?, options?)
+// apiPost(url, body, params?, options?)
 export async function apiPost(url, body, params = {}, { signal } = {}) {
   const finalUrl = withQuery(url, params);
 
   const res = await fetch(finalUrl, {
     method: "POST",
     credentials: "include",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: body ? JSON.stringify(body) : undefined,
     signal,
+    cache: "no-store",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      "Cache-Control": "no-cache, no-store, max-age=0",
+      Pragma: "no-cache",
+    },
+    body: body ? JSON.stringify(body) : undefined,
   });
 
   const { json, text } = await safeRead(res);

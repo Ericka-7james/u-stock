@@ -33,7 +33,7 @@
   margin-top: 14px;
 }
 
-/* back to dashboard pill link (reuses your About style) */
+/* back to dashboard pill link */
 .back-link-pill {
   display: inline-flex;
   align-items: center;
@@ -57,7 +57,7 @@
 /* GRID */
 .bt-grid {
   width: 100%;
-  max-width: 1100px; /* keep aligned with header lane */
+  max-width: 1100px;
   margin: 16px auto 0;
   padding: 0 24px;
   box-sizing: border-box;
@@ -87,6 +87,10 @@
 
 .bt-span2 {
   grid-column: span 2;
+}
+
+.bt-span4 {
+  grid-column: 1 / -1;
 }
 
 /* Pills */
@@ -192,24 +196,23 @@
   border: 1px solid rgba(148, 163, 184, 0.22);
   padding: 9px 12px;
   border-radius: 12px;
-  background: var(--ustock-bg-card-soft); /* ✅ was white */
+  background: var(--ustock-bg-card-soft);
   color: var(--ustock-text-main);
   cursor: pointer;
   transition: transform 0.08s ease, border-color 0.18s ease, background 0.18s ease, color 0.18s ease;
+  text-decoration: none;
 }
 
 .bt-btn:active {
   transform: scale(0.98);
 }
 
-/* Primary action */
 .bt-btn.primary {
   border-color: rgba(34, 197, 94, 0.3);
   background: rgba(34, 197, 94, 0.12);
   color: var(--ustock-green-main);
 }
 
-/* ✅ Secondary action (Reset) */
 .bt-btn.secondary {
   border-color: rgba(148, 163, 184, 0.22);
   background: rgba(148, 163, 184, 0.08);
@@ -222,9 +225,11 @@
   color: var(--ustock-text-strong);
 }
 
-.bt-btn:disabled {
+.bt-btn:disabled,
+.bt-btn[aria-disabled="true"] {
   opacity: 0.6;
   cursor: not-allowed;
+  pointer-events: none;
 }
 
 /* Inline error */
@@ -312,7 +317,7 @@
   color: var(--ustock-green-main);
 }
 
-/* Results */
+/* Results modal content */
 .bt-empty,
 .bt-progress {
   border-radius: 14px;
@@ -337,6 +342,49 @@
   font-weight: 900;
   color: var(--ustock-text-strong);
   margin-bottom: 10px;
+}
+
+.bt-overviewCard {
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(148, 163, 184, 0.06);
+  border-radius: 14px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.bt-overviewTitle,
+.bt-blockTitle,
+.bt-artifactsTitle {
+  font-weight: 900;
+  color: var(--ustock-text-strong);
+  margin-bottom: 8px;
+}
+
+/* overlay should own the viewport */
+.modalOverlay,
+.mOverlay,
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* modal panel should not exceed viewport */
+.modalCard,
+.mCard,
+.modalPanel {
+  max-height: min(88vh, 900px);
+  display: flex;
+  flex-direction: column;
+}
+
+/* modal content area should scroll */
+.modalBody,
+.mBody,
+.modalContent {
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .bt-metrics {
@@ -366,6 +414,25 @@
   overflow-wrap: anywhere;
 }
 
+.bt-block {
+  margin-top: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(148, 163, 184, 0.05);
+  border-radius: 14px;
+  padding: 12px;
+}
+
+.bt-pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New",
+    monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ustock-text-main);
+}
+
 .bt-notes {
   margin-top: 8px;
 }
@@ -374,12 +441,6 @@
   margin-top: 14px;
   padding-top: 12px;
   border-top: 1px solid rgba(148, 163, 184, 0.18);
-}
-
-.bt-artifactsTitle {
-  font-weight: 900;
-  color: var(--ustock-text-strong);
-  margin-bottom: 8px;
 }
 
 .bt-artifactsBtns {
@@ -407,84 +468,69 @@
   margin-bottom: 6px;
 }
 
-/* Responsive */
+/* Tablet */
 @media (max-width: 1024px) {
   .bt-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .bt-span2 {
-    grid-column: span 2;
+
+  .bt-span2,
+  .bt-span4 {
+    grid-column: 1 / -1;
   }
+
   .bt-row-4 {
     grid-template-columns: 1fr 1fr;
   }
 }
 
+/* Mobile */
 @media (max-width: 768px) {
   .bt-grid {
     grid-template-columns: 1fr;
     padding: 0 16px;
   }
-  .bt-span2 {
-    grid-column: span 1;
+
+  .bt-span2,
+  .bt-span4 {
+    grid-column: auto;
   }
+
   .bt-row-3,
   .bt-row-4 {
     grid-template-columns: 1fr;
   }
+
   .bt-heroRight {
     align-items: flex-start;
   }
+
   .bt-heroHint {
     text-align: left;
   }
+
   .bt-actionsNote {
     margin-left: 0;
     text-align: left;
   }
+
   .bt-metrics {
     grid-template-columns: 1fr;
   }
 
-  /* Mobile stacking order:
-     1) Config  2) Results  3) Preview  4) Safety */
-  .bt-grid > article:nth-of-type(1) {
-    order: 1;
+  .bt-kv-row {
+    flex-direction: column;
+    align-items: flex-start;
   }
-  .bt-grid > article:nth-of-type(3) {
-    order: 2;
-  }
-  .bt-grid > article:nth-of-type(2) {
-    order: 3;
-  }
-  .bt-grid > article:nth-of-type(4) {
-    order: 4;
+
+  .bt-kv .v {
+    text-align: left;
   }
 }
-
-/* ===== Make right-side cards bigger on large screens ===== */
 
 /* Keep grid aligned to header lane on ultra-wide screens */
 @media (min-width: 1200px) {
   .bt-grid {
-    max-width: 1100px; /* clamp to header lane (prevents overshoot) */
-  }
-}
-
-/* Desktop: give Preview + Safety the same width as Config (2 columns) */
-@media (min-width: 1024px) {
-  /* Keep 4-column grid, but change spans */
-  .bt-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-
-  /* ✅ Preview card becomes 2 columns wide */
-  .bt-grid > article:nth-of-type(2) {
-    grid-column: span 2;
-  }
-
-  /* ✅ Safety card becomes 2 columns wide */
-  .bt-grid > article:nth-of-type(4) {
-    grid-column: span 2;
+    max-width: 1100px;
   }
 }

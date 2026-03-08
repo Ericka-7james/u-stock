@@ -1,14 +1,13 @@
-// frontend/src/components/dashboard/pages/AboutPage.jsx
+import { Link } from "react-router-dom";
+
 import AppShell from "../layout/AppShell";
+import PageHeaderCard from "../common/PageHeaderCard";
+import ContentCard from "../common/ContentCard";
 import "../../css/pages/AboutPage.css";
 
 import headshot from "../../assets/ericka-headshot.jpeg";
 import AboutPageSquirrel from "../../assets/pages/AboutPageSquirrel.png";
 
-import { Link } from "react-router-dom";
-import PageHeaderCard from "../common/PageHeaderCard";
-
-// ✅ content moved here
 import { ABOUT_PAGE_COPY } from "../../content/pages/aboutPage.content.ts";
 
 export default function AboutPage() {
@@ -38,62 +37,54 @@ export default function AboutPage() {
         </PageHeaderCard>
 
         <section className="about-grid">
-          <article className="about-card">
-            <h2>{c.sections.howItWorks.title}</h2>
+          <ContentCard title={c.sections.howItWorks.title} className="about-card">
             <ul className="about-list">
               {c.sections.howItWorks.items.map((item) => (
                 <li key={item}>{item}</li>
               ))}
             </ul>
-          </article>
+          </ContentCard>
 
-          <article className="about-card">
-            <h2>{c.sections.transparency.title}</h2>
+          <ContentCard title={c.sections.transparency.title} className="about-card">
             <p className="muted">{c.sections.transparency.body}</p>
             <p className="muted small">{c.sections.transparency.note}</p>
-          </article>
+          </ContentCard>
 
-          <article className="about-card">
-            <h2>{c.sections.coreFeatures.title}</h2>
+          <ContentCard title={c.sections.coreFeatures.title} className="about-card">
             <ul className="about-list">
               {c.sections.coreFeatures.items.map((item) => (
                 <li key={item}>{item}</li>
               ))}
             </ul>
-          </article>
+          </ContentCard>
 
-          {/* ✅ NEW: safety section (only renders if present) */}
           {c.sections.safety ? (
-            <article className="about-card">
-              <h2>{c.sections.safety.title}</h2>
+            <ContentCard title={c.sections.safety.title} className="about-card">
               <ul className="about-list">
                 {c.sections.safety.items.map((item) => (
                   <li key={item}>{item}</li>
                 ))}
               </ul>
-            </article>
+            </ContentCard>
           ) : null}
 
-          <article className="about-card">
-            <h2>{c.sections.techStack.title}</h2>
+          <ContentCard title={c.sections.techStack.title} className="about-card">
             <ul className="about-pill-list">
               {c.sections.techStack.items.map((item) => (
                 <li key={item}>{item}</li>
               ))}
             </ul>
-          </article>
+          </ContentCard>
 
-          <article className="about-card">
-            <h2>{c.sections.provides.title}</h2>
+          <ContentCard title={c.sections.provides.title} className="about-card">
             <ul className="about-list">
               {c.sections.provides.items.map((item) => (
                 <li key={item}>{item}</li>
               ))}
             </ul>
-          </article>
+          </ContentCard>
 
-          <article className="about-card">
-            <h2>{c.sections.defaults.title}</h2>
+          <ContentCard title={c.sections.defaults.title} className="about-card">
             <div className="about-kv">
               {c.sections.defaults.kv.map((row) => (
                 <div className="about-kv-row" key={row.k}>
@@ -102,11 +93,11 @@ export default function AboutPage() {
                 </div>
               ))}
             </div>
-          </article>
+          </ContentCard>
 
-          <article className="about-card about-span2">
+          <ContentCard className="about-card about-span2">
             <div className="about-builderHead">
-              <h2>{c.sections.builder.title}</h2>
+              <h2 className="content-card-title">{c.sections.builder.title}</h2>
             </div>
 
             <div className="about-builderRow">
@@ -134,7 +125,7 @@ export default function AboutPage() {
                 </ul>
               </div>
             </div>
-          </article>
+          </ContentCard>
         </section>
       </div>
     </AppShell>

@@ -62,7 +62,7 @@ function runtimeToneFromEffective(eff) {
   if (s.includes("running")) return "pos";
   if (s.includes("waiting")) return "warn";
   if (s.includes("paused") || s.includes("stopped") || s.includes("idle")) return "neutral";
-  if (s.includes("error") || s.includes("failed")) return "neg";
+  if (s.includes("error") || s.includes("failed") || s.includes("offline")) return "neg";
   return "neutral";
 }
 
@@ -76,6 +76,7 @@ function runtimeLabelFromEffective(eff, intent) {
   if (e.includes("paused")) return "Paused";
   if (e.includes("stopped")) return "Stopped";
   if (e.includes("idle")) return "Idle";
+  if (e.includes("offline")) return "Offline";
   if (e.includes("error") || e.includes("failed")) return "Error";
 
   if (i === "running") return "Running";
@@ -106,7 +107,6 @@ function validateRiskDraft(draft) {
   return errors;
 }
 
-// Normalize “available bots” from many possible backend shapes
 function normalizeAvailableBots(data) {
   const root = _asDict(data);
   const raw = root.items ?? root.bots ?? root.available ?? root.bot_ids ?? root.botIds ?? data;
@@ -129,7 +129,6 @@ function normalizeAvailableBots(data) {
     })
     .filter(Boolean);
 
-  // de-dupe
   const seen = new Set();
   return normalized.filter((b) => {
     if (seen.has(b.id)) return false;
@@ -138,7 +137,6 @@ function normalizeAvailableBots(data) {
   });
 }
 
-// Detect “bot unavailable / not wired” from backend errors
 function isBotUnavailableError(err) {
   const status = Number(err?.status || 0);
   const msg = String(err?.message || "").toLowerCase();
@@ -146,7 +144,6 @@ function isBotUnavailableError(err) {
 
   const blob = `${msg} ${detailMsg}`.trim();
 
-  // Only treat as bot-unavailable if the server explicitly indicates that.
   const explicit =
     blob.includes("unknown bot") ||
     blob.includes("bot not registered") ||
@@ -155,10 +152,7 @@ function isBotUnavailableError(err) {
     blob.includes("bot unavailable") ||
     blob.includes("bot not found");
 
-  // A plain 404 from risk/log routes should NOT unselect the bot.
   if (status === 404) return explicit;
-
-  // Also allow explicit language regardless of status.
   if (explicit) return true;
 
   return false;
@@ -166,14 +160,9 @@ function isBotUnavailableError(err) {
 
 function normalizeStatusPayload(data) {
   const root = _asDict(data);
-
-  // allow common nesting patterns
   const status = _asDict(root.status) || _asDict(root.snapshot) || _asDict(root.data) || root;
 
-  // merge so both root and status fields are available
   const merged = { ...root, ...status };
-
-  // keep market merged too
   merged.market = _asDict(status.market) || _asDict(root.market) || {};
 
   return merged;
@@ -189,12 +178,10 @@ function _truthy(v) {
 function readArmedFlag(snap) {
   if (!snap || typeof snap !== "object") return false;
 
-  // direct flags
   if (_truthy(snap.armed)) return true;
   if (_truthy(snap.is_armed)) return true;
   if (_truthy(snap.isArmed)) return true;
 
-  // common state strings
   const armedState = String(snap.armed_state ?? snap.armedState ?? snap.arm_state ?? "")
     .trim()
     .toLowerCase();
@@ -218,7 +205,7 @@ async function apiGetWithFallback(paths, params) {
       return await apiGet(p, params);
     } catch (e) {
       lastErr = e;
-      if (!isNotFoundError(e)) break; // non-404 should not fall through
+      if (!isNotFoundError(e)) break;
     }
   }
 
@@ -293,9 +280,15 @@ export default function useBotControlCard({
 
   const loadedBotsRef = useRef(new Set());
   const initialStatusLoadedRef = useRef(false);
+  const statusReqSeqRef = useRef(0);
+  const statusAbortRef = useRef(null);
+  const statusInFlightRef = useRef(false);
 
-  const [busy, setBusy] = useState(false);
-  const [isStarting, setIsStarting] = useState(false);
+  const [armBusy, setArmBusy] = useState(false);
+  const [startBusy, setStartBusy] = useState(false);
+  const [pauseBusy, setPauseBusy] = useState(false);
+  const [optimisticArmed, setOptimisticArmed] = useState(null);
+  const optimisticArmedUntilRef = useRef(0);
 
   const [errModalOpen, setErrModalOpen] = useState(false);
   const [errModal, setErrModal] = useState(null);
@@ -332,7 +325,13 @@ export default function useBotControlCard({
 
   const lastUnavailableBotRef = useRef("");
 
-  // ✅ Restore selection from localStorage (only if parent didn’t already pick one)
+  const busy = useMemo(
+    () => armBusy || startBusy || pauseBusy || riskBusy || hardLoading,
+    [armBusy, startBusy, pauseBusy, riskBusy, hardLoading]
+  );
+
+  const isStarting = useMemo(() => startBusy, [startBusy]);
+
   useEffect(() => {
     const propId = safeStr(activeBotId, "");
     const sel = safeStr(selected, "");
@@ -377,13 +376,19 @@ export default function useBotControlCard({
   const message = useMemo(() => safeStr(snapshot?.message, ""), [snapshot?.message]);
 
   const isOpen = useMemo(() => snapshot?.market?.is_open === true, [snapshot?.market?.is_open]);
+
   const nextOpenEpoch = useMemo(() => {
-    const v = snapshot?.market?.next_open_epoch;
+    const v = snapshot?.market?.next_open_epoch ?? snapshot?.nextOpenEpoch;
     return Number.isFinite(Number(v)) ? Number(v) : null;
-  }, [snapshot?.market?.next_open_epoch]);
+  }, [snapshot?.market?.next_open_epoch, snapshot?.nextOpenEpoch]);
 
   const hbAge = useMemo(() => {
-    const v = snapshot?.hb_age_seconds ?? snapshot?.heartbeat_age ?? snapshot?.heartbeat_age_seconds ?? null;
+    const v =
+      snapshot?.heartbeatAgeSec ??
+      snapshot?.hb_age_seconds ??
+      snapshot?.heartbeat_age ??
+      snapshot?.heartbeat_age_seconds ??
+      null;
     if (v == null) return null;
     const n = Number(v);
     return Number.isFinite(n) ? n : null;
@@ -392,28 +397,24 @@ export default function useBotControlCard({
   const runtimeTone = useMemo(() => runtimeToneFromEffective(eff), [eff]);
   const runtimeLabel = useMemo(() => runtimeLabelFromEffective(eff, intent), [eff, intent]);
 
-  const isArmed = useMemo(() => readArmedFlag(snapshot), [snapshot]);
+  const isArmed = useMemo(() => {
+    if (typeof optimisticArmed === "boolean") return optimisticArmed;
+    return readArmedFlag(snapshot);
+  }, [snapshot, optimisticArmed]);
 
   const isRunningEff = useMemo(() => String(eff || "").toLowerCase().includes("running"), [eff]);
   const isWaiting = useMemo(() => String(eff || "").toLowerCase().includes("waiting"), [eff]);
 
-  const canPause = useMemo(
-    () => hasSelection && (isRunningEff || isWaiting || isStarting),
-    [hasSelection, isRunningEff, isWaiting, isStarting]
-  );
-
-  // ✅ CHANGE: Market hours should NOT block Start. We only block if server explicitly says so.
   const marketClosedBlocksStart = useMemo(() => {
     if (!hasSelection) return false;
     return snapshot?.market?.blocks_start === true;
   }, [hasSelection, snapshot]);
 
-  // ✅ Keep note informational. Still shows when market is closed (but doesn’t block).
   const showMarketClosedNote = useMemo(() => {
     if (!hasSelection) return false;
     if (snapshot?.market?.show_note) return true;
-    if (snapshot?.market?.is_open === false) return true; // informational
-    if (marketClosedBlocksStart) return true; // explicit block
+    if (snapshot?.market?.is_open === false) return true;
+    if (marketClosedBlocksStart) return true;
     return false;
   }, [hasSelection, snapshot, marketClosedBlocksStart]);
 
@@ -422,7 +423,7 @@ export default function useBotControlCard({
     const r = safeStr(snapshot?.market?.reason, "");
     if (r) return r;
     if (marketClosedBlocksStart) return "Start blocked by server.";
-    if (snapshot?.market?.is_open === false) return "Market is closed."; // informational
+    if (snapshot?.market?.is_open === false) return "Market is closed.";
     return "";
   }, [hasSelection, snapshot, marketClosedBlocksStart]);
 
@@ -435,26 +436,35 @@ export default function useBotControlCard({
     return parts.filter(Boolean).join(" · ");
   }, [hasSelection, runtimeLabel, mode, snapshot?.reason_code]);
 
-  const canArm = useMemo(() => hasSelection && !busy && !isArmed, [hasSelection, busy, isArmed]);
-
-  const canDisarm = useMemo(
-    () => hasSelection && !busy && isArmed && !isRunningEff && !isWaiting && !isStarting,
-    [hasSelection, busy, isArmed, isRunningEff, isWaiting, isStarting]
+  const canArm = useMemo(
+    () => hasSelection && !armBusy && !startBusy && !pauseBusy && !isArmed,
+    [hasSelection, armBusy, startBusy, pauseBusy, isArmed]
   );
 
-  // ✅ CHANGE: remove marketClosedBlocksStart from canStart gating
+  const canDisarm = useMemo(
+    () => hasSelection && !armBusy && !startBusy && !pauseBusy && isArmed && !isRunningEff && !isWaiting,
+    [hasSelection, armBusy, startBusy, pauseBusy, isArmed, isRunningEff, isWaiting]
+  );
+
   const canStart = useMemo(() => {
     if (!hasSelection) return false;
-    if (busy || isStarting) return false;
+    if (startBusy || pauseBusy) return false;
     if (!isArmed) return false;
     if (isRunningEff || isWaiting) return false;
-
-    // Market hours do NOT block start. Server may still deny on /start if it wants.
-    // We only block if the server explicitly sets blocks_start.
     if (marketClosedBlocksStart) return false;
-
     return true;
-  }, [hasSelection, busy, isStarting, isArmed, isRunningEff, isWaiting, marketClosedBlocksStart]);
+  }, [hasSelection, startBusy, pauseBusy, isArmed, isRunningEff, isWaiting, marketClosedBlocksStart]);
+
+  const canPause = useMemo(
+    () => hasSelection && !pauseBusy && !startBusy && (isRunningEff || isWaiting || startBusy),
+    [hasSelection, pauseBusy, startBusy, isRunningEff, isWaiting]
+  );
+
+  const pollMs = useMemo(() => {
+    if (!hasSelection) return 0;
+    if (isRunningEff || isWaiting || startBusy) return 2500;
+    return 5000;
+  }, [hasSelection, isRunningEff, isWaiting, startBusy]);
 
   const fail = useCallback((title, body, action = null, image = null, subtitle = "") => {
     setErrModal({
@@ -474,13 +484,23 @@ export default function useBotControlCard({
 
   const unselectBot = useCallback(
     (reason = "") => {
+      if (statusAbortRef.current) {
+        statusAbortRef.current.abort();
+        statusAbortRef.current = null;
+      }
+      statusInFlightRef.current = false;
+      statusReqSeqRef.current += 1;
+
       setSelected("");
       setSnapshot(null);
+      setOptimisticArmed(null);
+      optimisticArmedUntilRef.current = 0;
       lastUnavailableBotRef.current = "";
 
       writeStoredBotId(storageKey, "");
 
       loadedBotsRef.current = new Set();
+      initialStatusLoadedRef.current = false;
       setHardLoading(false);
       setSoftLoading(false);
 
@@ -516,41 +536,67 @@ export default function useBotControlCard({
 
       const now = _nowMs();
       if (!force && now - lastStatusFetch.current < 600) return;
+
+      if (statusInFlightRef.current && !force) return;
+
       lastStatusFetch.current = now;
 
       const hasLoadedThisBot = loadedBotsRef.current.has(bid);
       const isHard = !initialStatusLoadedRef.current && (force || !hasLoadedThisBot);
 
+      const controller = new AbortController();
+      statusAbortRef.current = controller;
+
+      const reqSeq = ++statusReqSeqRef.current;
+      statusInFlightRef.current = true;
+
       if (isHard) setHardLoading(true);
       else setSoftLoading(true);
 
       try {
-        const data = await apiGet("/api/bots/status", { bot_id: bid });
-        setSnapshot(normalizeStatusPayload(data));
-        loadedBotsRef.current.add(bid);
+        const data = await apiGet("/api/bots/status", { bot_id: bid }, { signal: controller.signal });
 
+        if (controller.signal.aborted) return;
+        if (reqSeq !== statusReqSeqRef.current) return;
+        if (safeStr(selected, "") !== bid) return;
+
+        const normalized = normalizeStatusPayload(data);
+        setSnapshot(normalized);
+        setOptimisticArmed(null);
+        loadedBotsRef.current.add(bid);
         initialStatusLoadedRef.current = true;
 
         if (lastUnavailableBotRef.current === bid) lastUnavailableBotRef.current = "";
       } catch (e) {
+        if (e?.name === "AbortError") return;
+
         const msg = String(e?.message || e || "Unknown error");
 
         if (isBotUnavailableError(e)) {
+          if (reqSeq !== statusReqSeqRef.current) return;
+
           if (lastUnavailableBotRef.current !== bid) {
             lastUnavailableBotRef.current = bid;
             unselectBot(COPY?.errors?.botUnavailableMessage || `“${bid}” is not available yet.`);
           } else {
             setSelected("");
+            setSnapshot(null);
+            setOptimisticArmed(null);
             writeStoredBotId(storageKey, "");
             if (typeof onActiveBotChange === "function") onActiveBotChange("");
           }
           return;
         }
 
+        if (reqSeq !== statusReqSeqRef.current) return;
         fail("Failed to load bot status", msg, { label: "Refresh", kind: "refresh" });
       } finally {
-        if (isHard) setHardLoading(false);
-        else setSoftLoading(false);
+        statusInFlightRef.current = false;
+
+        if (reqSeq === statusReqSeqRef.current) {
+          if (isHard) setHardLoading(false);
+          else setSoftLoading(false);
+        }
       }
     },
     [selected, fail, unselectBot, onActiveBotChange, COPY, storageKey]
@@ -651,9 +697,19 @@ export default function useBotControlCard({
     (e) => {
       const v = safeStr(e?.target?.value, "");
 
+      if (statusAbortRef.current) {
+        statusAbortRef.current.abort();
+        statusAbortRef.current = null;
+      }
+      statusInFlightRef.current = false;
+      statusReqSeqRef.current += 1;
+      initialStatusLoadedRef.current = false;
+
       if (!v) {
         setSelected("");
         setSnapshot(null);
+        setOptimisticArmed(null);
+        optimisticArmedUntilRef.current = 0;
         lastUnavailableBotRef.current = "";
 
         loadedBotsRef.current = new Set();
@@ -666,6 +722,9 @@ export default function useBotControlCard({
       loadedBotsRef.current.delete(v);
 
       setSelected(v);
+      setSnapshot(null);
+      setOptimisticArmed(null);
+      optimisticArmedUntilRef.current = 0;
       writeStoredBotId(storageKey, v);
 
       if (typeof onActiveBotChange === "function") onActiveBotChange(v);
@@ -709,6 +768,16 @@ export default function useBotControlCard({
     }
   }, [availableLoaded, available, selected, unselectBot, COPY]);
 
+  useEffect(() => {
+    return () => {
+      if (statusAbortRef.current) {
+        statusAbortRef.current.abort();
+        statusAbortRef.current = null;
+      }
+      statusInFlightRef.current = false;
+    };
+  }, []);
+
   const openRisk = useCallback(async () => {
     if (!hasSelection) return;
     try {
@@ -741,18 +810,23 @@ export default function useBotControlCard({
     const bid = safeStr(selected, "");
     if (!bid) return;
 
-    setBusy(true);
+    setArmBusy(true);
     try {
       await apiPost("/api/bots/arm", { bot_id: bid });
+
+      setOptimisticArmed(true);
+      optimisticArmedUntilRef.current = Date.now() + 10000;
       setArmConfirmOpen(false);
 
       await fetchStatus({ force: true });
       await _sleep(250);
       await fetchStatus({ force: true });
     } catch (e) {
+      setOptimisticArmed(null);
+      optimisticArmedUntilRef.current = 0;
       fail("Failed to arm bot", String(e?.message || e || "Unknown error"));
     } finally {
-      setBusy(false);
+      setArmBusy(false);
     }
   }, [selected, fetchStatus, fail]);
 
@@ -761,14 +835,19 @@ export default function useBotControlCard({
     if (!bid) return;
     if (!canDisarm) return;
 
-    setBusy(true);
+    setArmBusy(true);
     try {
       await apiPost("/api/bots/disarm", { bot_id: bid });
+
+      setOptimisticArmed(false);
+      optimisticArmedUntilRef.current = Date.now() + 10000;
       await fetchStatus({ force: true });
     } catch (e) {
+      setOptimisticArmed(null);
+      optimisticArmedUntilRef.current = 0;
       fail("Failed to disarm bot", String(e?.message || e || "Unknown error"));
     } finally {
-      setBusy(false);
+      setArmBusy(false);
     }
   }, [selected, canDisarm, fetchStatus, fail]);
 
@@ -781,8 +860,7 @@ export default function useBotControlCard({
     const bid = safeStr(selected, "");
     if (!bid) return;
 
-    setIsStarting(true);
-    setBusy(true);
+    setStartBusy(true);
     try {
       if (typeof onStartBot === "function") await onStartBot(bid);
       else await apiPost("/api/bots/start", { bot_id: bid });
@@ -792,8 +870,7 @@ export default function useBotControlCard({
     } catch (e) {
       fail("Failed to start bot", String(e?.message || e || "Unknown error"));
     } finally {
-      setBusy(false);
-      setIsStarting(false);
+      setStartBusy(false);
     }
   }, [selected, onStartBot, fetchStatus, fail]);
 
@@ -802,7 +879,7 @@ export default function useBotControlCard({
     if (!bid) return;
     if (!canPause) return;
 
-    setBusy(true);
+    setPauseBusy(true);
     try {
       if (typeof onStopBot === "function") await onStopBot(bid);
       else await apiPost("/api/bots/stop", { bot_id: bid });
@@ -811,7 +888,7 @@ export default function useBotControlCard({
     } catch (e) {
       fail("Failed to pause bot", String(e?.message || e || "Unknown error"));
     } finally {
-      setBusy(false);
+      setPauseBusy(false);
     }
   }, [selected, canPause, onStopBot, fetchStatus, fail]);
 
@@ -884,7 +961,7 @@ export default function useBotControlCard({
 
     pollTimer.current = setInterval(() => {
       fetchStatus({ force: false });
-    }, 2500);
+    }, pollMs);
 
     return () => {
       if (pollTimer.current) {
@@ -892,7 +969,7 @@ export default function useBotControlCard({
         pollTimer.current = null;
       }
     };
-  }, [hasSelection, selected, fetchStatus]);
+  }, [hasSelection, selected, fetchStatus, pollMs]);
 
   useEffect(() => {
     if (!logOpen) return;
@@ -922,6 +999,9 @@ export default function useBotControlCard({
     isArmed,
 
     busy,
+    armBusy,
+    startBusy,
+    pauseBusy,
     isRunningEff,
     isWaiting,
     isStarting,
@@ -930,7 +1010,6 @@ export default function useBotControlCard({
     canStart,
     canPause,
 
-    // still returned so UI can show note / title, but it no longer blocks on is_open=false
     marketClosedBlocksStart,
 
     openLog,

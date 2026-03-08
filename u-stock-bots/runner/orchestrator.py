@@ -138,23 +138,32 @@ def _should_emit_block_event(
     return False
 
 
-def _should_emit_idle_heartbeat(hb_state: HeartbeatState, *, sig: str, now: int, idle_emit_seconds: int) -> bool:
+def _should_emit_cadence_heartbeat(
+    hb_state: HeartbeatState,
+    *,
+    sig: str,
+    now: int,
+    heartbeat_every_loops: int,
+) -> bool:
     """
-    Anti-spam for "nothing interesting" heartbeats.
-    Emit if:
-      - signature changes, OR
-      - idle_emit_seconds elapsed.
+    Emit a runtime heartbeat every N loops, or immediately when the signature changes.
+    This keeps runtime_state fresh without writing every single loop.
     """
-    last_sig = str(getattr(hb_state, "last_idle_sig", "") or "")
-    last_ts = int(getattr(hb_state, "last_idle_ts", 0) or 0)
+    n = max(1, int(heartbeat_every_loops))
+    last_sig = str(getattr(hb_state, "last_runtime_sig", "") or "")
+    loop_count = int(getattr(hb_state, "runtime_loop_count", 0) or 0) + 1
+
+    hb_state.runtime_loop_count = loop_count  # type: ignore[attr-defined]
 
     if sig != last_sig:
-        hb_state.last_idle_sig = sig  # type: ignore[attr-defined]
-        hb_state.last_idle_ts = now  # type: ignore[attr-defined]
+        hb_state.last_runtime_sig = sig  # type: ignore[attr-defined]
+        hb_state.last_runtime_hb_ts = now  # type: ignore[attr-defined]
+        hb_state.runtime_loop_count = 0  # type: ignore[attr-defined]
         return True
 
-    if now - last_ts >= int(idle_emit_seconds):
-        hb_state.last_idle_ts = now  # type: ignore[attr-defined]
+    if loop_count >= n:
+        hb_state.last_runtime_hb_ts = now  # type: ignore[attr-defined]
+        hb_state.runtime_loop_count = 0  # type: ignore[attr-defined]
         return True
 
     return False
@@ -167,7 +176,7 @@ def run_once(
     respect_market_hours: bool,
     risk_state: RiskState,
     hb_state: HeartbeatState,
-    idle_emit_seconds: int,
+    heartbeat_every_loops: int,
     block_log_min_seconds: int,
 ) -> None:
     """
@@ -263,7 +272,13 @@ def run_once(
         now = now_epoch()
         gated_bucket = _bucket_gate_reason(str(gate_reason or ""))
         sig = f"gated|{mode}|{gated_bucket}"
-        if _should_emit_idle_heartbeat(hb_state, sig=sig, now=now, idle_emit_seconds=idle_emit_seconds):
+
+        if _should_emit_cadence_heartbeat(
+            hb_state,
+            sig=sig,
+            now=now,
+            heartbeat_every_loops=heartbeat_every_loops,
+        ):
             safe_heartbeat(
                 api,
                 user_id=user_id,
@@ -303,7 +318,13 @@ def run_once(
 
     now = now_epoch()
     sig = f"loop_ok|{mode}"
-    if _should_emit_idle_heartbeat(hb_state, sig=sig, now=now, idle_emit_seconds=idle_emit_seconds):
+
+    if _should_emit_cadence_heartbeat(
+        hb_state,
+        sig=sig,
+        now=now,
+        heartbeat_every_loops=heartbeat_every_loops,
+    ):
         safe_heartbeat(
             api,
             user_id=user_id,
@@ -326,15 +347,17 @@ def main(*, max_loops: Optional[int] = None, sleep_fn: Callable[[float], None] =
     bot_id = (os.getenv("RUNNER_BOT_ID") or "ema_trend").strip() or "ema_trend"
     respect_market_hours = _env_bool("RUNNER_RESPECT_MARKET_HOURS", True)
 
-    # Anti-spam windows
-    idle_emit_seconds = _env_int("RUNNER_IDLE_EMIT_SECONDS", 1800, min_value=10)
-    block_log_min_seconds = _env_int("RUNNER_BLOCK_LOG_MIN_SECONDS", idle_emit_seconds, min_value=10)
+    # heartbeat cadence: every N loops
+    heartbeat_every_loops = _env_int("RUNNER_HEARTBEAT_EVERY_LOOPS", 6, min_value=1)
+
+    # block event anti-spam
+    block_log_min_seconds = _env_int("RUNNER_BLOCK_LOG_MIN_SECONDS", 1800, min_value=10)
 
     debug = _env_bool("RUNNER_DEBUG", False)
 
     print(
         f"[runner] starting | base={base_url} | bot_id={bot_id} | loop={loop_seconds}s "
-        f"| respect_market_hours={respect_market_hours}"
+        f"| respect_market_hours={respect_market_hours} | heartbeat_every_loops={heartbeat_every_loops}"
     )
 
     loops = 0
@@ -360,7 +383,7 @@ def main(*, max_loops: Optional[int] = None, sleep_fn: Callable[[float], None] =
                     respect_market_hours=respect_market_hours,
                     risk_state=risk_state,
                     hb_state=hb_state,
-                    idle_emit_seconds=idle_emit_seconds,
+                    heartbeat_every_loops=heartbeat_every_loops,
                     block_log_min_seconds=block_log_min_seconds,
                 )
                 fail_streak = 0
@@ -380,22 +403,19 @@ def main(*, max_loops: Optional[int] = None, sleep_fn: Callable[[float], None] =
 
                 # Heartbeat is best-effort; only attempt if we have a uid
                 if uid:
-                    err_sig = f"error|{mode}|{type(e).__name__}"
-                    if _should_emit_idle_heartbeat(hb_state, sig=err_sig, now=now, idle_emit_seconds=idle_emit_seconds):
-                        safe_heartbeat(
-                            api,
-                            user_id=uid,
-                            bot_id=bot_id,
-                            intent="running",
-                            effective_state="error",
-                            mode=mode,
-                            reason_code="runner_exception",
-                            message="Runner exception.",
-                            last_error=repr(e),
-                            last_tick=now,
-                        )
+                    safe_heartbeat(
+                        api,
+                        user_id=uid,
+                        bot_id=bot_id,
+                        intent="running",
+                        effective_state="error",
+                        mode=mode,
+                        reason_code="runner_exception",
+                        message="Runner exception.",
+                        last_error=repr(e),
+                        last_tick=now,
+                    )
                 else:
-                    # Still visible locally
                     print(f"[runner] exception (no user_id yet): {type(e).__name__}: {e!r}")
 
                 # Exponential-ish backoff, capped

@@ -106,6 +106,7 @@ curl -s http://127.0.0.1:8000/health
 Local dev (optional hot reload):
 
 ```bash
+cd backend
 python -m uvicorn api.index:app --reload --host 0.0.0.0 --port 8000
 ```
 ### Run Frontend

@@ -34,16 +34,39 @@ def _runner_id_for_mint(bot_id: str) -> str:
     return _env("RUNNER_ID") or _env("RUNNER_DEVICE_ID") or str(bot_id or "").strip() or "local-runner"
 
 
+def _runner_shared_secret() -> str:
+    return _env("RUNNER_SHARED_SECRET") or _env("BOT_RUNNER_SECRET")
+
+
 def _runner_user_id() -> str:
     return _env("RUNNER_USER_ID") or _env("USTOCK_USER_ID")
 
 
+def _normalize_desired_state(x: Any) -> str:
+    s = str(x or "").strip().lower()
+    if s == "running":
+        return "running"
+    if s == "paused":
+        return "stopped"
+    return "stopped"
+
+
+def _normalize_effective_state(x: Any) -> str:
+    s = str(x or "").strip().lower()
+    if not s:
+        return "unknown"
+    if s == "paused":
+        return "stopped"
+    return s
+
+
 def _mint_runner_token(api: UStockAPI, *, bot_id: str) -> Tuple[str, int]:
     """
-    Mint a runner JWT via backend /api/runner/token using RUNNER_SHARED_SECRET.
+    Mint a runner JWT via backend /api/runner/token using RUNNER_SHARED_SECRET
+    (or BOT_RUNNER_SECRET fallback).
     Returns (token, expires_in_seconds).
     """
-    shared = _env("RUNNER_SHARED_SECRET")
+    shared = _runner_shared_secret()
     if not shared:
         raise RuntimeError("RUNNER_SHARED_SECRET missing; cannot mint runner token.")
 
@@ -86,7 +109,6 @@ class _TokenCache:
 
     def valid(self, runner_id: str) -> bool:
         tok, exp = self.get(runner_id)
-        # refresh a bit early
         return bool(tok) and _is_jwt(tok) and (now_epoch() + 20) < int(exp or 0)
 
 
@@ -118,12 +140,12 @@ def _dev_token_from_env() -> str:
 def _auth_headers_for_bot(api: UStockAPI, *, bot_id: str) -> Dict[str, str]:
     """
     Auth priority:
-      1) Mint JWT via /api/runner/token (RUNNER_SHARED_SECRET)
+      1) Mint JWT via /api/runner/token
       2) DEV env token (BOT_RUNNER_TOKEN / RUNNER_TOKEN)
       3) Empty -> backend will 401
     """
     bid = str(bot_id or "").strip()
-    shared = _env("RUNNER_SHARED_SECRET")
+    shared = _runner_shared_secret()
 
     if shared:
         runner_id = _runner_id_for_mint(bid)
@@ -153,7 +175,7 @@ def _get_with_auth_retry(
     params: Optional[Dict[str, Any]] = None,
 ) -> Any:
     bid = str(bot_id or "").strip()
-    shared = _env("RUNNER_SHARED_SECRET")
+    shared = _runner_shared_secret()
     runner_id = _runner_id_for_mint(bid) if shared else ""
 
     try:
@@ -173,7 +195,7 @@ def _post_with_auth_retry(
     json: Dict[str, Any],
 ) -> Any:
     bid = str(bot_id or "").strip()
-    shared = _env("RUNNER_SHARED_SECRET")
+    shared = _runner_shared_secret()
     runner_id = _runner_id_for_mint(bid) if shared else ""
 
     try:
@@ -206,6 +228,7 @@ def heartbeat_tick(
     paused_reason: Optional[str] = None,
     next_open_epoch: Optional[int] = None,
     last_error: Optional[str] = None,
+    reason_code: Optional[str] = None,
 ) -> None:
     uid = (_runner_user_id() or "").strip()
     if not uid:
@@ -216,12 +239,14 @@ def heartbeat_tick(
         user_id=uid,
         bot_id=bot_id,
         intent=intent,
+        desired_state=_normalize_desired_state(intent),
         effective_state=effective_state,
         mode=mode,
         message=message,
         paused_reason=paused_reason,
         next_open_epoch=next_open_epoch,
         last_error=last_error,
+        reason_code=reason_code,
         last_tick=now_epoch(),
     )
 
@@ -301,6 +326,7 @@ def post_heartbeat(
     intent: str,
     effective_state: str,
     mode: str,
+    desired_state: Optional[str] = None,
     message: Optional[str] = None,
     reason_code: Optional[str] = None,
     paused_reason: Optional[str] = None,
@@ -313,15 +339,20 @@ def post_heartbeat(
     if not uid:
         return
 
-    # IMPORTANT: send "" to CLEAR stale errors in storage.
+    desired = _normalize_desired_state(desired_state or intent)
+    eff = _normalize_effective_state(effective_state)
+    mode_norm = (str(mode or "paper").strip().lower() or "paper")
+
+    # IMPORTANT: send "" to clear stale errors in storage.
     last_error_str = str(last_error or "").strip()
 
     payload: Dict[str, Any] = {
         "user_id": uid,
         "bot_id": _s(bot_id) or "unknown",
-        "intent": (_s(intent) or "paused").lower(),
-        "effective_state": _s(effective_state) or "unknown",
-        "mode": (_s(mode) or "paper").lower(),
+        "intent": desired,
+        "desired_state": desired,
+        "effective_state": eff,
+        "mode": mode_norm,
         "heartbeat_at": now,
         "last_run": now,
         "last_tick": int(last_tick or now),

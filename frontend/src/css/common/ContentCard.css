@@ -1,0 +1,23 @@
+.content-card {
+  background: var(--ustock-bg-card);
+  border: 1px solid var(--ustock-border-card);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-card-sm);
+  color: var(--ustock-text-main);
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+.content-card-title {
+  margin: 0 0 10px;
+  font-size: var(--font-body-lg);
+  font-weight: 700;
+  color: var(--ustock-text-strong);
+}
+
+@media (max-width: 560px) {
+  .content-card {
+    padding: 16px;
+  }
+}
