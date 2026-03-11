@@ -512,20 +512,33 @@ body.ustock-dark .landing-shape--c {
   justify-content: center;
   overflow: hidden;
   flex: 0 0 auto;
-  --z: 1.75;
-  --y: 0px;
   position: relative;
 }
 
-/* Image */
 .landing-trusted-logo {
   height: 100%;
   width: auto;
   object-fit: contain;
-  transform: translateY(var(--y)) scale(var(--z));
   transform-origin: center;
   opacity: 0.82;
   filter: grayscale(100%);
+}
+
+/* Per-logo presentation tuning */
+.landing-logo-slot--jpm .landing-trusted-logo {
+  transform: translateY(1px) scale(1.95);
+}
+
+.landing-logo-slot--spelman .landing-trusted-logo {
+  transform: translateY(0) scale(1.85);
+}
+
+.landing-logo-slot--gpc .landing-trusted-logo {
+  transform: translateY(0) scale(2.05);
+}
+
+.landing-logo-slot--mlt .landing-trusted-logo {
+  transform: translateY(1px) scale(2.15);
 }
 
 /* Caption */

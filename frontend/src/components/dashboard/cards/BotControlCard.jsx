@@ -1,5 +1,7 @@
 // frontend/src/components/dashboard/cards/BotControlCard.jsx
+
 import { useEffect, useRef } from "react";
+
 import HelpTooltip from "../../common/HelpTooltip.jsx";
 import Modal from "../../common/Modal.jsx";
 import LoadingOverlay from "../../common/LoadingOverlay.jsx";
@@ -14,25 +16,194 @@ import useBotControlCard from "../../../hooks/bots/useBotControlCard.js";
 import { safeStr, fmtTime, fmtAge, pillTone } from "../../../lib/format/botFormat.js";
 
 import botUnavailableSquirrel from "../../../assets/modal/bot-unavailable-squirrel.png";
-
 import { lsSet } from "../../../lib/storage/localStorage.js";
 
 /**
- * storageScope (optional):
- * Pass something stable per-user (ex: authed user id) so the hook can namespace localStorage.
- * Example usage from parent:
- *   <BotControlCard storageScope={user?.id} ... />
+ * Local storage key base for the dashboard's currently selected bot.
  *
- * Also persist "selected bot" (for dashboard welcome modal logic):
+ * Scoped form:
  *   ustock:selected_bot_id_v1::<storageScope>
+ *
+ * Unscoped form:
+ *   ustock:selected_bot_id_v1
+ *
+ * @type {string}
  */
 const SELECTED_BOT_KEY_BASE = "ustock:selected_bot_id_v1";
 
+/**
+ * Builds a storage key scoped to a user or session identity.
+ *
+ * @param {string} base
+ * @param {string | number | null | undefined} scope
+ * @returns {string}
+ */
 function scopedKey(base, scope) {
   const s = String(scope || "").trim();
   return s ? `${base}::${s}` : base;
 }
 
+/**
+ * Returns true if the provided selected bot id exists in the available bot list.
+ *
+ * @param {Array<{ id?: string, name?: string }>} available
+ * @param {string} selectedId
+ * @returns {boolean}
+ */
+function selectionExists(available, selectedId) {
+  if (!selectedId) return false;
+  return (available || []).some((bot) => safeStr(bot?.id, "") === selectedId);
+}
+
+/**
+ * Returns true when the current error modal content represents a "bot unavailable" case.
+ *
+ * @param {boolean} errModalOpen
+ * @param {{ title?: string, message?: string, detail?: string } | null | undefined} errModal
+ * @returns {boolean}
+ */
+function isBotUnavailableError(errModalOpen, errModal) {
+  if (!errModalOpen) return false;
+
+  const text = String(errModal?.title || errModal?.message || errModal?.detail || "");
+  return /bot unavailable|bot not found|unavailable/i.test(text);
+}
+
+/**
+ * Small presentational tile for bot status metrics.
+ *
+ * @param {{
+ *   label: string,
+ *   value: string,
+ *   full?: boolean,
+ *   subtext?: string | null
+ * }} props
+ * @returns {JSX.Element}
+ */
+function BotTile({ label, value, full = false, subtext = null }) {
+  return (
+    <div className={`botTile ${full ? "botTileFull" : ""}`}>
+      <div className="botTileLabel">{label}</div>
+      <div className="botTileValue">{value}</div>
+      {subtext ? <div className="botPausedLine">{subtext}</div> : null}
+    </div>
+  );
+}
+
+/**
+ * Shared modal footer button.
+ *
+ * @param {{
+ *   children: React.ReactNode,
+ *   onClick: () => void,
+ *   disabled?: boolean,
+ *   primary?: boolean,
+ *   type?: "button" | "submit" | "reset"
+ * }} props
+ * @returns {JSX.Element}
+ */
+function ModalButton({ children, onClick, disabled = false, primary = false, type = "button" }) {
+  return (
+    <button className={`mBtn ${primary ? "mBtnPrimary" : ""}`} type={type} onClick={onClick} disabled={disabled}>
+      {children}
+    </button>
+  );
+}
+
+/**
+ * Renders a single log event block inside the log modal.
+ *
+ * @param {{
+ *   item: any,
+ *   index: number,
+ *   logSeverity: (item: any) => "info" | "warn" | "error",
+ *   toneClass: (sev: "info" | "warn" | "error") => string,
+ *   logMessageFor: (item: any) => string,
+ *   safeJson: (value: any) => string
+ * }} props
+ * @returns {JSX.Element}
+ */
+function LogEventCard({ item, index, logSeverity, toneClass, logMessageFor, safeJson }) {
+  const sev = logSeverity(item);
+  const headline = logMessageFor(item) || "Update";
+  const action = safeStr(item?.event_type, "").replaceAll("_", " ") || "Event";
+  const key = item?.event_id || `${index}-${item?.ts || "0"}`;
+
+  return (
+    <div key={key} className={toneClass(sev)}>
+      <div className="blog-evtTop">
+        <div className="blog-evtLeft">
+          <div className="blog-evtTitle">{headline}</div>
+
+          <div className="blog-evtSub">
+            <span className="blog-evtChip">System</span>
+            <span className="blog-evtDot">•</span>
+            <span className="blog-evtChip blog-evtChip--soft">{action}</span>
+            <span className="blog-evtDot">•</span>
+            <span className="mMono">{item?.ts ? fmtTime(item.ts) : "—"}</span>
+          </div>
+        </div>
+
+        <div className="blog-evtRight">
+          <span className={`blog-level blog-level--${sev}`}>
+            {sev === "info" ? "OK" : sev === "warn" ? "WARN" : "ERROR"}
+          </span>
+        </div>
+      </div>
+
+      <div className="blog-evtDetails">
+        <details>
+          <summary>Raw log</summary>
+          <div className="blog-rawGrid">
+            <div className="blog-rawLabel">Level</div>
+            <div className="mMono">{safeStr(item?.level, "info").toUpperCase()}</div>
+
+            <div className="blog-rawLabel">Event</div>
+            <div className="mMono">{safeStr(item?.event_type, "—")}</div>
+
+            <div className="blog-rawLabel">Message</div>
+            <div>{headline}</div>
+
+            <div className="blog-rawLabel">Payload</div>
+            <pre className="mMono blog-pre">{item?.payload ? safeJson(item.payload) : "—"}</pre>
+          </div>
+        </details>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * BotControlCard
+ *
+ * Dashboard control panel for selecting, arming, starting, pausing, and inspecting
+ * trading bots. This component is intentionally "feature complete in one file" so
+ * it can be maintained without immediate modularization.
+ *
+ * Responsibilities:
+ * - render bot selection and action controls
+ * - reflect bot runtime / market / heartbeat state
+ * - persist selected bot id to localStorage
+ * - sync selected bot back to parent via onActiveBotChange
+ * - render confirmation, logs, and risk configuration modals
+ * - display hard-loading / soft-loading / error UI states
+ *
+ * Non-responsibilities:
+ * - fetching / mutation logic
+ * - business state derivation
+ * - risk validation rules
+ *
+ * Those are delegated to useBotControlCard().
+ *
+ * @param {{
+ *   activeBotId?: string | null,
+ *   onActiveBotChange?: (botId: string) => void,
+ *   onStartBot?: (...args: any[]) => void,
+ *   onStopBot?: (...args: any[]) => void,
+ *   storageScope?: string | number | null
+ * }} props
+ * @returns {JSX.Element}
+ */
 export default function BotControlCard({
   activeBotId,
   onActiveBotChange,
@@ -67,16 +238,15 @@ export default function BotControlCard({
     hasSelection,
     onSelect,
 
-    // state pills / derived
+    // derived state
     runtimeTone,
     runtimeLabel,
     isArmed,
 
-    // buttons
+    // buttons / runtime flags
     busy,
     armBusy,
     startBusy,
-    pauseBusy,
     isRunningEff,
     isWaiting,
     isStarting,
@@ -108,15 +278,17 @@ export default function BotControlCard({
     statusLine,
     message,
 
-    // modals
+    // arm modal
     armConfirmOpen,
     setArmConfirmOpen,
     confirmArm,
 
+    // start modal
     startConfirmOpen,
     setStartConfirmOpen,
     confirmStart,
 
+    // log modal
     logOpen,
     closeLog,
     logBusy,
@@ -126,6 +298,7 @@ export default function BotControlCard({
     logMessageFor,
     safeJson,
 
+    // risk modal
     riskOpen,
     closeRisk,
     riskBusy,
@@ -136,58 +309,62 @@ export default function BotControlCard({
     onRiskBlur,
     saveRisk,
 
+    // display mode
     mode,
   } = ui;
 
   const selectedId = safeStr(selected, "");
-  const selectionExistsInAvailable =
-    !!selectedId && (available || []).some((b) => safeStr(b?.id, "") === selectedId);
-
-  const hasValidSelection = !!hasSelection && selectionExistsInAvailable;
+  const hasSelectedInAvailable = selectionExists(available, selectedId);
+  const hasValidSelection = !!hasSelection && hasSelectedInAvailable;
   const selectedValue = hasValidSelection ? selectedId : "";
 
   const showStaleSelectionHint =
-    Array.isArray(available) && available.length > 0 && !!hasSelection && !selectionExistsInAvailable;
+    Array.isArray(available) && available.length > 0 && !!hasSelection && !hasSelectedInAvailable;
 
-  const isBotUnavailable =
-    !!errModalOpen &&
-    /bot unavailable|bot not found|unavailable/i.test(
-      String(errModal?.title || errModal?.message || errModal?.detail || "")
-    );
+  const showBotUnavailableArt = isBotUnavailableError(errModalOpen, errModal);
 
   const selectedBotLsKey = scopedKey(SELECTED_BOT_KEY_BASE, storageScope);
   const lastPersistedRef = useRef(null);
 
+  /**
+   * Persist only meaningful selected bot changes.
+   * Prevents redundant writes when state re-renders with the same value.
+   */
   useEffect(() => {
     const next = String(selectedValue || "").trim();
     if (lastPersistedRef.current === next) return;
+
     lastPersistedRef.current = next;
 
     try {
       lsSet(selectedBotLsKey, next);
     } catch {
-      // ignore
+      // Local storage failures should not break dashboard interaction.
     }
   }, [selectedValue, selectedBotLsKey]);
 
+  /**
+   * Notify parent when the local valid selection diverges from activeBotId.
+   * This keeps dashboard-level state synchronized without firing on empty / stale selection.
+   */
   useEffect(() => {
     if (!hasValidSelection) return;
 
-    const a = safeStr(activeBotId, "");
-    const s = safeStr(selectedValue, "");
+    const active = safeStr(activeBotId, "");
+    const next = safeStr(selectedValue, "");
 
-    if (!s) return;
-    if (a === s) return;
+    if (!next) return;
+    if (active === next) return;
 
     if (typeof onActiveBotChange === "function") {
-      onActiveBotChange(s);
+      onActiveBotChange(next);
     }
   }, [hasValidSelection, selectedValue, activeBotId, onActiveBotChange]);
 
   return (
     <>
       <ErrorModal open={errModalOpen} error={errModal} onClose={closeErrorModal} onAction={handleErrorAction}>
-        {isBotUnavailable ? (
+        {showBotUnavailableArt ? (
           <div style={{ display: "grid", placeItems: "center", paddingTop: 8 }}>
             <img
               src={botUnavailableSquirrel}
@@ -249,9 +426,9 @@ export default function BotControlCard({
 
               <select className="botSelect" value={selectedValue} onChange={onSelect} disabled={busy}>
                 <option value="">{COPY.select.placeholder}</option>
-                {(available || []).map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name || b.id}
+                {(available || []).map((bot) => (
+                  <option key={bot.id} value={bot.id}>
+                    {bot.name || bot.id}
                   </option>
                 ))}
               </select>
@@ -323,40 +500,23 @@ export default function BotControlCard({
           </div>
 
           <div className="botGrid">
-            <div className="botTile">
-              <div className="botTileLabel">{COPY.tiles.intent}</div>
-              <div className="botTileValue">{hasValidSelection ? intent || "—" : "—"}</div>
-            </div>
-
-            <div className="botTile">
-              <div className="botTileLabel">{COPY.tiles.effective}</div>
-              <div className="botTileValue">{hasValidSelection ? eff || "—" : "—"}</div>
-            </div>
-
-            <div className="botTile">
-              <div className="botTileLabel">{COPY.tiles.desired}</div>
-              <div className="botTileValue">{hasValidSelection ? desiredState || "—" : "—"}</div>
-            </div>
-
-            <div className="botTile">
-              <div className="botTileLabel">{COPY.tiles.heartbeat}</div>
-              <div className="botTileValue">
-                {!hasValidSelection ? "—" : hbAge == null ? "—" : `${fmtAge(hbAge)} ago`}
-              </div>
-            </div>
-
-            <div className="botTile">
-              <div className="botTileLabel">{isOpen ? COPY.tiles.market : COPY.tiles.nextOpen}</div>
-              <div className="botTileValue">
-                {isOpen ? COPY.market.openNow : nextOpenEpoch ? fmtTime(nextOpenEpoch) : "—"}
-              </div>
-            </div>
-
-            <div className="botTile botTileFull">
-              <div className="botTileLabel">{COPY.tiles.status}</div>
-              <div className="botTileValue">{statusLine}</div>
-              {hasValidSelection && message ? <div className="botPausedLine">{message}</div> : null}
-            </div>
+            <BotTile label={COPY.tiles.intent} value={hasValidSelection ? intent || "—" : "—"} />
+            <BotTile label={COPY.tiles.effective} value={hasValidSelection ? eff || "—" : "—"} />
+            <BotTile label={COPY.tiles.desired} value={hasValidSelection ? desiredState || "—" : "—"} />
+            <BotTile
+              label={COPY.tiles.heartbeat}
+              value={!hasValidSelection ? "—" : hbAge == null ? "—" : `${fmtAge(hbAge)} ago`}
+            />
+            <BotTile
+              label={isOpen ? COPY.tiles.market : COPY.tiles.nextOpen}
+              value={isOpen ? COPY.market.openNow : nextOpenEpoch ? fmtTime(nextOpenEpoch) : "—"}
+            />
+            <BotTile
+              label={COPY.tiles.status}
+              value={statusLine}
+              full
+              subtext={hasValidSelection && message ? message : null}
+            />
           </div>
         </div>
       </div>
@@ -367,17 +527,12 @@ export default function BotControlCard({
         onClose={() => setArmConfirmOpen(false)}
         footer={
           <>
-            <button className="mBtn" type="button" onClick={() => setArmConfirmOpen(false)} disabled={armBusy}>
+            <ModalButton onClick={() => setArmConfirmOpen(false)} disabled={armBusy}>
               {COPY.modals.arm.cancel}
-            </button>
-            <button
-              className="mBtn mBtnPrimary"
-              type="button"
-              onClick={confirmArm}
-              disabled={armBusy || !hasValidSelection}
-            >
+            </ModalButton>
+            <ModalButton onClick={confirmArm} disabled={armBusy || !hasValidSelection} primary>
               {COPY.modals.arm.confirm}
-            </button>
+            </ModalButton>
           </>
         }
       >
@@ -400,17 +555,12 @@ export default function BotControlCard({
         onClose={() => setStartConfirmOpen(false)}
         footer={
           <>
-            <button className="mBtn" type="button" onClick={() => setStartConfirmOpen(false)} disabled={startBusy}>
+            <ModalButton onClick={() => setStartConfirmOpen(false)} disabled={startBusy}>
               {COPY.modals.start.cancel}
-            </button>
-            <button
-              className="mBtn mBtnPrimary"
-              type="button"
-              onClick={confirmStart}
-              disabled={startBusy || !hasValidSelection}
-            >
+            </ModalButton>
+            <ModalButton onClick={confirmStart} disabled={startBusy || !hasValidSelection} primary>
               {COPY.modals.start.confirm}
-            </button>
+            </ModalButton>
           </>
         }
       >
@@ -434,9 +584,9 @@ export default function BotControlCard({
         title={COPY.modals.log.title}
         onClose={closeLog}
         footer={
-          <button className="mBtn" type="button" onClick={closeLog} disabled={logBusy}>
+          <ModalButton onClick={closeLog} disabled={logBusy}>
             {COPY.modals.log.close}
-          </button>
+          </ModalButton>
         }
       >
         {logItems.length === 0 && logBusy ? (
@@ -446,54 +596,17 @@ export default function BotControlCard({
         ) : (
           <>
             <div style={{ display: "grid", gap: 10, maxHeight: "62vh", overflow: "auto", paddingRight: 6 }}>
-              {logItems.map((it, idx) => {
-                const sev = logSeverity(it);
-                const headline = logMessageFor(it) || "Update";
-                const action = safeStr(it?.event_type, "").replaceAll("_", " ") || "Event";
-
-                return (
-                  <div key={it?.event_id || `${idx}-${it?.ts || "0"}`} className={toneClass(sev)}>
-                    <div className="blog-evtTop">
-                      <div className="blog-evtLeft">
-                        <div className="blog-evtTitle">{headline}</div>
-
-                        <div className="blog-evtSub">
-                          <span className="blog-evtChip">System</span>
-                          <span className="blog-evtDot">•</span>
-                          <span className="blog-evtChip blog-evtChip--soft">{action}</span>
-                          <span className="blog-evtDot">•</span>
-                          <span className="mMono">{it?.ts ? fmtTime(it.ts) : "—"}</span>
-                        </div>
-                      </div>
-
-                      <div className="blog-evtRight">
-                        <span className={`blog-level blog-level--${sev}`}>
-                          {sev === "info" ? "OK" : sev === "warn" ? "WARN" : "ERROR"}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="blog-evtDetails">
-                      <details>
-                        <summary>Raw log</summary>
-                        <div className="blog-rawGrid">
-                          <div className="blog-rawLabel">Level</div>
-                          <div className="mMono">{safeStr(it?.level, "info").toUpperCase()}</div>
-
-                          <div className="blog-rawLabel">Event</div>
-                          <div className="mMono">{safeStr(it?.event_type, "—")}</div>
-
-                          <div className="blog-rawLabel">Message</div>
-                          <div>{headline}</div>
-
-                          <div className="blog-rawLabel">Payload</div>
-                          <pre className="mMono blog-pre">{it?.payload ? safeJson(it.payload) : "—"}</pre>
-                        </div>
-                      </details>
-                    </div>
-                  </div>
-                );
-              })}
+              {logItems.map((item, index) => (
+                <LogEventCard
+                  key={item?.event_id || `${index}-${item?.ts || "0"}`}
+                  item={item}
+                  index={index}
+                  logSeverity={logSeverity}
+                  toneClass={toneClass}
+                  logMessageFor={logMessageFor}
+                  safeJson={safeJson}
+                />
+              ))}
             </div>
 
             {logBusy ? (
@@ -535,12 +648,12 @@ export default function BotControlCard({
         onClose={closeRisk}
         footer={
           <>
-            <button className="mBtn" type="button" onClick={closeRisk} disabled={riskBusy}>
+            <ModalButton onClick={closeRisk} disabled={riskBusy}>
               {COPY.modals.risk.cancel}
-            </button>
-            <button className="mBtn mBtnPrimary" type="button" onClick={saveRisk} disabled={riskBusy || !hasValidSelection}>
+            </ModalButton>
+            <ModalButton onClick={saveRisk} disabled={riskBusy || !hasValidSelection} primary>
               {COPY.modals.risk.save}
-            </button>
+            </ModalButton>
           </>
         }
       >
