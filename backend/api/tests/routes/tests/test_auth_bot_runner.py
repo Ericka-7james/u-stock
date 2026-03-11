@@ -1,4 +1,4 @@
-# backend/api/routes/tests/test_auth_bot_runner.py
+from __future__ import annotations
 
 import importlib
 import sys
@@ -25,7 +25,7 @@ def _make_client(mod):
 def _base_env(monkeypatch):
     monkeypatch.setenv("RUNNER_SHARED_SECRET", "shh")
     monkeypatch.setenv("RUNNER_JWT_SIGNING_KEY", "signing_key_123")
-    # keep issuer/audience defaults unless test overrides
+    monkeypatch.delenv("BOT_RUNNER_SECRET", raising=False)
 
 
 def test_mint_runner_token_success(mod, monkeypatch):
@@ -36,7 +36,10 @@ def test_mint_runner_token_success(mod, monkeypatch):
     res = client.post(
         "/api/runner/token",
         json={"runner_id": "runner_001"},
-        headers={"X-Runner-Secret": "shh"},
+        headers={
+            "X-Runner-Secret": "shh",
+            "X-Runner-User-Id": "user_123",
+        },
     )
 
     assert res.status_code == 200
@@ -52,17 +55,21 @@ def test_mint_runner_token_success(mod, monkeypatch):
         issuer="ustock-backend",
     )
     assert claims["sub"] == "runner_001"
+    assert claims["uid"] == "user_123"
     assert claims["scope"] == "runner"
 
 
-def test_mint_runner_token_includes_uid_claim_when_header_provided(mod, monkeypatch):
+def test_mint_runner_token_includes_required_uid_claim(mod, monkeypatch):
     _base_env(monkeypatch)
 
     client = _make_client(mod)
     res = client.post(
         "/api/runner/token",
         json={"runner_id": "runner_001"},
-        headers={"X-Runner-Secret": "shh", "X-Runner-User-Id": "user_123"},
+        headers={
+            "X-Runner-Secret": "shh",
+            "X-Runner-User-Id": "user_123",
+        },
     )
 
     assert res.status_code == 200
@@ -78,6 +85,20 @@ def test_mint_runner_token_includes_uid_claim_when_header_provided(mod, monkeypa
     assert claims["uid"] == "user_123"
 
 
+def test_mint_runner_token_400_when_user_id_header_missing(mod, monkeypatch):
+    _base_env(monkeypatch)
+
+    client = _make_client(mod)
+    res = client.post(
+        "/api/runner/token",
+        json={"runner_id": "runner_001"},
+        headers={"X-Runner-Secret": "shh"},
+    )
+
+    assert res.status_code == 400
+    assert res.json()["detail"] == "Runner user id header missing"
+
+
 def test_mint_runner_token_500_when_shared_secret_not_configured(mod, monkeypatch):
     monkeypatch.delenv("RUNNER_SHARED_SECRET", raising=False)
     monkeypatch.delenv("BOT_RUNNER_SECRET", raising=False)
@@ -87,7 +108,10 @@ def test_mint_runner_token_500_when_shared_secret_not_configured(mod, monkeypatc
     res = client.post(
         "/api/runner/token",
         json={"runner_id": "runner_001"},
-        headers={"X-Runner-Secret": "shh"},
+        headers={
+            "X-Runner-Secret": "shh",
+            "X-Runner-User-Id": "user_123",
+        },
     )
 
     assert res.status_code == 500
@@ -98,14 +122,21 @@ def test_mint_runner_token_401_when_secret_missing_or_wrong(mod, monkeypatch):
     _base_env(monkeypatch)
     client = _make_client(mod)
 
-    res1 = client.post("/api/runner/token", json={"runner_id": "runner_001"})
+    res1 = client.post(
+        "/api/runner/token",
+        json={"runner_id": "runner_001"},
+        headers={"X-Runner-User-Id": "user_123"},
+    )
     assert res1.status_code == 401
     assert res1.json()["detail"] == "Runner not authenticated"
 
     res2 = client.post(
         "/api/runner/token",
         json={"runner_id": "runner_001"},
-        headers={"X-Runner-Secret": "nope"},
+        headers={
+            "X-Runner-Secret": "nope",
+            "X-Runner-User-Id": "user_123",
+        },
     )
     assert res2.status_code == 401
     assert res2.json()["detail"] == "Runner not authenticated"
@@ -119,7 +150,10 @@ def test_mint_runner_token_500_when_signing_key_missing(mod, monkeypatch):
     res = client.post(
         "/api/runner/token",
         json={"runner_id": "runner_001"},
-        headers={"X-Runner-Secret": "shh"},
+        headers={
+            "X-Runner-Secret": "shh",
+            "X-Runner-User-Id": "user_123",
+        },
     )
 
     assert res.status_code == 500
@@ -129,8 +163,8 @@ def test_mint_runner_token_500_when_signing_key_missing(mod, monkeypatch):
 @pytest.mark.parametrize(
     "runner_id",
     [
-        "",  # min_length violation
-        "a" * 201,  # max_length violation
+        "",
+        "a" * 201,
     ],
 )
 def test_mint_runner_token_422_on_schema_invalid_runner_id(mod, monkeypatch, runner_id):
@@ -140,7 +174,10 @@ def test_mint_runner_token_422_on_schema_invalid_runner_id(mod, monkeypatch, run
     res = client.post(
         "/api/runner/token",
         json={"runner_id": runner_id},
-        headers={"X-Runner-Secret": "shh"},
+        headers={
+            "X-Runner-Secret": "shh",
+            "X-Runner-User-Id": "user_123",
+        },
     )
 
     assert res.status_code == 422
@@ -149,9 +186,9 @@ def test_mint_runner_token_422_on_schema_invalid_runner_id(mod, monkeypatch, run
 @pytest.mark.parametrize(
     "runner_id",
     [
-        " ",  # strips to empty -> handler returns 400
-        "bad/runner",  # regex fail
-        r"bad\runner",  # regex fail
+        " ",
+        "bad/runner",
+        r"bad\runner",
     ],
 )
 def test_mint_runner_token_400_on_handler_invalid_runner_id(mod, monkeypatch, runner_id):
@@ -161,7 +198,10 @@ def test_mint_runner_token_400_on_handler_invalid_runner_id(mod, monkeypatch, ru
     res = client.post(
         "/api/runner/token",
         json={"runner_id": runner_id},
-        headers={"X-Runner-Secret": "shh"},
+        headers={
+            "X-Runner-Secret": "shh",
+            "X-Runner-User-Id": "user_123",
+        },
     )
 
     assert res.status_code == 400
@@ -176,7 +216,10 @@ def test_ttl_clamps_to_min_60(mod, monkeypatch):
     res = client.post(
         "/api/runner/token",
         json={"runner_id": "runner_001"},
-        headers={"X-Runner-Secret": "shh"},
+        headers={
+            "X-Runner-Secret": "shh",
+            "X-Runner-User-Id": "user_123",
+        },
     )
 
     assert res.status_code == 200
@@ -191,7 +234,10 @@ def test_ttl_clamps_to_max_3600(mod, monkeypatch):
     res = client.post(
         "/api/runner/token",
         json={"runner_id": "runner_001"},
-        headers={"X-Runner-Secret": "shh"},
+        headers={
+            "X-Runner-Secret": "shh",
+            "X-Runner-User-Id": "user_123",
+        },
     )
 
     assert res.status_code == 200
@@ -207,7 +253,10 @@ def test_compat_header_and_env_names(mod, monkeypatch):
     res = client.post(
         "/api/runner/token",
         json={"runner_id": "runner_001"},
-        headers={"X-Bot-Runner-Secret": "shh"},
+        headers={
+            "X-Bot-Runner-Secret": "shh",
+            "X-Bot-Runner-User-Id": "user_legacy_123",
+        },
     )
 
     assert res.status_code == 200
@@ -220,3 +269,4 @@ def test_compat_header_and_env_names(mod, monkeypatch):
         issuer="ustock-backend",
     )
     assert claims["sub"] == "runner_001"
+    assert claims["uid"] == "user_legacy_123"
