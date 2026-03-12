@@ -14,7 +14,7 @@ export default function IndexFundsPage() {
   const copy = INDEX_FUNDS_PAGE_COPY;
 
   const [activeTab, setActiveTab] = useState(copy.tabs.defaultKey); // "baselines" | "universe"
-  const baselines = useMemo(() => copy.baselines, [copy.baselines]);
+  const baselines = copy.baselines;
 
   const isBaselines = activeTab === copy.tabs.keys.baselines;
   const isUniverse = activeTab === copy.tabs.keys.universe;
@@ -108,9 +108,66 @@ export default function IndexFundsPage() {
                   <p className="muted">{copy.sections.connects.tail}</p>
                 </div>
               </section>
+
+              <section className="panel">
+                <div className="index-tabs-row">
+                  <div className="tabs" role="tablist" aria-label={copy.sections.baselinesReference.ariaLabel}>
+                    <button
+                      type="button"
+                      className="tab-btn tab-btn--active"
+                      aria-current="true"
+                    >
+                      {copy.sections.baselinesReference.pillLabel}
+                    </button>
+                  </div>
+                </div>
+
+                <p className="muted">{copy.sections.baselinesReference.body}</p>
+
+                <div className="fund-grid">
+                  {baselines.map((b) => (
+                    <article key={b.ticker} className="fund-card">
+                      <header className="fund-card-header">
+                        <div>
+                          <div className="fund-ticker">{b.ticker}</div>
+                          <div className="fund-name">{b.name}</div>
+                        </div>
+                      </header>
+
+                      <p className="fund-blurb">{b.blurb}</p>
+
+                      <div className="fund-metrics-row">
+                        <div className="fund-metric">
+                          <span className="fund-metric-label">{copy.baselineCard.labels.role}</span>
+                          <span className="fund-metric-value">{copy.baselineCard.values.role}</span>
+                        </div>
+
+                        <div className="fund-metric">
+                          <span className="fund-metric-label">{copy.baselineCard.labels.usedFor}</span>
+                          <span className="fund-metric-value">{b.use.join(copy.baselineCard.useJoiner)}</span>
+                        </div>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </section>
             </>
           ) : (
             <section className="panel">
+              <div className="index-tabs-row">
+                <div className="tabs" role="tablist" aria-label={copy.sections.learn.ariaLabel}>
+                  <button
+                    type="button"
+                    className="tab-btn tab-btn--active"
+                    aria-current="true"
+                  >
+                    {copy.sections.learn.title}
+                  </button>
+                </div>
+              </div>
+
+              <p className="muted">{copy.sections.learn.body}</p>
+
               <div className="fund-grid">
                 {copy.sections.learn.cards.map((c) => (
                   <article key={c.title} className="fund-card">

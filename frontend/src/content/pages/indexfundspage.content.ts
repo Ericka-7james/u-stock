@@ -78,7 +78,15 @@ export const INDEX_FUNDS_PAGE_COPY = {
         "This page explains the ‘why’ now, so when live context tiles ship later, the UI already makes sense.",
     },
 
+    baselinesReference: {
+      ariaLabel: "Market baselines Lucent monitors",
+      pillLabel: "Market baselines Lucent monitors",
+      body:
+        "These reference funds help Lucent read the broader market backdrop before strategy behavior, risk posture, and runner activity are evaluated.",
+    },
+
     learn: {
+      ariaLabel: "Learn day trading and strategy cards",
       title: "Learn day trading + strategies",
       body:
         "You don’t need ten strategies. You need one or two that you can explain, test, and repeat. Below are study cards you can use alongside Lucent while you learn the U.S. stock market.",
@@ -154,13 +162,23 @@ export const INDEX_FUNDS_PAGE_COPY = {
   },
 
   universeCard: {
-    // This section is now "learning cards" but we keep naming to avoid touching CSS.
     labels: {
       role: "Focus:",
       usedFor: "Key takeaways:",
     },
     values: {
       role: "U.S. stock market",
+    },
+    useJoiner: " • ",
+  },
+
+  baselineCard: {
+    labels: {
+      role: "Role:",
+      usedFor: "Used for:",
+    },
+    values: {
+      role: "Market context baseline",
     },
     useJoiner: " • ",
   },
