@@ -131,9 +131,9 @@ def test_pick_user_id_from_status_falls_back_to_env(monkeypatch):
         ("stopped", "stopped"),
         ("paused", "stopped"),
         (" PAUSED ", "stopped"),
-        ("", "stopped"),
-        (None, "stopped"),
-        ("weird", "stopped"),
+        ("", ""),
+        (None, ""),
+        ("weird", ""),
     ],
 )
 def test_normalize_intent(raw, expected):
@@ -156,7 +156,7 @@ def test_normalize_intent(raw, expected):
     ],
 )
 def test_bucket_gate_reason(reason, expected):
-    assert oc._bucket_gate_reason(reason, ) == expected
+    assert oc._bucket_gate_reason(reason) == expected
 
 
 def test_should_emit_block_event_on_reason_change_and_then_throttle():
@@ -475,7 +475,9 @@ def test_run_once_gated_without_reason_uploads_events_but_no_block_event(monkeyp
     assert "risk_gate_block" not in event_types
     assert len(calls["safe_heartbeat"]) == 1
     hb_call = calls["safe_heartbeat"][0]
-    assert hb_call["reason_code"] == "risk_gate"
+    assert hb_call["reason_code"] == "no_valid_intents"
+    assert hb_call["effective_state"] == "running"
+    assert hb_call["message"] == "No actionable intents this loop."
     assert hb_call["mode"] == "paper"
 
 

@@ -160,16 +160,14 @@ def test_sync_trade_fills_raises_when_user_id_missing(monkeypatch):
     assert "Runner missing user_id for sync_trade_fills" in str(exc.value)
 
 
-def test_post_heartbeat_posts_required_fields_and_defaults(monkeypatch):
-    monkeypatch.setattr(api_client, "now_epoch", lambda: 999)
+def test_post_heartbeat_posts_required_fields_and_defaults():
     api = FakeAPI()
 
     api_client.post_heartbeat(
         api,
         user_id="u1",
         bot_id="ema_trend",
-        intent="running",
-        effective_state="running",
+        runtime_state="running",
         mode="paper",
     )
 
@@ -179,14 +177,11 @@ def test_post_heartbeat_posts_required_fields_and_defaults(monkeypatch):
 
     assert payload["user_id"] == "u1"
     assert payload["bot_id"] == "ema_trend"
-    assert payload["intent"] == "running"
-    assert payload["desired_state"] == "running"
     assert payload["effective_state"] == "running"
     assert payload["mode"] == "paper"
 
-    assert payload["heartbeat_at"] == 999
-    assert payload["last_run"] == 999
-    assert payload["last_tick"] == 999
+    assert isinstance(payload["runner_id"], str)
+    assert payload["runner_id"] != ""
 
     assert payload["reason_code"] is None
     assert payload["message"] is None
@@ -195,32 +190,27 @@ def test_post_heartbeat_posts_required_fields_and_defaults(monkeypatch):
     assert payload["last_error"] == ""
 
 
-def test_post_heartbeat_respects_last_tick_and_optional_fields(monkeypatch):
-    monkeypatch.setattr(api_client, "now_epoch", lambda: 111)
+def test_post_heartbeat_respects_optional_fields():
     api = FakeAPI()
 
     api_client.post_heartbeat(
         api,
         user_id="u1",
         bot_id="ema_trend",
-        intent="running",
-        effective_state="waiting_for_market",
+        runtime_state="waiting_for_market",
         mode="paper",
         message="Waiting",
         reason_code="market_closed",
         paused_reason="Market closed",
         next_open_epoch=222,
         last_error="none",
-        last_tick=333,
     )
 
     path, payload, _headers = api.post_calls[0]
     assert path == "/api/bots/heartbeat"
 
-    assert payload["heartbeat_at"] == 111
-    assert payload["last_run"] == 111
-    assert payload["last_tick"] == 333
-
+    assert payload["effective_state"] == "offline"
+    assert payload["mode"] == "paper"
     assert payload["message"] == "Waiting"
     assert payload["reason_code"] == "market_closed"
     assert payload["paused_reason"] == "Market closed"
@@ -236,8 +226,7 @@ def test_heartbeat_tick_noops_without_runner_user_id(monkeypatch):
     api_client.heartbeat_tick(
         api,
         bot_id="ema_trend",
-        intent="running",
-        effective_state="running",
+        runtime_state="running",
         mode="paper",
     )
 
@@ -246,14 +235,12 @@ def test_heartbeat_tick_noops_without_runner_user_id(monkeypatch):
 
 def test_heartbeat_tick_posts_when_runner_user_id_present(monkeypatch):
     monkeypatch.setenv("RUNNER_USER_ID", "u1")
-    monkeypatch.setattr(api_client, "now_epoch", lambda: 500)
 
     api = FakeAPI()
     api_client.heartbeat_tick(
         api,
         bot_id="ema_trend",
-        intent="running",
-        effective_state="running",
+        runtime_state="running",
         mode="paper",
     )
 
@@ -261,4 +248,6 @@ def test_heartbeat_tick_posts_when_runner_user_id_present(monkeypatch):
     path, payload, _headers = api.post_calls[0]
     assert path == "/api/bots/heartbeat"
     assert payload["user_id"] == "u1"
-    assert payload["last_tick"] == 500
+    assert payload["bot_id"] == "ema_trend"
+    assert payload["effective_state"] == "running"
+    assert payload["mode"] == "paper"
