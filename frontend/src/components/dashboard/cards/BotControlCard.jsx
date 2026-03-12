@@ -273,7 +273,6 @@ export default function BotControlCard({
     busy,
     armBusy,
     startBusy,
-    pauseBusy,
     isRunningEff,
     isWaiting,
     isStarting,
