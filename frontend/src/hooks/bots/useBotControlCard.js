@@ -15,91 +15,52 @@ import botUnavailableSquirrel from "../../assets/modal/bot-unavailable-squirrel.
  */
 
 /* -------------------------------------------------------------------------- */
-/* Constants                                                                   */
+/* Constants                                                                  */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Storage key base for the last selected bot.
- *
- * @type {string}
- */
 const LAST_SELECTED_BOT_KEY = "ustock:last_bot_id_v1";
 
-/**
- * Grace windows used to smooth over backend eventual consistency after actions.
- * These windows prevent the UI from immediately snapping back to stale state.
- */
-const ARM_GRACE_MS = 10_000;
-const DISARM_GRACE_MS = 10_000;
-const START_GRACE_MS = 20_000;
-const PAUSE_GRACE_MS = 12_000;
+const ARM_GRACE_MS = 8_000;
+const DISARM_GRACE_MS = 8_000;
+const START_GRACE_MS = 12_000;
+const PAUSE_GRACE_MS = 8_000;
+
+const STATUS_THROTTLE_MS = 1_000;
 
 /**
- * Throttle interval for repeated non-forced status fetches.
+ * Polling cadence.
  *
- * @type {number}
+ * Keep this conservative so the frontend does not aggressively spam backend
+ * status routes while still feeling responsive during active transitions.
  */
-const STATUS_THROTTLE_MS = 600;
+const POLL_TRANSITION_MS = 5_000;
+const POLL_IDLE_MS = 15_000;
+const LOG_POLL_MS = 10_000;
 
 /* -------------------------------------------------------------------------- */
-/* Generic helpers                                                             */
+/* Generic helpers                                                            */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Returns a plain object or an empty object.
- *
- * @param {any} value
- * @returns {Record<string, any>}
- */
 function asDict(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
 
-/**
- * Returns an array or an empty array.
- *
- * @param {any} value
- * @returns {any[]}
- */
 function asList(value) {
   return Array.isArray(value) ? value : [];
 }
 
-/**
- * Converts a value to a trimmed string.
- *
- * @param {any} value
- * @returns {string}
- */
 function toNumStr(value) {
   return String(value ?? "").trim();
 }
 
-/**
- * Returns the current timestamp in milliseconds.
- *
- * @returns {number}
- */
 function nowMs() {
   return Date.now();
 }
 
-/**
- * Sleep helper for small async timing gaps.
- *
- * @param {number} ms
- * @returns {Promise<void>}
- */
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/**
- * Safely stringifies JSON-like data.
- *
- * @param {any} value
- * @returns {string}
- */
 function safeJson(value) {
   try {
     return JSON.stringify(value, null, 2);
@@ -108,12 +69,6 @@ function safeJson(value) {
   }
 }
 
-/**
- * Extracts the most useful human-readable message from an error-like object.
- *
- * @param {any} err
- * @returns {string}
- */
 function getErrorMessage(err) {
   if (!err) return "Unknown error";
 
@@ -129,15 +84,9 @@ function getErrorMessage(err) {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Log helpers                                                                 */
+/* Log helpers                                                                */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Maps a log item to a normalized severity.
- *
- * @param {any} item
- * @returns {"info" | "warn" | "error"}
- */
 function logSeverity(item) {
   const level = String(item?.level || "").toLowerCase();
   if (level === "error") return "error";
@@ -145,24 +94,12 @@ function logSeverity(item) {
   return "info";
 }
 
-/**
- * Returns the CSS class name for a log severity.
- *
- * @param {"info" | "warn" | "error"} severity
- * @returns {string}
- */
 function toneClass(severity) {
   if (severity === "error") return "blog-evt blog-evt--error";
   if (severity === "warn") return "blog-evt blog-evt--warn";
   return "blog-evt";
 }
 
-/**
- * Extracts the most relevant message from a log item.
- *
- * @param {any} item
- * @returns {string}
- */
 function logMessageFor(item) {
   const payload = item?.payload;
 
@@ -174,15 +111,9 @@ function logMessageFor(item) {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Runtime state helpers                                                       */
+/* Runtime state helpers                                                      */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Returns true when a value represents a truthy "armed" flag.
- *
- * @param {any} value
- * @returns {boolean}
- */
 function truthy(value) {
   if (value === true || value === 1) return true;
 
@@ -190,12 +121,6 @@ function truthy(value) {
   return s === "true" || s === "armed" || s === "1" || s === "yes";
 }
 
-/**
- * Reads an "armed" flag from a status snapshot.
- *
- * @param {Record<string, any> | null | undefined} snapshot
- * @returns {boolean}
- */
 function readArmedFlag(snapshot) {
   if (!snapshot || typeof snapshot !== "object") return false;
 
@@ -210,12 +135,6 @@ function readArmedFlag(snapshot) {
   return armedState === "armed";
 }
 
-/**
- * Normalizes a raw status payload into a flatter shape with a nested market object.
- *
- * @param {any} data
- * @returns {Record<string, any>}
- */
 function normalizeStatusPayload(data) {
   const root = asDict(data);
   const status = asDict(root.status) || asDict(root.snapshot) || asDict(root.data) || root;
@@ -226,55 +145,25 @@ function normalizeStatusPayload(data) {
   return merged;
 }
 
-/**
- * Returns a normalized effective state string.
- *
- * @param {any} value
- * @returns {string}
- */
 function normalizeEffectiveState(value) {
   return String(value || "").trim().toLowerCase();
 }
 
-/**
- * Returns true if the effective state represents running.
- *
- * @param {string} effectiveState
- * @returns {boolean}
- */
 function isRunningState(effectiveState) {
   const s = normalizeEffectiveState(effectiveState);
   return s.includes("running");
 }
 
-/**
- * Returns true if the effective state represents waiting.
- *
- * @param {string} effectiveState
- * @returns {boolean}
- */
 function isWaitingState(effectiveState) {
   const s = normalizeEffectiveState(effectiveState);
-  return s.includes("waiting");
+  return s.includes("waiting") || s === "starting" || s === "stopping";
 }
 
-/**
- * Returns true if the effective state represents a stopped or idle family state.
- *
- * @param {string} effectiveState
- * @returns {boolean}
- */
 function isStoppedFamilyState(effectiveState) {
   const s = normalizeEffectiveState(effectiveState);
   return s.includes("stopped") || s.includes("paused") || s.includes("idle") || s.includes("offline");
 }
 
-/**
- * Maps an effective state to a tone.
- *
- * @param {string} effectiveState
- * @returns {"neutral" | "pos" | "warn" | "neg"}
- */
 function runtimeToneFromEffective(effectiveState) {
   const s = normalizeEffectiveState(effectiveState);
 
@@ -289,13 +178,6 @@ function runtimeToneFromEffective(effectiveState) {
   return "neutral";
 }
 
-/**
- * Maps an effective state + intent to a compact human-readable runtime label.
- *
- * @param {string} effectiveState
- * @param {string} intent
- * @returns {string}
- */
 function runtimeLabelFromEffective(effectiveState, intent) {
   const e = normalizeEffectiveState(effectiveState);
   const i = String(intent || "").toLowerCase();
@@ -319,19 +201,9 @@ function runtimeLabelFromEffective(effectiveState, intent) {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Risk helpers                                                                */
+/* Risk helpers                                                               */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Validates the risk settings draft.
- *
- * @param {{
- *   risk_per_trade: string,
- *   max_trades_per_day: string,
- *   min_confidence: string
- * }} draft
- * @returns {Record<string, string>}
- */
 function validateRiskDraft(draft) {
   const errors = {};
 
@@ -354,15 +226,9 @@ function validateRiskDraft(draft) {
 }
 
 /* -------------------------------------------------------------------------- */
-/* API normalization helpers                                                   */
+/* API normalization helpers                                                  */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Normalizes available bot payloads from several server shapes.
- *
- * @param {any} data
- * @returns {Array<{id: string, name: string, description: string}>}
- */
 function normalizeAvailableBots(data) {
   const root = asDict(data);
   const raw = root.items ?? root.bots ?? root.available ?? root.bot_ids ?? root.botIds ?? data;
@@ -395,12 +261,6 @@ function normalizeAvailableBots(data) {
   });
 }
 
-/**
- * Returns true when the error looks like a 404/not-found response.
- *
- * @param {any} err
- * @returns {boolean}
- */
 function isNotFoundError(err) {
   const status = Number(err?.status || err?.response?.status || 0);
   if (status === 404) return true;
@@ -409,12 +269,6 @@ function isNotFoundError(err) {
   return message.includes("404") || message.includes("not found");
 }
 
-/**
- * Returns true when the error clearly indicates the selected bot is unavailable.
- *
- * @param {any} err
- * @returns {boolean}
- */
 function isBotUnavailableError(err) {
   const status = Number(err?.status || err?.response?.status || 0);
   const message = String(err?.message || "").toLowerCase();
@@ -440,13 +294,6 @@ function isBotUnavailableError(err) {
   return explicit;
 }
 
-/**
- * GET helper that falls back across multiple possible routes.
- *
- * @param {string[]} paths
- * @param {Record<string, any>} params
- * @returns {Promise<any>}
- */
 async function apiGetWithFallback(paths, params) {
   let lastErr = null;
 
@@ -462,13 +309,6 @@ async function apiGetWithFallback(paths, params) {
   throw lastErr;
 }
 
-/**
- * POST helper that falls back across multiple possible routes.
- *
- * @param {string[]} paths
- * @param {Record<string, any>} body
- * @returns {Promise<any>}
- */
 async function apiPostWithFallback(paths, body) {
   let lastErr = null;
 
@@ -485,26 +325,14 @@ async function apiPostWithFallback(paths, body) {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Persistence helpers                                                         */
+/* Persistence helpers                                                        */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Builds a storage key for a user/session-scoped bot selection.
- *
- * @param {string | number | null | undefined} storageScope
- * @returns {string}
- */
 function buildStorageKey(storageScope) {
   const scope = String(storageScope || "").trim();
   return scope ? `${LAST_SELECTED_BOT_KEY}:${scope}` : LAST_SELECTED_BOT_KEY;
 }
 
-/**
- * Reads a stored bot id from localStorage.
- *
- * @param {string} storageKey
- * @returns {string}
- */
 function readStoredBotId(storageKey) {
   try {
     const value = window.localStorage.getItem(storageKey);
@@ -515,13 +343,6 @@ function readStoredBotId(storageKey) {
   }
 }
 
-/**
- * Writes a stored bot id to localStorage.
- *
- * @param {string} storageKey
- * @param {string} botId
- * @returns {void}
- */
 function writeStoredBotId(storageKey, botId) {
   try {
     const s = String(botId || "").trim();
@@ -536,17 +357,9 @@ function writeStoredBotId(storageKey, botId) {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Pending action helpers                                                      */
+/* Pending action helpers                                                     */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Creates a pending action record.
- *
- * @param {"arm" | "disarm" | "start" | "pause"} kind
- * @param {string} botId
- * @param {number} durationMs
- * @returns {{ kind: "arm" | "disarm" | "start" | "pause", botId: string, until: number }}
- */
 function makePendingAction(kind, botId, durationMs) {
   return {
     kind,
@@ -555,13 +368,6 @@ function makePendingAction(kind, botId, durationMs) {
   };
 }
 
-/**
- * Returns true when a pending action is still active for the selected bot.
- *
- * @param {{ kind: string, botId: string, until: number } | null} pendingAction
- * @param {string} selectedBotId
- * @returns {boolean}
- */
 function isPendingForSelectedBot(pendingAction, selectedBotId) {
   if (!pendingAction) return false;
   if (!selectedBotId) return false;
@@ -569,14 +375,6 @@ function isPendingForSelectedBot(pendingAction, selectedBotId) {
   return pendingAction.until > nowMs();
 }
 
-/**
- * Returns true if the pending action can be cleared based on the latest snapshot.
- *
- * @param {{ kind: string, botId: string, until: number } | null} pendingAction
- * @param {Record<string, any> | null} snapshot
- * @param {string} selectedBotId
- * @returns {boolean}
- */
 function shouldClearPendingAction(pendingAction, snapshot, selectedBotId) {
   if (!pendingAction) return true;
   if (!selectedBotId) return true;
@@ -602,17 +400,6 @@ function shouldClearPendingAction(pendingAction, snapshot, selectedBotId) {
   return true;
 }
 
-/**
- * Returns a display-effective-state that smooths over stale backend snapshots
- * during transition windows after start/pause actions.
- *
- * @param {string} rawEffectiveState
- * @param {string} intent
- * @param {string} desiredState
- * @param {{ kind: string, botId: string, until: number } | null} pendingAction
- * @param {string} selectedBotId
- * @returns {string}
- */
 function deriveDisplayEffectiveState(rawEffectiveState, intent, desiredState, pendingAction, selectedBotId) {
   const effectiveState = normalizeEffectiveState(rawEffectiveState);
 
@@ -647,31 +434,9 @@ function deriveDisplayEffectiveState(rawEffectiveState, intent, desiredState, pe
 }
 
 /* -------------------------------------------------------------------------- */
-/* Hook                                                                        */
+/* Hook                                                                       */
 /* -------------------------------------------------------------------------- */
 
-/**
- * useBotControlCard
- *
- * State and behavior controller for the dashboard BotControlCard.
- *
- * Responsibilities:
- * - load and persist bot selection
- * - fetch available bots, status, logs, and risk settings
- * - manage arm/start/pause/disarm actions
- * - smooth over eventual consistency after mutations with pending transitions
- * - derive button enablement and display state
- *
- * @param {{
- *   activeBotId?: string | null,
- *   onActiveBotChange?: (botId: string) => void,
- *   onStartBot?: (botId: string) => Promise<any> | any,
- *   onStopBot?: (botId: string) => Promise<any> | any,
- *   COPY?: Record<string, any>,
- *   storageScope?: string | number | null
- * }} params
- * @returns {Record<string, any>}
- */
 export default function useBotControlCard({
   activeBotId,
   onActiveBotChange,
@@ -739,31 +504,19 @@ export default function useBotControlCard({
     return scope ? `ustock_select_bot_prompt_shown_v1:${scope}` : "ustock_select_bot_prompt_shown_v1";
   }, [storageScope]);
 
-  /**
-   * Composite busy state.
-   */
   const busy = useMemo(
     () => armBusy || startBusy || pauseBusy || riskBusy || hardLoading,
     [armBusy, startBusy, pauseBusy, riskBusy, hardLoading]
   );
 
-  /**
-   * Current selection state.
-   */
   const hasSelection = useMemo(() => safeStr(selected, "") !== "", [selected]);
 
-  /**
-   * Selected bot metadata from available list.
-   */
   const selectedMeta = useMemo(() => {
     const botId = safeStr(selected, "");
     if (!botId) return null;
     return (available || []).find((bot) => String(bot?.id || "") === botId) || null;
   }, [available, selected]);
 
-  /**
-   * Raw snapshot-derived values.
-   */
   const mode = useMemo(() => {
     const m = String(snapshot?.mode || "paper").toLowerCase();
     return m === "live" ? "live" : "paper";
@@ -795,37 +548,21 @@ export default function useBotControlCard({
     return Number.isFinite(n) ? n : null;
   }, [snapshot]);
 
-  /**
-   * Smooth display-effective state during post-action backend lag.
-   */
   const eff = useMemo(() => {
     return deriveDisplayEffectiveState(rawEff, intent, desiredState, pendingAction, safeStr(selected, ""));
   }, [rawEff, intent, desiredState, pendingAction, selected]);
 
-  /**
-   * Runtime tone + label should use display-effective state, not raw state.
-   */
   const runtimeTone = useMemo(() => runtimeToneFromEffective(eff), [eff]);
   const runtimeLabel = useMemo(() => runtimeLabelFromEffective(eff, intent), [eff, intent]);
 
-  /**
-   * Armed state may use a short optimistic window after arm/disarm.
-   */
   const isArmed = useMemo(() => {
     if (typeof optimisticArmed === "boolean") return optimisticArmed;
     return readArmedFlag(snapshot);
   }, [snapshot, optimisticArmed]);
 
-  /**
-   * Action-state booleans based on display-effective state.
-   */
   const isRunningEff = useMemo(() => isRunningState(eff), [eff]);
   const isWaiting = useMemo(() => isWaitingState(eff), [eff]);
 
-  /**
-   * Expose isStarting for the card. This now includes both the API mutation and
-   * the transition grace window after a successful start.
-   */
   const isStartPending = useMemo(() => {
     return isPendingForSelectedBot(pendingAction, safeStr(selected, "")) && pendingAction?.kind === "start";
   }, [pendingAction, selected]);
@@ -836,9 +573,6 @@ export default function useBotControlCard({
 
   const isStarting = useMemo(() => startBusy || isStartPending, [startBusy, isStartPending]);
 
-  /**
-   * Market-related derivations.
-   */
   const marketClosedBlocksStart = useMemo(() => {
     if (!hasSelection) return false;
     return snapshot?.market?.blocks_start === true;
@@ -861,9 +595,6 @@ export default function useBotControlCard({
     return "";
   }, [hasSelection, snapshot, marketClosedBlocksStart]);
 
-  /**
-   * Primary status line for display.
-   */
   const statusLine = useMemo(() => {
     if (!hasSelection) return "Select a bot to view status.";
 
@@ -875,9 +606,6 @@ export default function useBotControlCard({
     return parts.filter(Boolean).join(" · ");
   }, [hasSelection, runtimeLabel, mode, snapshot?.reason_code]);
 
-  /**
-   * Button enablement.
-   */
   const canArm = useMemo(() => {
     return hasSelection && !armBusy && !startBusy && !pauseBusy && !isArmed;
   }, [hasSelection, armBusy, startBusy, pauseBusy, isArmed]);
@@ -910,18 +638,14 @@ export default function useBotControlCard({
     return hasSelection && !pauseBusy && !startBusy && (isRunningEff || isWaiting || isStartPending);
   }, [hasSelection, pauseBusy, startBusy, isRunningEff, isWaiting, isStartPending]);
 
-  /**
-   * Polling interval. Poll faster while starting / waiting / running.
-   */
   const pollMs = useMemo(() => {
     if (!hasSelection) return 0;
-    if (isRunningEff || isWaiting || isStartPending || startBusy) return 2500;
-    return 5000;
-  }, [hasSelection, isRunningEff, isWaiting, isStartPending, startBusy]);
+    if (isRunningEff || isWaiting || isStartPending || isPausePending || startBusy || pauseBusy) {
+      return POLL_TRANSITION_MS;
+    }
+    return POLL_IDLE_MS;
+  }, [hasSelection, isRunningEff, isWaiting, isStartPending, isPausePending, startBusy, pauseBusy]);
 
-  /**
-   * Opens the standard error modal.
-   */
   const fail = useCallback((title, body, action = null, image = null, subtitle = "") => {
     setErrModal({
       title: title || "Something went wrong",
@@ -933,19 +657,11 @@ export default function useBotControlCard({
     setErrModalOpen(true);
   }, []);
 
-  /**
-   * Closes the standard error modal.
-   */
   const closeErrorModal = useCallback(() => {
     setErrModalOpen(false);
     setErrModal(null);
   }, []);
 
-  /**
-   * Clears the selected bot and resets most state related to that bot.
-   *
-   * @param {string} reason
-   */
   const unselectBot = useCallback(
     (reason = "") => {
       if (statusAbortRef.current) {
@@ -986,9 +702,37 @@ export default function useBotControlCard({
     [COPY, fail, onActiveBotChange, storageKey]
   );
 
-  /**
-   * Loads the list of available bots.
-   */
+  const applySnapshot = useCallback(
+    (data, botId) => {
+      const selectedBotId = safeStr(botId || selected, "");
+      if (!selectedBotId) return null;
+
+      const normalized = normalizeStatusPayload(data);
+      setSnapshot(normalized);
+      loadedBotsRef.current.add(selectedBotId);
+      initialStatusLoadedRef.current = true;
+
+      if (lastUnavailableBotRef.current === selectedBotId) {
+        lastUnavailableBotRef.current = "";
+      }
+
+      if (shouldClearPendingAction(pendingAction, normalized, selectedBotId)) {
+        setPendingAction(null);
+      }
+
+      if (pendingAction?.kind === "arm" && pendingAction.botId === selectedBotId && readArmedFlag(normalized)) {
+        setOptimisticArmed(null);
+      }
+
+      if (pendingAction?.kind === "disarm" && pendingAction.botId === selectedBotId && !readArmedFlag(normalized)) {
+        setOptimisticArmed(null);
+      }
+
+      return normalized;
+    },
+    [pendingAction, selected]
+  );
+
   const fetchAvailable = useCallback(async () => {
     try {
       const data = await apiGet("/api/bots/available", {});
@@ -1000,17 +744,6 @@ export default function useBotControlCard({
     }
   }, []);
 
-  /**
-   * Loads the latest status for the selected bot.
-   *
-   * Notes:
-   * - uses request sequencing + abort controller to avoid stale overwrites
-   * - uses hard loading for first-load experience
-   * - does not immediately clear pending start/pause transitions unless the server
-   *   confirms the new state or the grace window expires
-   *
-   * @param {{ force?: boolean }} options
-   */
   const fetchStatus = useCallback(
     async ({ force = false } = {}) => {
       const botId = safeStr(selected, "");
@@ -1042,35 +775,7 @@ export default function useBotControlCard({
         if (requestSeq !== statusReqSeqRef.current) return;
         if (safeStr(selected, "") !== botId) return;
 
-        const normalized = normalizeStatusPayload(data);
-
-        setSnapshot(normalized);
-        loadedBotsRef.current.add(botId);
-        initialStatusLoadedRef.current = true;
-
-        if (lastUnavailableBotRef.current === botId) {
-          lastUnavailableBotRef.current = "";
-        }
-
-        if (shouldClearPendingAction(pendingAction, normalized, botId)) {
-          setPendingAction(null);
-        }
-
-        if (
-          pendingAction?.kind === "arm" &&
-          pendingAction.botId === botId &&
-          readArmedFlag(normalized)
-        ) {
-          setOptimisticArmed(null);
-        }
-
-        if (
-          pendingAction?.kind === "disarm" &&
-          pendingAction.botId === botId &&
-          !readArmedFlag(normalized)
-        ) {
-          setOptimisticArmed(null);
-        }
+        applySnapshot(data, botId);
       } catch (err) {
         if (err?.name === "AbortError") return;
 
@@ -1103,14 +808,9 @@ export default function useBotControlCard({
         }
       }
     },
-    [selected, pendingAction, fail, unselectBot, COPY, storageKey, onActiveBotChange]
+    [selected, applySnapshot, fail, unselectBot, COPY, storageKey, onActiveBotChange]
   );
 
-  /**
-   * Handles modal error actions.
-   *
-   * @param {{ kind?: string } | null | undefined} action
-   */
   const handleErrorAction = useCallback(
     async (action) => {
       const kind = action?.kind || errModal?.action?.kind;
@@ -1126,9 +826,6 @@ export default function useBotControlCard({
     [closeErrorModal, errModal, fetchStatus, hasSelection]
   );
 
-  /**
-   * Loads recent log items for the selected bot.
-   */
   const fetchLog = useCallback(async () => {
     const botId = safeStr(selected, "");
     if (!botId) return;
@@ -1185,9 +882,6 @@ export default function useBotControlCard({
     }
   }, [selected, fail]);
 
-  /**
-   * Loads risk settings for the selected bot.
-   */
   const fetchRisk = useCallback(async () => {
     const botId = safeStr(selected, "");
     if (!botId) return;
@@ -1221,11 +915,6 @@ export default function useBotControlCard({
     }
   }, [selected, fail]);
 
-  /**
-   * Handles bot selection changes from the UI.
-   *
-   * @param {Event} event
-   */
   const onSelect = useCallback(
     (event) => {
       const value = safeStr(event?.target?.value, "");
@@ -1273,9 +962,6 @@ export default function useBotControlCard({
     [onActiveBotChange, storageKey]
   );
 
-  /**
-   * Open risk modal after loading risk data.
-   */
   const openRisk = useCallback(async () => {
     if (!hasSelection) return;
 
@@ -1287,9 +973,6 @@ export default function useBotControlCard({
     }
   }, [hasSelection, fetchRisk]);
 
-  /**
-   * Open log modal after loading log data.
-   */
   const openLog = useCallback(async () => {
     if (!hasSelection) return;
 
@@ -1301,27 +984,14 @@ export default function useBotControlCard({
     }
   }, [hasSelection, fetchLog]);
 
-  /**
-   * Close log modal.
-   */
   const closeLog = useCallback(() => setLogOpen(false), []);
-
-  /**
-   * Close risk modal.
-   */
   const closeRisk = useCallback(() => setRiskOpen(false), []);
 
-  /**
-   * Opens arm confirmation modal if arming is allowed.
-   */
   const requestArm = useCallback(() => {
     if (!canArm) return;
     setArmConfirmOpen(true);
   }, [canArm]);
 
-  /**
-   * Confirms arm action.
-   */
   const confirmArm = useCallback(async () => {
     const botId = safeStr(selected, "");
     if (!botId) return;
@@ -1329,14 +999,17 @@ export default function useBotControlCard({
     setArmBusy(true);
 
     try {
-      await apiPost("/api/bots/arm", { bot_id: botId });
+      const response = await apiPost("/api/bots/arm", { bot_id: botId });
 
       setOptimisticArmed(true);
       setPendingAction(makePendingAction("arm", botId, ARM_GRACE_MS));
       setArmConfirmOpen(false);
 
-      await fetchStatus({ force: true });
-      await sleep(250);
+      if (response && typeof response === "object") {
+        applySnapshot(response, botId);
+      }
+
+      await sleep(800);
       await fetchStatus({ force: true });
     } catch (err) {
       setOptimisticArmed(null);
@@ -1345,11 +1018,8 @@ export default function useBotControlCard({
     } finally {
       setArmBusy(false);
     }
-  }, [selected, fetchStatus, fail]);
+  }, [selected, applySnapshot, fetchStatus, fail]);
 
-  /**
-   * Disarms the selected bot.
-   */
   const doDisarm = useCallback(async () => {
     const botId = safeStr(selected, "");
     if (!botId) return;
@@ -1358,11 +1028,16 @@ export default function useBotControlCard({
     setArmBusy(true);
 
     try {
-      await apiPost("/api/bots/disarm", { bot_id: botId });
+      const response = await apiPost("/api/bots/disarm", { bot_id: botId });
 
       setOptimisticArmed(false);
       setPendingAction(makePendingAction("disarm", botId, DISARM_GRACE_MS));
 
+      if (response && typeof response === "object") {
+        applySnapshot(response, botId);
+      }
+
+      await sleep(800);
       await fetchStatus({ force: true });
     } catch (err) {
       setOptimisticArmed(null);
@@ -1371,23 +1046,13 @@ export default function useBotControlCard({
     } finally {
       setArmBusy(false);
     }
-  }, [selected, canDisarm, fetchStatus, fail]);
+  }, [selected, canDisarm, applySnapshot, fetchStatus, fail]);
 
-  /**
-   * Opens start confirmation modal if starting is allowed.
-   */
   const requestStart = useCallback(() => {
     if (!canStart) return;
     setStartConfirmOpen(true);
   }, [canStart]);
 
-  /**
-   * Confirms start action.
-   *
-   * Key behavior:
-   * - immediately enters a pending "start" grace window after a successful API call
-   * - this prevents the UI from reverting to stale "Stopped" snapshots while the runner catches up
-   */
   const confirmStart = useCallback(async () => {
     const botId = safeStr(selected, "");
     if (!botId) return;
@@ -1395,17 +1060,20 @@ export default function useBotControlCard({
     setStartBusy(true);
 
     try {
-      if (typeof onStartBot === "function") {
-        await onStartBot(botId);
-      } else {
-        await apiPost("/api/bots/start", { bot_id: botId });
-      }
+      const response =
+        typeof onStartBot === "function"
+          ? await onStartBot(botId)
+          : await apiPost("/api/bots/start", { bot_id: botId });
 
       setStartConfirmOpen(false);
+      setOptimisticArmed(true);
       setPendingAction(makePendingAction("start", botId, START_GRACE_MS));
 
-      await fetchStatus({ force: true });
-      await sleep(1200);
+      if (response && typeof response === "object") {
+        applySnapshot(response, botId);
+      }
+
+      await sleep(1500);
       await fetchStatus({ force: true });
     } catch (err) {
       setPendingAction(null);
@@ -1413,11 +1081,8 @@ export default function useBotControlCard({
     } finally {
       setStartBusy(false);
     }
-  }, [selected, onStartBot, fetchStatus, fail]);
+  }, [selected, onStartBot, applySnapshot, fetchStatus, fail]);
 
-  /**
-   * Pauses/stops the selected bot.
-   */
   const doPause = useCallback(async () => {
     const botId = safeStr(selected, "");
     if (!botId) return;
@@ -1426,13 +1091,18 @@ export default function useBotControlCard({
     setPauseBusy(true);
 
     try {
-      if (typeof onStopBot === "function") {
-        await onStopBot(botId);
-      } else {
-        await apiPost("/api/bots/stop", { bot_id: botId });
-      }
+      const response =
+        typeof onStopBot === "function"
+          ? await onStopBot(botId)
+          : await apiPost("/api/bots/stop", { bot_id: botId });
 
       setPendingAction(makePendingAction("pause", botId, PAUSE_GRACE_MS));
+
+      if (response && typeof response === "object") {
+        applySnapshot(response, botId);
+      }
+
+      await sleep(800);
       await fetchStatus({ force: true });
     } catch (err) {
       setPendingAction(null);
@@ -1440,23 +1110,12 @@ export default function useBotControlCard({
     } finally {
       setPauseBusy(false);
     }
-  }, [selected, canPause, onStopBot, fetchStatus, fail]);
+  }, [selected, canPause, onStopBot, applySnapshot, fetchStatus, fail]);
 
-  /**
-   * Updates risk draft field values.
-   *
-   * @param {string} key
-   * @param {string} value
-   */
   const onRiskChange = useCallback((key, value) => {
     setRiskDraft((prev) => ({ ...prev, [key]: value }));
   }, []);
 
-  /**
-   * Marks a risk field as touched and updates that field's validation state.
-   *
-   * @param {string} key
-   */
   const onRiskBlur = useCallback(
     (key) => {
       setRiskTouched((prev) => ({ ...prev, [key]: true }));
@@ -1474,9 +1133,6 @@ export default function useBotControlCard({
     [riskDraft]
   );
 
-  /**
-   * Persists risk settings.
-   */
   const saveRisk = useCallback(async () => {
     const botId = safeStr(selected, "");
     if (!botId) return;
@@ -1514,13 +1170,6 @@ export default function useBotControlCard({
     }
   }, [selected, riskDraft, fetchStatus, fail]);
 
-  /* ------------------------------------------------------------------------ */
-  /* Effects                                                                   */
-  /* ------------------------------------------------------------------------ */
-
-  /**
-   * Restore selection from storage when parent has not supplied a bot id yet.
-   */
   useEffect(() => {
     const propId = safeStr(activeBotId, "");
     const sel = safeStr(selected, "");
@@ -1540,9 +1189,6 @@ export default function useBotControlCard({
     loadedBotsRef.current.delete(stored);
   }, [activeBotId, selected, storageKey, onActiveBotChange]);
 
-  /**
-   * When parent provides an active bot id, accept it if local selection is empty.
-   */
   useEffect(() => {
     const propId = safeStr(activeBotId, "");
     if (!propId) return;
@@ -1551,9 +1197,6 @@ export default function useBotControlCard({
     writeStoredBotId(storageKey, propId);
   }, [activeBotId, storageKey]);
 
-  /**
-   * Prompt logic for "please select a bot" style UX.
-   */
   useEffect(() => {
     const propId = safeStr(activeBotId, "");
     const sel = safeStr(selected, "");
@@ -1577,9 +1220,6 @@ export default function useBotControlCard({
     setSelectPromptOpen(true);
   }, [activeBotId, selected, available, selectPromptOpen, selectPromptKey]);
 
-  /**
-   * If the current selection disappears from the available list, clear it.
-   */
   useEffect(() => {
     if (!availableLoaded) return;
 
@@ -1593,9 +1233,6 @@ export default function useBotControlCard({
     }
   }, [availableLoaded, available, selected, unselectBot, COPY]);
 
-  /**
-   * Clear pending-action grace windows once they expire.
-   */
   useEffect(() => {
     if (pendingActionClearTimerRef.current) {
       clearTimeout(pendingActionClearTimerRef.current);
@@ -1610,7 +1247,7 @@ export default function useBotControlCard({
       setPendingAction((current) => {
         if (!current) return null;
         if (current.until <= nowMs()) return null;
-        return current;
+        return current.until <= nowMs() ? null : current;
       });
     }, msRemaining + 20);
 
@@ -1622,9 +1259,6 @@ export default function useBotControlCard({
     };
   }, [pendingAction]);
 
-  /**
-   * Clear optimistic armed override once confirmed or once the grace window expires.
-   */
   useEffect(() => {
     if (!pendingAction || !selected) return;
     if (pendingAction.botId !== selected) return;
@@ -1636,16 +1270,10 @@ export default function useBotControlCard({
     }
   }, [pendingAction, selected]);
 
-  /**
-   * Initial available-bots load.
-   */
   useEffect(() => {
     fetchAvailable();
   }, [fetchAvailable]);
 
-  /**
-   * Status polling lifecycle.
-   */
   useEffect(() => {
     if (!hasSelection) {
       if (pollTimerRef.current) {
@@ -1674,22 +1302,16 @@ export default function useBotControlCard({
     };
   }, [hasSelection, selected, fetchStatus, pollMs]);
 
-  /**
-   * Refresh logs while log modal is open.
-   */
   useEffect(() => {
     if (!logOpen) return;
 
     const timer = setInterval(() => {
       fetchLog();
-    }, 5000);
+    }, LOG_POLL_MS);
 
     return () => clearInterval(timer);
   }, [logOpen, fetchLog]);
 
-  /**
-   * Cleanup on unmount.
-   */
   useEffect(() => {
     return () => {
       if (statusAbortRef.current) {
