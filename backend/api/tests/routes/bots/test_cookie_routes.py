@@ -98,18 +98,34 @@ def test_stop_rejects_missing_bot_id(client):
 
 
 def test_intents_snapshot_returns_preview(client):
-    mock_svc = Mock()
-    mock_svc.status.return_value = {
-        "lastIntents": 2,
-        "lastIntentsAt": 1710000000,
-        "lastIntentsPreview": [{"symbol": "AAPL"}, {"symbol": "MSFT"}],
-    }
+    mock_sb = Mock()
+    mock_query = Mock()
 
-    client.app.dependency_overrides[get_bot_service] = lambda: mock_svc
+    mock_sb.table.return_value = mock_query
+    mock_query.select.return_value = mock_query
+    mock_query.eq.return_value = mock_query
+    mock_query.order.return_value = mock_query
+    mock_query.limit.return_value = mock_query
+    mock_query.execute.return_value = Mock(
+        data=[
+            {
+                "ts": 1710000000,
+                "action": "intent_summary",
+                "source": "runner",
+                "details": {
+                    "count": 2,
+                    "preview": [{"symbol": "AAPL"}, {"symbol": "MSFT"}],
+                },
+            }
+        ]
+    )
 
     with patch(
         "api.routes.bots.cookie_routes.require_cookie_user_id",
         return_value="user-123",
+    ), patch(
+        "api.routes.bots.cookie_routes.get_supabase_service",
+        return_value=mock_sb,
     ):
         response = client.get(
             "/api/bots/intents",
@@ -124,4 +140,12 @@ def test_intents_snapshot_returns_preview(client):
         "ts": 1710000000,
         "items": [{"symbol": "AAPL"}],
     }
-    mock_svc.status.assert_called_once_with("user-123", "ema_trend")
+
+    mock_sb.table.assert_called_once_with("bot_logs")
+    mock_query.select.assert_called_once_with("ts,details,action,source")
+    mock_query.eq.assert_any_call("user_id", "user-123")
+    mock_query.eq.assert_any_call("bot_id", "ema_trend")
+    mock_query.eq.assert_any_call("source", "runner")
+    mock_query.order.assert_called_once_with("ts", desc=True)
+    mock_query.limit.assert_called_once_with(50)
+    mock_query.execute.assert_called_once_with()

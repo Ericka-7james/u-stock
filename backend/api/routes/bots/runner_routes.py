@@ -43,20 +43,7 @@ router = APIRouter()
 
 
 def _require_runner_uid_claim(claims: Dict[str, Any]) -> str:
-    """Returns the authenticated application user id from runner claims.
-
-    Runner JWTs use `sub` for the runner id, so this helper only accepts a
-    user id from the dedicated `uid` claim or legacy `user_id` claim.
-
-    Args:
-        claims: Decoded runner JWT claims.
-
-    Raises:
-        HTTPException: If no usable user id is present in the claims.
-
-    Returns:
-        str: Authenticated application user id.
-    """
+    """Returns the authenticated application user id from runner claims."""
     uid = str(claims.get("uid") or claims.get("user_id") or "").strip()
     if not uid:
         raise HTTPException(
@@ -67,23 +54,7 @@ def _require_runner_uid_claim(claims: Dict[str, Any]) -> str:
 
 
 def _resolve_runner_user_id(*, body: Dict[str, Any], claims: Dict[str, Any]) -> str:
-    """Resolves the authenticated user id for a runner-authenticated request.
-
-    The effective user id is always sourced from verified JWT claims. If the
-    request payload also supplies a user id, it is optionally enforced against
-    the JWT `uid` claim via the shared runner auth enforcement hook.
-
-    Args:
-        body: Validated request payload.
-        claims: Decoded runner JWT claims.
-
-    Raises:
-        HTTPException: If the runner token is not bound to a user or if the
-            payload user id does not match the enforced JWT claim.
-
-    Returns:
-        str: Effective authenticated application user id.
-    """
+    """Resolves the authenticated user id for a runner-authenticated request."""
     uid = _require_runner_uid_claim(claims)
 
     payload_user_id = str(body.get("user_id") or "").strip()
@@ -100,17 +71,7 @@ def _runner_status_response(
     user_id: str,
     bot_id: str,
 ) -> Dict[str, Any]:
-    """Builds a runner-facing status response.
-
-    Args:
-        service_response: Response returned by the bot service.
-        runner_id: Authenticated runner id.
-        user_id: Authenticated application user id.
-        bot_id: Validated bot identifier.
-
-    Returns:
-        Dict[str, Any]: Response enriched with runner context.
-    """
+    """Builds a runner-facing status response."""
     out = dict(service_response) if isinstance(service_response, dict) else {}
     out.setdefault("runner_id", runner_id)
     out.setdefault("user_id", user_id)
@@ -119,17 +80,7 @@ def _runner_status_response(
 
 
 def _require_items_list(raw_items: Any) -> List[Any]:
-    """Validates and returns the submitted intents list.
-
-    Args:
-        raw_items: Raw `items` field from the request payload.
-
-    Raises:
-        HTTPException: If `items` is not a list.
-
-    Returns:
-        List[Any]: Submitted intents list.
-    """
+    """Validates and returns the submitted intents list."""
     items = raw_items or []
     if not isinstance(items, list):
         logger.warning("Runner submitted non-list intents payload")
@@ -147,25 +98,7 @@ def heartbeat(
     claims: Dict[str, Any] = Depends(require_bot_runner_claims),
     svc: BotService = Depends(get_bot_service),
 ) -> Dict[str, Any]:
-    """Accepts a heartbeat from an authenticated runner.
-
-    The heartbeat is bound to the authenticated user from the runner JWT. If
-    uid-claim enforcement is enabled, any provided payload user id must match
-    the JWT uid claim.
-
-    Args:
-        payload: Incoming heartbeat request body.
-        runner_id: Authenticated runner id from JWT `sub`.
-        claims: Decoded runner JWT claims.
-        svc: Bot service dependency.
-
-    Raises:
-        HTTPException: If the payload is invalid, the bot id is invalid, or
-            the runner token is not bound to a user.
-
-    Returns:
-        Dict[str, Any]: Service heartbeat response.
-    """
+    """Accepts a heartbeat from an authenticated runner."""
     body = require_payload_obj(payload)
     bid = require_bot_id(body.get("bot_id"))
     uid = _resolve_runner_user_id(body=body, claims=claims)
@@ -181,11 +114,33 @@ def heartbeat(
             "runner_id": runner_id,
             "bot_id": bid,
             "user_id": uid,
+            "mode": str(safe_payload.get("mode") or "").strip().lower() or None,
+            "runtime_state": str(
+                safe_payload.get("runtime_state") or safe_payload.get("effective_state") or ""
+            ).strip().lower()
+            or None,
         },
     )
 
-    return svc.heartbeat(uid, safe_payload)
+    result = svc.heartbeat(uid, safe_payload)
 
+    if not isinstance(result, dict):
+        logger.error(
+            "BotService heartbeat returned non-dict result",
+            extra={
+                "runner_id": runner_id,
+                "bot_id": bid,
+                "user_id": uid,
+                "result_type": type(result).__name__,
+            },
+        )
+        return {
+            "ok": False,
+            "bot_id": bid,
+            "detail": "heartbeat returned invalid response",
+        }
+
+    return result
 
 @router.get("/status_runner")
 def status_runner(
@@ -198,19 +153,6 @@ def status_runner(
 
     This endpoint is bound to the authenticated application user carried in
     the runner JWT `uid` claim.
-
-    Args:
-        bot_id: Bot identifier.
-        runner_id: Authenticated runner id from JWT `sub`.
-        claims: Decoded runner JWT claims.
-        svc: Bot service dependency.
-
-    Raises:
-        HTTPException: If the bot id is invalid or the runner token is not
-            bound to a user.
-
-    Returns:
-        Dict[str, Any]: Current bot status response.
     """
     bid = require_bot_id(bot_id)
     uid = _require_runner_uid_claim(claims)
@@ -246,19 +188,6 @@ def submit_intents(
     If the payload supplies `user_id`, it is checked against the JWT uid claim
     when uid enforcement is enabled. The effective user id is always sourced
     from the verified claims.
-
-    Args:
-        payload: Incoming intents request body.
-        runner_id: Authenticated runner id from JWT `sub`.
-        claims: Decoded runner JWT claims.
-        svc: Bot service dependency.
-
-    Raises:
-        HTTPException: If the payload is invalid, bot id is invalid, items is
-            not a list, or the runner token is not bound to a user.
-
-    Returns:
-        Dict[str, Any]: Service response for submitted intents.
     """
     body = require_payload_obj(payload)
     bid = require_bot_id(body.get("bot_id"))
