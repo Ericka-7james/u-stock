@@ -1,10 +1,56 @@
 // frontend/src/hooks/bots/useBotControlCard.js
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { apiGet, apiPost } from "../../lib/api/botApi.js";
-import { safeStr } from "../../lib/format/botFormat.js";
+import { safeStr } from "../../../lib/format/botFormat.js";
+import { apiGet, apiPost } from "../../../lib/api/botApi.js";
 
-import botUnavailableSquirrel from "../../assets/modal/bot-unavailable-squirrel.png";
+import botUnavailableSquirrel from "../../../assets/modal/bot-unavailable-squirrel.png";
+
+import {
+  ARM_GRACE_MS,
+  DISARM_GRACE_MS,
+  START_GRACE_MS,
+  PAUSE_GRACE_MS,
+  LAST_SELECTED_BOT_KEY,
+  STATUS_THROTTLE_MS,
+  POLL_TRANSITION_MS,
+  POLL_IDLE_MS,
+  LOG_POLL_MS,
+} from "../botControlCard/botControlCard.constants.js";
+
+import { apiGetWithFallback, apiPostWithFallback } from "../botControlCard/botControlCard.api.js";
+
+import {
+  asDict,
+  asList,
+  toNumStr,
+  nowMs,
+  sleep,
+  safeJson,
+  getErrorMessage,
+  logSeverity,
+  toneClass,
+  logMessageFor,
+  readArmedFlag,
+  normalizeStatusPayload,
+  normalizeEffectiveState,
+  isRunningState,
+  isWaitingState,
+  isStoppedFamilyState,
+  runtimeToneFromEffective,
+  runtimeLabelFromEffective,
+  validateRiskDraft,
+  normalizeAvailableBots,
+  normalizeLogItems,
+  isBotUnavailableError,
+  buildStorageKey,
+  readStoredBotId,
+  writeStoredBotId,
+  makePendingAction,
+  isPendingForSelectedBot,
+  shouldClearPendingAction,
+  deriveDisplayEffectiveState,
+} from "../botControlCard/botControlCard.helpers.js";
 
 /**
  * IMPORTANT:
@@ -14,429 +60,6 @@ import botUnavailableSquirrel from "../../assets/modal/bot-unavailable-squirrel.
  * - UI components should consume this hook and render only.
  */
 
-/* -------------------------------------------------------------------------- */
-/* Constants                                                                  */
-/* -------------------------------------------------------------------------- */
-
-const LAST_SELECTED_BOT_KEY = "ustock:last_bot_id_v1";
-
-const ARM_GRACE_MS = 8_000;
-const DISARM_GRACE_MS = 8_000;
-const START_GRACE_MS = 12_000;
-const PAUSE_GRACE_MS = 8_000;
-
-const STATUS_THROTTLE_MS = 1_000;
-
-/**
- * Polling cadence.
- *
- * Keep this conservative so the frontend does not aggressively spam backend
- * status routes while still feeling responsive during active transitions.
- */
-const POLL_TRANSITION_MS = 5_000;
-const POLL_IDLE_MS = 15_000;
-const LOG_POLL_MS = 10_000;
-
-/* -------------------------------------------------------------------------- */
-/* Generic helpers                                                            */
-/* -------------------------------------------------------------------------- */
-
-function asDict(value) {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
-}
-
-function asList(value) {
-  return Array.isArray(value) ? value : [];
-}
-
-function toNumStr(value) {
-  return String(value ?? "").trim();
-}
-
-function nowMs() {
-  return Date.now();
-}
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function safeJson(value) {
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch {
-    return String(value);
-  }
-}
-
-function getErrorMessage(err) {
-  if (!err) return "Unknown error";
-
-  const body =
-    err?.detail?.message ||
-    err?.detail?.detail ||
-    err?.response?.data?.detail ||
-    err?.response?.data?.message ||
-    err?.message;
-
-  const text = String(body || err).trim();
-  return text || "Unknown error";
-}
-
-/* -------------------------------------------------------------------------- */
-/* Log helpers                                                                */
-/* -------------------------------------------------------------------------- */
-
-function logSeverity(item) {
-  const level = String(item?.level || "").toLowerCase();
-  if (level === "error") return "error";
-  if (level === "warn" || level === "warning") return "warn";
-  return "info";
-}
-
-function toneClass(severity) {
-  if (severity === "error") return "blog-evt blog-evt--error";
-  if (severity === "warn") return "blog-evt blog-evt--warn";
-  return "blog-evt";
-}
-
-function logMessageFor(item) {
-  const payload = item?.payload;
-
-  if (typeof payload?.message === "string" && payload.message.trim()) return payload.message.trim();
-  if (typeof item?.message === "string" && item.message.trim()) return item.message.trim();
-  if (typeof payload?.error === "string" && payload.error.trim()) return payload.error.trim();
-
-  return "";
-}
-
-/* -------------------------------------------------------------------------- */
-/* Runtime state helpers                                                      */
-/* -------------------------------------------------------------------------- */
-
-function truthy(value) {
-  if (value === true || value === 1) return true;
-
-  const s = String(value ?? "").trim().toLowerCase();
-  return s === "true" || s === "armed" || s === "1" || s === "yes";
-}
-
-function readArmedFlag(snapshot) {
-  if (!snapshot || typeof snapshot !== "object") return false;
-
-  if (truthy(snapshot.armed)) return true;
-  if (truthy(snapshot.is_armed)) return true;
-  if (truthy(snapshot.isArmed)) return true;
-
-  const armedState = String(snapshot.armed_state ?? snapshot.armedState ?? snapshot.arm_state ?? "")
-    .trim()
-    .toLowerCase();
-
-  return armedState === "armed";
-}
-
-function normalizeStatusPayload(data) {
-  const root = asDict(data);
-  const status = asDict(root.status) || asDict(root.snapshot) || asDict(root.data) || root;
-
-  const merged = { ...root, ...status };
-  merged.market = asDict(status.market) || asDict(root.market) || {};
-
-  return merged;
-}
-
-function normalizeEffectiveState(value) {
-  return String(value || "").trim().toLowerCase();
-}
-
-function isRunningState(effectiveState) {
-  const s = normalizeEffectiveState(effectiveState);
-  return s.includes("running");
-}
-
-function isWaitingState(effectiveState) {
-  const s = normalizeEffectiveState(effectiveState);
-  return s.includes("waiting") || s === "starting" || s === "stopping";
-}
-
-function isStoppedFamilyState(effectiveState) {
-  const s = normalizeEffectiveState(effectiveState);
-  return s.includes("stopped") || s.includes("paused") || s.includes("idle") || s.includes("offline");
-}
-
-function runtimeToneFromEffective(effectiveState) {
-  const s = normalizeEffectiveState(effectiveState);
-
-  if (!s) return "neutral";
-  if (s === "starting" || s === "waiting_for_runner") return "warn";
-  if (s === "stopping") return "warn";
-  if (s.includes("running")) return "pos";
-  if (s.includes("waiting")) return "warn";
-  if (s.includes("paused") || s.includes("stopped") || s.includes("idle")) return "neutral";
-  if (s.includes("error") || s.includes("failed") || s.includes("offline")) return "neg";
-
-  return "neutral";
-}
-
-function runtimeLabelFromEffective(effectiveState, intent) {
-  const e = normalizeEffectiveState(effectiveState);
-  const i = String(intent || "").toLowerCase();
-
-  if (e === "starting" || e === "waiting_for_runner") return "Starting";
-  if (e === "stopping") return "Stopping";
-  if (e === "waiting_for_market") return "Waiting";
-  if (e.includes("waiting")) return "Waiting";
-  if (e.includes("running")) return "Running";
-  if (e.includes("paused")) return "Paused";
-  if (e.includes("stopped")) return "Stopped";
-  if (e.includes("idle")) return "Idle";
-  if (e.includes("offline")) return "Offline";
-  if (e.includes("error") || e.includes("failed")) return "Error";
-
-  if (i === "running") return "Running";
-  if (i === "paused") return "Paused";
-  if (i === "stopped") return "Stopped";
-
-  return "Unknown";
-}
-
-/* -------------------------------------------------------------------------- */
-/* Risk helpers                                                               */
-/* -------------------------------------------------------------------------- */
-
-function validateRiskDraft(draft) {
-  const errors = {};
-
-  const riskPerTrade = Number(draft.risk_per_trade);
-  if (!Number.isFinite(riskPerTrade) || riskPerTrade <= 0 || riskPerTrade > 0.2) {
-    errors.risk_per_trade = "Enter a number between 0 and 0.20";
-  }
-
-  const maxTradesPerDay = Number(draft.max_trades_per_day);
-  if (!Number.isFinite(maxTradesPerDay) || !Number.isInteger(maxTradesPerDay) || maxTradesPerDay <= 0 || maxTradesPerDay > 200) {
-    errors.max_trades_per_day = "Enter a whole number between 1 and 200";
-  }
-
-  const minConfidence = Number(draft.min_confidence);
-  if (!Number.isFinite(minConfidence) || minConfidence < 0 || minConfidence > 1) {
-    errors.min_confidence = "Enter a number between 0 and 1";
-  }
-
-  return errors;
-}
-
-/* -------------------------------------------------------------------------- */
-/* API normalization helpers                                                  */
-/* -------------------------------------------------------------------------- */
-
-function normalizeAvailableBots(data) {
-  const root = asDict(data);
-  const raw = root.items ?? root.bots ?? root.available ?? root.bot_ids ?? root.botIds ?? data;
-  const items = asList(raw);
-
-  const normalized = items
-    .map((item) => {
-      if (typeof item === "string") {
-        const id = item.trim();
-        return id ? { id, name: id, description: "" } : null;
-      }
-
-      const obj = asDict(item);
-      const id = String(obj.id ?? obj.bot_id ?? obj.botId ?? obj.key ?? "").trim();
-      if (!id) return null;
-
-      return {
-        id,
-        name: String(obj.name ?? obj.label ?? id),
-        description: String(obj.description ?? obj.desc ?? ""),
-      };
-    })
-    .filter(Boolean);
-
-  const seen = new Set();
-  return normalized.filter((bot) => {
-    if (seen.has(bot.id)) return false;
-    seen.add(bot.id);
-    return true;
-  });
-}
-
-function isNotFoundError(err) {
-  const status = Number(err?.status || err?.response?.status || 0);
-  if (status === 404) return true;
-
-  const message = String(err?.message || err || "").toLowerCase();
-  return message.includes("404") || message.includes("not found");
-}
-
-function isBotUnavailableError(err) {
-  const status = Number(err?.status || err?.response?.status || 0);
-  const message = String(err?.message || "").toLowerCase();
-  const detailMessage = String(
-    err?.detail?.message ||
-      err?.detail?.detail ||
-      err?.response?.data?.detail ||
-      err?.response?.data?.message ||
-      ""
-  ).toLowerCase();
-
-  const blob = `${message} ${detailMessage}`.trim();
-
-  const explicit =
-    blob.includes("unknown bot") ||
-    blob.includes("bot not registered") ||
-    blob.includes("not wired") ||
-    blob.includes("not hooked") ||
-    blob.includes("bot unavailable") ||
-    blob.includes("bot not found");
-
-  if (status === 404) return explicit || blob.includes("bot");
-  return explicit;
-}
-
-async function apiGetWithFallback(paths, params) {
-  let lastErr = null;
-
-  for (const path of paths) {
-    try {
-      return await apiGet(path, params);
-    } catch (err) {
-      lastErr = err;
-      if (!isNotFoundError(err)) break;
-    }
-  }
-
-  throw lastErr;
-}
-
-async function apiPostWithFallback(paths, body) {
-  let lastErr = null;
-
-  for (const path of paths) {
-    try {
-      return await apiPost(path, body);
-    } catch (err) {
-      lastErr = err;
-      if (!isNotFoundError(err)) break;
-    }
-  }
-
-  throw lastErr;
-}
-
-/* -------------------------------------------------------------------------- */
-/* Persistence helpers                                                        */
-/* -------------------------------------------------------------------------- */
-
-function buildStorageKey(storageScope) {
-  const scope = String(storageScope || "").trim();
-  return scope ? `${LAST_SELECTED_BOT_KEY}:${scope}` : LAST_SELECTED_BOT_KEY;
-}
-
-function readStoredBotId(storageKey) {
-  try {
-    const value = window.localStorage.getItem(storageKey);
-    const s = String(value || "").trim();
-    return s || "";
-  } catch {
-    return "";
-  }
-}
-
-function writeStoredBotId(storageKey, botId) {
-  try {
-    const s = String(botId || "").trim();
-    if (!s) {
-      window.localStorage.removeItem(storageKey);
-      return;
-    }
-    window.localStorage.setItem(storageKey, s);
-  } catch {
-    // Ignore storage failures.
-  }
-}
-
-/* -------------------------------------------------------------------------- */
-/* Pending action helpers                                                     */
-/* -------------------------------------------------------------------------- */
-
-function makePendingAction(kind, botId, durationMs) {
-  return {
-    kind,
-    botId,
-    until: nowMs() + durationMs,
-  };
-}
-
-function isPendingForSelectedBot(pendingAction, selectedBotId) {
-  if (!pendingAction) return false;
-  if (!selectedBotId) return false;
-  if (pendingAction.botId !== selectedBotId) return false;
-  return pendingAction.until > nowMs();
-}
-
-function shouldClearPendingAction(pendingAction, snapshot, selectedBotId) {
-  if (!pendingAction) return true;
-  if (!selectedBotId) return true;
-  if (pendingAction.botId !== selectedBotId) return true;
-  if (pendingAction.until <= nowMs()) return true;
-
-  const effectiveState = normalizeEffectiveState(snapshot?.effective_state);
-  const armed = readArmedFlag(snapshot);
-
-  if (pendingAction.kind === "arm") return armed;
-  if (pendingAction.kind === "disarm") return !armed;
-
-  if (pendingAction.kind === "start") {
-    if (isRunningState(effectiveState) || isWaitingState(effectiveState)) return true;
-    return false;
-  }
-
-  if (pendingAction.kind === "pause") {
-    if (isStoppedFamilyState(effectiveState)) return true;
-    return false;
-  }
-
-  return true;
-}
-
-function deriveDisplayEffectiveState(rawEffectiveState, intent, desiredState, pendingAction, selectedBotId) {
-  const effectiveState = normalizeEffectiveState(rawEffectiveState);
-
-  if (!isPendingForSelectedBot(pendingAction, selectedBotId)) {
-    return effectiveState;
-  }
-
-  if (pendingAction.kind === "start") {
-    if (isRunningState(effectiveState) || isWaitingState(effectiveState)) return effectiveState;
-
-    const normalizedIntent = String(intent || "").toLowerCase();
-    const normalizedDesired = String(desiredState || "").toLowerCase();
-
-    if (normalizedIntent === "running" || normalizedDesired === "running") {
-      return "starting";
-    }
-
-    if (isStoppedFamilyState(effectiveState)) {
-      return "starting";
-    }
-
-    return effectiveState || "starting";
-  }
-
-  if (pendingAction.kind === "pause") {
-    if (isStoppedFamilyState(effectiveState)) return effectiveState;
-    if (isRunningState(effectiveState) || isWaitingState(effectiveState)) return "stopping";
-    return effectiveState || "stopping";
-  }
-
-  return effectiveState;
-}
-
-/* -------------------------------------------------------------------------- */
-/* Hook                                                                       */
-/* -------------------------------------------------------------------------- */
-
 export default function useBotControlCard({
   activeBotId,
   onActiveBotChange,
@@ -445,7 +68,7 @@ export default function useBotControlCard({
   COPY,
   storageScope = "",
 }) {
-  const storageKey = useMemo(() => buildStorageKey(storageScope), [storageScope]);
+  const storageKey = useMemo(() => buildStorageKey(LAST_SELECTED_BOT_KEY, storageScope), [storageScope]);
 
   const [available, setAvailable] = useState([]);
   const [availableLoaded, setAvailableLoaded] = useState(false);
@@ -522,10 +145,14 @@ export default function useBotControlCard({
     return m === "live" ? "live" : "paper";
   }, [snapshot?.mode]);
 
-  const intent = useMemo(() => safeStr(snapshot?.intent, ""), [snapshot?.intent]);
+  const intent = useMemo(() => safeStr(snapshot?.intent ?? snapshot?.desired_state, ""), [snapshot?.intent, snapshot?.desired_state]);
   const rawEff = useMemo(() => safeStr(snapshot?.effective_state, ""), [snapshot?.effective_state]);
   const desiredState = useMemo(() => safeStr(snapshot?.desired_state, ""), [snapshot?.desired_state]);
   const message = useMemo(() => safeStr(snapshot?.message, ""), [snapshot?.message]);
+  const pausedReason = useMemo(() => safeStr(snapshot?.pausedReason ?? snapshot?.paused_reason, ""), [
+    snapshot?.pausedReason,
+    snapshot?.paused_reason,
+  ]);
 
   const isOpen = useMemo(() => snapshot?.market?.is_open === true, [snapshot?.market?.is_open]);
 
@@ -553,7 +180,7 @@ export default function useBotControlCard({
   }, [rawEff, intent, desiredState, pendingAction, selected]);
 
   const runtimeTone = useMemo(() => runtimeToneFromEffective(eff), [eff]);
-  const runtimeLabel = useMemo(() => runtimeLabelFromEffective(eff, intent), [eff, intent]);
+  const runtimeLabel = useMemo(() => runtimeLabelFromEffective(eff, intent, pausedReason), [eff, intent, pausedReason]);
 
   const isArmed = useMemo(() => {
     if (typeof optimisticArmed === "boolean") return optimisticArmed;
@@ -583,17 +210,19 @@ export default function useBotControlCard({
     if (snapshot?.market?.show_note) return true;
     if (snapshot?.market?.is_open === false) return true;
     if (marketClosedBlocksStart) return true;
+    if (pausedReason && pausedReason.toLowerCase().includes("market")) return true;
     return false;
-  }, [hasSelection, snapshot, marketClosedBlocksStart]);
+  }, [hasSelection, snapshot, marketClosedBlocksStart, pausedReason]);
 
   const startBlockedReason = useMemo(() => {
     if (!hasSelection) return "";
     const reason = safeStr(snapshot?.market?.reason, "");
     if (reason) return reason;
+    if (pausedReason && pausedReason.toLowerCase().includes("market")) return pausedReason;
     if (marketClosedBlocksStart) return "Start blocked by server.";
     if (snapshot?.market?.is_open === false) return "Market is closed.";
     return "";
-  }, [hasSelection, snapshot, marketClosedBlocksStart]);
+  }, [hasSelection, snapshot, marketClosedBlocksStart, pausedReason]);
 
   const statusLine = useMemo(() => {
     if (!hasSelection) return "Select a bot to view status.";
@@ -601,7 +230,9 @@ export default function useBotControlCard({
     const parts = [];
     if (runtimeLabel) parts.push(runtimeLabel);
     if (mode) parts.push(mode.toUpperCase());
-    if (snapshot?.reason_code) parts.push(String(snapshot.reason_code).replaceAll("_", " "));
+
+    const reasonCode = safeStr(snapshot?.reason_code, "");
+    if (reasonCode) parts.push(reasonCode.replaceAll("_", " "));
 
     return parts.filter(Boolean).join(" · ");
   }, [hasSelection, runtimeLabel, mode, snapshot?.reason_code]);
@@ -838,23 +469,18 @@ export default function useBotControlCard({
         { bot_id: botId, limit: 80, mode: "paper" }
       );
 
-      const incoming = asList(data?.items || data || []).filter((item) => item && typeof item === "object");
+      const incoming = normalizeLogItems(data);
 
       const keyOf = (item) => {
-        const eventId = String(item?.event_id || item?.id || "").trim();
-        if (eventId) return `eid:${eventId}`;
+        const eventId = String(item?.request_id || item?.event_id || item?.id || "").trim();
+        if (eventId) return `id:${eventId}`;
 
         const ts = String(item?.ts ?? "");
-        const eventType = String(item?.event_type ?? "");
-        const level = String(item?.level ?? "");
-        const msg =
-          typeof item?.payload?.message === "string"
-            ? item.payload.message.trim()
-            : typeof item?.message === "string"
-              ? item.message.trim()
-              : "";
+        const action = String(item?.action ?? item?.event_type ?? "");
+        const level = String(item?.level ?? item?.status ?? "");
+        const msg = logMessageFor(item);
 
-        return `fb:${ts}|${eventType}|${level}|${msg}`;
+        return `fb:${ts}|${action}|${level}|${msg}`;
       };
 
       setLogItems((prev) => {
@@ -1247,7 +873,7 @@ export default function useBotControlCard({
       setPendingAction((current) => {
         if (!current) return null;
         if (current.until <= nowMs()) return null;
-        return current.until <= nowMs() ? null : current;
+        return null;
       });
     }, msRemaining + 20);
 
@@ -1384,6 +1010,7 @@ export default function useBotControlCard({
     isOpen,
     statusLine,
     message,
+    pausedReason,
 
     armConfirmOpen,
     setArmConfirmOpen,
