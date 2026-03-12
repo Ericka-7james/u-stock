@@ -30,6 +30,28 @@ const STATUS_CLASS_MAP = {
   failed: "pill failed",
 };
 
+function getStoredCompletedJobForToday() {
+  const today = todayISO();
+  const savedDay = window.localStorage.getItem(BT_LAST_DONE_DAY_KEY);
+  const savedJobRaw = window.localStorage.getItem(BT_LAST_DONE_JOB_KEY);
+
+  if (savedDay === today && savedJobRaw) {
+    try {
+      const parsed = JSON.parse(savedJobRaw);
+      if (parsed?.status === "done") {
+        return parsed;
+      }
+    } catch {
+      window.localStorage.removeItem(BT_LAST_DONE_JOB_KEY);
+    }
+  } else {
+    window.localStorage.removeItem(BT_LAST_DONE_DAY_KEY);
+    window.localStorage.removeItem(BT_LAST_DONE_JOB_KEY);
+  }
+
+  return null;
+}
+
 function getDefaultForm() {
   return {
     symbolsRaw: "SPY,QQQ,AAPL,MSFT,NVDA",
@@ -62,11 +84,7 @@ async function apiJson(url, options = {}, signal) {
   }
 
   if (!res.ok) {
-    const detail =
-      data?.detail ||
-      data?.error?.message ||
-      data?.message ||
-      `Request failed (${res.status})`;
+    const detail = data?.detail || data?.error?.message || data?.message || `Request failed (${res.status})`;
     throw new Error(String(detail));
   }
 
@@ -88,11 +106,12 @@ export default function BacktestPracticePage() {
 
   const [form, setForm] = useState(() => getDefaultForm());
   const [job, setJob] = useState(null);
-  const [latestCompletedJob, setLatestCompletedJob] = useState(null);
+  const [latestCompletedJob, setLatestCompletedJob] = useState(() => getStoredCompletedJobForToday());
   const [err, setErr] = useState(null);
   const [isResultsModalOpen, setIsResultsModalOpen] = useState(false);
 
   const pollRef = useRef(null);
+  const pollJobRef = useRef(null);
   const isMountedRef = useRef(true);
   const abortRef = useRef(null);
 
@@ -112,24 +131,6 @@ export default function BacktestPracticePage() {
 
   useEffect(() => {
     isMountedRef.current = true;
-
-    const today = todayISO();
-    const savedDay = window.localStorage.getItem(BT_LAST_DONE_DAY_KEY);
-    const savedJobRaw = window.localStorage.getItem(BT_LAST_DONE_JOB_KEY);
-
-    if (savedDay === today && savedJobRaw) {
-      try {
-        const parsed = JSON.parse(savedJobRaw);
-        if (parsed?.status === "done") {
-          setLatestCompletedJob(parsed);
-        }
-      } catch {
-        window.localStorage.removeItem(BT_LAST_DONE_JOB_KEY);
-      }
-    } else {
-      window.localStorage.removeItem(BT_LAST_DONE_DAY_KEY);
-      window.localStorage.removeItem(BT_LAST_DONE_JOB_KEY);
-    }
 
     return () => {
       isMountedRef.current = false;
@@ -179,12 +180,15 @@ export default function BacktestPracticePage() {
     window.localStorage.setItem(BT_LAST_DONE_JOB_KEY, JSON.stringify(doneJob));
   }, []);
 
-  const scheduleNextPoll = useCallback((jobId, pollJobFn) => {
-    clearPollTimer();
-    pollRef.current = window.setTimeout(() => {
-      pollJobFn(jobId);
-    }, POLL_MS);
-  }, [clearPollTimer]);
+  const scheduleNextPoll = useCallback(
+    (jobId) => {
+      clearPollTimer();
+      pollRef.current = window.setTimeout(() => {
+        pollJobRef.current?.(jobId);
+      }, POLL_MS);
+    },
+    [clearPollTimer]
+  );
 
   const pollJob = useCallback(
     async (jobId) => {
@@ -222,7 +226,7 @@ export default function BacktestPracticePage() {
         }
 
         abortRef.current = null;
-        scheduleNextPoll(jobId, pollJob);
+        scheduleNextPoll(jobId);
       } catch (e) {
         if (!isMountedRef.current) return;
         if (e?.name === "AbortError") return;
@@ -237,6 +241,10 @@ export default function BacktestPracticePage() {
     },
     [clearInFlightRequest, clearPollTimer, persistCompletedJob, scheduleNextPoll]
   );
+
+  useEffect(() => {
+    pollJobRef.current = pollJob;
+  }, [pollJob]);
 
   const onReset = useCallback(() => {
     clearPollTimer();
@@ -635,11 +643,7 @@ export default function BacktestPracticePage() {
                 </button>
 
                 {hasCompletedRunToday ? (
-                  <button
-                    className="bt-btn secondary"
-                    type="button"
-                    onClick={() => setIsResultsModalOpen(true)}
-                  >
+                  <button className="bt-btn secondary" type="button" onClick={() => setIsResultsModalOpen(true)}>
                     Reopen latest results
                   </button>
                 ) : null}

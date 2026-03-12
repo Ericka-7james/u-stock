@@ -1,5 +1,5 @@
 // src/components/pages/IndexFundsPage.jsx
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 
 import AppShell from "../layout/AppShell";
