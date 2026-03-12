@@ -13,83 +13,80 @@ import { fmtEpochSeconds, dayKeyFromEpochSeconds, dateStrToEpochSec } from "../.
 import "../../../css/dashboard/cards/BotLogsCard.css";
 
 const CACHE_TTL_MS = 60_000;
-
-// ✅ SWR cache with our own cache key field (no new exports needed)
 const logsCache = { ...createSWRCache([]), key: "" };
-
-// --- local helpers that are specific to logs behavior ---
 
 function isFailishLevel(level) {
   const l = String(level || "").toLowerCase();
   return l === "error" || l === "warn" || l === "warning";
 }
 
-function normalizeEffective(x) {
+function normalizeEffective(x, desiredState = "") {
   const v = String(x || "").toLowerCase();
-  if (
-    v === "waiting_for_market" ||
-    v === "running" ||
-    v === "paused" ||
-    v === "starting" ||
-    v === "stopping" ||
-    v === "degraded" ||
-    v === "error" ||
-    v === "offline"
-  ) {
+  const desired = String(desiredState || "").toLowerCase();
+
+  if (v === "running" || v === "starting" || v === "stopping" || v === "offline" || v === "errored") {
     return v;
   }
-  if (v === "stopped") return "paused";
-  if (v === "failed") return "error";
+  if (v === "error" || v === "failed") return "errored";
+  if (v === "stopped" || v === "idle" || v === "paused") {
+    return desired === "running" ? "offline" : "stopped";
+  }
   return "unknown";
 }
 
-function statusPill(effective) {
+function statusPill(effective, pausedReason = "", desiredState = "") {
+  const desired = String(desiredState || "").toLowerCase();
+
+  if (effective === "running" && pausedReason) {
+    return { label: "Paused by condition", cls: "blog-pill blog-pill--warn" };
+  }
   if (effective === "running") return { label: "Live", cls: "blog-pill blog-pill--on" };
-  if (effective === "waiting_for_market") return { label: "Waiting for market", cls: "blog-pill blog-pill--warn" };
-  if (effective === "paused") return { label: "Paused", cls: "blog-pill blog-pill--paused" };
-  if (effective === "offline") return { label: "Runner offline", cls: "blog-pill blog-pill--off" };
-  if (effective === "error") return { label: "Error", cls: "blog-pill blog-pill--bad" };
   if (effective === "starting") return { label: "Starting…", cls: "blog-pill blog-pill--soft" };
   if (effective === "stopping") return { label: "Stopping…", cls: "blog-pill blog-pill--soft" };
+  if (effective === "offline" && desired === "stopped") {
+    return { label: "Stopped", cls: "blog-pill blog-pill--paused" };
+  }
+  if (effective === "offline") return { label: "Runner offline", cls: "blog-pill blog-pill--off" };
+  if (effective === "stopped") return { label: "Stopped", cls: "blog-pill blog-pill--paused" };
+  if (effective === "errored") return { label: "Error", cls: "blog-pill blog-pill--bad" };
   return { label: "Unknown", cls: "blog-pill blog-pill--soft" };
 }
 
-/**
- * ✅ Normalize backend rows into a unified shape for classifyLog().
- * Backend /api/bots/log returns items like:
- *   { ts, level, event_type, symbol, event_id, payload }
- */
 function normalizeLogRow(row) {
   const ts = Number(row?.ts) || 0;
-  const level = safeStr(row?.level, "info").toLowerCase();
+  const level = safeStr(row?.level || row?.status, "info").toLowerCase();
+  const source = safeStr(row?.source, "system").toLowerCase();
+  const action = safeStr(row?.action || row?.event_type, "log").toLowerCase();
+  const status = safeStr(row?.status, "").toLowerCase();
+  const details = row?.details && typeof row.details === "object" ? row.details : {};
 
-  const eventType = safeStr(row?.event_type, "");
-  const payload = row?.payload && typeof row.payload === "object" ? row.payload : null;
+  const userMessage = safeStr(row?.user_message, "");
+  const message = safeStr(row?.message, "");
+  const technicalMessage = safeStr(row?.technical_message, "");
+  const preferredMessage =
+    userMessage ||
+    message ||
+    technicalMessage ||
+    safeStr(details?.message, "") ||
+    action.replaceAll("_", " ") ||
+    "Update";
 
-  const pMessage = payload ? safeStr(payload.message, "") : "";
-  const pErr = payload ? safeStr(payload.last_error, "") : "";
-  const pReason = payload ? safeStr(payload.reason_code, "") : "";
-  const pPausedReason = payload ? safeStr(payload.paused_reason, "") : "";
-  const pNextOpen = payload ? payload.next_open_epoch ?? payload.nextOpenEpoch : null;
-
-  let message = pMessage;
-  if (!message && pPausedReason) message = pPausedReason;
-  if (!message && pReason) message = pReason;
-  if (!message && pErr) message = pErr;
-  if (!message && eventType) message = eventType;
-  if (!message) message = "Update";
-
-  const meta = payload
-    ? {
-        ...payload,
-        event_type: eventType || undefined,
-        next_open_epoch: pNextOpen ?? payload.next_open_epoch ?? undefined,
-      }
-    : eventType
-    ? { event_type: eventType }
-    : null;
-
-  return { ts, level, message, meta };
+  return {
+    ts,
+    level,
+    source,
+    action,
+    status,
+    message: preferredMessage,
+    user_message: userMessage,
+    technical_message: technicalMessage,
+    request_id: safeStr(row?.request_id, ""),
+    runner_id: safeStr(row?.runner_id, ""),
+    desired_state: safeStr(row?.desired_state, ""),
+    runtime_state: safeStr(row?.runtime_state, ""),
+    visible_to_user: Boolean(row?.visible_to_user),
+    details,
+  };
 }
 
 function classifyLog(row) {
@@ -97,82 +94,102 @@ function classifyLog(row) {
   const isFail = isFailishLevel(levelRaw);
 
   const msg = safeStr(row?.message, "");
-  const msgL = msg.toLowerCase();
-  const meta = row?.meta || null;
+  const userMessage = safeStr(row?.user_message, "");
+  const technicalMessage = safeStr(row?.technical_message, "");
+  const details = row?.details || {};
+  const action = safeStr(row?.action, "log").toLowerCase();
+  const source = safeStr(row?.source, "system").toLowerCase();
+  const runtimeState = safeStr(row?.runtime_state, "").toLowerCase();
+  const desiredState = safeStr(row?.desired_state, "").toLowerCase();
 
-  const hasAny = (...needles) => needles.some((n) => msgL.includes(String(n).toLowerCase()));
+  const detailsStr = details ? safeJson(details).toLowerCase() : "";
+  const textBlob = `${msg.toLowerCase()} ${action} ${source} ${detailsStr}`.trim();
+
+  const hasAny = (...needles) => needles.some((n) => textBlob.includes(String(n).toLowerCase()));
 
   let category = "System";
-  if (hasAny("market", "session", "open", "closed", "next open")) category = "Market";
-  if (hasAny("alpaca", "broker", "order", "submit", "fill", "filled", "position")) category = "Orders";
-  if (hasAny("risk", "max trades", "min confidence", "risk_per_trade", "stop", "halt", "guard")) category = "Risk";
-  if (hasAny("signal", "ema", "trend", "entry", "exit", "strategy", "setup")) category = "Strategy";
-  if (hasAny("runner", "heartbeat", "loop", "engine", "orchestration")) category = "Runner";
+  if (hasAny("market", "session", "open", "closed", "next_open_epoch", "market_closed")) category = "Market";
+  else if (hasAny("order", "fill", "filled", "broker", "alpaca", "position")) category = "Orders";
+  else if (hasAny("risk", "max trades", "min confidence", "blocked", "halt", "guard")) category = "Risk";
+  else if (hasAny("signal", "strategy", "ema", "trend", "entry", "exit")) category = "Strategy";
+  else if (hasAny("runner", "heartbeat", "offline", "starting", "stopping")) category = "Runner";
 
-  let headline = msg;
+  let headline = userMessage || msg || "Update";
   let detail = "";
-  let action = "Update";
+  let actionLabel = action ? action.replaceAll("_", " ") : "Update";
 
-  const metaStr = meta ? safeJson(meta).toLowerCase() : "";
-  const hasMetaAny = (...needles) => needles.some((n) => metaStr.includes(String(n).toLowerCase()));
-
-  if (hasAny("waiting_for_market", "waiting for market") || hasMetaAny("waiting_for_market", "market_closed")) {
-    action = "Waiting";
-    headline = "Market is closed — bot is waiting";
-    detail = "No trades will be placed until the next open.";
-    category = "Market";
-  } else if (hasAny("starting")) {
-    action = "Starting";
-    headline = "Bot is starting up";
-    detail = "Loading config and checking market session.";
-    category = category === "System" ? "Runner" : category;
-  } else if (hasAny("running")) {
-    action = "Running";
-    headline = "Bot is running";
-    detail = "Scanning for setups and evaluating signals.";
-  } else if (hasAny("paused", "manual_pause", "intent_paused")) {
-    action = "Paused";
-    headline = "Bot is paused";
-    detail = "Start the bot from the Dashboard to resume.";
+  if (action === "request_start") {
+    actionLabel = "Start";
+    headline = "Start requested";
+    detail = "The control plane asked the runner to start the bot.";
     category = "System";
-  } else if (hasAny("offline", "not heartbeating", "heartbeat")) {
-    action = isFail ? "Offline" : "Runner";
-    headline = isFail ? "Runner appears offline" : "Runner heartbeat received";
-    detail = isFail
-      ? "U-Stock runner is not reporting in. Check your runner host."
-      : "Runner is online and reporting.";
-    category = "Runner";
-  } else if (hasAny("order") && hasAny("submit")) {
-    action = "Order";
-    headline = "Order submitted";
-    detail = meta ? safeJson(meta) : "";
-    category = "Orders";
-  } else if (hasAny("filled", "fill")) {
-    action = "Fill";
-    headline = "Order filled";
-    detail = meta ? safeJson(meta) : "";
-    category = "Orders";
-  } else if (hasAny("reject", "rejected")) {
-    action = "Rejected";
-    headline = "Order rejected";
-    detail = meta ? safeJson(meta) : "";
-    category = "Orders";
-  } else if (hasAny("risk") && hasAny("block", "blocked", "halt", "gate")) {
-    action = "Blocked";
-    headline = "Risk controls blocked an action";
-    detail = meta ? safeJson(meta) : "";
-    category = "Risk";
-  } else if (isFail) {
-    action = "Issue";
-    headline = msg || "Something needs attention";
-    detail = meta ? safeJson(meta) : "";
-  } else {
-    const max = 84;
-    if (msg.length > max) {
-      headline = msg.slice(0, max).trim() + "…";
-      detail = meta ? safeJson(meta) : msg;
+  } else if (action === "request_stop") {
+    actionLabel = "Stop";
+    headline = "Stop requested";
+    detail = "The control plane asked the runner to stop the bot.";
+    category = "System";
+  } else if (action === "request_arm") {
+    actionLabel = "Arm";
+    headline = "Bot armed";
+    detail = "The bot is armed and allowed to start.";
+    category = "System";
+  } else if (action === "request_disarm") {
+    actionLabel = "Disarm";
+    headline = "Bot disarmed";
+    detail = "The bot is disarmed and cannot start until armed again.";
+    category = "System";
+  } else if (action === "config_loaded") {
+    actionLabel = "Config";
+    headline = "Configuration updated";
+    detail = "Bot configuration was saved successfully.";
+    category = "System";
+  } else if (action === "heartbeat") {
+    actionLabel = "Heartbeat";
+
+    if (details?.reason_code === "market_closed") {
+      headline = "Waiting for market open";
+      detail = technicalMessage || "The runner is healthy, but trading is paused until the market opens.";
+      category = "Market";
+    } else if (runtimeState === "running") {
+      headline = "Runner heartbeat received";
+      detail = technicalMessage || "Runner is online and scanning for setups.";
+      category = "Runner";
+    } else if (runtimeState === "starting") {
+      headline = "Bot is starting";
+      detail = technicalMessage || "Runner is initializing the bot.";
+      category = "Runner";
+    } else if (runtimeState === "stopping") {
+      headline = "Bot is stopping";
+      detail = technicalMessage || "Runner is shutting the bot down.";
+      category = "Runner";
+    } else if (runtimeState === "offline") {
+      headline = desiredState === "stopped" ? "Bot is stopped" : "Runner reports bot offline";
+      detail =
+        technicalMessage ||
+        (desiredState === "stopped"
+          ? "The bot is intentionally not running."
+          : "The bot is currently not running.");
+      category = "Runner";
     } else {
-      detail = meta ? safeJson(meta) : "";
+      headline = userMessage || "Runner heartbeat received";
+      detail = technicalMessage || "";
+      category = "Runner";
+    }
+  } else if (action === "error") {
+    actionLabel = "Error";
+    headline = userMessage || "Bot reported an error";
+    detail = technicalMessage || safeJson(details);
+    category = "Runner";
+  } else if (action === "log" && (hasAny("intent", "preview") || Array.isArray(details?.preview))) {
+    actionLabel = "Intent";
+    headline = userMessage || "Runner submitted intents";
+    detail = details?.count ? `Submitted ${details.count} intents.` : "";
+    category = "Strategy";
+  } else {
+    if (technicalMessage) {
+      detail = technicalMessage;
+    } else if (Object.keys(details).length) {
+      detail = safeJson(details);
     }
   }
 
@@ -181,17 +198,35 @@ function classifyLog(row) {
   return {
     ts: row?.ts,
     category,
-    action,
+    action: actionLabel,
     severity,
     headline,
     detail,
-    rawLevel: String(row?.level || "info").toUpperCase(),
+    rawLevel: String(row?.level || row?.status || "info").toUpperCase(),
     rawMessage: msg,
-    rawMeta: meta,
+    rawMeta: {
+      source: row?.source || null,
+      action: row?.action || null,
+      request_id: row?.request_id || null,
+      runner_id: row?.runner_id || null,
+      desired_state: row?.desired_state || null,
+      runtime_state: row?.runtime_state || null,
+      visible_to_user: row?.visible_to_user ?? null,
+      details: row?.details || {},
+    },
   };
 }
 
-function effectiveExplainer(eff, nextOpenEpoch) {
+function effectiveExplainer(eff, nextOpenEpoch, pausedReason = "", desiredState = "") {
+  const desired = String(desiredState || "").toLowerCase();
+
+  if (eff === "running" && pausedReason) {
+    return {
+      tone: "warn",
+      title: "Runner is healthy, but work is paused",
+      body: pausedReason,
+    };
+  }
   if (eff === "running") {
     return {
       tone: "ok",
@@ -199,50 +234,58 @@ function effectiveExplainer(eff, nextOpenEpoch) {
       body: "The bot is online and evaluating signals. Orders may be placed if risk checks pass.",
     };
   }
-  if (eff === "waiting_for_market") {
-    return {
-      tone: "warn",
-      title: "Waiting for market open",
-      body: `The market is closed, so the bot is idle. Next open: ${nextOpenEpoch ? fmtEpochSeconds(nextOpenEpoch) : "—"}.`,
-    };
-  }
-  if (eff === "paused") {
+  if (eff === "starting") {
     return {
       tone: "neutral",
-      title: "Paused",
-      body: "The bot is not trading right now. Start it from the Dashboard when you’re ready.",
+      title: "Starting up",
+      body: "Loading configuration and checking connectivity.",
     };
   }
-  if (eff === "starting") {
-    return { tone: "neutral", title: "Starting up", body: "Loading configuration and checking connectivity." };
+  if (eff === "stopping") {
+    return {
+      tone: "neutral",
+      title: "Stopping",
+      body: "The runner is shutting the bot down.",
+    };
+  }
+  if (eff === "offline" && desired === "stopped") {
+    return {
+      tone: "neutral",
+      title: "Stopped",
+      body: "The bot is intentionally not running right now.",
+    };
   }
   if (eff === "offline") {
     return {
       tone: "bad",
       title: "Runner offline",
-      body: "U-Stock isn’t receiving runner heartbeats. Check your runner host and API connectivity.",
+      body: "U-Stock isn’t receiving live runtime updates from the runner right now.",
     };
   }
-  if (eff === "error") {
+  if (eff === "stopped") {
+    return {
+      tone: "neutral",
+      title: "Stopped",
+      body: "The bot is currently not running.",
+    };
+  }
+  if (eff === "errored") {
     return {
       tone: "bad",
       title: "Error state",
-      body: "The bot reported an error. Review recent issues below and the raw details in “View all”.",
+      body: "The bot reported an error. Review recent issues below and inspect the raw details.",
     };
   }
-  if (eff === "degraded") {
-    return {
-      tone: "warn",
-      title: "Degraded",
-      body: "The bot is running, but some dependencies may be failing (data/broker/session). Review recent issues.",
-    };
-  }
-  return { tone: "neutral", title: "Status unknown", body: "The bot status couldn’t be determined. Refresh and verify the runner is online." };
+  return {
+    tone: "neutral",
+    title: "Status unknown",
+    body: "The bot status couldn’t be determined. Refresh and verify the runner is online.",
+  };
 }
 
 export default function BotLogsCard({
   title = "System logs",
-  subtitle = "Filter by day, status, and search terms. Logs help you validate decisions, runner states, and intent generation.",
+  subtitle = "Filter by day, status, and search terms. Logs help you validate bot actions, runner state, and strategy behavior.",
   defaultBotId = "ema_trend",
   maxPreview = 4,
   timeframe = null,
@@ -298,7 +341,7 @@ export default function BotLogsCard({
 
     try {
       const url =
-        `/api/bots/log?bot_id=${encodeURIComponent(safeStr(botId, "ema_trend"))}` +
+        `/api/bots/events?bot_id=${encodeURIComponent(safeStr(botId, "ema_trend"))}` +
         `&mode=${encodeURIComponent(modeNorm)}` +
         `&limit=${encodeURIComponent(String(limit || 120))}` +
         (startTs ? `&start_ts=${encodeURIComponent(String(startTs))}` : "") +
@@ -308,7 +351,6 @@ export default function BotLogsCard({
       if (!aliveRef.current || ac.signal.aborted) return;
 
       const raw = Array.isArray(data?.items) ? data.items : [];
-
       const normalized = raw
         .filter((x) => x && typeof x === "object")
         .map(normalizeLogRow)
@@ -353,8 +395,11 @@ export default function BotLogsCard({
 
   useEffect(() => {
     const fresh = isFresh(logsCache.ts, CACHE_TTL_MS) && logsCache.key === cacheKey;
-    if (fresh) setItems(Array.isArray(logsCache.data) ? logsCache.data : []);
-    else refresh();
+    if (fresh) {
+      setItems(Array.isArray(logsCache.data) ? logsCache.data : []);
+    } else {
+      refresh();
+    }
 
     refreshStatus();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -401,11 +446,18 @@ export default function BotLogsCard({
     return list.slice(Math.max(0, list.length - maxPreview));
   }, [filtered, maxPreview]);
 
-  const eff = normalizeEffective(botStatus?.effective_state || botStatus?.state);
-  const pill = statusPill(eff);
+  const desiredState = safeStr(botStatus?.desired_state || botStatus?.intent, "");
+  const eff = normalizeEffective(botStatus?.effective_state || botStatus?.state, desiredState);
+  const pausedReason = safeStr(botStatus?.pausedReason || botStatus?.paused_reason, "");
+  const pill = statusPill(eff, pausedReason, desiredState);
 
-  const nextOpen = botStatus?.nextOpenEpoch || botStatus?.next_open_epoch || null;
-  const explain = effectiveExplainer(eff, nextOpen);
+  const nextOpen =
+    botStatus?.nextOpenEpoch ||
+    botStatus?.next_open_epoch ||
+    botStatus?.market?.next_open_epoch ||
+    null;
+
+  const explain = effectiveExplainer(eff, nextOpen, pausedReason, desiredState);
 
   const counts = useMemo(() => {
     const list = Array.isArray(filtered) ? filtered : [];
@@ -420,7 +472,7 @@ export default function BotLogsCard({
   }
 
   const statusNode =
-    eff === "offline" ? (
+    eff === "offline" && desiredState !== "stopped" ? (
       <Link to="/connected-apps" className={`${pill.cls} blog-pillLink`} title="Runner offline — open Connected apps">
         {pill.label}
       </Link>
@@ -443,16 +495,16 @@ export default function BotLogsCard({
                   <HelpTooltip title="System logs help">
                     <div style={{ display: "grid", gap: 10 }}>
                       <div>
-                        <b>Status pill</b>: running, waiting for market, paused, offline, error.
+                        <b>Status pill</b>: live runner state from the backend.
                       </div>
                       <div>
-                        <b>Events</b>: log count after your filters.
+                        <b>Events</b>: filtered activity feed rows.
                       </div>
                       <div>
                         <b>Issues</b>: warnings/errors in the filtered range.
                       </div>
                       <div style={{ opacity: 0.9 }}>
-                        Tip: set Outcome to “Issues”, then search “risk”, “order”, or “heartbeat”.
+                        Tip: set Outcome to “Issues”, then search “risk”, “heartbeat”, “market”, or “error”.
                       </div>
                     </div>
                   </HelpTooltip>
@@ -485,7 +537,8 @@ export default function BotLogsCard({
         <div className={`blog-statusBanner blog-statusBanner--${explain.tone}`}>
           <div className="blog-statusTitle">{explain.title}</div>
           <div className="blog-statusBody">{explain.body}</div>
-          {eff === "waiting_for_market" && nextOpen ? (
+          {pausedReason ? <div className="blog-statusMeta">{pausedReason}</div> : null}
+          {nextOpen && pausedReason.toLowerCase().includes("market") ? (
             <div className="blog-statusMeta">Next open: {fmtEpochSeconds(nextOpen)}</div>
           ) : null}
         </div>
@@ -540,7 +593,7 @@ export default function BotLogsCard({
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Search events, categories, raw details…"
+              placeholder="Search events, actions, runner details…"
               className="blog-input"
               disabled={busy}
             />
@@ -670,8 +723,10 @@ export default function BotLogsCard({
                     <div className="blog-rawGrid">
                       <div className="blog-rawLabel">Level</div>
                       <div className="mMono">{r.rawLevel}</div>
+
                       <div className="blog-rawLabel">Message</div>
                       <div>{r.rawMessage || "—"}</div>
+
                       <div className="blog-rawLabel">Meta</div>
                       <pre className="mMono blog-pre">{r.rawMeta ? safeJson(r.rawMeta) : "—"}</pre>
                     </div>
