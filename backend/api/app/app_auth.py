@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import APIRouter, HTTPException, Request, Response
 
@@ -24,8 +24,6 @@ def _normalize_phone(phone: Optional[str]) -> Optional[str]:
 
 def _looks_like_existing_user_error(err: Exception) -> bool:
     msg = str(err).lower()
-    # Supabase auth commonly returns something like:
-    # "User already registered", "already registered", etc.
     return (
         "already registered" in msg
         or "user already exists" in msg
@@ -35,7 +33,6 @@ def _looks_like_existing_user_error(err: Exception) -> bool:
 
 
 def _pg_unique_violation(err: Exception) -> bool:
-    # Postgrest / Supabase python libs often embed "23505" in the error string
     return "23505" in str(err)
 
 
@@ -44,20 +41,122 @@ def _extract_auth_error_code_message(res) -> tuple[Optional[str], Optional[str]]
     Supabase python client behavior can vary:
     - sometimes raises Exception
     - sometimes returns an object with .error populated
-    Try to normalize that into (code, message).
+    Normalize that into (code, message).
     """
     err = getattr(res, "error", None)
     if not err:
         return None, None
 
-    # err might be dict-like, string-like, or an object
     if isinstance(err, dict):
         code = err.get("code") or err.get("error_code") or err.get("status") or None
         msg = err.get("message") or err.get("msg") or err.get("error_description") or None
         return (str(code) if code else None, str(msg) if msg else None)
 
-    msg = str(err)
-    return None, msg
+    return None, str(err)
+
+
+def _safe_user_metadata(user: Any) -> dict[str, Any]:
+    try:
+        raw = getattr(user, "user_metadata", None) or {}
+        return raw if isinstance(raw, dict) else {}
+    except Exception:
+        return {}
+
+
+def _default_username_from_email(email: Optional[str]) -> str:
+    local = (email or "").split("@")[0].strip().lower()
+    cleaned = re.sub(r"[^a-z0-9_.-]+", "_", local).strip("._-")
+    return cleaned or "user"
+
+
+def _ensure_profile_exists(
+    *,
+    user_id: str,
+    email: Optional[str],
+    user_metadata: Optional[dict[str, Any]] = None,
+) -> None:
+    """
+    Ensure a minimal profiles row exists for the authenticated user.
+
+    Why here:
+    - fixes deleted/missing profiles rows after successful auth
+    - works for both login and session refresh
+    - keeps integrity on the server, not in the UI
+    """
+    sb_service = get_supabase_service()
+    normalized_email = _normalize_email(email or "")
+    metadata = user_metadata or {}
+
+    username = (metadata.get("username") or "").strip() or _default_username_from_email(
+        normalized_email
+    )
+    avatar = (metadata.get("avatar") or "").strip() or "📈"
+    phone = _normalize_phone(
+        metadata.get("phone") or metadata.get("phone_number") or metadata.get("mobile")
+    )
+
+    try:
+        existing = (
+            sb_service.table("profiles")
+            .select("id")
+            .eq("id", user_id)
+            .limit(1)
+            .execute()
+        )
+        if getattr(existing, "data", None):
+            return
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "code": "PROFILE_LOOKUP_FAILED",
+                "message": "Could not verify account profile.",
+            },
+        )
+
+    payload = {
+        "id": user_id,
+        "username": username,
+        "avatar": avatar,
+        "email": normalized_email or None,
+        "phone": phone,
+    }
+
+    try:
+        sb_service.table("profiles").insert(payload).execute()
+        return
+    except Exception as e:
+        # Race-safe retry: if another request created it after our first check,
+        # do not fail the auth flow.
+        try:
+            retry_existing = (
+                sb_service.table("profiles")
+                .select("id")
+                .eq("id", user_id)
+                .limit(1)
+                .execute()
+            )
+            if getattr(retry_existing, "data", None):
+                return
+        except Exception:
+            pass
+
+        if _pg_unique_violation(e):
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "PROFILE_RECOVERY_CONFLICT",
+                    "message": "Authenticated successfully, but profile recovery hit a data conflict.",
+                },
+            )
+
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "code": "PROFILE_RECOVERY_FAILED",
+                "message": "Authenticated successfully, but profile recovery failed.",
+            },
+        )
 
 
 def get_auth_router() -> APIRouter:
@@ -65,19 +164,13 @@ def get_auth_router() -> APIRouter:
 
     @router.post("/auth/signup", response_model=AuthResponse)
     async def signup(body: SignupBody, response: Response):
-        # 1) Normalize inputs
         email = _normalize_email(body.email)
         username = (body.username or "").strip()
         avatar = body.avatar or "📈"
-
-        # phone is optional; your frontend might send it
         phone = _normalize_phone(getattr(body, "phone", None))
 
-        # 2) Validate password (use normalized email)
         validate_password(body.password, email, username)
 
-        # 3) Pre-check phone uniqueness (prevents orphan auth users)
-        #    Requires phone column + unique index you added.
         if phone:
             sb_service = get_supabase_service()
             try:
@@ -106,12 +199,10 @@ def get_auth_router() -> APIRouter:
                     },
                 )
 
-        # 4) Create auth user
         sb = get_supabase_anon()
         try:
             res = sb.auth.sign_up({"email": email, "password": body.password})
         except Exception as e:
-            # If email already exists in auth, Supabase often throws
             if _looks_like_existing_user_error(e):
                 raise HTTPException(
                     status_code=409,
@@ -125,7 +216,6 @@ def get_auth_router() -> APIRouter:
                 detail={"code": "SIGNUP_FAILED", "message": "Signup failed"},
             )
 
-        # Some client versions return .error instead of throwing
         code, msg = _extract_auth_error_code_message(res)
         if msg:
             if _looks_like_existing_user_error(Exception(msg)):
@@ -147,7 +237,6 @@ def get_auth_router() -> APIRouter:
                 detail={"code": "SIGNUP_FAILED", "message": "Signup failed"},
             )
 
-        # 5) Set cookies if session exists (depends on email confirmation settings)
         session = getattr(res, "session", None)
         if session:
             set_auth_cookies(
@@ -156,8 +245,6 @@ def get_auth_router() -> APIRouter:
                 getattr(session, "refresh_token", None),
             )
 
-        # 6) Upsert profile row (server-side service role so it always works)
-        #    NOTE: requires profiles.email + profiles.phone columns.
         sb_service = get_supabase_service()
         try:
             sb_service.table("profiles").upsert(
@@ -171,7 +258,6 @@ def get_auth_router() -> APIRouter:
                 on_conflict="id",
             ).execute()
         except Exception as e:
-            # If email/phone violates your unique indexes, surface it cleanly
             if _pg_unique_violation(e):
                 msg2 = str(e).lower()
                 if "profiles_email_unique" in msg2 or "email" in msg2:
@@ -214,8 +300,6 @@ def get_auth_router() -> APIRouter:
     @router.post("/auth/login", response_model=AuthResponse)
     async def login(body: LoginBody, response: Response):
         sb = get_supabase_anon()
-
-        # normalize email to match signup behavior
         email = _normalize_email(body.email)
 
         try:
@@ -224,7 +308,21 @@ def get_auth_router() -> APIRouter:
             raise HTTPException(status_code=401, detail="Invalid email/password")
 
         if not getattr(res, "user", None) or not getattr(res, "session", None):
-            raise HTTPException(status_code=401, detail="Invalid email/password or email not confirmed")
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid email/password or email not confirmed",
+            )
+
+        user_metadata = _safe_user_metadata(res.user)
+
+        # Critical recovery step:
+        # if the user can authenticate but their profiles row was deleted,
+        # recreate the minimal row before the rest of the app uses FK-backed tables.
+        _ensure_profile_exists(
+            user_id=res.user.id,
+            email=res.user.email or email,
+            user_metadata=user_metadata,
+        )
 
         set_auth_cookies(
             response,
@@ -232,13 +330,12 @@ def get_auth_router() -> APIRouter:
             getattr(res.session, "refresh_token", None),
         )
 
-        avatar = None
-        try:
-            avatar = (res.user.user_metadata or {}).get("avatar")
-        except Exception:
-            avatar = None
+        avatar = user_metadata.get("avatar")
 
-        return AuthResponse(user=UserOut(id=res.user.id, email=res.user.email, avatar=avatar), ok=True)
+        return AuthResponse(
+            user=UserOut(id=res.user.id, email=res.user.email, avatar=avatar),
+            ok=True,
+        )
 
     @router.post("/auth/logout")
     async def logout(response: Response):
@@ -248,6 +345,15 @@ def get_auth_router() -> APIRouter:
     @router.get("/auth/me")
     async def me(request: Request, response: Response):
         u = require_user(request, response)
+
+        # Also enforce this during session bootstrap / refresh so users who
+        # already have cookies are repaired without having to sign in again.
+        _ensure_profile_exists(
+            user_id=u["id"],
+            email=u.get("email"),
+            user_metadata={},
+        )
+
         return {"user_id": u["id"], "email": u["email"]}
 
     return router

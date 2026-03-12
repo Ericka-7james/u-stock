@@ -109,6 +109,7 @@ class BotService:
             )
         except Exception:
             logger.exception("BotService _safe_log failed")
+
     def _derive_runtime_message(self, runtime_row: Dict[str, Any]) -> str:
         """Builds a user-facing runtime message from runtime state."""
         if not isinstance(runtime_row, dict):
@@ -277,7 +278,6 @@ class BotService:
                 hb_age_sec=hb_age,
             )
 
-            # Convert "offline while desired stopped" to "stopped" for the frontend
             if effective_state == "offline" and desired_state == "stopped":
                 effective_state = "stopped"
 
@@ -755,6 +755,11 @@ class BotService:
                 if not isinstance(details, dict):
                     details = {}
 
+                user_message = str(row.get("user_message") or "").strip()
+                technical_message = str(row.get("technical_message") or "").strip()
+                legacy_message = str(row.get("message") or "").strip()
+                message = user_message or legacy_message or technical_message or ""
+
                 items_out.append(
                     {
                         "ts": parse_ts_to_epoch_seconds(row.get("ts")),
@@ -762,8 +767,9 @@ class BotService:
                         "source": str(row.get("source") or "system").strip().lower(),
                         "action": str(row.get("action") or "log").strip().lower(),
                         "status": str(row.get("status") or "info").strip().lower(),
-                        "user_message": str(row.get("user_message") or "").strip(),
-                        "technical_message": str(row.get("technical_message") or "").strip(),
+                        "message": message,
+                        "user_message": user_message,
+                        "technical_message": technical_message,
                         "visible_to_user": bool(row.get("visible_to_user", True)),
                         "request_id": str(row.get("request_id") or "").strip() or None,
                         "runner_id": str(row.get("runner_id") or "").strip() or None,
@@ -782,22 +788,3 @@ class BotService:
         except BotServiceError:
             logger.exception("BotService get_log failed")
             return {"ok": True, "bot_id": normalized_bot_id, "mode": normalized_mode, "items": []}
-
-    def send_stopped(
-        api: UStockAPI,
-        state: HeartbeatState,
-        *,
-        bot_id: str,
-        status_mode: str,
-        user_id: Optional[str] = None,
-    ) -> None:
-        """Backward-compatible wrapper for older runner call sites."""
-        send_offline(
-            api,
-            state,
-            bot_id=bot_id,
-            status_mode=status_mode,
-            user_id=user_id,
-            reason_code="intent_stopped",
-            message="Control plane indicates stopped.",
-        )

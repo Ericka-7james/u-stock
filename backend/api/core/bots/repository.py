@@ -20,6 +20,40 @@ class BotRepository:
         """Initializes the repository with a Supabase service client."""
         self.sb = get_supabase_service()
 
+    def ensure_profile_row(self, *, user_id: str) -> None:
+        """Ensures a minimal profile row exists for the given user.
+
+        Some bot tables have a foreign key to profiles.id. If a user can
+        authenticate but their profile row was deleted, writes into bot tables
+        will fail unless we recreate a minimal profile shell.
+
+        Args:
+            user_id: Authenticated user id.
+
+        Raises:
+            BotServiceError: If the profile row cannot be ensured.
+        """
+        normalized_user_id = str(user_id or "").strip()
+        if not normalized_user_id:
+            raise BotServiceError(
+                op_name="ensure_profile_row",
+                public_detail="missing user id",
+                internal_detail="empty user_id passed to ensure_profile_row",
+            )
+
+        try:
+            self.sb.table("profiles").upsert(
+                {"id": normalized_user_id},
+                on_conflict="id",
+            ).execute()
+        except Exception as exc:
+            logger.exception("BotRepository ensure_profile_row failed", extra={"user_id": normalized_user_id})
+            raise BotServiceError(
+                op_name="ensure_profile_row",
+                public_detail="failed to ensure profile row",
+                internal_detail=str(exc),
+            ) from exc
+
     def get_config_row(self, *, user_id: str, bot_id: str) -> Dict[str, Any]:
         """Returns a bot config row."""
         try:
@@ -43,6 +77,8 @@ class BotRepository:
     def upsert_config_row(self, *, user_id: str, bot_id: str, config: Dict[str, Any], now_iso: str) -> None:
         """Upserts a bot config row."""
         try:
+            self.ensure_profile_row(user_id=user_id)
+
             self.sb.table("bot_configs").upsert(
                 {
                     "user_id": user_id,
@@ -53,6 +89,8 @@ class BotRepository:
                 },
                 on_conflict="user_id,bot_id",
             ).execute()
+        except BotServiceError:
+            raise
         except Exception as exc:
             raise BotServiceError(
                 op_name="upsert_config_row",
@@ -92,10 +130,14 @@ class BotRepository:
     def upsert_desired_state_row(self, *, row: Dict[str, Any]) -> None:
         """Upserts a bot_desired_state row."""
         try:
+            self.ensure_profile_row(user_id=str(row.get("user_id") or "").strip())
+
             self.sb.table("bot_desired_state").upsert(
                 row,
                 on_conflict="user_id,bot_id",
             ).execute()
+        except BotServiceError:
+            raise
         except Exception as exc:
             logger.exception("BotRepository upsert_desired_state_row failed", extra={"row": row})
             raise BotServiceError(
@@ -138,10 +180,14 @@ class BotRepository:
     def upsert_runtime_state_row(self, *, row: Dict[str, Any]) -> None:
         """Upserts a bot_runtime_state row."""
         try:
+            self.ensure_profile_row(user_id=str(row.get("user_id") or "").strip())
+
             self.sb.table("bot_runtime_state").upsert(
                 row,
                 on_conflict="user_id,bot_id",
             ).execute()
+        except BotServiceError:
+            raise
         except Exception as exc:
             logger.exception("BotRepository upsert_runtime_state_row failed", extra={"row": row})
             raise BotServiceError(
@@ -151,13 +197,33 @@ class BotRepository:
             ) from exc
 
     def insert_log_row(self, *, row: Dict[str, Any], fail_open: bool = False) -> None:
-        """Inserts a bot_logs row."""
+        """Inserts a bot_logs row.
+
+        `message` is optional. If provided it will be included, otherwise
+        structured fields (`user_message`, `technical_message`) are used.
+        """
         try:
-            self.sb.table("bot_logs").insert(row).execute()
+            user_id = str(row.get("user_id") or "").strip()
+            self.ensure_profile_row(user_id=user_id)
+
+            payload = dict(row)
+
+            if payload.get("message") is None:
+                payload.pop("message", None)
+
+            self.sb.table("bot_logs").insert(payload).execute()
+
+        except BotServiceError as exc:
+            if fail_open:
+                logger.exception("BotRepository insert_log_row failed while ensuring profile (fail-open)")
+                return
+            raise exc
+
         except Exception as exc:
             if fail_open:
-                logger.exception("BotRepository insert_log_row failed (fail-open)")
+                logger.exception("BotRepository insert_log_row failed (fail-open)", extra={"row": row})
                 return
+
             raise BotServiceError(
                 op_name="insert_log_row",
                 public_detail="failed to persist bot log",
@@ -187,7 +253,7 @@ class BotRepository:
                 .select(
                     "ts,level,source,action,status,visible_to_user,"
                     "user_message,technical_message,request_id,runner_id,"
-                    "desired_state,runtime_state,details,meta"
+                    "desired_state,runtime_state,details,meta,message"
                 )
                 .eq("user_id", user_id)
                 .eq("bot_id", bot_id)
@@ -214,7 +280,6 @@ class BotRepository:
                 if not isinstance(details, dict):
                     details = {}
 
-                # Optional soft mode filter from structured payload.
                 row_mode = str(details.get("mode") or "").strip().lower()
                 if mode and row_mode and row_mode != str(mode).strip().lower():
                     continue
@@ -246,7 +311,7 @@ class BotRepository:
                 .select(
                     "ts,level,source,action,status,visible_to_user,"
                     "user_message,technical_message,request_id,runner_id,"
-                    "desired_state,runtime_state,details"
+                    "desired_state,runtime_state,details,message"
                 )
                 .eq("user_id", user_id)
                 .eq("bot_id", bot_id)
