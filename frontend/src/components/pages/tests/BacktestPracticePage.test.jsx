@@ -21,6 +21,20 @@ vi.mock("../../common/PageHeaderCard", () => ({
   ),
 }));
 
+vi.mock("../../common/Modal.jsx", () => ({
+  default: ({ open, title, children, footer, onClose }) =>
+    open ? (
+      <div role="dialog" aria-modal="true">
+        <div>{title}</div>
+        <button type="button" aria-label="Close" onClick={onClose}>
+          ✕
+        </button>
+        <div>{children}</div>
+        <div>{footer}</div>
+      </div>
+    ) : null,
+}));
+
 vi.mock("../../../css/pages/BacktestPracticePage.css", () => ({}));
 
 vi.mock("../../../content/pages/backtestPracticePage.content.ts", () => ({
@@ -76,15 +90,35 @@ function renderPage() {
   );
 }
 
+function jsonResponse(data, ok = true, status = 200) {
+  return Promise.resolve({
+    ok,
+    status,
+    json: async () => data,
+  });
+}
+
+async function flushAsync() {
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+}
+
 describe("BacktestPracticePage", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-03-03T12:00:00.000Z"));
+    vi.restoreAllMocks();
+    window.localStorage.clear();
   });
 
   afterEach(() => {
+    vi.clearAllTimers();
     vi.useRealTimers();
     vi.restoreAllMocks();
+    window.localStorage.clear();
   });
 
   it("renders header + initial Idle status pill", () => {
@@ -115,67 +149,204 @@ describe("BacktestPracticePage", () => {
 
     expect(screen.getByRole("alert")).toBeTruthy();
     expect(screen.getByText("Invalid config")).toBeTruthy();
-    const alert = screen.getByRole("alert");
-    expect(alert).toBeTruthy();
-    expect(alert).toHaveTextContent("Add at least one symbol.");
-
+    expect(screen.getByRole("alert")).toHaveTextContent("Add at least one symbol.");
     expect(screen.getByText("Idle")).toBeTruthy();
     expect(screen.queryByText("Working…")).toBeNull();
   });
 
   it("valid Run transitions queued -> running -> done and renders results", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementationOnce(() =>
+        jsonResponse({
+          job_id: "job_123",
+        })
+      )
+      .mockImplementationOnce(() =>
+        jsonResponse({
+          id: "job_123",
+          status: "queued",
+        })
+      )
+      .mockImplementationOnce(() =>
+        jsonResponse({
+          id: "job_123",
+          status: "running",
+        })
+      )
+      .mockImplementationOnce(() =>
+        jsonResponse({
+          id: "job_123",
+          status: "done",
+          result: {
+            headline: "Mock backtest complete (frontend stub)",
+            summary: {
+              trades: 42,
+              win_rate: 0.57,
+              pnl: 1234,
+              max_drawdown: 0.12,
+              avg_trade: 29.4,
+              exposure: 0.31,
+            },
+            artifacts: {
+              report_txt: "/fake/report.txt",
+              run_json_gz: "/fake/run.json.gz",
+            },
+            overview: {
+              universe: ["SPY", "QQQ", "AAPL", "MSFT", "NVDA"],
+              config_line: {
+                tf_bias: "15Min",
+                tf_entry: "5Min",
+                start: "2025-09-04",
+                end: "2026-03-03",
+                feed: "sip",
+              },
+              errors: 0,
+            },
+          },
+        })
+      );
+
     renderPage();
 
     fireEvent.click(screen.getByRole("button", { name: "Run backtest" }));
+
+    await flushAsync();
 
     expect(screen.getByText("Queued")).toBeTruthy();
     expect(screen.getByText("Working…")).toBeTruthy();
 
     await act(async () => {
-      vi.advanceTimersByTime(460);
+      vi.advanceTimersByTime(1500);
     });
+    await flushAsync();
+
     expect(screen.getByText("Running")).toBeTruthy();
 
     await act(async () => {
-      vi.advanceTimersByTime(1000);
+      vi.advanceTimersByTime(1500);
     });
-    expect(screen.getByText("Done")).toBeTruthy();
+    await flushAsync();
 
+    expect(screen.getByText("Done")).toBeTruthy();
     expect(screen.getByText("Mock backtest complete (frontend stub)")).toBeTruthy();
     expect(screen.getByText("Trades")).toBeTruthy();
     expect(screen.getByText("42")).toBeTruthy();
     expect(screen.getByText("Win rate")).toBeTruthy();
     expect(screen.getByText("57%")).toBeTruthy();
+
+    expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 
-  it("Reset clears job state and returns status to Idle", async () => {
-    renderPage();
+it("Reset clears active job/form state while preserving latest completed result status", async () => {
+  vi.spyOn(globalThis, "fetch")
+    .mockImplementationOnce(() =>
+      jsonResponse({
+        job_id: "job_123",
+      })
+    )
+    .mockImplementationOnce(() =>
+      jsonResponse({
+        id: "job_123",
+        status: "queued",
+      })
+    )
+    .mockImplementationOnce(() =>
+      jsonResponse({
+        id: "job_123",
+        status: "running",
+      })
+    )
+    .mockImplementationOnce(() =>
+      jsonResponse({
+        id: "job_123",
+        status: "done",
+        result: {
+          headline: "Mock backtest complete (frontend stub)",
+          summary: {
+            trades: 42,
+            win_rate: 0.57,
+            pnl: 1234,
+            max_drawdown: 0.12,
+            avg_trade: 29.4,
+            exposure: 0.31,
+          },
+          artifacts: {
+            report_txt: "/fake/report.txt",
+            run_json_gz: "/fake/run.json.gz",
+          },
+          overview: {
+            universe: ["SPY", "QQQ", "AAPL", "MSFT", "NVDA"],
+            config_line: {
+              tf_bias: "15Min",
+              tf_entry: "5Min",
+              start: "2025-09-04",
+              end: "2026-03-03",
+              feed: "sip",
+            },
+            errors: 0,
+          },
+        },
+      })
+    );
 
-    fireEvent.click(screen.getByRole("button", { name: "Run backtest" }));
+  renderPage();
 
-    await act(async () => {
-      vi.advanceTimersByTime(1500);
-    });
-    expect(screen.getByText("Done")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Run backtest" }));
 
-    fireEvent.click(screen.getByRole("button", { name: "Reset" }));
+  await flushAsync();
+  expect(screen.getByText("Queued")).toBeTruthy();
 
-    expect(screen.getByText("Idle")).toBeTruthy();
-    expect(screen.getByText("No run yet")).toBeTruthy();
-    expect(screen.queryByText("Mock backtest complete (frontend stub)")).toBeNull();
+  await act(async () => {
+    vi.advanceTimersByTime(1500);
   });
+  await flushAsync();
+  expect(screen.getByText("Running")).toBeTruthy();
+
+  await act(async () => {
+    vi.advanceTimersByTime(1500);
+  });
+  await flushAsync();
+  expect(screen.getByText("Done")).toBeTruthy();
+  expect(screen.getByText("Mock backtest complete (frontend stub)")).toBeTruthy();
+
+  fireEvent.click(screen.getByRole("button", { name: "Reset" }));
+
+  expect(screen.getByText("Done")).toBeTruthy();
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(screen.queryByText("Mock backtest complete (frontend stub)")).toBeNull();
+  expect(screen.getByRole("button", { name: "Reopen latest results" })).toBeTruthy();
+  expect(screen.getByLabelText("Symbols")).toHaveValue("SPY,QQQ,AAPL,MSFT,NVDA");
+});
 
   it("cleans up timers on unmount (no setState-on-unmounted warnings)", async () => {
+    vi.spyOn(globalThis, "fetch")
+      .mockImplementationOnce(() =>
+        jsonResponse({
+          job_id: "job_123",
+        })
+      )
+      .mockImplementationOnce(() =>
+        jsonResponse({
+          id: "job_123",
+          status: "queued",
+        })
+      );
+
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const { unmount } = renderPage();
 
     fireEvent.click(screen.getByRole("button", { name: "Run backtest" }));
 
+    await flushAsync();
+    expect(screen.getByText("Queued")).toBeTruthy();
+
     unmount();
 
     await act(async () => {
-      vi.advanceTimersByTime(2000);
+      vi.advanceTimersByTime(5000);
     });
+    await flushAsync();
 
     const calls = errSpy.mock.calls.map((c) => String(c[0] ?? ""));
     const hasUnmountWarning = calls.some((msg) =>

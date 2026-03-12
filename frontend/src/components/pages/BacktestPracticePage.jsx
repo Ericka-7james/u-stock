@@ -20,14 +20,37 @@ import {
 
 const BT_LAST_DONE_DAY_KEY = "bt_practice_last_done_day";
 const BT_LAST_DONE_JOB_KEY = "bt_practice_last_done_job";
+const POLL_MS = 1500;
 
-async function apiJson(url, options = {}) {
+const STATUS_CLASS_MAP = {
+  idle: "pill idle",
+  queued: "pill queued",
+  running: "pill running",
+  done: "pill done",
+  failed: "pill failed",
+};
+
+function getDefaultForm() {
+  return {
+    symbolsRaw: "SPY,QQQ,AAPL,MSFT,NVDA",
+    tfEntry: "5Min",
+    tfBias: "15Min",
+    startDate: daysAgoISO(180),
+    endDate: todayISO(),
+    warmup: 320,
+    steps: 200000,
+    qty: 1,
+  };
+}
+
+async function apiJson(url, options = {}, signal) {
   const res = await fetch(url, {
     credentials: "include",
     headers: {
       "Content-Type": "application/json",
       ...(options.headers || {}),
     },
+    signal,
     ...options,
   });
 
@@ -63,26 +86,29 @@ function fmtMaybePctFromRatio(v) {
 export default function BacktestPracticePage() {
   const c = BACKTEST_PRACTICE_PAGE_COPY;
 
-  const [symbolsRaw, setSymbolsRaw] = useState("SPY,QQQ,AAPL,MSFT,NVDA");
-  const [tfEntry, setTfEntry] = useState("5Min");
-  const [tfBias, setTfBias] = useState("15Min");
-
-  const [startDate, setStartDate] = useState(daysAgoISO(180));
-  const [endDate, setEndDate] = useState(todayISO());
-
-  const [warmup, setWarmup] = useState(320);
-  const [steps, setSteps] = useState(200000);
-  const [qty, setQty] = useState(1);
-
+  const [form, setForm] = useState(() => getDefaultForm());
   const [job, setJob] = useState(null);
   const [latestCompletedJob, setLatestCompletedJob] = useState(null);
-  const [running, setRunning] = useState(false);
   const [err, setErr] = useState(null);
-
   const [isResultsModalOpen, setIsResultsModalOpen] = useState(false);
 
   const pollRef = useRef(null);
   const isMountedRef = useRef(true);
+  const abortRef = useRef(null);
+
+  const clearPollTimer = useCallback(() => {
+    if (pollRef.current) {
+      window.clearTimeout(pollRef.current);
+      pollRef.current = null;
+    }
+  }, []);
+
+  const clearInFlightRequest = useCallback(() => {
+    if (abortRef.current) {
+      abortRef.current.abort();
+      abortRef.current = null;
+    }
+  }, []);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -107,132 +133,154 @@ export default function BacktestPracticePage() {
 
     return () => {
       isMountedRef.current = false;
-      if (pollRef.current) {
-        window.clearTimeout(pollRef.current);
-        pollRef.current = null;
-      }
+      clearPollTimer();
+      clearInFlightRequest();
     };
-  }, []);
+  }, [clearPollTimer, clearInFlightRequest]);
 
-  const symbols = useMemo(() => splitSymbols(symbolsRaw), [symbolsRaw]);
+  const symbols = useMemo(() => splitSymbols(form.symbolsRaw), [form.symbolsRaw]);
 
   const config = useMemo(() => {
     return {
       symbols,
-      tf_entry: tfEntry,
-      tf_bias: tfBias,
-      start: startDate,
-      end: endDate,
-      warmup: asInt(warmup, 320),
-      steps: asInt(steps, 200000),
-      qty: asInt(qty, 1),
+      tf_entry: form.tfEntry,
+      tf_bias: form.tfBias,
+      start: form.startDate,
+      end: form.endDate,
+      warmup: asInt(form.warmup, 320),
+      steps: asInt(form.steps, 200000),
+      qty: asInt(form.qty, 1),
     };
-  }, [symbols, tfEntry, tfBias, startDate, endDate, warmup, steps, qty]);
+  }, [symbols, form]);
 
   const validation = useMemo(() => {
     return validateBacktestConfig({
       symbols,
-      tfEntry,
-      tfBias,
-      startDate,
-      endDate,
-      warmup,
-      steps,
-      qty,
+      tfEntry: form.tfEntry,
+      tfBias: form.tfBias,
+      startDate: form.startDate,
+      endDate: form.endDate,
+      warmup: form.warmup,
+      steps: form.steps,
+      qty: form.qty,
       tfOptions: TF_OPTIONS,
     });
-  }, [symbols, tfEntry, tfBias, startDate, endDate, warmup, steps, qty]);
+  }, [symbols, form]);
 
-  const hasCompletedRunToday = Boolean(latestCompletedJob?.status === "done");
+  const isRunning = job?.status === "queued" || job?.status === "running";
+  const hasCompletedRunToday = latestCompletedJob?.status === "done";
+
+  const setField = useCallback((key, value) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  }, []);
+
+  const persistCompletedJob = useCallback((doneJob) => {
+    window.localStorage.setItem(BT_LAST_DONE_DAY_KEY, todayISO());
+    window.localStorage.setItem(BT_LAST_DONE_JOB_KEY, JSON.stringify(doneJob));
+  }, []);
+
+  const scheduleNextPoll = useCallback((jobId, pollJobFn) => {
+    clearPollTimer();
+    pollRef.current = window.setTimeout(() => {
+      pollJobFn(jobId);
+    }, POLL_MS);
+  }, [clearPollTimer]);
+
+  const pollJob = useCallback(
+    async (jobId) => {
+      clearInFlightRequest();
+
+      const controller = new AbortController();
+      abortRef.current = controller;
+
+      try {
+        const data = await apiJson(`/api/backtests/${jobId}`, {}, controller.signal);
+
+        if (!isMountedRef.current) return;
+
+        setJob(data);
+
+        if (data.status === "done") {
+          setLatestCompletedJob(data);
+          persistCompletedJob(data);
+          clearPollTimer();
+          abortRef.current = null;
+          return;
+        }
+
+        if (data.status === "failed") {
+          setErr({
+            title: "Backtest failed",
+            body:
+              data?.error?.message ||
+              data?.error?.stderr_tail ||
+              "The backtest did not complete successfully.",
+          });
+          clearPollTimer();
+          abortRef.current = null;
+          return;
+        }
+
+        abortRef.current = null;
+        scheduleNextPoll(jobId, pollJob);
+      } catch (e) {
+        if (!isMountedRef.current) return;
+        if (e?.name === "AbortError") return;
+
+        setErr({
+          title: "Unable to fetch backtest status",
+          body: e?.message || "Polling failed.",
+        });
+        clearPollTimer();
+        abortRef.current = null;
+      }
+    },
+    [clearInFlightRequest, clearPollTimer, persistCompletedJob, scheduleNextPoll]
+  );
 
   const onReset = useCallback(() => {
-    if (pollRef.current) {
-      window.clearTimeout(pollRef.current);
-      pollRef.current = null;
-    }
-
-    setSymbolsRaw("SPY,QQQ,AAPL,MSFT,NVDA");
-    setTfEntry("5Min");
-    setTfBias("15Min");
-    setStartDate(daysAgoISO(180));
-    setEndDate(todayISO());
-    setWarmup(320);
-    setSteps(200000);
-    setQty(1);
+    clearPollTimer();
+    clearInFlightRequest();
+    setForm(getDefaultForm());
     setErr(null);
     setJob(null);
-    setRunning(false);
-  }, []);
-
-  const pollJob = useCallback(async (jobId) => {
-    try {
-      const data = await apiJson(`/api/backtests/${jobId}`);
-
-      if (!isMountedRef.current) return;
-
-      setJob(data);
-
-      if (data.status === "done") {
-        setLatestCompletedJob(data);
-        setRunning(false);
-        setIsResultsModalOpen(true);
-
-        window.localStorage.setItem(BT_LAST_DONE_DAY_KEY, todayISO());
-        window.localStorage.setItem(BT_LAST_DONE_JOB_KEY, JSON.stringify(data));
-
-        pollRef.current = null;
-        return;
-      }
-
-      if (data.status === "failed") {
-        setRunning(false);
-        setErr({
-          title: "Backtest failed",
-          body:
-            data?.error?.message ||
-            data?.error?.stderr_tail ||
-            "The backtest did not complete successfully.",
-        });
-        pollRef.current = null;
-        return;
-      }
-
-      pollRef.current = window.setTimeout(() => {
-        pollJob(jobId);
-      }, 1500);
-    } catch (e) {
-      if (!isMountedRef.current) return;
-
-      setRunning(false);
-      setErr({
-        title: "Unable to fetch backtest status",
-        body: e?.message || "Polling failed.",
-      });
-      pollRef.current = null;
-    }
-  }, []);
+    setIsResultsModalOpen(false);
+  }, [clearPollTimer, clearInFlightRequest]);
 
   const onRun = useCallback(async () => {
-    if (running) return;
+    if (isRunning) return;
 
     setErr(null);
 
     if (!validation.ok) {
-      setErr({ title: c.errors.invalid.title, body: validation.issues.join(" ") });
+      setErr({
+        title: c.errors.invalid.title,
+        body: validation.issues.join(" "),
+      });
       return;
     }
 
-    try {
-      setRunning(true);
-      setIsResultsModalOpen(true);
+    clearPollTimer();
+    clearInFlightRequest();
+    setIsResultsModalOpen(true);
 
-      const res = await apiJson("/api/backtests/run", {
-        method: "POST",
-        body: JSON.stringify({
-          kind: "ema_scan",
-          config,
-        }),
-      });
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    try {
+      const res = await apiJson(
+        "/api/backtests/run",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            kind: "ema_scan",
+            config,
+          }),
+        },
+        controller.signal
+      );
+
+      if (!isMountedRef.current) return;
 
       const nextJob = {
         id: res.job_id,
@@ -240,29 +288,51 @@ export default function BacktestPracticePage() {
         createdAt: new Date().toISOString(),
         config,
       };
+
       setJob(nextJob);
+      abortRef.current = null;
 
       pollJob(res.job_id);
     } catch (e) {
-      setRunning(false);
+      if (!isMountedRef.current) return;
+      if (e?.name === "AbortError") return;
+
+      setJob(null);
       setErr({
         title: "Unable to start backtest",
         body: e?.message || "Request failed.",
       });
+      abortRef.current = null;
     }
-  }, [running, validation.ok, validation.issues, c.errors.invalid.title, config, pollJob]);
+  }, [
+    c.errors.invalid.title,
+    clearInFlightRequest,
+    clearPollTimer,
+    config,
+    isRunning,
+    pollJob,
+    validation,
+  ]);
 
-  const statusPill = useMemo(() => {
-    const s = running ? job?.status || "queued" : latestCompletedJob?.status || job?.status || "idle";
+  const displayJob = useMemo(() => {
+    if (isRunning || (job && job.status !== "done")) return job;
+    return latestCompletedJob;
+  }, [isRunning, job, latestCompletedJob]);
+
+  const statusKey = useMemo(() => {
+    return latestCompletedJob?.status || job?.status || "idle";
+  }, [job?.status, latestCompletedJob?.status]);
+
+  const statusLabel = useMemo(() => {
     const map = {
-      idle: { label: c.status.idle, cls: "pill idle" },
-      queued: { label: c.status.queued, cls: "pill queued" },
-      running: { label: c.status.running, cls: "pill running" },
-      done: { label: c.status.done, cls: "pill done" },
-      failed: { label: c.status.failed, cls: "pill failed" },
+      idle: c.status.idle,
+      queued: c.status.queued,
+      running: c.status.running,
+      done: c.status.done,
+      failed: c.status.failed,
     };
-    return map[s] || map.idle;
-  }, [running, job?.status, latestCompletedJob?.status, c.status]);
+    return map[statusKey] || c.status.idle;
+  }, [c.status, statusKey]);
 
   const renderResultsContent = (sourceJob) => {
     if (!sourceJob) {
@@ -406,8 +476,6 @@ export default function BacktestPracticePage() {
     );
   };
 
-  const canReopenResults = hasCompletedRunToday;
-
   return (
     <AppShell>
       <div className="bt-practice-page">
@@ -417,7 +485,7 @@ export default function BacktestPracticePage() {
             subtitle={<span className="bt-tagline">{c.header.tagline}</span>}
             right={
               <div className="bt-heroRight">
-                <div className={statusPill.cls}>{statusPill.label}</div>
+                <div className={STATUS_CLASS_MAP[statusKey] || STATUS_CLASS_MAP.idle}>{statusLabel}</div>
                 <div className="bt-heroHint">{c.header.hint}</div>
               </div>
             }
@@ -454,8 +522,8 @@ export default function BacktestPracticePage() {
                   <input
                     id="bt-symbols"
                     className="bt-input"
-                    value={symbolsRaw}
-                    onChange={(e) => setSymbolsRaw(e.target.value)}
+                    value={form.symbolsRaw}
+                    onChange={(e) => setField("symbolsRaw", e.target.value)}
                     placeholder={c.fields.symbols.placeholder}
                     spellCheck={false}
                   />
@@ -469,8 +537,8 @@ export default function BacktestPracticePage() {
                   <select
                     id="bt-tf-entry"
                     className="bt-input"
-                    value={tfEntry}
-                    onChange={(e) => setTfEntry(e.target.value)}
+                    value={form.tfEntry}
+                    onChange={(e) => setField("tfEntry", e.target.value)}
                   >
                     {TF_OPTIONS.map((x) => (
                       <option key={x} value={x}>
@@ -485,8 +553,8 @@ export default function BacktestPracticePage() {
                   <select
                     id="bt-tf-bias"
                     className="bt-input"
-                    value={tfBias}
-                    onChange={(e) => setTfBias(e.target.value)}
+                    value={form.tfBias}
+                    onChange={(e) => setField("tfBias", e.target.value)}
                   >
                     {TF_OPTIONS.map((x) => (
                       <option key={x} value={x}>
@@ -501,8 +569,8 @@ export default function BacktestPracticePage() {
                   <input
                     id="bt-qty"
                     className="bt-input"
-                    value={qty}
-                    onChange={(e) => setQty(e.target.value)}
+                    value={form.qty}
+                    onChange={(e) => setField("qty", e.target.value)}
                     inputMode="numeric"
                     placeholder="1"
                   />
@@ -516,8 +584,8 @@ export default function BacktestPracticePage() {
                     id="bt-start"
                     className="bt-input"
                     type="date"
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
+                    value={form.startDate}
+                    onChange={(e) => setField("startDate", e.target.value)}
                   />
                 </div>
 
@@ -527,8 +595,8 @@ export default function BacktestPracticePage() {
                     id="bt-end"
                     className="bt-input"
                     type="date"
-                    value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
+                    value={form.endDate}
+                    onChange={(e) => setField("endDate", e.target.value)}
                   />
                 </div>
 
@@ -537,8 +605,8 @@ export default function BacktestPracticePage() {
                   <input
                     id="bt-warmup"
                     className="bt-input"
-                    value={warmup}
-                    onChange={(e) => setWarmup(e.target.value)}
+                    value={form.warmup}
+                    onChange={(e) => setField("warmup", e.target.value)}
                     inputMode="numeric"
                     placeholder="320"
                   />
@@ -549,8 +617,8 @@ export default function BacktestPracticePage() {
                   <input
                     id="bt-steps"
                     className="bt-input"
-                    value={steps}
-                    onChange={(e) => setSteps(e.target.value)}
+                    value={form.steps}
+                    onChange={(e) => setField("steps", e.target.value)}
                     inputMode="numeric"
                     placeholder="200000"
                   />
@@ -558,20 +626,15 @@ export default function BacktestPracticePage() {
               </div>
 
               <div className="bt-actions">
-                <button
-                  className="bt-btn primary"
-                  onClick={onRun}
-                  disabled={running}
-                  type="button"
-                >
-                  {running ? c.buttons.running : c.buttons.run}
+                <button className="bt-btn primary" onClick={onRun} disabled={isRunning} type="button">
+                  {isRunning ? c.buttons.running : c.buttons.run}
                 </button>
 
-                <button className="bt-btn" onClick={onReset} type="button" disabled={running}>
+                <button className="bt-btn" onClick={onReset} type="button" disabled={isRunning}>
                   {c.buttons.reset}
                 </button>
 
-                {canReopenResults ? (
+                {hasCompletedRunToday ? (
                   <button
                     className="bt-btn secondary"
                     type="button"
@@ -600,19 +663,19 @@ export default function BacktestPracticePage() {
               <div className="bt-kv-row">
                 <span className="k">{c.kv.timeframes}</span>
                 <span className="v">
-                  {tfBias} → {tfEntry}
+                  {form.tfBias} → {form.tfEntry}
                 </span>
               </div>
               <div className="bt-kv-row">
                 <span className="k">{c.kv.range}</span>
                 <span className="v">
-                  {startDate} to {endDate}
+                  {form.startDate} to {form.endDate}
                 </span>
               </div>
               <div className="bt-kv-row">
                 <span className="k">{c.kv.params}</span>
                 <span className="v">
-                  warmup {String(warmup)}, steps {String(steps)}, qty {String(qty)}
+                  warmup {String(form.warmup)}, steps {String(form.steps)}, qty {String(form.qty)}
                 </span>
               </div>
             </div>
@@ -651,9 +714,7 @@ export default function BacktestPracticePage() {
             </button>
           }
         >
-          {running || (job && job.status !== "done")
-            ? renderResultsContent(job)
-            : renderResultsContent(latestCompletedJob)}
+          {renderResultsContent(displayJob)}
         </Modal>
       </div>
     </AppShell>
