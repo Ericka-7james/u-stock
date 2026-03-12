@@ -1,1026 +1,718 @@
-# backend/api/core/bots/service.py
 from __future__ import annotations
 
-import time
+"""Service layer for bot control-plane and runtime-plane operations."""
+
+import logging
 from typing import Any, Dict, List, Optional
 
+from api.core.bots.constants import BOT_CATALOG
+from api.core.bots.errors import BotServiceError, failure_response
+from api.core.bots.repository import BotRepository
+from api.core.bots.state_machine import (
+    compute_effective_state,
+    heartbeat_age_or_none,
+    normalize_desired_state,
+    normalize_runtime_state,
+)
+from api.core.bots.time_utils import epoch_to_iso_z, now_epoch
 from api.core.bots.validators import normalize_mode, parse_ts_to_epoch_seconds
-from api.db import get_supabase_service
 
-
-# -------------------------
-# Helpers
-# -------------------------
-def _now_epoch() -> int:
-    return int(time.time())
-
-
-def _epoch_to_iso_z(ep: int) -> str:
-    import time as _t
-
-    return _t.strftime("%Y-%m-%dT%H:%M:%SZ", _t.gmtime(int(ep)))
-
-
-def _safe_sb_execute(fn, *, default: Any):
-    """
-    Fail-soft wrapper: don't take down the API if Supabase errors.
-    IMPORTANT: For production, prefer logging exceptions server-side.
-    """
-    try:
-        return fn()
-    except Exception:
-        return default
-
-
-def _heartbeat_age_or_none(last_heartbeat_at: Any) -> Optional[int]:
-    ep = parse_ts_to_epoch_seconds(last_heartbeat_at) or 0
-    if ep <= 0:
-        return None
-    return max(0, _now_epoch() - int(ep))
-
-
-def _normalize_legacy_intent(it: Any) -> str:
-    """
-    Backwards-compat: older values may still contain 'paused'.
-    Canonical lifecycle intents are: running | stopped.
-    """
-    v = str(it or "").strip().lower()
-    if v == "paused":
-        return "stopped"
-    if v == "armed":
-        return "stopped"
-    return v
-
-
-def _compute_effective_state(*, runtime_state: Any, desired_state: Any, hb_age_sec: Optional[int]) -> str:
-    eff = str(runtime_state or "").strip().lower()
-    desired = _normalize_legacy_intent(desired_state)
-
-    if eff == "paused":
-        eff = "stopped"
-
-    if hb_age_sec is None:
-        if desired == "running":
-            return "starting"
-        if eff:
-            return eff
-        return "stopped"
-
-    if hb_age_sec > 360:
-        return "offline"
-
-    if eff:
-        return eff
-
-    if desired == "running":
-        return "running"
-    return "stopped"
-
-
-# -------------------------
-# Heartbeat log throttling (per-type)
-# -------------------------
-HB_5_MIN = 5 * 60
-HB_15_MIN = 15 * 60
-HB_30_MIN = 30 * 60
-HB_1_HOUR = 60 * 60
-
-
-def _hb_signature(payload: Dict[str, Any]) -> str:
-    """
-    Stable signature so we can avoid spamming bot_events when nothing changes.
-    """
-    if not isinstance(payload, dict):
-        payload = {}
-
-    desired_state = _normalize_legacy_intent(payload.get("desired_state") or payload.get("intent"))
-    eff = str(payload.get("effective_state") or "").strip().lower()
-    if eff == "paused":
-        eff = "stopped"
-
-    mode = normalize_mode(payload.get("mode") or "paper")
-
-    msg = str(payload.get("message") or "").strip()
-    paused_reason = str(payload.get("paused_reason") or "").strip()
-    last_error = str(payload.get("last_error") or "").strip()
-    reason_code = str(payload.get("reason_code") or "").strip()
-
-    try:
-        next_open_epoch = int(payload.get("next_open_epoch") or 0)
-    except Exception:
-        next_open_epoch = 0
-
-    return "|".join(
-        [
-            f"desired={desired_state}",
-            f"eff={eff}",
-            f"mode={mode}",
-            f"reason={reason_code}",
-            f"next_open={next_open_epoch}",
-            f"msg={msg}",
-            f"paused={paused_reason}",
-            f"err={last_error}",
-        ]
-    )
-
-
-def _is_blocked_no_valid_intents(payload: Dict[str, Any]) -> bool:
-    """
-    Detect noisy case: 'blocked: no valid intents'
-    We check message + paused_reason + reason_code to be robust.
-    """
-    if not isinstance(payload, dict):
-        return False
-    msg = str(payload.get("message") or "").strip().lower()
-    pr = str(payload.get("paused_reason") or "").strip().lower()
-    rc = str(payload.get("reason_code") or "").strip().lower()
-
-    blob = " ".join([msg, pr, rc]).strip()
-    if "no valid intents" in blob:
-        return True
-    if "no_valid_intents" in blob:
-        return True
-    if rc.startswith("blocked") and ("intent" in blob or "valid" in blob):
-        return True
-    return False
-
-
-def _heartbeat_throttle_seconds(payload: Dict[str, Any]) -> int:
-    """
-    Per-type throttle policy for inserting heartbeat into bot_events.
-    Signature changes ALWAYS log immediately; this only applies when signature is unchanged.
-    """
-    if not isinstance(payload, dict):
-        return HB_1_HOUR
-
-    eff = str(payload.get("effective_state") or "").strip().lower()
-    if eff == "paused":
-        eff = "stopped"
-
-    desired_state = _normalize_legacy_intent(payload.get("desired_state") or payload.get("intent"))
-    reason_code = str(payload.get("reason_code") or "").strip().lower()
-    last_error = str(payload.get("last_error") or "").strip()
-
-    if _is_blocked_no_valid_intents(payload):
-        return HB_1_HOUR
-
-    if eff == "waiting_for_market" or reason_code == "market_closed":
-        return HB_30_MIN
-
-    if eff == "starting":
-        return HB_5_MIN
-
-    if eff == "error" or bool(last_error):
-        return HB_5_MIN
-
-    if eff in ("running", "degraded") or desired_state == "running":
-        return HB_15_MIN
-
-    return HB_1_HOUR
-
-
-def _should_insert_heartbeat_event(
-    sb,
-    *,
-    user_id: str,
-    bot_id: str,
-    mode: str,
-    sig: str,
-    now_epoch: int,
-    throttle_seconds: int,
-) -> bool:
-    """
-    Insert heartbeat event if:
-      - no prior heartbeat log
-      - OR signature changed
-      - OR last same-signature heartbeat is older than throttle_seconds
-    Fail-open: if the check fails, we still insert.
-    """
-    try:
-        res = (
-            sb.table("bot_events")
-            .select("ts,payload")
-            .eq("user_id", user_id)
-            .eq("bot_id", bot_id)
-            .eq("mode", mode)
-            .eq("event_type", "heartbeat")
-            .order("ts", desc=True)
-            .limit(1)
-            .execute()
-        )
-        rows = getattr(res, "data", None) or []
-        if not isinstance(rows, list) or not rows:
-            return True
-
-        row0 = rows[0] if isinstance(rows[0], dict) else {}
-        last_ts_ep = parse_ts_to_epoch_seconds(row0.get("ts")) or 0
-
-        last_payload = row0.get("payload")
-        if not isinstance(last_payload, dict):
-            last_payload = {}
-
-        last_sig = _hb_signature(last_payload)
-
-        if last_sig != sig:
-            return True
-
-        if last_ts_ep <= 0:
-            return True
-
-        age = max(0, int(now_epoch) - int(last_ts_ep))
-        return age >= int(throttle_seconds)
-
-    except Exception:
-        return True
+logger = logging.getLogger(__name__)
 
 
 class BotService:
-    """
-    Production split-model service:
+    """Service layer for bot control-plane and runtime-plane state."""
 
-    - bot_configs: persistent config
-    - bot_desired_state: control plane
-    - bot_runtime_state: runtime/heartbeat plane
-    - bot_events: append-only audit/events
-    - bot_status_v: unified read model for status
-    """
-
-    BOT_CATALOG: List[Dict[str, Any]] = [
-        {
-            "id": "ema_trend",
-            "name": "EMA Trend Bot",
-            "description": "Trend-following EMA signals + risk gates.",
-            "wired": True,
-        },
-        {
-            "id": "orb",
-            "name": "ORB Bot",
-            "description": "Opening Range Breakout scanner + execution.",
-            "wired": False,
-        },
-        {
-            "id": "mean_revert",
-            "name": "Mean Revert Bot",
-            "description": "Mean reversion entries with confidence gating.",
-            "wired": False,
-        },
-    ]
+    BOT_CATALOG = BOT_CATALOG
 
     def __init__(self) -> None:
-        self.sb = get_supabase_service()
+        """Initializes the bot service."""
+        self.repo = BotRepository()
 
-    # -------------------------
-    # Catalog
-    # -------------------------
     def _catalog_item(self, bot_id: str) -> Optional[Dict[str, Any]]:
-        bid = str(bot_id or "").strip()
-        if not bid:
+        normalized_bot_id = str(bot_id or "").strip()
+        if not normalized_bot_id:
             return None
-        for b in self.BOT_CATALOG:
-            if str(b.get("id") or "").strip() == bid:
-                return b
+
+        for bot in self.BOT_CATALOG:
+            if str(bot.get("id") or "").strip() == normalized_bot_id:
+                return bot
         return None
 
     def _is_wired(self, bot_id: str) -> bool:
-        b = self._catalog_item(bot_id)
-        return bool(b and b.get("wired"))
+        bot = self._catalog_item(bot_id)
+        return bool(bot and bot.get("wired"))
 
     def _unavailable_payload(self, bot_id: str) -> Dict[str, Any]:
-        bid = str(bot_id or "").strip()
+        normalized_bot_id = str(bot_id or "").strip()
         return {
             "ok": False,
             "code": "bot_unavailable",
-            "detail": f"bot not available: {bid}",
-            "bot_id": bid,
+            "detail": f"bot not available: {normalized_bot_id}",
+            "bot_id": normalized_bot_id,
         }
 
     def _guard_wired_or_unavailable(self, bot_id: str) -> Optional[Dict[str, Any]]:
-        bid = str(bot_id or "").strip()
-        if not bid:
+        normalized_bot_id = str(bot_id or "").strip()
+        if not normalized_bot_id:
             return {"ok": False, "detail": "missing bot_id"}
-        if not self._is_wired(bid):
-            return self._unavailable_payload(bid)
+        if not self._is_wired(normalized_bot_id):
+            return self._unavailable_payload(normalized_bot_id)
         return None
+
+    def _safe_log(
+        self,
+        *,
+        user_id: str,
+        bot_id: str,
+        level: str = "info",
+        source: str = "system",
+        action: str = "log",
+        status: str = "info",
+        user_message: str = "",
+        technical_message: str = "",
+        mode: Optional[str] = None,
+        request_id: Optional[str] = None,
+        runner_id: Optional[str] = None,
+        visible_to_user: bool = True,
+        desired_state: Optional[str] = None,
+        runtime_state: Optional[str] = None,
+        details: Optional[Dict[str, Any]] = None,
+        ts_iso: Optional[str] = None,
+    ) -> None:
+        """Best-effort structured audit log writer."""
+        try:
+            details_payload = details.copy() if isinstance(details, dict) else {}
+            if mode:
+                details_payload.setdefault("mode", str(mode).strip().lower())
+
+            self.repo.insert_log_row(
+                row={
+                    "user_id": user_id,
+                    "bot_id": bot_id,
+                    "ts": ts_iso or epoch_to_iso_z(now_epoch()),
+                    "level": str(level or "info").strip().lower(),
+                    "source": str(source or "system").strip().lower(),
+                    "action": str(action or "log").strip().lower(),
+                    "status": str(status or "info").strip().lower(),
+                    "visible_to_user": bool(visible_to_user),
+                    "user_message": str(user_message or "").strip(),
+                    "technical_message": str(technical_message or "").strip(),
+                    "request_id": request_id,
+                    "runner_id": runner_id,
+                    "desired_state": desired_state,
+                    "runtime_state": runtime_state,
+                    "details": details_payload,
+                    "meta": details_payload,
+                },
+                fail_open=True,
+            )
+        except Exception:
+            logger.exception("BotService _safe_log failed")
+    def _derive_runtime_message(self, runtime_row: Dict[str, Any]) -> str:
+        """Builds a user-facing runtime message from runtime state."""
+        if not isinstance(runtime_row, dict):
+            return ""
+
+        runtime_state = normalize_runtime_state(runtime_row.get("runtime_state"))
+        paused_reason = str(runtime_row.get("paused_reason") or "").strip()
+        last_error_message = str(runtime_row.get("last_error_message") or "").strip()
+        last_error_type = str(runtime_row.get("last_error_type") or "").strip()
+
+        if runtime_state == "starting":
+            return "Bot is starting."
+        if runtime_state == "running":
+            return "Bot is running."
+        if runtime_state == "stopping":
+            return "Bot is stopping."
+        if runtime_state == "offline":
+            return "Bot is stopped."
+        if runtime_state == "errored":
+            if last_error_message:
+                return last_error_message
+            if last_error_type:
+                return f"Bot error: {last_error_type}"
+            return "Bot hit an error."
+        if paused_reason:
+            return paused_reason
+        return ""
 
     def available(self) -> Dict[str, Any]:
         bots: List[Dict[str, Any]] = []
-        for b in self.BOT_CATALOG:
-            if not b.get("wired"):
+        for bot in self.BOT_CATALOG:
+            if not bot.get("wired"):
                 continue
             bots.append(
                 {
-                    "id": str(b.get("id") or "").strip(),
-                    "name": str(b.get("name") or "").strip(),
-                    "description": str(b.get("description") or "").strip(),
+                    "id": str(bot.get("id") or "").strip(),
+                    "name": str(bot.get("name") or "").strip(),
+                    "description": str(bot.get("description") or "").strip(),
                 }
             )
         return {"ok": True, "bots": bots}
 
-    # -------------------------
-    # Config
-    # -------------------------
     def get_config(self, user_id: str, bot_id: str) -> Dict[str, Any]:
-        uid = str(user_id or "").strip()
-        bid = str(bot_id or "").strip()
-        if not uid or not bid:
+        normalized_user_id = str(user_id or "").strip()
+        normalized_bot_id = str(bot_id or "").strip()
+
+        if not normalized_user_id or not normalized_bot_id:
             return {"ok": False, "detail": "missing user_id/bot_id"}
 
-        guard = self._guard_wired_or_unavailable(bid)
+        guard = self._guard_wired_or_unavailable(normalized_bot_id)
         if guard:
             return guard
 
-        def _read():
-            res = (
-                self.sb.table("bot_configs")
-                .select("config,updated_at,enabled")
-                .eq("user_id", uid)
-                .eq("bot_id", bid)
-                .maybe_single()
-                .execute()
-            )
-            data = getattr(res, "data", None) or {}
-            cfg = data.get("config")
-            if not isinstance(cfg, dict):
-                cfg = {}
+        try:
+            row = self.repo.get_config_row(user_id=normalized_user_id, bot_id=normalized_bot_id)
+            config = row.get("config")
+            if not isinstance(config, dict):
+                config = {}
             return {
                 "ok": True,
-                "bot_id": bid,
-                "config": cfg,
-                "enabled": bool(data.get("enabled", True)),
+                "bot_id": normalized_bot_id,
+                "config": config,
+                "enabled": bool(row.get("enabled", True)),
             }
-
-        return _safe_sb_execute(
-            _read,
-            default={"ok": True, "bot_id": bid, "config": {}, "enabled": True},
-        )
+        except BotServiceError:
+            logger.exception("BotService get_config failed")
+            return {"ok": True, "bot_id": normalized_bot_id, "config": {}, "enabled": True}
 
     def set_config(self, user_id: str, bot_id: str, config: Dict[str, Any]) -> Dict[str, Any]:
-        uid = str(user_id or "").strip()
-        bid = str(bot_id or "").strip()
-        cfg = config if isinstance(config, dict) else {}
-        if not uid or not bid:
+        normalized_user_id = str(user_id or "").strip()
+        normalized_bot_id = str(bot_id or "").strip()
+        normalized_config = config if isinstance(config, dict) else {}
+
+        if not normalized_user_id or not normalized_bot_id:
             return {"ok": False, "detail": "missing user_id/bot_id"}
 
-        guard = self._guard_wired_or_unavailable(bid)
+        guard = self._guard_wired_or_unavailable(normalized_bot_id)
         if guard:
             return guard
 
-        def _write():
-            now_iso = _epoch_to_iso_z(_now_epoch())
-            self.sb.table("bot_configs").upsert(
-                {
-                    "user_id": uid,
-                    "bot_id": bid,
-                    "config": cfg,
-                    "enabled": True,
-                    "updated_at": now_iso,
-                },
-                on_conflict="user_id,bot_id",
-            ).execute()
-            return {"ok": True, "bot_id": bid, "config": cfg}
+        try:
+            now_iso = epoch_to_iso_z(now_epoch())
+            self.repo.upsert_config_row(
+                user_id=normalized_user_id,
+                bot_id=normalized_bot_id,
+                config=normalized_config,
+                now_iso=now_iso,
+            )
+            self._safe_log(
+                user_id=normalized_user_id,
+                bot_id=normalized_bot_id,
+                source="api",
+                action="config_loaded",
+                status="success",
+                user_message="Bot configuration updated.",
+                technical_message="Config upserted successfully.",
+                details={"config_keys": sorted(list(normalized_config.keys()))},
+                ts_iso=now_iso,
+            )
+            return {"ok": True, "bot_id": normalized_bot_id, "config": normalized_config}
+        except BotServiceError:
+            logger.exception("BotService set_config failed")
+            return failure_response(bot_id=normalized_bot_id, detail="failed to persist config")
 
-        return _safe_sb_execute(
-            _write,
-            default={"ok": False, "bot_id": bid, "detail": "failed to persist config"},
-        )
-
-    # -------------------------
-    # Status / control
-    # -------------------------
     def status(self, user_id: str, bot_id: str) -> Dict[str, Any]:
-        uid = str(user_id or "").strip()
-        bid = str(bot_id or "").strip()
-        if not uid or not bid:
+        """Reads unified bot status for the frontend from base tables only."""
+        normalized_user_id = str(user_id or "").strip()
+        normalized_bot_id = str(bot_id or "").strip()
+
+        if not normalized_user_id or not normalized_bot_id:
             return {"ok": False, "detail": "missing user_id/bot_id"}
 
-        guard = self._guard_wired_or_unavailable(bid)
+        guard = self._guard_wired_or_unavailable(normalized_bot_id)
         if guard:
             return guard
 
         base: Dict[str, Any] = {
             "ok": True,
-            "user_id": uid,
-            "bot_id": bid,
+            "user_id": normalized_user_id,
+            "bot_id": normalized_bot_id,
             "intent": "stopped",
             "mode": "paper",
             "armed": False,
             "config": {},
+            "enabled": True,
             "effective_state": "stopped",
             "desired_state": "stopped",
+            "runtime_state": "offline",
             "message": "",
             "pausedReason": "",
             "lastError": "",
             "heartbeatAgeSec": None,
-            "nextOpenEpoch": 0,
-            "lastTickEpoch": 0,
-            "lastIntents": 0,
-            "lastIntentsAt": 0,
-            "lastIntentsPreview": [],
+            "lastHeartbeatAt": None,
+            "lastStartedAt": None,
+            "lastStoppedAt": None,
+            "runnerId": None,
         }
 
-        def _latest_hb_event_from_events() -> Optional[Dict[str, Any]]:
-            try:
-                res = (
-                    self.sb.table("bot_events")
-                    .select("ts,payload")
-                    .eq("user_id", uid)
-                    .eq("bot_id", bid)
-                    .eq("event_type", "heartbeat")
-                    .order("ts", desc=True)
-                    .limit(1)
-                    .execute()
-                )
-                rows = getattr(res, "data", None) or []
-                if not isinstance(rows, list) or not rows:
-                    return None
-                row0 = rows[0] if isinstance(rows[0], dict) else {}
-                payload = row0.get("payload")
-                if not isinstance(payload, dict):
-                    payload = {}
-                return {"ts": row0.get("ts"), "payload": payload}
-            except Exception:
-                return None
-
-        def _overlay_from_hb_payload(out: Dict[str, Any], hb_payload: Dict[str, Any]) -> None:
-            if not isinstance(hb_payload, dict) or not hb_payload:
-                return
-
-            hb_eff = str(hb_payload.get("effective_state") or "").strip().lower()
-            if hb_eff == "paused":
-                hb_eff = "stopped"
-
-            if hb_eff:
-                out["effective_state"] = hb_eff
-
-            msg = str(hb_payload.get("message") or "").strip()
-            if msg:
-                out["message"] = msg
-
-            pr = str(hb_payload.get("paused_reason") or "").strip()
-            if pr:
-                out["pausedReason"] = pr
-
-            le = str(hb_payload.get("last_error") or "").strip()
-            if le:
-                out["lastError"] = le
-
-            try:
-                out["lastTickEpoch"] = int(hb_payload.get("last_tick") or out.get("lastTickEpoch") or 0)
-            except Exception:
-                pass
-
-            try:
-                out["nextOpenEpoch"] = int(hb_payload.get("next_open_epoch") or out.get("nextOpenEpoch") or 0)
-            except Exception:
-                pass
-
-        def _read():
+        try:
             out = dict(base)
 
-            cfg = self.get_config(uid, bid).get("config") or {}
-            out["config"] = cfg if isinstance(cfg, dict) else {}
+            config_row = self.repo.get_config_row(user_id=normalized_user_id, bot_id=normalized_bot_id)
+            config = config_row.get("config")
+            out["config"] = config if isinstance(config, dict) else {}
+            out["enabled"] = bool(config_row.get("enabled", True))
 
-            res = (
-                self.sb.table("bot_status_v")
-                .select("*")
-                .eq("user_id", uid)
-                .eq("bot_id", bid)
-                .maybe_single()
-                .execute()
+            desired_row = self.repo.get_desired_state_row(
+                user_id=normalized_user_id,
+                bot_id=normalized_bot_id,
             )
-            row = getattr(res, "data", None) or {}
-            if not isinstance(row, dict):
-                row = {}
+            runtime_row = self.repo.get_runtime_state_row(
+                user_id=normalized_user_id,
+                bot_id=normalized_bot_id,
+            )
 
-            if not row:
-                hb_ev = _latest_hb_event_from_events()
-                hb_age = _heartbeat_age_or_none(hb_ev.get("ts")) if hb_ev else None
-                out["heartbeatAgeSec"] = hb_age
+            desired_state = normalize_desired_state(desired_row.get("desired_state") or "stopped")
+            mode = normalize_mode(desired_row.get("mode") or "paper")
+            armed = bool(desired_row.get("armed") or False)
 
-                if hb_ev and isinstance(hb_ev.get("payload"), dict):
-                    _overlay_from_hb_payload(out, hb_ev["payload"])  # type: ignore[arg-type]
+            runtime_state = normalize_runtime_state(runtime_row.get("runtime_state") or "offline")
+            hb_age = heartbeat_age_or_none(runtime_row.get("last_heartbeat"))
 
-                out["effective_state"] = _compute_effective_state(
-                    runtime_state=out.get("effective_state"),
-                    desired_state=out.get("desired_state"),
-                    hb_age_sec=hb_age,
-                )
-                return out
-
-            desired_state = _normalize_legacy_intent(str(row.get("desired_state") or "stopped"))
-            mode = normalize_mode(row.get("mode") or "paper")
-            armed = bool(row.get("armed") or False)
-
-            hb_age = row.get("heartbeat_age_sec")
-            try:
-                hb_age = int(hb_age) if hb_age is not None else None
-            except Exception:
-                hb_age = None
-
-            runtime_state = str(row.get("runtime_state") or "").strip().lower()
-            if runtime_state == "paused":
-                runtime_state = "stopped"
-
-            effective_state = _compute_effective_state(
+            effective_state = compute_effective_state(
                 runtime_state=runtime_state,
                 desired_state=desired_state,
                 hb_age_sec=hb_age,
             )
 
+            # Convert "offline while desired stopped" to "stopped" for the frontend
+            if effective_state == "offline" and desired_state == "stopped":
+                effective_state = "stopped"
+
             out["intent"] = desired_state
             out["mode"] = mode
             out["armed"] = armed
-
             out["desired_state"] = desired_state
+            out["runtime_state"] = runtime_state
             out["effective_state"] = effective_state
             out["heartbeatAgeSec"] = hb_age
+            out["lastHeartbeatAt"] = runtime_row.get("last_heartbeat")
+            out["lastStartedAt"] = runtime_row.get("last_started_at")
+            out["lastStoppedAt"] = runtime_row.get("last_stopped_at")
+            out["runnerId"] = runtime_row.get("runner_id")
 
-            out["message"] = str(row.get("runtime_message") or "").strip()
-            out["pausedReason"] = str(row.get("paused_reason") or "").strip()
+            paused_reason = str(runtime_row.get("paused_reason") or "").strip()
+            out["pausedReason"] = paused_reason
 
-            last_error = str(row.get("last_error_message") or "").strip()
+            last_error = str(runtime_row.get("last_error_message") or "").strip()
             if not last_error:
-                last_error = str(row.get("last_error_type") or "").strip()
+                last_error = str(runtime_row.get("last_error_type") or "").strip()
             out["lastError"] = last_error
 
-            out["lastIntents"] = int(row.get("last_intents_count") or 0)
-            out["lastIntentsAt"] = int(parse_ts_to_epoch_seconds(row.get("last_intents_at")) or 0)
-
-            preview = row.get("last_intents_preview") or []
-            out["lastIntentsPreview"] = preview if isinstance(preview, list) else []
-
-            try:
-                out["lastTickEpoch"] = int(row.get("last_tick_epoch") or 0)
-            except Exception:
-                out["lastTickEpoch"] = 0
-
-            try:
-                out["nextOpenEpoch"] = int(row.get("next_open_epoch") or 0)
-            except Exception:
-                out["nextOpenEpoch"] = 0
-
-            hb_ev = _latest_hb_event_from_events()
-            if hb_ev and isinstance(hb_ev.get("payload"), dict):
-                if hb_age is None or hb_age > 30:
-                    _overlay_from_hb_payload(out, hb_ev["payload"])  # type: ignore[arg-type]
+            out["message"] = self._derive_runtime_message(runtime_row)
 
             return out
-
-        return _safe_sb_execute(_read, default=base)
+        except BotServiceError:
+            logger.exception("BotService status failed")
+            return base
 
     def arm(self, user_id: str, bot_id: str, mode: Optional[str]) -> Dict[str, Any]:
-        uid = str(user_id or "").strip()
-        bid = str(bot_id or "").strip()
-        m = normalize_mode(mode) if mode else None
+        normalized_user_id = str(user_id or "").strip()
+        normalized_bot_id = str(bot_id or "").strip()
+        normalized_mode = normalize_mode(mode) if mode else None
 
-        if not uid or not bid:
+        if not normalized_user_id or not normalized_bot_id:
             return {"ok": False, "detail": "missing user_id/bot_id"}
 
-        guard = self._guard_wired_or_unavailable(bid)
+        guard = self._guard_wired_or_unavailable(normalized_bot_id)
         if guard:
             return guard
 
-        def _write():
-            now_iso = _epoch_to_iso_z(_now_epoch())
+        try:
+            now_iso = epoch_to_iso_z(now_epoch())
 
-            current = (
-                self.sb.table("bot_desired_state")
-                .select("desired_state,mode")
-                .eq("user_id", uid)
-                .eq("bot_id", bid)
-                .maybe_single()
-                .execute()
+            current = self.repo.get_desired_state_row(
+                user_id=normalized_user_id,
+                bot_id=normalized_bot_id,
+                columns="desired_state,mode",
             )
-            data = getattr(current, "data", None) or {}
-            current_desired = _normalize_legacy_intent(data.get("desired_state") or "stopped")
-            current_mode = normalize_mode(data.get("mode") or (m or "paper"))
+            current_desired_state = normalize_desired_state(current.get("desired_state") or "stopped")
+            current_mode = normalize_mode(current.get("mode") or (normalized_mode or "paper"))
 
-            self.sb.table("bot_desired_state").upsert(
-                {
-                    "user_id": uid,
-                    "bot_id": bid,
-                    "desired_state": current_desired,
+            self.repo.upsert_desired_state_row(
+                row={
+                    "user_id": normalized_user_id,
+                    "bot_id": normalized_bot_id,
+                    "desired_state": current_desired_state,
                     "armed": True,
-                    "mode": m or current_mode,
+                    "mode": normalized_mode or current_mode,
                     "requested_by": "user",
-                    "reason": "",
+                    "reason": "Armed by user.",
                     "updated_at": now_iso,
-                },
-                on_conflict="user_id,bot_id",
-            ).execute()
-
-            self.sb.table("bot_events").insert(
-                {
-                    "user_id": uid,
-                    "bot_id": bid,
-                    "mode": m or current_mode,
-                    "ts": now_iso,
-                    "level": "info",
-                    "event_type": "arm",
-                    "symbol": None,
-                    "event_id": None,
-                    "request_id": None,
-                    "runner_id": None,
-                    "payload": {"armed": True},
                 }
-            ).execute()
+            )
 
-            return {"ok": True, "bot_id": bid, "armed": True, "mode": m or current_mode}
+            self._safe_log(
+                user_id=normalized_user_id,
+                bot_id=normalized_bot_id,
+                source="api",
+                action="request_arm",
+                status="success",
+                user_message="Bot armed.",
+                technical_message="Arm request persisted to bot_desired_state.",
+                mode=normalized_mode or current_mode,
+                desired_state=current_desired_state,
+                details={"armed": True},
+                ts_iso=now_iso,
+            )
 
-        return _safe_sb_execute(
-            _write,
-            default={"ok": False, "bot_id": bid, "detail": "failed to persist arm state"},
-        )
+            return self.status(normalized_user_id, normalized_bot_id)
+        except BotServiceError:
+            logger.exception("BotService arm failed")
+            return failure_response(bot_id=normalized_bot_id, detail="failed to persist arm state")
 
     def disarm(self, user_id: str, bot_id: str) -> Dict[str, Any]:
-        uid = str(user_id or "").strip()
-        bid = str(bot_id or "").strip()
+        normalized_user_id = str(user_id or "").strip()
+        normalized_bot_id = str(bot_id or "").strip()
 
-        if not uid or not bid:
+        if not normalized_user_id or not normalized_bot_id:
             return {"ok": False, "detail": "missing user_id/bot_id"}
 
-        guard = self._guard_wired_or_unavailable(bid)
+        guard = self._guard_wired_or_unavailable(normalized_bot_id)
         if guard:
             return guard
 
-        def _write():
-            now_iso = _epoch_to_iso_z(_now_epoch())
+        try:
+            now_iso = epoch_to_iso_z(now_epoch())
 
-            current = (
-                self.sb.table("bot_desired_state")
-                .select("mode")
-                .eq("user_id", uid)
-                .eq("bot_id", bid)
-                .maybe_single()
-                .execute()
+            current = self.repo.get_desired_state_row(
+                user_id=normalized_user_id,
+                bot_id=normalized_bot_id,
+                columns="mode",
             )
-            data = getattr(current, "data", None) or {}
-            current_mode = normalize_mode(data.get("mode") or "paper")
+            current_mode = normalize_mode(current.get("mode") or "paper")
 
-            self.sb.table("bot_desired_state").upsert(
-                {
-                    "user_id": uid,
-                    "bot_id": bid,
+            self.repo.upsert_desired_state_row(
+                row={
+                    "user_id": normalized_user_id,
+                    "bot_id": normalized_bot_id,
                     "desired_state": "stopped",
                     "armed": False,
                     "mode": current_mode,
                     "requested_by": "user",
                     "reason": "Disarmed by user.",
                     "updated_at": now_iso,
-                },
-                on_conflict="user_id,bot_id",
-            ).execute()
-
-            self.sb.table("bot_runtime_state").upsert(
-                {
-                    "user_id": uid,
-                    "bot_id": bid,
-                    "runtime_state": "stopped",
-                    "last_stopped_at": now_iso,
-                    "message": "Disarmed by user.",
-                    "paused_reason": "",
-                    "updated_at": now_iso,
-                },
-                on_conflict="user_id,bot_id",
-            ).execute()
-
-            self.sb.table("bot_events").insert(
-                {
-                    "user_id": uid,
-                    "bot_id": bid,
-                    "mode": current_mode,
-                    "ts": now_iso,
-                    "level": "info",
-                    "event_type": "disarm",
-                    "symbol": None,
-                    "event_id": None,
-                    "request_id": None,
-                    "runner_id": None,
-                    "payload": {"armed": False},
                 }
-            ).execute()
-
-            return {"ok": True, "bot_id": bid, "armed": False}
-
-        return _safe_sb_execute(
-            _write,
-            default={"ok": False, "bot_id": bid, "detail": "failed to persist disarm state"},
-        )
-
-    def start(self, user_id: str, bot_id: str, mode: str) -> Dict[str, Any]:
-        uid = str(user_id or "").strip()
-        bid = str(bot_id or "").strip()
-        m = normalize_mode(mode)
-
-        if not uid or not bid:
-            return {"ok": False, "detail": "missing user_id/bot_id"}
-
-        guard = self._guard_wired_or_unavailable(bid)
-        if guard:
-            return guard
-
-        def _write():
-            now_iso = _epoch_to_iso_z(_now_epoch())
-
-            current = (
-                self.sb.table("bot_desired_state")
-                .select("armed")
-                .eq("user_id", uid)
-                .eq("bot_id", bid)
-                .maybe_single()
-                .execute()
             )
-            data = getattr(current, "data", None) or {}
-            armed = bool(data.get("armed") or False)
 
-            self.sb.table("bot_desired_state").upsert(
-                {
-                    "user_id": uid,
-                    "bot_id": bid,
-                    "desired_state": "running",
-                    "armed": armed,
-                    "mode": m,
-                    "requested_by": "user",
-                    "reason": "Start requested by user.",
-                    "updated_at": now_iso,
-                },
-                on_conflict="user_id,bot_id",
-            ).execute()
-
-            self.sb.table("bot_runtime_state").upsert(
-                {
-                    "user_id": uid,
-                    "bot_id": bid,
-                    "runtime_state": "starting",
-                    "last_started_at": now_iso,
-                    "message": "Starting bot.",
+            self.repo.upsert_runtime_state_row(
+                row={
+                    "user_id": normalized_user_id,
+                    "bot_id": normalized_bot_id,
+                    "runtime_state": "offline",
+                    "last_stopped_at": now_iso,
                     "paused_reason": "",
                     "last_error_type": None,
                     "last_error_message": None,
                     "updated_at": now_iso,
-                },
-                on_conflict="user_id,bot_id",
-            ).execute()
-
-            self.sb.table("bot_events").insert(
-                {
-                    "user_id": uid,
-                    "bot_id": bid,
-                    "mode": m,
-                    "ts": now_iso,
-                    "level": "info",
-                    "event_type": "start",
-                    "symbol": None,
-                    "event_id": None,
-                    "request_id": None,
-                    "runner_id": None,
-                    "payload": {"desired_state": "running", "armed": armed},
                 }
-            ).execute()
+            )
 
-            return {"ok": True, "bot_id": bid, "intent": "running", "mode": m}
+            self._safe_log(
+                user_id=normalized_user_id,
+                bot_id=normalized_bot_id,
+                source="api",
+                action="request_disarm",
+                status="success",
+                user_message="Bot disarmed.",
+                technical_message="Disarm request persisted; runtime marked offline.",
+                mode=current_mode,
+                desired_state="stopped",
+                runtime_state="offline",
+                details={"armed": False},
+                ts_iso=now_iso,
+            )
 
-        return _safe_sb_execute(
-            _write,
-            default={"ok": False, "bot_id": bid, "detail": "failed to persist start state"},
-        )
+            return self.status(normalized_user_id, normalized_bot_id)
+        except BotServiceError:
+            logger.exception("BotService disarm failed")
+            return failure_response(bot_id=normalized_bot_id, detail="failed to persist disarm state")
 
-    def stop(self, user_id: str, bot_id: str) -> Dict[str, Any]:
-        uid = str(user_id or "").strip()
-        bid = str(bot_id or "").strip()
+    def start(self, user_id: str, bot_id: str, mode: str) -> Dict[str, Any]:
+        """Requests that a bot start running.
 
-        if not uid or not bid:
+        Start auto-arms the bot so the runner and UI converge faster.
+        """
+        normalized_user_id = str(user_id or "").strip()
+        normalized_bot_id = str(bot_id or "").strip()
+        normalized_mode = normalize_mode(mode)
+
+        if not normalized_user_id or not normalized_bot_id:
             return {"ok": False, "detail": "missing user_id/bot_id"}
 
-        guard = self._guard_wired_or_unavailable(bid)
+        guard = self._guard_wired_or_unavailable(normalized_bot_id)
         if guard:
             return guard
 
-        def _write():
-            now_iso = _epoch_to_iso_z(_now_epoch())
+        try:
+            now_iso = epoch_to_iso_z(now_epoch())
 
-            current = (
-                self.sb.table("bot_desired_state")
-                .select("armed,mode")
-                .eq("user_id", uid)
-                .eq("bot_id", bid)
-                .maybe_single()
-                .execute()
+            self.repo.upsert_desired_state_row(
+                row={
+                    "user_id": normalized_user_id,
+                    "bot_id": normalized_bot_id,
+                    "desired_state": "running",
+                    "armed": True,
+                    "mode": normalized_mode,
+                    "requested_by": "user",
+                    "reason": "Start requested by user.",
+                    "updated_at": now_iso,
+                }
             )
-            data = getattr(current, "data", None) or {}
-            armed = bool(data.get("armed") or False)
-            current_mode = normalize_mode(data.get("mode") or "paper")
 
-            self.sb.table("bot_desired_state").upsert(
-                {
-                    "user_id": uid,
-                    "bot_id": bid,
+            self.repo.upsert_runtime_state_row(
+                row={
+                    "user_id": normalized_user_id,
+                    "bot_id": normalized_bot_id,
+                    "runtime_state": "starting",
+                    "last_started_at": now_iso,
+                    "paused_reason": "",
+                    "last_error_type": None,
+                    "last_error_message": None,
+                    "updated_at": now_iso,
+                }
+            )
+
+            self._safe_log(
+                user_id=normalized_user_id,
+                bot_id=normalized_bot_id,
+                source="api",
+                action="request_start",
+                status="success",
+                user_message="Start requested.",
+                technical_message="Desired state set to running; runtime set to starting.",
+                mode=normalized_mode,
+                desired_state="running",
+                runtime_state="starting",
+                details={"armed": True},
+                ts_iso=now_iso,
+            )
+
+            return self.status(normalized_user_id, normalized_bot_id)
+        except BotServiceError:
+            logger.exception("BotService start failed")
+            return failure_response(bot_id=normalized_bot_id, detail="failed to persist start state")
+
+    def stop(self, user_id: str, bot_id: str) -> Dict[str, Any]:
+        normalized_user_id = str(user_id or "").strip()
+        normalized_bot_id = str(bot_id or "").strip()
+
+        if not normalized_user_id or not normalized_bot_id:
+            return {"ok": False, "detail": "missing user_id/bot_id"}
+
+        guard = self._guard_wired_or_unavailable(normalized_bot_id)
+        if guard:
+            return guard
+
+        try:
+            now_iso = epoch_to_iso_z(now_epoch())
+
+            current = self.repo.get_desired_state_row(
+                user_id=normalized_user_id,
+                bot_id=normalized_bot_id,
+                columns="armed,mode",
+            )
+            armed = bool(current.get("armed") or False)
+            current_mode = normalize_mode(current.get("mode") or "paper")
+
+            self.repo.upsert_desired_state_row(
+                row={
+                    "user_id": normalized_user_id,
+                    "bot_id": normalized_bot_id,
                     "desired_state": "stopped",
                     "armed": armed,
                     "mode": current_mode,
                     "requested_by": "user",
                     "reason": "Stopped by user.",
                     "updated_at": now_iso,
-                },
-                on_conflict="user_id,bot_id",
-            ).execute()
+                }
+            )
 
-            self.sb.table("bot_runtime_state").upsert(
-                {
-                    "user_id": uid,
-                    "bot_id": bid,
-                    "runtime_state": "stopped",
+            self.repo.upsert_runtime_state_row(
+                row={
+                    "user_id": normalized_user_id,
+                    "bot_id": normalized_bot_id,
+                    "runtime_state": "stopping",
                     "last_stopped_at": now_iso,
-                    "message": "Stopped by user.",
                     "paused_reason": "",
                     "updated_at": now_iso,
-                },
-                on_conflict="user_id,bot_id",
-            ).execute()
-
-            self.sb.table("bot_events").insert(
-                {
-                    "user_id": uid,
-                    "bot_id": bid,
-                    "mode": current_mode,
-                    "ts": now_iso,
-                    "level": "info",
-                    "event_type": "stop",
-                    "symbol": None,
-                    "event_id": None,
-                    "request_id": None,
-                    "runner_id": None,
-                    "payload": {"desired_state": "stopped", "armed": armed},
                 }
-            ).execute()
+            )
 
-            return {"ok": True, "bot_id": bid, "intent": "stopped"}
+            self._safe_log(
+                user_id=normalized_user_id,
+                bot_id=normalized_bot_id,
+                source="api",
+                action="request_stop",
+                status="success",
+                user_message="Stop requested.",
+                technical_message="Desired state set to stopped; runtime set to stopping.",
+                mode=current_mode,
+                desired_state="stopped",
+                runtime_state="stopping",
+                details={"armed": armed},
+                ts_iso=now_iso,
+            )
 
-        return _safe_sb_execute(
-            _write,
-            default={"ok": False, "bot_id": bid, "detail": "failed to persist stop state"},
-        )
+            return self.status(normalized_user_id, normalized_bot_id)
+        except BotServiceError:
+            logger.exception("BotService stop failed")
+            return failure_response(bot_id=normalized_bot_id, detail="failed to persist stop state")
 
-    # -------------------------
-    # Runner endpoints
-    # -------------------------
     def heartbeat(self, user_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Writes:
-        - bot_events: heartbeat event (THROTTLED per type)
-        - bot_runtime_state: last_heartbeat + runtime fields
+        """Persists runner heartbeat data.
 
-        IMPORTANT:
-        Heartbeat updates runtime/freshness only.
-        Control-plane desired_state/armed are owned by arm/start/stop/disarm.
+        Heartbeat owns runtime freshness and runner-reported runtime state only.
         """
-        uid = str(user_id or "").strip()
-        bid = str(payload.get("bot_id") or "").strip()
+        normalized_user_id = str(user_id or "").strip()
+        normalized_bot_id = str(payload.get("bot_id") or "").strip()
         mode = normalize_mode(payload.get("mode") or "paper")
         runner_id = str(payload.get("runner_id") or "").strip() or None
 
-        if not uid or not bid:
+        if not normalized_user_id or not normalized_bot_id:
             return {"ok": False, "detail": "missing user_id/bot_id"}
 
-        guard = self._guard_wired_or_unavailable(bid)
+        guard = self._guard_wired_or_unavailable(normalized_bot_id)
         if guard:
             return guard
 
-        eff = str(payload.get("effective_state") or "").strip().lower()
-        if eff == "paused":
-            eff = "stopped"
+        runtime_state = normalize_runtime_state(payload.get("effective_state") or payload.get("runtime_state"))
+        if not runtime_state:
+            runtime_state = "running"
 
-        message = str(payload.get("message") or "").strip()
         paused_reason = str(payload.get("paused_reason") or "").strip()
         last_error = str(payload.get("last_error") or "").strip()
         reason_code = str(payload.get("reason_code") or "").strip()
 
-        next_open_epoch = payload.get("next_open_epoch")
-        last_tick = payload.get("last_tick")
-
         try:
-            last_tick_epoch = int(last_tick) if last_tick is not None else 0
-        except Exception:
-            last_tick_epoch = 0
+            now_iso = epoch_to_iso_z(now_epoch())
 
-        try:
-            next_open_epoch_int = int(next_open_epoch) if next_open_epoch is not None else 0
-        except Exception:
-            next_open_epoch_int = 0
-
-        def _write():
-            now_ep = _now_epoch()
-            now_iso = _epoch_to_iso_z(now_ep)
-
-            try:
-                sig = _hb_signature(payload if isinstance(payload, dict) else {})
-                throttle_s = _heartbeat_throttle_seconds(payload if isinstance(payload, dict) else {})
-                if _should_insert_heartbeat_event(
-                    self.sb,
-                    user_id=uid,
-                    bot_id=bid,
-                    mode=mode,
-                    sig=sig,
-                    now_epoch=now_ep,
-                    throttle_seconds=throttle_s,
-                ):
-                    self.sb.table("bot_events").insert(
-                        {
-                            "user_id": uid,
-                            "bot_id": bid,
-                            "mode": mode,
-                            "ts": now_iso,
-                            "level": "info" if not last_error else "warn",
-                            "event_type": "heartbeat",
-                            "symbol": None,
-                            "event_id": payload.get("event_id"),
-                            "request_id": None,
-                            "runner_id": runner_id,
-                            "payload": payload,
-                        }
-                    ).execute()
-            except Exception:
-                pass
+            current_runtime = self.repo.get_runtime_state_row(
+                user_id=normalized_user_id,
+                bot_id=normalized_bot_id,
+                columns="runtime_state,last_started_at,last_stopped_at",
+            )
+            previous_runtime_state = normalize_runtime_state(current_runtime.get("runtime_state") or "offline")
+            previous_last_started_at = current_runtime.get("last_started_at")
 
             patch: Dict[str, Any] = {
-                "user_id": uid,
-                "bot_id": bid,
+                "user_id": normalized_user_id,
+                "bot_id": normalized_bot_id,
+                "runtime_state": runtime_state,
                 "last_heartbeat": now_iso,
                 "runner_id": runner_id,
-                "updated_at": now_iso,
-                "message": message,
                 "paused_reason": paused_reason,
-                "last_error_type": reason_code or (("runner_error" if last_error else None)),
+                "last_error_type": reason_code or ("runner_error" if last_error else None),
                 "last_error_message": last_error or None,
-                "last_tick_epoch": last_tick_epoch,
-                "next_open_epoch": next_open_epoch_int,
+                "updated_at": now_iso,
             }
 
-            if eff:
-                patch["runtime_state"] = eff
+            if runtime_state == "running" and (
+                previous_runtime_state != "running" or not previous_last_started_at
+            ):
+                patch["last_started_at"] = now_iso
 
-            self.sb.table("bot_runtime_state").upsert(patch, on_conflict="user_id,bot_id").execute()
-            return {"ok": True}
+            if runtime_state in {"offline", "stopping"}:
+                patch["last_stopped_at"] = now_iso
 
-        return _safe_sb_execute(
-            _write,
-            default={"ok": False, "bot_id": bid, "detail": "failed to persist heartbeat"},
-        )
+            self.repo.upsert_runtime_state_row(row=patch)
+
+            self._safe_log(
+                user_id=normalized_user_id,
+                bot_id=normalized_bot_id,
+                source="runner",
+                action="heartbeat",
+                status="warning" if last_error else "info",
+                user_message="Heartbeat received." if not last_error else "Heartbeat received with warnings.",
+                technical_message=(
+                    f"Heartbeat persisted with runtime_state={runtime_state}, "
+                    f"runner_id={runner_id or 'none'}, reason_code={reason_code or 'none'}."
+                ),
+                mode=mode,
+                runner_id=runner_id,
+                runtime_state=runtime_state,
+                visible_to_user=False,
+                details=payload if isinstance(payload, dict) else {},
+                ts_iso=now_iso,
+            )
+
+            if last_error:
+                self._safe_log(
+                    user_id=normalized_user_id,
+                    bot_id=normalized_bot_id,
+                    level="error",
+                    source="runner",
+                    action="error",
+                    status="error",
+                    user_message="Bot hit an error.",
+                    technical_message=last_error,
+                    mode=mode,
+                    runner_id=runner_id,
+                    runtime_state=runtime_state,
+                    details={
+                        "reason_code": reason_code,
+                        "payload": payload if isinstance(payload, dict) else {},
+                    },
+                    ts_iso=now_iso,
+                )
+
+            return {"ok": True, "bot_id": normalized_bot_id}
+        except Exception as exc:
+            logger.exception(
+                "BotService heartbeat failed",
+                extra={
+                    "user_id": normalized_user_id,
+                    "bot_id": normalized_bot_id,
+                    "runner_id": runner_id,
+                    "payload": payload,
+                    "error": str(exc),
+                },
+            )
+            return failure_response(bot_id=normalized_bot_id, detail="failed to persist heartbeat")
 
     def submit_intents(self, user_id: str, bot_id: str, ts: int, items: List[Any]) -> Dict[str, Any]:
-        uid = str(user_id or "").strip()
-        bid = str(bot_id or "").strip()
+        """Persists intent activity as logs only.
 
-        if not uid or not bid:
+        Intent summary columns were removed from runtime state, so this is now
+        purely an audit/debug path.
+        """
+        normalized_user_id = str(user_id or "").strip()
+        normalized_bot_id = str(bot_id or "").strip()
+
+        if not normalized_user_id or not normalized_bot_id:
             return {"ok": False, "detail": "missing user_id/bot_id"}
 
-        guard = self._guard_wired_or_unavailable(bid)
+        guard = self._guard_wired_or_unavailable(normalized_bot_id)
         if guard:
             return guard
 
         preview: List[Dict[str, Any]] = []
-        for x in items[:5]:
-            preview.append(x if isinstance(x, dict) else {"raw": x})
+        for item in items[:5]:
+            preview.append(item if isinstance(item, dict) else {"raw": item})
 
-        def _write():
-            now_iso = _epoch_to_iso_z(_now_epoch())
-            intents_iso = _epoch_to_iso_z(int(ts or _now_epoch()))
-
-            self.sb.table("bot_runtime_state").upsert(
-                {
-                    "user_id": uid,
-                    "bot_id": bid,
-                    "last_intents_at": intents_iso,
-                    "last_intents_count": int(len(items)),
-                    "last_intents_preview": preview,
-                    "updated_at": now_iso,
-                },
-                on_conflict="user_id,bot_id",
-            ).execute()
+        try:
+            intents_iso = epoch_to_iso_z(int(ts or now_epoch()))
 
             if items:
-                self.sb.table("bot_events").insert(
-                    {
-                        "user_id": uid,
-                        "bot_id": bid,
-                        "mode": "paper",
-                        "ts": intents_iso,
-                        "level": "info",
-                        "event_type": "submit_intents",
-                        "symbol": None,
-                        "event_id": None,
-                        "request_id": None,
-                        "runner_id": None,
-                        "payload": {"count": int(len(items)), "preview": preview},
-                    }
-                ).execute()
+                self._safe_log(
+                    user_id=normalized_user_id,
+                    bot_id=normalized_bot_id,
+                    source="runner",
+                    action="log",
+                    status="info",
+                    user_message=f"Runner submitted {len(items)} intents.",
+                    technical_message="Intent summary recorded to bot_logs.",
+                    visible_to_user=False,
+                    details={"count": int(len(items)), "preview": preview},
+                    ts_iso=intents_iso,
+                )
 
             return {"ok": True, "count": int(len(items)), "ts": int(ts or 0)}
-
-        return _safe_sb_execute(
-            _write,
-            default={"ok": False, "bot_id": bid, "detail": "failed to persist intents"},
-        )
+        except BotServiceError:
+            logger.exception("BotService submit_intents failed")
+            return failure_response(bot_id=normalized_bot_id, detail="failed to persist intents")
 
     def get_log(
         self,
@@ -1032,64 +724,80 @@ class BotService:
         start_ts: int,
         end_ts: int,
     ) -> Dict[str, Any]:
-        """
-        Returns bot_events rows filtered by mode.
-        """
-        uid = str(user_id or "").strip()
-        bid = str(bot_id or "").strip()
-        m = normalize_mode(mode)
+        """Reads structured bot log entries."""
+        normalized_user_id = str(user_id or "").strip()
+        normalized_bot_id = str(bot_id or "").strip()
+        normalized_mode = normalize_mode(mode)
 
-        if not uid or not bid:
+        if not normalized_user_id or not normalized_bot_id:
             return {"ok": False, "detail": "missing user_id/bot_id"}
 
-        guard = self._guard_wired_or_unavailable(bid)
+        guard = self._guard_wired_or_unavailable(normalized_bot_id)
         if guard:
             return guard
 
-        def _read():
-            q = (
-                self.sb.table("bot_events")
-                .select("ts,level,event_type,symbol,payload,event_id")
-                .eq("user_id", uid)
-                .eq("bot_id", bid)
-                .eq("mode", m)
-                .order("ts", desc=True)
-                .limit(int(limit))
+        try:
+            rows = self.repo.get_log_rows(
+                user_id=normalized_user_id,
+                bot_id=normalized_bot_id,
+                mode=normalized_mode,
+                limit=int(limit),
+                start_ts=int(start_ts),
+                end_ts=int(end_ts),
             )
 
-            if int(end_ts or 0) > 0:
-                q = q.lt("ts", _epoch_to_iso_z(int(end_ts) + 1))
-            if int(start_ts or 0) > 0:
-                q = q.gte("ts", _epoch_to_iso_z(int(start_ts)))
-
-            res = q.execute()
-            rows = getattr(res, "data", None) or []
-            if not isinstance(rows, list):
-                rows = []
-
             items_out: List[Dict[str, Any]] = []
-            for r in rows:
-                if not isinstance(r, dict):
+            for row in rows:
+                if not isinstance(row, dict):
                     continue
 
-                payload = r.get("payload")
-                if not isinstance(payload, dict):
-                    payload = {"raw": payload}
+                details = row.get("details")
+                if not isinstance(details, dict):
+                    details = {}
 
                 items_out.append(
                     {
-                        "ts": parse_ts_to_epoch_seconds(r.get("ts")),
-                        "level": str(r.get("level") or "info").strip().lower(),
-                        "event_type": str(r.get("event_type") or "").strip(),
-                        "symbol": (str(r.get("symbol") or "").strip().upper() or None),
-                        "event_id": str(r.get("event_id") or "").strip() or None,
-                        "payload": payload,
+                        "ts": parse_ts_to_epoch_seconds(row.get("ts")),
+                        "level": str(row.get("level") or "info").strip().lower(),
+                        "source": str(row.get("source") or "system").strip().lower(),
+                        "action": str(row.get("action") or "log").strip().lower(),
+                        "status": str(row.get("status") or "info").strip().lower(),
+                        "user_message": str(row.get("user_message") or "").strip(),
+                        "technical_message": str(row.get("technical_message") or "").strip(),
+                        "visible_to_user": bool(row.get("visible_to_user", True)),
+                        "request_id": str(row.get("request_id") or "").strip() or None,
+                        "runner_id": str(row.get("runner_id") or "").strip() or None,
+                        "desired_state": str(row.get("desired_state") or "").strip() or None,
+                        "runtime_state": str(row.get("runtime_state") or "").strip() or None,
+                        "details": details,
                     }
                 )
 
-            return {"ok": True, "bot_id": bid, "mode": m, "items": items_out}
+            return {
+                "ok": True,
+                "bot_id": normalized_bot_id,
+                "mode": normalized_mode,
+                "items": items_out,
+            }
+        except BotServiceError:
+            logger.exception("BotService get_log failed")
+            return {"ok": True, "bot_id": normalized_bot_id, "mode": normalized_mode, "items": []}
 
-        return _safe_sb_execute(
-            _read,
-            default={"ok": True, "bot_id": bid, "mode": m, "items": []},
+    def send_stopped(
+        api: UStockAPI,
+        state: HeartbeatState,
+        *,
+        bot_id: str,
+        status_mode: str,
+        user_id: Optional[str] = None,
+    ) -> None:
+        """Backward-compatible wrapper for older runner call sites."""
+        send_offline(
+            api,
+            state,
+            bot_id=bot_id,
+            status_mode=status_mode,
+            user_id=user_id,
+            reason_code="intent_stopped",
+            message="Control plane indicates stopped.",
         )
