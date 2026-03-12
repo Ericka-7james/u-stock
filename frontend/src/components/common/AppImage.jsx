@@ -54,12 +54,14 @@ export default function AppImage({
   onClick,
   onLoad,
   onError,
-  as: Component = "img",
+  as = "img",
   wrapperProps = {},
   ...rest
 }) {
+  const ImageTag = as;
+
   const imageElement = (
-    <Component
+    <ImageTag
       src={src}
       alt={alt}
       className={className}
@@ -82,11 +84,7 @@ export default function AppImage({
   }
 
   return (
-    <div
-      className={wrapperClassName}
-      style={wrapperStyle}
-      {...wrapperProps}
-    >
+    <div className={wrapperClassName} style={wrapperStyle} {...wrapperProps}>
       {imageElement}
     </div>
   );
