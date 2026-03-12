@@ -42,12 +42,41 @@ class BotRepository:
             )
 
         try:
-            self.sb.table("profiles").upsert(
-                {"id": normalized_user_id},
-                on_conflict="id",
+            existing = (
+                self.sb.table("profiles")
+                .select("id")
+                .eq("id", normalized_user_id)
+                .limit(1)
+                .execute()
+            )
+            if getattr(existing, "data", None):
+                return
+        except Exception as exc:
+            logger.exception(
+                "BotRepository ensure_profile_row lookup failed",
+                extra={"user_id": normalized_user_id},
+            )
+            raise BotServiceError(
+                op_name="ensure_profile_row",
+                public_detail="failed to verify profile row",
+                internal_detail=str(exc),
+            ) from exc
+
+        fallback_username = f"bot_{normalized_user_id.replace('-', '')[:12] or 'user'}"
+
+        try:
+            self.sb.table("profiles").insert(
+                {
+                    "id": normalized_user_id,
+                    "username": fallback_username,
+                    "avatar": "📈",
+                }
             ).execute()
         except Exception as exc:
-            logger.exception("BotRepository ensure_profile_row failed", extra={"user_id": normalized_user_id})
+            logger.exception(
+                "BotRepository ensure_profile_row insert failed",
+                extra={"user_id": normalized_user_id},
+            )
             raise BotServiceError(
                 op_name="ensure_profile_row",
                 public_detail="failed to ensure profile row",
