@@ -39,7 +39,6 @@ function randomIdHex(bytesLen = 8) {
 }
 
 const THEME_KEYS = [
-  // add your real key here if you have one
   "lucent:theme",
   "lucent:ui_theme",
   "ustock:theme",
@@ -71,7 +70,6 @@ function readThemeFromDom() {
     if (cls?.contains("dark")) return "dark";
     if (cls?.contains("light")) return "light";
 
-    // common variants
     const classStr = String(el?.className || "").toLowerCase();
     if (classStr.includes("theme-dark")) return "dark";
     if (classStr.includes("theme-light")) return "light";
@@ -90,47 +88,38 @@ function detectTheme(isDarkMode) {
 
   if (typeof isDarkMode === "boolean") return isDarkMode ? "dark" : "light";
 
-  // fallback
   try {
     if (window.matchMedia?.("(prefers-color-scheme: dark)")?.matches) return "dark";
   } catch {
     // ignore
   }
+
   return "light";
 }
 
 export default function PriceChartPanel({
   currentTicker = COPY.fallbacks.symbol,
-  isDarkMode, // <-- no default; we will detect from DOM/storage if undefined or stale
+  isDarkMode,
   activeRangeLabel = "",
   interval = COPY.fallbacks.interval,
 }) {
   const [containerId] = useState(() => `tv-${randomIdHex(8)}`);
+  const [themeVersion, setThemeVersion] = useState(0);
+
   const widgetRef = useRef(null);
 
   const intervalLabel = useMemo(() => prettyTvInterval(interval), [interval]);
 
-  // Theme that survives refresh and updates when your app toggles theme classes/data-theme.
-  const [theme, setTheme] = useState(() => detectTheme(isDarkMode));
+  const theme = useMemo(() => {
+    return detectTheme(isDarkMode);
+  }, [isDarkMode, themeVersion]);
 
-  // Sync when prop changes (if your app passes it)
-  useEffect(() => {
-    setTheme((prev) => {
-      const next = detectTheme(isDarkMode);
-      return prev === next ? prev : next;
-    });
-  }, [isDarkMode]);
-
-  // Watch DOM theme changes (critical for "refresh then hydrate" cases)
   useEffect(() => {
     const el = document.documentElement;
-    if (!el || !window.MutationObserver) return;
+    if (!el || !window.MutationObserver) return undefined;
 
     const obs = new MutationObserver(() => {
-      setTheme((prev) => {
-        const next = detectTheme(isDarkMode);
-        return prev === next ? prev : next;
-      });
+      setThemeVersion((v) => v + 1);
     });
 
     obs.observe(el, {
@@ -139,7 +128,7 @@ export default function PriceChartPanel({
     });
 
     return () => obs.disconnect();
-  }, [isDarkMode]);
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -160,7 +149,7 @@ export default function PriceChartPanel({
           symbol,
           interval: String(interval || COPY.fallbacks.interval),
           autosize: true,
-          theme, // ✅ source-of-truth theme
+          theme,
           locale: "en",
           allow_symbol_change: true,
           hide_top_toolbar: false,
