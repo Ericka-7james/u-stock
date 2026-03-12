@@ -8,8 +8,8 @@ market-hours gating used by bot orchestration loops.
 
 Responsibilities:
     - throttle heartbeat emission
-    - emit low-frequency stopped heartbeats
-    - emit waiting-for-market heartbeats during off-hours
+    - emit low-frequency offline heartbeats
+    - emit market-closed heartbeats during off-hours
     - protect the runner loop from heartbeat transport failures
     - raise a structured market-closed signal when trading should pause
 
@@ -29,38 +29,17 @@ from runner import api_client
 
 
 def now_epoch() -> int:
-    """Returns the current epoch time in seconds.
-
-    Returns:
-        int: Current Unix timestamp in seconds.
-    """
+    """Returns the current epoch time in seconds."""
     return int(time.time())
 
 
 def _env(name: str, default: str = "") -> str:
-    """Returns a stripped environment variable value.
-
-    Args:
-        name: Environment variable name.
-        default: Default value if the variable is missing.
-
-    Returns:
-        str: Trimmed environment variable value or the provided default.
-    """
+    """Returns a stripped environment variable value."""
     return str(os.getenv(name, default) or "").strip()
 
 
 def _env_int(name: str, default: int, *, min_value: int = 1) -> int:
-    """Returns an integer environment variable with lower-bound enforcement.
-
-    Args:
-        name: Environment variable name.
-        default: Fallback integer value if parsing fails.
-        min_value: Minimum allowed value.
-
-    Returns:
-        int: Parsed integer value clamped to the provided minimum.
-    """
+    """Returns an integer environment variable with lower-bound enforcement."""
     raw = _env(name, "")
     if raw == "":
         return max(int(min_value), int(default))
@@ -74,17 +53,7 @@ def _env_int(name: str, default: int, *, min_value: int = 1) -> int:
 
 
 def _env_bool(name: str, default: bool = False) -> bool:
-    """Returns a boolean environment variable value.
-
-    Truthy values include: 1, true, t, yes, y, on.
-
-    Args:
-        name: Environment variable name.
-        default: Fallback boolean value.
-
-    Returns:
-        bool: Parsed boolean value.
-    """
+    """Returns a boolean environment variable value."""
     raw = _env(name, "").lower()
     if raw == "":
         return bool(default)
@@ -92,57 +61,55 @@ def _env_bool(name: str, default: bool = False) -> bool:
 
 
 def _heartbeat_every_seconds() -> int:
-    """Returns the default active-loop heartbeat cadence.
-
-    Returns:
-        int: Heartbeat cadence in seconds, with a minimum of 5.
-    """
+    """Returns the default active-loop heartbeat cadence."""
     return _env_int("RUNNER_HEARTBEAT_EVERY_SECONDS", 60, min_value=5)
 
 
 def _market_closed_heartbeat_every_seconds() -> int:
-    """Returns the off-hours heartbeat cadence.
-
-    Returns:
-        int: Heartbeat cadence in seconds while the market is closed, with a
-        minimum of 60.
-    """
+    """Returns the off-hours heartbeat cadence."""
     return _env_int("RUNNER_MARKET_CLOSED_HEARTBEAT_SECONDS", 1800, min_value=60)
 
 
-def _stopped_heartbeat_every_seconds() -> int:
-    """Returns the stopped-state heartbeat cadence.
-
-    Returns:
-        int: Heartbeat cadence in seconds while explicitly stopped, with a
-        minimum of 60.
-    """
+def _offline_heartbeat_every_seconds() -> int:
+    """Returns the offline-state heartbeat cadence."""
     return _env_int("RUNNER_STOPPED_HEARTBEAT_SECONDS", 3600, min_value=60)
 
 
 def _normalized_user_id(user_id: Optional[str]) -> str:
-    """Returns a stripped user id or an empty string.
-
-    Args:
-        user_id: Optional user id.
-
-    Returns:
-        str: Trimmed user id if present, otherwise an empty string.
-    """
+    """Returns a stripped user id or an empty string."""
     return str(user_id or "").strip()
+
+
+def _normalized_runner_id() -> Optional[str]:
+    """Returns the runner id from environment when present."""
+    value = _env("RUNNER_ID") or _env("RUNNER_DEVICE_ID")
+    return value or None
 
 
 @dataclass
 class HeartbeatState:
-    """Mutable anti-spam state for runner heartbeat emission.
-
-    Attributes:
-        last_hb_ts: Epoch timestamp of the last emitted heartbeat.
-        last_signature: Signature of the last emitted heartbeat payload shape.
-    """
+    """Mutable anti-spam state for runner heartbeat emission."""
 
     last_hb_ts: int = 0
     last_signature: str = ""
+
+
+def normalize_runtime_state(value: Any) -> str:
+    """Normalizes runtime states to the backend canonical set."""
+    normalized = str(value or "").strip().lower()
+
+    if normalized in {"running", "active", "live"}:
+        return "running"
+    if normalized in {"starting", "booting", "initializing"}:
+        return "starting"
+    if normalized in {"stopping", "shutting_down", "shutting-down"}:
+        return "stopping"
+    if normalized in {"errored", "error", "failed", "fatal"}:
+        return "errored"
+    if normalized in {"offline", "stopped", "idle", "dead", ""}:
+        return "offline"
+
+    return "offline"
 
 
 def should_heartbeat(
@@ -152,23 +119,7 @@ def should_heartbeat(
     now: int,
     every_seconds: Optional[int] = None,
 ) -> bool:
-    """Returns whether a heartbeat should be emitted.
-
-    Anti-spam policy:
-        - emit immediately if the heartbeat signature changes
-        - otherwise emit only after the cadence window has elapsed
-
-    The function updates the shared HeartbeatState when it decides to emit.
-
-    Args:
-        state: Shared heartbeat state.
-        signature: Signature representing the current heartbeat-relevant state.
-        now: Current epoch time in seconds.
-        every_seconds: Optional explicit cadence override.
-
-    Returns:
-        bool: True if a heartbeat should be emitted now.
-    """
+    """Returns whether a heartbeat should be emitted."""
     if signature != state.last_signature:
         state.last_signature = signature
         state.last_hb_ts = now
@@ -183,30 +134,79 @@ def should_heartbeat(
 
 
 def safe_heartbeat(api: UStockAPI, **kwargs: Any) -> None:
-    """Attempts to post a heartbeat without breaking the runner loop.
-
-    If `RUNNER_DEBUG=true`, failures are printed for local visibility.
-    Otherwise they are swallowed intentionally to keep the orchestrator loop
-    alive.
-
-    Args:
-        api: Shared HTTP client.
-        **kwargs: Keyword arguments forwarded to `api_client.post_heartbeat`.
-
-    Returns:
-        None
-    """
+    """Attempts to post a heartbeat without breaking the runner loop."""
     debug = _env_bool("RUNNER_DEBUG", False)
 
     uid = str(kwargs.get("user_id") or "").strip()
     if not uid:
         return
 
+    payload = dict(kwargs)
+    payload["runner_id"] = payload.get("runner_id") or _normalized_runner_id()
+
+    runtime_state = payload.get("runtime_state")
+    effective_state = payload.get("effective_state")
+    canonical = normalize_runtime_state(runtime_state or effective_state)
+
     try:
-        api_client.post_heartbeat(api, **kwargs)
+        api_client.post_heartbeat(
+            api,
+            user_id=uid,
+            bot_id=str(payload.get("bot_id") or "").strip(),
+            runtime_state=canonical,
+            mode=str(payload.get("mode") or "paper").strip().lower() or "paper",
+            message=str(payload.get("message") or "").strip() or None,
+            reason_code=str(payload.get("reason_code") or "").strip() or None,
+            paused_reason=str(payload.get("paused_reason") or "").strip() or None,
+            next_open_epoch=payload.get("next_open_epoch"),
+            last_error=str(payload.get("last_error") or "").strip() or None,
+            runner_id=payload.get("runner_id"),
+        )
     except Exception as exc:
         if debug:
             print("[runner] heartbeat failed:", repr(exc))
+
+
+def send_offline(
+    api: UStockAPI,
+    state: HeartbeatState,
+    *,
+    bot_id: str,
+    status_mode: str,
+    user_id: Optional[str] = None,
+    reason_code: str = "intent_stopped",
+    message: str = "Control plane indicates stopped.",
+) -> None:
+    """Emits a low-frequency offline heartbeat.
+
+    This prevents status freshness from drifting forever while the bot is
+    intentionally not running.
+    """
+    uid = _normalized_user_id(user_id)
+    if not uid:
+        return
+
+    now = now_epoch()
+    signature = f"offline|{status_mode}|{reason_code}"
+
+    if should_heartbeat(
+        state,
+        signature,
+        now=now,
+        every_seconds=_offline_heartbeat_every_seconds(),
+    ):
+        safe_heartbeat(
+            api,
+            user_id=uid,
+            bot_id=bot_id,
+            mode=status_mode,
+            runner_id=_normalized_runner_id(),
+            runtime_state="offline",
+            reason_code=reason_code,
+            message=message,
+            paused_reason="",
+            last_error="",
+        )
 
 
 def send_stopped(
@@ -217,57 +217,20 @@ def send_stopped(
     status_mode: str,
     user_id: Optional[str] = None,
 ) -> None:
-    """Emits a low-frequency stopped heartbeat.
-
-    This prevents UI freshness from drifting indefinitely when a bot remains
-    explicitly stopped for a long period.
-
-    Args:
-        api: Shared HTTP client.
-        state: Shared heartbeat anti-spam state.
-        bot_id: Bot identifier.
-        status_mode: Current bot mode, typically paper or live.
-        user_id: Optional application user id.
-
-    Returns:
-        None
-    """
-    uid = _normalized_user_id(user_id)
-    if not uid:
-        return
-
-    now = now_epoch()
-    signature = f"stopped|{status_mode}|intent_stopped"
-
-    if should_heartbeat(
+    """Backward-compatible wrapper for older runner call sites."""
+    send_offline(
+        api,
         state,
-        signature,
-        now=now,
-        every_seconds=_stopped_heartbeat_every_seconds(),
-    ):
-        safe_heartbeat(
-            api,
-            user_id=uid,
-            bot_id=bot_id,
-            intent="stopped",
-            effective_state="stopped",
-            mode=status_mode,
-            reason_code="intent_stopped",
-            message="Stopped by user.",
-            paused_reason="",
-            next_open_epoch=0,
-            last_error="",
-            last_tick=now,
-        )
+        bot_id=bot_id,
+        status_mode=status_mode,
+        user_id=user_id,
+        reason_code="intent_stopped",
+        message="Control plane indicates stopped.",
+    )
 
 
 class MarketClosed(Exception):
-    """Raised when the market is closed and the runner should short-circuit.
-
-    Attributes:
-        next_open_epoch: Optional next known market-open epoch.
-        reason: Human-readable market-closed reason.
-    """
+    """Raised when the market is closed and the runner should short-circuit."""
 
     def __init__(
         self,
@@ -275,12 +238,6 @@ class MarketClosed(Exception):
         next_open_epoch: Optional[int] = None,
         reason: str = "Market closed",
     ) -> None:
-        """Initializes the market-closed exception.
-
-        Args:
-            next_open_epoch: Optional next market-open epoch.
-            reason: Human-readable reason.
-        """
         super().__init__(reason)
         self.next_open_epoch = next_open_epoch
         self.reason = reason
@@ -296,26 +253,10 @@ def gate_market_hours(
 ) -> None:
     """Raises MarketClosed when the market is closed.
 
-    When the market is closed, this function emits a throttled
-    `waiting_for_market` heartbeat before raising `MarketClosed`.
-
-    The market session lookup is intentionally fail-open. If the backend
-    session endpoint fails or returns an unexpected response shape, the runner
-    continues rather than stopping local or development flows.
-
-    Args:
-        api: Shared HTTP client.
-        state: Shared heartbeat anti-spam state.
-        bot_id: Bot identifier.
-        mode: Current bot mode, typically paper or live.
-        user_id: Optional application user id.
-
-    Raises:
-        MarketClosed: If the market session endpoint reports the market is
-            closed.
-
-    Returns:
-        None
+    When the market is closed, this function emits a throttled heartbeat using
+    canonical runtime_state='running' plus a paused_reason that explains why
+    work is paused. We keep runtime state canonical and let the backend/logs
+    carry the richer explanation.
     """
     debug = _env_bool("RUNNER_DEBUG", False)
 
@@ -335,7 +276,7 @@ def gate_market_hours(
 
     uid = _normalized_user_id(user_id)
     now = now_epoch()
-    signature = f"wait_market|{mode}|market_closed|{next_open_epoch}"
+    signature = f"market_closed|{mode}|{next_open_epoch}"
 
     if uid and should_heartbeat(
         state,
@@ -347,15 +288,14 @@ def gate_market_hours(
             api,
             user_id=uid,
             bot_id=bot_id,
-            intent="running",
-            effective_state="waiting_for_market",
             mode=mode,
+            runner_id=_normalized_runner_id(),
+            runtime_state="running",
             reason_code="market_closed",
             message="Waiting for market open.",
             paused_reason=paused_reason,
-            next_open_epoch=next_open_epoch,
             last_error="",
-            last_tick=now,
+            next_open_epoch=next_open_epoch,
         )
 
     raise MarketClosed(next_open_epoch=next_open_epoch, reason=paused_reason)
