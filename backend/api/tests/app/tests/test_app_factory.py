@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 @pytest.fixture()
 def app_module(monkeypatch):
+    """Loads the app factory module under test mode."""
     # Ensure test runner ENV wins over anything loaded from .env
     monkeypatch.setenv("ENV", "test")
     mod = importlib.import_module("api.app.app_factory")
@@ -14,12 +15,12 @@ def app_module(monkeypatch):
 
 
 def _set_min_prod_env(monkeypatch):
-    """
-    Production Settings() may enforce required env vars.
-    Provide safe dummy values so create_app() can boot.
-    """
+    """Sets the minimum production env vars required for Settings()."""
     monkeypatch.setenv("ENV", "production")
     monkeypatch.setenv("DATABASE_URL", "postgresql://user:pass@localhost:5432/test_db")
+    monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setenv("SUPABASE_ANON_KEY", "test-anon-key")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "test-service-role-key")
 
 
 def test_create_app_root_and_health_reflect_effective_env(app_module):
@@ -65,7 +66,7 @@ def test_unhandled_exception_handler_includes_error_when_not_production(app_modu
 def test_root_hides_cors_origins_in_production(monkeypatch):
     _set_min_prod_env(monkeypatch)
 
-    import api.app.app_factory as mod
+    mod = importlib.import_module("api.app.app_factory")
     importlib.reload(mod)
 
     app = mod.create_app()
@@ -82,7 +83,7 @@ def test_root_hides_cors_origins_in_production(monkeypatch):
 def test_unhandled_exception_handler_hides_error_in_production(monkeypatch):
     _set_min_prod_env(monkeypatch)
 
-    import api.app.app_factory as mod
+    mod = importlib.import_module("api.app.app_factory")
     importlib.reload(mod)
 
     app = mod.create_app()
