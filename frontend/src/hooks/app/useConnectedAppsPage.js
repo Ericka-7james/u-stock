@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { useAuth } from "../../context/authContextBase.js";
-import { explainResponseError } from "../../lib/ErrorMessages";
+import { explainResponseError } from "../../lib/ErrorMessages.jsx";
 import { CONNECTED_APPS_PAGE_COPY } from "../../content/pages/connectedAppsPage.content.ts";
 
 const PROVIDERS = CONNECTED_APPS_PAGE_COPY.providers;
