@@ -1,68 +1,87 @@
-// frontend/src/content/errorCatalog.js
+// frontend/src/content/error/errorCatalog.js
 
-import accountCreated from "../../assets/modal/AccountCreated.png";
-import errorSquirrel from "../../assets/modal/ErrorSquirrel.png";
+export const ERROR_KEYS = {
+  // ...existing keys
 
-/**
- * Centralized UI presets (copy + image + default action) for known error keys.
- * Logic lives in lib/errorMessages.jsx.
- */
+  // ---------------------------
+  // Signup (inline validation)
+  // ---------------------------
+  SIGNUP_NAME_REQUIRED: "signup_name_required",
+  SIGNUP_EMAIL_INVALID: "signup_email_invalid",
+  SIGNUP_PHONE_INVALID: "signup_phone_invalid",
 
-export const ERROR_KEYS = /** @type {const} */ ({
-  NOT_AUTHENTICATED: "NOT_AUTHENTICATED",
-  DUPLICATE: "DUPLICATE",
-  ALPACA_FEED_FORBIDDEN: "ALPACA_FEED_FORBIDDEN",
-  NETWORK_ERROR: "NETWORK_ERROR",
-  SERVER_ERROR: "SERVER_ERROR",
-  UNKNOWN: "UNKNOWN",
-});
+  SIGNUP_PASSWORD_TOO_SHORT: "signup_password_too_short",
+  SIGNUP_PASSWORD_NEEDS_UPPER: "signup_password_needs_upper",
+  SIGNUP_PASSWORD_NEEDS_LOWER: "signup_password_needs_lower",
+  SIGNUP_PASSWORD_NEEDS_NUMBER: "signup_password_needs_number",
+  SIGNUP_PASSWORD_NEEDS_SPECIAL: "signup_password_needs_special",
+  SIGNUP_PASSWORD_CONTAINS_EMAIL: "signup_password_contains_email",
+  SIGNUP_PASSWORD_CONTAINS_USERNAME: "signup_password_contains_username",
+
+  // ---------------------------
+  // Signup (provider wiring)
+  // ---------------------------
+  SIGNUP_GOOGLE_NOT_CONFIGURED: "signup_google_not_configured",
+  SIGNUP_FACEBOOK_NOT_CONFIGURED: "signup_facebook_not_configured",
+  LOGIN_FALLBACK: "login_fallback",
+};
 
 export const ERROR_PRESETS = {
-  [ERROR_KEYS.DUPLICATE]: {
-    title: "Account already exists",
-    body: "That email or phone number is already in use.",
-    subtitle: "Try signing in instead, or use a different email/phone.",
-    image: accountCreated,
-    action: { label: "Sign in", href: "/auth" },
+  // ...existing presets
+
+  // Inline validation (these are “messages”, but using the same store keeps it centralized)
+  [ERROR_KEYS.SIGNUP_NAME_REQUIRED]: {
+    title: "Missing username",
+    body: "Please enter your username.",
+  },
+  [ERROR_KEYS.SIGNUP_EMAIL_INVALID]: {
+    title: "Invalid email",
+    body: "Please enter a valid email address.",
+  },
+  [ERROR_KEYS.SIGNUP_PHONE_INVALID]: {
+    title: "Invalid phone number",
+    body: "Please enter a valid phone number (10–15 digits).",
   },
 
-  [ERROR_KEYS.NOT_AUTHENTICATED]: {
-    title: "Session expired",
-    body: "You’re signed out or your session expired.",
-    subtitle: "Sign in again, then retry.",
-    image: errorSquirrel,
-    action: { label: "Sign in", href: "/auth" },
+  [ERROR_KEYS.SIGNUP_PASSWORD_TOO_SHORT]: {
+    title: "Weak password",
+    body: "Password must be at least 12 characters long.",
+  },
+  [ERROR_KEYS.SIGNUP_PASSWORD_NEEDS_UPPER]: {
+    title: "Weak password",
+    body: "Password must include at least 1 uppercase letter.",
+  },
+  [ERROR_KEYS.SIGNUP_PASSWORD_NEEDS_LOWER]: {
+    title: "Weak password",
+    body: "Password must include at least 1 lowercase letter.",
+  },
+  [ERROR_KEYS.SIGNUP_PASSWORD_NEEDS_NUMBER]: {
+    title: "Weak password",
+    body: "Password must include at least 1 number.",
+  },
+  [ERROR_KEYS.SIGNUP_PASSWORD_NEEDS_SPECIAL]: {
+    title: "Weak password",
+    body: "Password must include at least 1 special character.",
+  },
+  [ERROR_KEYS.SIGNUP_PASSWORD_CONTAINS_EMAIL]: {
+    title: "Weak password",
+    body: "Password must not contain your email.",
+  },
+  [ERROR_KEYS.SIGNUP_PASSWORD_CONTAINS_USERNAME]: {
+    title: "Weak password",
+    body: "Password must not contain your username.",
   },
 
-  [ERROR_KEYS.ALPACA_FEED_FORBIDDEN]: {
-    title: "Alpaca data feed not available",
-    body: "Your Alpaca account doesn’t have access to this market data feed (often SIP).",
-    subtitle: "Use IEX feed for dev, or upgrade your Alpaca market data plan.",
-    image: errorSquirrel,
-    action: { label: "Connected Apps", href: "/connected-apps" },
+  [ERROR_KEYS.SIGNUP_GOOGLE_NOT_CONFIGURED]: {
+    title: "Google signup unavailable",
+    body: "Google signup is not configured yet.",
   },
-
-  [ERROR_KEYS.NETWORK_ERROR]: {
-    title: "Connection problem",
-    body: "We couldn’t reach the server.",
-    subtitle: "Check your internet connection and try again.",
-    image: errorSquirrel,
-    action: null,
+  [ERROR_KEYS.SIGNUP_FACEBOOK_NOT_CONFIGURED]: {
+    title: "Facebook signup unavailable",
+    body: "Facebook signup is not configured yet.",
   },
-
-  [ERROR_KEYS.SERVER_ERROR]: {
-    title: "Server hiccup",
-    body: "Something went wrong on our side.",
-    subtitle: "Refresh and try again. If it keeps happening, sign out/in or restart the backend.",
-    image: errorSquirrel,
-    action: null,
-  },
-
-  [ERROR_KEYS.UNKNOWN]: {
-    title: "Something went wrong",
-    body: "We hit an unexpected issue.",
-    subtitle: "Please try again.",
-    image: errorSquirrel,
-    action: null,
+  [ERROR_KEYS.LOGIN_FALLBACK]: {
+    title: "Couldn’t sign you in",
+    body: "Something went wrong. Please try again.",
   },
 };

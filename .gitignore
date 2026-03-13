@@ -68,3 +68,10 @@ _my_commits_tmp.txt
 .coverage
 coverage-*.xml
 frontend/coverage/
+
+# ======================
+# Local Backtest Cache (DO NOT TRACK)
+# ======================
+.cache/
+backtest_results/
+*.parquet

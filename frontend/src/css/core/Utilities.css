@@ -1,0 +1,136 @@
+/* src/css/core/utilities.css */
+
+/* =====================================================
+   LAYOUT UTILITIES
+===================================================== */
+
+.u-stack-sm > * + * {
+  margin-top: 8px;
+}
+
+.u-stack-md > * + * {
+  margin-top: 16px;
+}
+
+.u-stack-lg > * + * {
+  margin-top: 24px;
+}
+
+.u-cluster-sm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.u-cluster-md {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.u-cluster-lg {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+}
+
+.u-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.u-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  align-items: stretch;
+}
+
+.u-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  align-items: stretch;
+}
+
+.u-grid-5 {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+  align-items: stretch;
+}
+
+.u-split-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+  gap: 40px;
+  align-items: center;
+}
+
+.u-split-hero-compact {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.75fr);
+  gap: 28px;
+  align-items: center;
+}
+
+.u-split-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.95fr);
+  gap: 28px;
+  align-items: center;
+}
+
+.u-media-frame {
+  width: 100%;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  border: 1px solid var(--ustock-border-card);
+  box-shadow: var(--shadow-card);
+  background: var(--ustock-bg-card);
+}
+
+.u-media-frame > img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.u-min-0 {
+  min-width: 0;
+}
+
+/* =====================================================
+   RESPONSIVE
+===================================================== */
+
+@media (max-width: 900px) {
+  .u-grid-3 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .u-grid-5 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .u-split-card {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .u-split-hero-compact {
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
+    gap: 20px;
+  }
+}
+
+@media (max-width: 768px) {
+  .u-split-hero,
+  .u-split-hero-compact {
+    grid-template-columns: 1fr;
+    gap: 18px;
+  }
+}

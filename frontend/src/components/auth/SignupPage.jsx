@@ -5,9 +5,18 @@ import { Link, useNavigate } from "react-router-dom";
 import AppShell from "../layout/AppShell";
 import ErrorModal from "../common/ErrorModal";
 import { useAuth } from "../../context/authContextBase.js";
-import { explainAnyError } from "../../lib/errorMessages";
+import { explainAnyError } from "../../lib/ErrorMessages.jsx";
 
 import { SIGNUP_PAGE_CONTENT } from "../../content/landing/signuppage.content.ts";
+
+// ✅ NEW: pull messages from the catalog
+import { ERROR_KEYS, ERROR_PRESETS } from "../../content/error/errorCatalog";
+
+// Profile avatars
+import CapitalCustodian from "../../assets/profileIcons/GlobalAscent.png";
+import LucentBaron from "../../assets/profileIcons/LucentClassic.png";
+import GrowthSeed from "../../assets/profileIcons/GrowthSeed.png";
+import SmartStash from "../../assets/profileIcons/SmartStash.png";
 
 import "../../css/auth/SignupPage.css";
 
@@ -22,13 +31,23 @@ function normalizeEmail(input) {
   return String(input || "").trim().toLowerCase();
 }
 
+// Small helper so SignupPage never hardcodes copy
+function msg(key, fallback) {
+  return ERROR_PRESETS?.[key]?.body || fallback || "Something went wrong.";
+}
+
 export default function SignupPage() {
   const navigate = useNavigate();
   const { signup, signupWithGoogle, signupWithFacebook } = useAuth();
 
   const CONTENT = SIGNUP_PAGE_CONTENT;
 
-  const avatars = CONTENT.avatar.options || [];
+  const avatars = [
+    { id: "capital_custodian", label: "Capital Custodian", src: CapitalCustodian },
+    { id: "lucent_baron", label: "Lucent Baron", src: LucentBaron },
+    { id: "growth_seed", label: "Growth Seed", src: GrowthSeed },
+    { id: "smart_stash", label: "Smart Stash", src: SmartStash },
+  ];
   const emailRegex = useMemo(() => /^[^\s@]+@[^\s@]+\.[^\s@]+$/, []);
 
   // Form state
@@ -36,7 +55,7 @@ export default function SignupPage() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
-  const [avatar, setAvatar] = useState(avatars[0] || "📈");
+  const [avatar, setAvatar] = useState(avatars[0]?.id);
 
   const [errors, setErrors] = useState({
     name: "",
@@ -80,33 +99,35 @@ export default function SignupPage() {
     const normalizedEmail = normalizeEmail(email);
     const phoneDigits = normalizePhone(phone);
 
-    if (!trimmedName) next.name = "Please enter your username.";
+    if (!trimmedName) {
+      next.name = msg(ERROR_KEYS.SIGNUP_NAME_REQUIRED, "Please enter your username.");
+    }
 
     if (!normalizedEmail || !emailRegex.test(normalizedEmail)) {
-      next.email = "Please enter a valid email address.";
+      next.email = msg(ERROR_KEYS.SIGNUP_EMAIL_INVALID, "Please enter a valid email address.");
     }
 
     // Optional phone field, but validate if provided
     if (phoneDigits && !isValidPhoneDigits(phoneDigits)) {
-      next.phone = "Please enter a valid phone number (10–15 digits).";
+      next.phone = msg(ERROR_KEYS.SIGNUP_PHONE_INVALID, "Please enter a valid phone number (10–15 digits).");
     }
 
     const emailLocal = normalizedEmail.includes("@") ? normalizedEmail.split("@")[0] : "";
 
     if (!password || password.length < 12) {
-      next.password = "Password must be at least 12 characters long.";
+      next.password = msg(ERROR_KEYS.SIGNUP_PASSWORD_TOO_SHORT, "Password must be at least 12 characters long.");
     } else if (!/[A-Z]/.test(password)) {
-      next.password = "Password must include at least 1 uppercase letter.";
+      next.password = msg(ERROR_KEYS.SIGNUP_PASSWORD_NEEDS_UPPER, "Password must include at least 1 uppercase letter.");
     } else if (!/[a-z]/.test(password)) {
-      next.password = "Password must include at least 1 lowercase letter.";
+      next.password = msg(ERROR_KEYS.SIGNUP_PASSWORD_NEEDS_LOWER, "Password must include at least 1 lowercase letter.");
     } else if (!/\d/.test(password)) {
-      next.password = "Password must include at least 1 number.";
+      next.password = msg(ERROR_KEYS.SIGNUP_PASSWORD_NEEDS_NUMBER, "Password must include at least 1 number.");
     } else if (!/[^\w\s]/.test(password)) {
-      next.password = "Password must include at least 1 special character.";
+      next.password = msg(ERROR_KEYS.SIGNUP_PASSWORD_NEEDS_SPECIAL, "Password must include at least 1 special character.");
     } else if (emailLocal && password.toLowerCase().includes(emailLocal)) {
-      next.password = "Password must not contain your email.";
+      next.password = msg(ERROR_KEYS.SIGNUP_PASSWORD_CONTAINS_EMAIL, "Password must not contain your email.");
     } else if (trimmedName && password.toLowerCase().includes(trimmedName.toLowerCase())) {
-      next.password = "Password must not contain your username.";
+      next.password = msg(ERROR_KEYS.SIGNUP_PASSWORD_CONTAINS_USERNAME, "Password must not contain your username.");
     }
 
     setErrors(next);
@@ -131,7 +152,6 @@ export default function SignupPage() {
           avatar,
         });
 
-        // Your flow: signup -> then sign in
         navigate("/auth");
       } catch (err) {
         openErrorModal(err, { feature: "signup" });
@@ -147,7 +167,7 @@ export default function SignupPage() {
     setLoading(true);
     try {
       if (!signupWithGoogle) {
-        openErrorModal("Google signup is not configured yet.", { feature: "signup_google" });
+        openErrorModal(msg(ERROR_KEYS.SIGNUP_GOOGLE_NOT_CONFIGURED), { feature: "signup_google" });
         return;
       }
       await signupWithGoogle();
@@ -164,7 +184,7 @@ export default function SignupPage() {
     setLoading(true);
     try {
       if (!signupWithFacebook) {
-        openErrorModal("Facebook signup is not configured yet.", { feature: "signup_facebook" });
+        openErrorModal(msg(ERROR_KEYS.SIGNUP_FACEBOOK_NOT_CONFIGURED), { feature: "signup_facebook" });
         return;
       }
       await signupWithFacebook();
@@ -187,12 +207,7 @@ export default function SignupPage() {
 
   return (
     <AppShell>
-      <ErrorModal
-        open={errModalOpen}
-        error={errModal}
-        onClose={closeErrorModal}
-        onAction={handleErrorAction}
-      />
+      <ErrorModal open={errModalOpen} error={errModal} onClose={closeErrorModal} onAction={handleErrorAction} />
 
       <div className="signup-page">
         <div className="signup-auth-card">
@@ -204,9 +219,7 @@ export default function SignupPage() {
           <form className="signup-auth-form" onSubmit={handleSubmit} noValidate>
             {/* Username */}
             <label className="signup-auth-field" htmlFor="signup-name">
-              <span className="signup-auth-icon" aria-hidden="true">
-                👤
-              </span>
+              <span className="signup-auth-icon" aria-hidden="true">👤</span>
               <input
                 id="signup-name"
                 name="name"
@@ -223,17 +236,11 @@ export default function SignupPage() {
                 aria-invalid={!!errors.name}
               />
             </label>
-            {errors.name && (
-              <p className="signup-error" role="alert">
-                {errors.name}
-              </p>
-            )}
+            {errors.name && <p className="signup-error" role="alert">{errors.name}</p>}
 
             {/* Email */}
             <label className="signup-auth-field" htmlFor="signup-email">
-              <span className="signup-auth-icon" aria-hidden="true">
-                ✉️
-              </span>
+              <span className="signup-auth-icon" aria-hidden="true">✉️</span>
               <input
                 id="signup-email"
                 name="email"
@@ -250,17 +257,11 @@ export default function SignupPage() {
                 aria-invalid={!!errors.email}
               />
             </label>
-            {errors.email && (
-              <p className="signup-error" role="alert">
-                {errors.email}
-              </p>
-            )}
+            {errors.email && <p className="signup-error" role="alert">{errors.email}</p>}
 
             {/* Phone */}
             <label className="signup-auth-field" htmlFor="signup-phone">
-              <span className="signup-auth-icon" aria-hidden="true">
-                📞
-              </span>
+              <span className="signup-auth-icon" aria-hidden="true">📞</span>
               <input
                 id="signup-phone"
                 name="phone"
@@ -276,17 +277,11 @@ export default function SignupPage() {
                 aria-invalid={!!errors.phone}
               />
             </label>
-            {errors.phone && (
-              <p className="signup-error" role="alert">
-                {errors.phone}
-              </p>
-            )}
+            {errors.phone && <p className="signup-error" role="alert">{errors.phone}</p>}
 
             {/* Password */}
             <label className="signup-auth-field" htmlFor="signup-password">
-              <span className="signup-auth-icon" aria-hidden="true">
-                🔒
-              </span>
+              <span className="signup-auth-icon" aria-hidden="true">🔒</span>
               <input
                 id="signup-password"
                 name="password"
@@ -303,27 +298,24 @@ export default function SignupPage() {
                 aria-invalid={!!errors.password}
               />
             </label>
-            {errors.password && (
-              <p className="signup-error" role="alert">
-                {errors.password}
-              </p>
-            )}
+            {errors.password && <p className="signup-error" role="alert">{errors.password}</p>}
 
             {/* Avatar */}
             <div className="signup-avatar-strip">
               <span className="signup-avatar-strip-label">{CONTENT.avatar.label}</span>
+
               <div className="signup-avatar-strip-grid" role="group" aria-label="Choose your avatar">
-                {avatars.map((icon) => (
+                {avatars.map((a) => (
                   <button
-                    key={icon}
+                    key={a.id}
                     type="button"
-                    className={"signup-avatar-pill" + (avatar === icon ? " signup-avatar-pill--active" : "")}
-                    onClick={() => setAvatar(icon)}
-                    aria-pressed={avatar === icon}
+                    className={"signup-avatar-pill" + (avatar === a.id ? " signup-avatar-pill--active" : "")}
+                    onClick={() => setAvatar(a.id)}
+                    aria-pressed={avatar === a.id}
                     disabled={loading}
-                    title={`Choose ${icon}`}
+                    title={`Choose ${a.label}`}
                   >
-                    {icon}
+                    <img src={a.src} alt={a.label} className="signup-avatar-img" draggable="false" />
                   </button>
                 ))}
               </div>

@@ -4,12 +4,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
-/**
- * ✅ Mocks MUST be declared before importing the component under test
- */
-
 // ✅ Mock auth hook (AppShell/NavBar uses it)
-// NOTE: useAuth now lives in authContextBase.js
 vi.mock("../../../context/authContextBase.js", () => ({
   useAuth: () => ({
     user: null,
@@ -21,30 +16,9 @@ vi.mock("../../../context/authContextBase.js", () => ({
   }),
 }));
 
-// (optional) config mock if other components import it
 vi.mock("../../../config/config", () => ({
   API_BASE: "",
   API_PREFIX: "/api",
-}));
-
-/**
- * ✅ Mock BotLogsCard so DatasourcesPage tests don't depend on BotLogsCard internals.
- */
-vi.mock("../../dashboard/cards/BotLogsCard.jsx", () => ({
-  default: function MockBotLogsCard(props) {
-    return (
-      <section data-testid="bot-logs-card">
-        <h2>{props.title || "Bot logs"}</h2>
-        <p>{props.subtitle || ""}</p>
-
-        <ul>
-          <li>Retrying submit</li>
-          <li>State changed</li>
-          <li>Runner error</li>
-        </ul>
-      </section>
-    );
-  },
 }));
 
 import DatasourcesPage from "../DatasourcesPage";
@@ -69,8 +43,8 @@ describe("DatasourcesPage", () => {
         if (u.includes("/api/market/leaders")) {
           return jsonOk({
             items: [
-              { symbol: "VERO", last: 8.0, prev_close: 7.65 },
-              { symbol: "JFBR", last: 1.29, prev_close: 0.56 },
+              { symbol: "VERO", last: 8.0, prev_close: 8.0 },
+              { symbol: "JFBR", last: 1.29, prev_close: 1.29 },
             ],
             source: { code: "alpaca_movers", label: "Alpaca market movers (today)" },
             asOf: "2025-01-18T21:00:00Z",
@@ -94,14 +68,25 @@ describe("DatasourcesPage", () => {
     );
   }
 
-  it("renders the page header + both sections", async () => {
+  it("renders the page header + market movers rows + system logs section", async () => {
     renderPage();
 
-    expect(await screen.findByRole("heading", { name: /data sources/i })).toBeInTheDocument();
-    expect(await screen.findByText(/market leaders/i)).toBeInTheDocument();
+    // ✅ Page header is now "Data + Logs"
+    expect(await screen.findByRole("heading", { name: /data \+ logs/i })).toBeInTheDocument();
 
-    expect(await screen.findByRole("heading", { name: /bot logs/i })).toBeInTheDocument();
-    expect(screen.getByTestId("bot-logs-card")).toBeInTheDocument();
+    // ✅ market movers render as ticker buttons; wait for one to appear
+    await waitFor(() =>
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        expect.stringContaining("/api/market/leaders"),
+        expect.anything()
+      )
+    );
+    expect(await screen.findByRole("button", { name: /^vero\b/i })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /^jfbr\b/i })).toBeInTheDocument();
+
+    // ✅ logs section is present
+    expect(await screen.findByRole("heading", { name: /system logs/i })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: /search/i })).toBeInTheDocument();
   });
 
   it("renders market leader rows and allows clicking a ticker button", async () => {
@@ -110,23 +95,26 @@ describe("DatasourcesPage", () => {
     await waitFor(() =>
       expect(globalThis.fetch).toHaveBeenCalledWith(
         expect.stringContaining("/api/market/leaders"),
-        expect.any(Object)
+        expect.anything()
       )
     );
 
-    const jfbrBtn = await screen.findByRole("button", { name: /jfbr/i });
+    const jfbrBtn = await screen.findByRole("button", { name: /^jfbr\b/i });
     fireEvent.click(jfbrBtn);
 
-    expect(screen.getByRole("heading", { name: /data sources/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /data \+ logs/i })).toBeInTheDocument();
   });
 
-  it("shows bot log preview entries (from mocked BotLogsCard)", async () => {
+  it("shows system logs controls (stable UI assertions)", async () => {
     renderPage();
 
-    await screen.findByRole("heading", { name: /bot logs/i });
+    await screen.findByRole("heading", { name: /system logs/i });
 
-    expect(screen.getByText(/retrying submit/i)).toBeInTheDocument();
-    expect(screen.getByText(/state changed/i)).toBeInTheDocument();
-    expect(screen.getByText(/runner error/i)).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: /bot/i })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: /day/i })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: /outcome/i })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: /limit/i })).toBeInTheDocument();
+
+    expect(screen.getByRole("textbox", { name: /search/i })).toBeInTheDocument();
   });
 });

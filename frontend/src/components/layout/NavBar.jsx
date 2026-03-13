@@ -28,10 +28,11 @@ export default function NavBar({
   const isConnectedApps = location.pathname.startsWith("/connected-apps");
   const isAbout = location.pathname.startsWith("/about");
   const isFeedback = location.pathname.startsWith("/feedback");
+  const isPracticeBacktests = location.pathname.startsWith("/practice/backtests");
 
   // Pages that require auth
   const protectedPaths = useMemo(
-    () => new Set(["/data-sources", "/index-funds", "/connected-apps"]),
+    () => new Set(["/data-sources", "/index-funds", "/connected-apps", "/practice"]),
     []
   );
 
@@ -191,6 +192,17 @@ export default function NavBar({
           >
             <span className="side-nav-item-icon" aria-hidden="true" />
             About
+          </Link>
+
+          <Link
+            to="/practice/backtests"
+            className={
+              "side-nav-item " + (isPracticeBacktests ? "side-nav-item--active" : "")
+            }
+            onClick={handleNavTo("/practice/backtests")}
+          >
+            <span className="side-nav-item-icon" aria-hidden="true" />
+            Backtest Practice
           </Link>
 
           <Link

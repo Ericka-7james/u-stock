@@ -99,7 +99,7 @@ vi.mock("../../../content/landing/authpage.content.ts", () => ({
 }));
 
 // ✅ Deterministic error mapping
-vi.mock("../../../lib/errorMessages", () => ({
+vi.mock("../../../lib/ErrorMessages", () => ({
   explainAnyError: (anyErr, { feature } = {}) => {
     const msg =
       anyErr && typeof anyErr === "object" && "message" in anyErr && anyErr.message

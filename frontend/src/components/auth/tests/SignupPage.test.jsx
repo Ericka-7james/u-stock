@@ -36,7 +36,7 @@ vi.mock("../../common/ErrorModal", () => ({
     ) : null,
 }));
 
-vi.mock("../../../lib/errorMessages", () => ({
+vi.mock("../../../lib/ErrorMessages.jsx", () => ({
   explainAnyError: (err) => ({
     title: "Error",
     body: String(err?.message || err || "Something went wrong."),
@@ -79,6 +79,11 @@ vi.mock("react-router-dom", async () => {
 vi.mock("../../../context/authContextBase.js", () => ({
   useAuth: () => authImpl,
 }));
+
+vi.mock("../../../assets/profileIcons/GlobalAscent.png", () => ({ default: "GlobalAscent.png" }));
+vi.mock("../../../assets/profileIcons/LucentClassic.png", () => ({ default: "LucentClassic.png" }));
+vi.mock("../../../assets/profileIcons/GrowthSeed.png", () => ({ default: "GrowthSeed.png" }));
+vi.mock("../../../assets/profileIcons/SmartStash.png", () => ({ default: "SmartStash.png" }));
 
 function renderSignup() {
   return render(
@@ -247,7 +252,9 @@ describe("SignupPage validation and behavior", () => {
     await user.type(screen.getByPlaceholderText("(555) 555-5555"), " (555) 555-5555 ");
     await user.type(screen.getByPlaceholderText("Password"), "VeryStrongPass1!");
 
-    await user.click(screen.getByRole("button", { name: "📊" }));
+    // ✅ select a non-default avatar using title (accessible name)
+    await user.click(screen.getByTitle("Choose Lucent Baron"));
+
     await user.click(screen.getByRole("button", { name: "Sign up" }));
 
     await waitFor(() => expect(authImpl.signup).toHaveBeenCalledTimes(1));
@@ -257,13 +264,13 @@ describe("SignupPage validation and behavior", () => {
       email: "test@example.com",
       phone: "5555555555",
       password: "VeryStrongPass1!",
-      avatar: "📊",
+      avatar: "lucent_baron",
     });
 
     expect(mockNavigate).toHaveBeenCalledWith("/auth");
   });
 
-  test("default avatar remains 📈 if user doesn't change it", async () => {
+  test("default avatar remains capital_custodian if user doesn't change it", async () => {
     const user = userEvent.setup();
     renderSignup();
 
@@ -273,9 +280,8 @@ describe("SignupPage validation and behavior", () => {
     await user.click(screen.getByRole("button", { name: "Sign up" }));
 
     await waitFor(() => expect(authImpl.signup).toHaveBeenCalledTimes(1));
-    expect(authImpl.signup.mock.calls[0][0].avatar).toBe("📈");
+    expect(authImpl.signup.mock.calls[0][0].avatar).toBe("capital_custodian");
   });
-
   test("shows backend error message when signup throws", async () => {
     const user = userEvent.setup();
     authImpl.signup.mockRejectedValueOnce(new Error("Backend exploded"));

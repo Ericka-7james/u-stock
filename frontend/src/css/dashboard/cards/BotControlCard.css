@@ -35,6 +35,9 @@
   display: flex;
   align-items: center;
   gap: 10px;
+
+  /* ✅ NEW: space between header title and pill row */
+  margin-top: 8px;
 }
 
 .botCardStatePill {
@@ -493,15 +496,17 @@ body.ustock-dark .botModalWarn {
     align-items: flex-start;
   }
 
-  .botCardTitleRow {
-    width: 100%;
-  }
-
+  /* ✅ slightly more breathing room on stacked headers */
   .botPillRow {
+    margin-top: 10px;
     width: 100%;
     flex-wrap: wrap;
     justify-content: flex-start;
     gap: 8px;
+  }
+
+  .botCardTitleRow {
+    width: 100%;
   }
 
   .botSelectWrap {

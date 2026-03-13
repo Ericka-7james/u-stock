@@ -7,6 +7,7 @@ import DatasourcesPage from "./components/pages/DatasourcesPage";
 import IndexFundsPage from "./components/pages/IndexFundsPage";
 import AboutPage from "./components/pages/AboutPage";
 import FeedbackPage from "./components/pages/FeedbackPage";
+import BacktestPracticePage from "./components/pages/BacktestPracticePage";
 
 import AuthPage from "./components/auth/AuthPage";
 import SignupPage from "./components/auth/SignupPage";
@@ -98,7 +99,14 @@ function App() {
             </RequireAuth>
           }
         />
-
+        <Route
+          path="/practice/backtests"
+          element={
+            <RequireAuth>
+              <BacktestPracticePage />
+            </RequireAuth>
+          }
+        />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </div>

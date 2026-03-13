@@ -1,31 +1,34 @@
 // frontend/src/components/dashboard/cards/DataSnapshotsCard.jsx
 import { fmtIsoDateTime } from "../../../lib/format/datetime.js";
+import { DASHBOARD_PAGE_COPY as COPY } from "../../../content/dashboardpage.content.ts";
 
 export default function DataSnapshotsCard({ signalsMeta, pricesMeta, priceSymbols }) {
-  const signalsGenerated = signalsMeta?.generatedAt ? fmtIsoDateTime(signalsMeta.generatedAt) : "—";
-  const pricesGenerated = pricesMeta?.generatedAt ? fmtIsoDateTime(pricesMeta.generatedAt) : "—";
+  const empty = COPY.dataSnapshots.empty;
+
+  const signalsGenerated = signalsMeta?.generatedAt ? fmtIsoDateTime(signalsMeta.generatedAt) : empty;
+  const pricesGenerated = pricesMeta?.generatedAt ? fmtIsoDateTime(pricesMeta.generatedAt) : empty;
 
   const universeSize = Array.isArray(pricesMeta?.universe)
     ? pricesMeta.universe.length
     : Array.isArray(priceSymbols)
     ? priceSymbols.length
-    : "---";
+    : COPY.dataSnapshots.emptyUniverse;
 
   return (
     <div className="panel filters-card filters-card--macro">
       <div className="filters-card-header">
-        <h3 className="panel-title">Data snapshots</h3>
+        <h3 className="panel-title">{COPY.dataSnapshots.title}</h3>
       </div>
 
       <ul className="muted mini-list">
         <li>
-          <strong>Signals:</strong> {signalsGenerated}
+          <strong>{COPY.dataSnapshots.signalsLabel}</strong> {signalsGenerated}
         </li>
         <li>
-          <strong>Prices:</strong> {pricesGenerated}
+          <strong>{COPY.dataSnapshots.pricesLabel}</strong> {pricesGenerated}
         </li>
         <li>
-          <strong>Universe size (prices):</strong> {universeSize}
+          <strong>{COPY.dataSnapshots.universeLabel}</strong> {universeSize}
         </li>
       </ul>
     </div>

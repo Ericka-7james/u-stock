@@ -6,7 +6,7 @@
 
 .connected-page-wrap {
   width: 100%;
-  max-width: 1100px;
+  max-width: var(--lane-narrow);
   margin: 0 auto;
   padding: 0 24px;
   box-sizing: border-box;
@@ -22,12 +22,10 @@
   display: block;
 }
 
-/* Header actions row (Terms pill) */
 .connected-header-actions {
   margin-top: 14px;
 }
 
-/* ✅ Terms pill should behave like About back-link-pill */
 .connected-link-pill {
   display: inline-flex;
   align-items: center;
@@ -53,21 +51,63 @@
   opacity: 0.75;
 }
 
+.connected-banner-slot {
+  margin-top: 12px;
+}
+
+.connected-banner-actions {
+  margin-top: 10px;
+}
+
 /* ---------- Banners ---------- */
 .connected-error {
   margin-top: 12px;
   padding: 10px 12px;
-  border-radius: 12px;
+  border-radius: var(--radius-sm);
   border: 1px solid rgba(220, 38, 38, 0.25);
   background: rgba(220, 38, 38, 0.08);
   color: #dc2626;
   font-weight: 700;
+  white-space: pre-wrap;
+}
+
+.connected-error--notice {
+  border-color: rgba(15, 118, 110, 0.22);
+  background: rgba(15, 118, 110, 0.08);
+  color: var(--ustock-text-main);
+  font-weight: 600;
+}
+
+.connected-banner-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.connected-banner-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.connected-banner-close {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  opacity: 0.85;
+  font-size: 16px;
+  line-height: 1;
+  padding: 0;
 }
 
 .connected-debug {
   margin-top: 10px;
   font-size: 12px;
   opacity: 0.75;
+}
+
+.connected-debug-copy {
+  white-space: pre-wrap;
 }
 
 /* ---------- Grid ---------- */
@@ -79,11 +119,8 @@
 }
 
 .connected-card {
-  background: var(--ustock-bg-card);
-  border: 1px solid var(--ustock-border-card);
-  border-radius: 18px;
   padding: 14px 14px 12px;
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+  box-shadow: var(--shadow-md);
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -118,11 +155,14 @@
   white-space: nowrap;
 }
 
-/* ✅ match About button vibe */
 .connected-status--on {
   border-color: var(--ustock-green-main);
   background: var(--ustock-green-main);
   color: #f9fafb;
+}
+
+.connected-status--off {
+  color: var(--ustock-text-main);
 }
 
 /* ---------- Tags ---------- */
@@ -148,6 +188,7 @@
   display: flex;
   gap: 10px;
   margin-top: 2px;
+  flex-wrap: wrap;
 }
 
 .connected-btn {
@@ -178,9 +219,6 @@
 /* ---------- Notes / Sections ---------- */
 .connected-note {
   margin-top: 18px;
-  background: var(--ustock-bg-card);
-  border: 1px solid var(--ustock-border-card);
-  border-radius: 18px;
   padding: 14px;
 }
 
@@ -205,18 +243,15 @@
   margin: 8px 0;
 }
 
-/* Smaller pill buttons for Next steps */
 .connected-pill {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   margin-left: 10px;
-
   border-radius: 999px;
   padding: 4px 10px;
   font-size: 12px;
   font-weight: 800;
-
   border: 1px solid var(--ustock-border-card);
   background: transparent;
   color: var(--ustock-text-main);
@@ -231,6 +266,19 @@
   margin-top: 14px;
   font-size: 13px;
   opacity: 0.85;
+}
+
+/* ---------- Modal ---------- */
+.connected-modal-copy {
+  white-space: pre-wrap;
+  color: var(--ustock-text-main);
+}
+
+.connected-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 /* MOBILE */

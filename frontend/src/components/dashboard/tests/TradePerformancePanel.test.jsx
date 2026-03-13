@@ -72,27 +72,6 @@ vi.mock("../../../content/dashboard/cards/tradePerformancePanel.content.ts", () 
     },
 
     cards: {
-      intents: {
-        title: "Recent Intents",
-        headerLines: {
-          selectBot: "Select a bot to see intents.",
-          unknown: (id) => `Bot ${id} status unknown`,
-          offline: (id) => `Bot ${id} offline`,
-          paused: (id) => `Bot ${id} paused`,
-          waiting: (id) => `Bot ${id} waiting`,
-          starting: (id) => `Bot ${id} starting`,
-          disarmed: (id) => `Bot ${id} disarmed`,
-          stopped: (id) => `Bot ${id} stopped`,
-          ok: (id) => `Bot ${id} active`,
-        },
-        updatedPrefix: "Updated",
-        updatedFallback: "—",
-        refresh: "Refresh",
-        errors: { prefix: "Error:", loadFail: "Failed to load intents." },
-        states: { loading: "Loading…", emptyNoBot: "No bot selected.", emptyNoIntents: "No intents yet." },
-        footnote: "Intent feed is informational.",
-      },
-
       topDayTrades: {
         title: "Top Day Trades",
         tables: {
@@ -127,23 +106,41 @@ vi.mock("../../../content/dashboard/cards/tradePerformancePanel.content.ts", () 
 });
 
 /* -----------------------------------------
-   ✅ Mock the RIGHT auth hook (component uses authContextBase)
+   ✅ Mock the RIGHT auth hook
 ------------------------------------------ */
 vi.mock("../../../context/authContextBase.js", () => ({
   useAuth: () => ({ user: { id: "u1" } }),
 }));
 
-// (Optional safety if other children use AuthContext)
-vi.mock("../../../context/AuthContext", () => ({
-  useAuth: () => ({ user: { id: "u1" } }),
+/* -----------------------------------------
+   Mock computeRangeDaysLabel to be deterministic
+------------------------------------------ */
+vi.mock("../../../lib/time/timeframe.js", () => ({
+  computeRangeDaysLabel: (tf) => {
+    if (!tf) return { days: 7, label: "7 days" };
+    if (tf?.preset === "30d") return { days: 30, label: "30 days" };
+    return { days: null, label: "—" };
+  },
 }));
 
 /* -----------------------------------------
-   Prevent BotControlCard side-effects
+   Prevent child components from adding side-effects
 ------------------------------------------ */
 vi.mock("../cards/BotControlCard.jsx", () => ({
   default: function BotControlCardMock() {
     return <div data-testid="bot-control-card" />;
+  },
+}));
+
+vi.mock("../cards/shared/ConnectedBrokersMiniCard.jsx", () => ({
+  default: function ConnectedBrokersMiniCardMock() {
+    return <div data-testid="connected-brokers" />;
+  },
+}));
+
+vi.mock("../cards/shared/BotIntentsCard.jsx", () => ({
+  default: function BotIntentsCardMock() {
+    return <div data-testid="bot-intents-card" />;
   },
 }));
 
@@ -154,26 +151,14 @@ vi.mock("../cards/TimeframeCard.jsx", () => ({
   default: function TimeframeCardMock({ onChange }) {
     return (
       <div data-testid="timeframe-card">
-        <button type="button" onClick={() => onChange?.({ preset: "Week" })}>
+        <button type="button" onClick={() => onChange?.({ preset: "7d" })}>
           Week
         </button>
-        <button type="button" onClick={() => onChange?.({ preset: "Month" })}>
+        <button type="button" onClick={() => onChange?.({ preset: "30d" })}>
           Month
-        </button>
-        <button type="button" onClick={() => onChange?.({ preset: "Year" })}>
-          Year
         </button>
       </div>
     );
-  },
-}));
-
-/* -----------------------------------------
-   Connected brokers mini card mock
------------------------------------------- */
-vi.mock("../cards/shared/ConnectedBrokersMiniCard.jsx", () => ({
-  default: function ConnectedBrokersMiniCardMock() {
-    return <div data-testid="connected-brokers" />;
   },
 }));
 
@@ -190,9 +175,9 @@ vi.mock("../cards/shared/StatTiles.jsx", () => ({
     );
   },
 
-  BigStat: function BigStat({ label, value, sub }) {
+  BigStat: function BigStat({ label, value, sub, tone }) {
     return (
-      <div className="tpCard" data-testid={`bigstat:${label}`}>
+      <div className="tpCard" data-testid={`bigstat:${label}`} data-tone={tone || ""}>
         <div>{label}</div>
         <div>{String(value)}</div>
         {sub ? <div>{sub}</div> : null}
@@ -200,9 +185,9 @@ vi.mock("../cards/shared/StatTiles.jsx", () => ({
     );
   },
 
-  MiniStat: function MiniStat({ label, value }) {
+  MiniStat: function MiniStat({ label, value, tone }) {
     return (
-      <div data-testid={`ministat:${label}`}>
+      <div data-testid={`ministat:${label}`} data-tone={tone || ""}>
         <span>{label}</span>
         <span>{String(value)}</span>
       </div>
@@ -241,10 +226,6 @@ vi.mock("../cards/shared/OpportunityTable.jsx", () => ({
       </div>
     );
   },
-
-  PillRow: function PillRowMock() {
-    return <div data-testid="pill-row" />;
-  },
 }));
 
 /* -----------------------------------------
@@ -262,19 +243,10 @@ describe("TradePerformancePanel", () => {
       if (msg.includes("not wrapped in act")) return;
       originalConsoleError(...args);
     };
-
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => ({
-        ok: true,
-        json: async () => ({ items: [], ts: 0 }),
-      }))
-    );
   });
 
   afterEach(() => {
     console.error = originalConsoleError;
-    vi.unstubAllGlobals();
     cleanup();
   });
 
@@ -317,31 +289,28 @@ describe("TradePerformancePanel", () => {
     return titleEl.closest(".tpOppMiniTable");
   };
 
-  const getCardByTitle = (titleRegexOrText) => {
-    const titleEl =
-      titleRegexOrText instanceof RegExp ? screen.getByText(titleRegexOrText) : screen.getByText(String(titleRegexOrText));
-    return titleEl.closest(".tpCard");
-  };
-
   it("sanity: component import resolves", () => {
     expect(TradePerformancePanel).toBeTypeOf("function");
   });
 
-  it("renders header + timeframe control and calls onTimeframeChange from TimeframeCard", async () => {
+  it("renders header + range label, and calls onTimeframeChange from TimeframeCard", async () => {
     const user = userEvent.setup();
     const onTimeframeChange = vi.fn();
 
-    renderWithRouter(baseProps({ onTimeframeChange }));
+    renderWithRouter(baseProps({ onTimeframeChange, timeframe: null }));
 
     expect(screen.getByRole("heading", { name: /opportunities/i })).toBeInTheDocument();
 
+    // Range label shows default mock (7 days)
+    expect(screen.getByLabelText("Active range")).toBeInTheDocument();
+    expect(screen.getByText("7 days")).toBeInTheDocument();
+
     await user.click(screen.getByRole("button", { name: /week/i }));
     await user.click(screen.getByRole("button", { name: /month/i }));
-    await user.click(screen.getByRole("button", { name: /year/i }));
 
-    expect(onTimeframeChange).toHaveBeenCalledTimes(3);
+    expect(onTimeframeChange).toHaveBeenCalledTimes(2);
     const payloads = onTimeframeChange.mock.calls.map((c) => c[0]?.preset);
-    expect(payloads).toEqual(["Week", "Month", "Year"]);
+    expect(payloads).toEqual(["7d", "30d"]);
   });
 
   it("shows aligned locked message when no bot is selected", () => {
@@ -365,7 +334,7 @@ describe("TradePerformancePanel", () => {
       })
     );
 
-    const tradesCard = getCardByTitle(/trades context/i);
+    const tradesCard = screen.getByTestId("bigstat:Trades Context").closest(".tpCard");
     expect(tradesCard).not.toBeNull();
 
     expect(within(tradesCard).getByText("Trades Context")).toBeInTheDocument();
@@ -401,12 +370,13 @@ describe("TradePerformancePanel", () => {
     expect(text).toMatch(/Source:\s*ALPACA\+Computed/i);
   });
 
-  it("renders leaders rows when leaders are provided", () => {
+  it("filters out non-alpha symbols in leaders", () => {
     renderWithRouter(
       baseProps({
         leaders: [
           { symbol: "AAPL", changePct: 2.5, last: 100, prevClose: 98 },
           { symbol: "MSFT", changePct: 1.0, last: 50, prevClose: 49 },
+          { symbol: "BRK.B", changePct: 1.0, last: 500, prevClose: 495 }, // filtered
         ],
       })
     );
@@ -417,6 +387,7 @@ describe("TradePerformancePanel", () => {
     const text = normalize(leadersTable.textContent);
     expect(text).toMatch(/AAPL/i);
     expect(text).toMatch(/MSFT/i);
+    expect(text).not.toMatch(/BRK\.B/i);
   });
 
   it("internal shows picks when opportunities provided; aligned still locked with no bot", () => {
@@ -432,7 +403,6 @@ describe("TradePerformancePanel", () => {
     );
 
     const alignedTable = getOppTableByTitle(/bot-aligned/i);
-    expect(alignedTable).not.toBeNull();
     expect(normalize(alignedTable.textContent).toLowerCase()).toContain("start a bot to generate aligned picks");
 
     const internalTable = getOppTableByTitle(/internal \(bot picks\)/i);
@@ -441,6 +411,55 @@ describe("TradePerformancePanel", () => {
     const internalText = normalize(internalTable.textContent);
     expect(internalText).toMatch(/AAPL/i);
     expect(internalText).toMatch(/TSLA/i);
+  });
+
+  it("aligned table shows 'No bot opportunities yet' when bot selected but has zero opportunities", () => {
+    renderWithRouter(
+      baseProps({
+        activeBot: { id: "bot1" },
+        botStatuses: {
+          bot1: { effective_state: "stopped" }, // has keys => not unknown
+        },
+        opportunities: { stocks: [] },
+      })
+    );
+
+    const alignedTable = getOppTableByTitle(/bot-aligned/i);
+    expect(normalize(alignedTable.textContent)).toMatch(/No bot opportunities yet/i);
+  });
+
+  it("bot status shows empty + 'No status yet' when bot selected but status payload missing", () => {
+    renderWithRouter(
+      baseProps({
+        activeBot: { id: "bot1" },
+        botStatuses: {}, // missing bot1 => unknown
+      })
+    );
+
+    const botStatusCard = screen.getByTestId("bigstat:Bot Status").closest(".tpCard");
+    const text = normalize(botStatusCard.textContent);
+
+    expect(text).toMatch(/Bot Status/i);
+    expect(text).toMatch(/—/);
+    expect(text).toMatch(/No status yet/i);
+  });
+
+  it("bot status shows OFFLINE + Runner offline when effective_state=offline", () => {
+    renderWithRouter(
+      baseProps({
+        activeBot: { id: "bot1" },
+        botStatuses: {
+          bot1: { effective_state: "offline", heartbeatAgeSec: 10 },
+        },
+      })
+    );
+
+    const botStatusCard = screen.getByTestId("bigstat:Bot Status").closest(".tpCard");
+    const text = normalize(botStatusCard.textContent);
+
+    expect(text).toMatch(/OFFLINE/i);
+    expect(text).toMatch(/Runner offline/i);
+    expect(botStatusCard.getAttribute("data-tone")).toBe("neg");
   });
 
   it("leaders table contains Symbol/Score headings (structure)", () => {
@@ -463,10 +482,14 @@ describe("TradePerformancePanel", () => {
     );
 
     const leadersTable = getOppTableByTitle(/market leaders \(today\)/i);
-    expect(leadersTable).not.toBeNull();
-
     const leadersText = normalize(leadersTable.textContent);
+
     expect(leadersText).toMatch(/Symbol/i);
     expect(leadersText).toMatch(/Score/i);
+  });
+
+  it("range label updates based on timeframe prop (mocked computeRangeDaysLabel)", () => {
+    renderWithRouter(baseProps({ timeframe: { preset: "30d" } }));
+    expect(screen.getByText("30 days")).toBeInTheDocument();
   });
 });

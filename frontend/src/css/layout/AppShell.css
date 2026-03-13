@@ -1,104 +1,97 @@
-:root {
-  /* Bridge Lucent -> App tokens (single source of truth: index.css) */
-  --ustock-green-main: var(--lucent-green);
-  --ustock-blue-main: var(--lucent-blue);
-  --ustock-bg-page: var(--lucent-bg);
+/* =====================================================
+   GLOBAL BASE
+===================================================== */
 
-  --ustock-bg-card: rgba(255, 255, 255, 0.92);
-  --ustock-bg-card-solid: #ffffff;
-  --ustock-bg-card-soft: rgba(255, 255, 255, 0.70);
-  --ustock-border-card: rgba(32, 64, 80, 0.12);
-
-  --ustock-text-main: var(--lucent-text);
-  --ustock-text-strong: #0b1120;
-  --ustock-text-muted: var(--lucent-muted);
-
-  /* Gold accent used for primary CTA */
-  --ustock-gold: #fbbf24;
-  --ustock-gold-ink: #1f2a33;
-
-  --ustock-card-chip-bg: rgba(37, 118, 98, 0.10);
-
-  /* Shared radii + shadows (site-wide cohesion) */
-  --ustock-radius-xl: 24px;
-  --ustock-radius-lg: 18px;
-  --ustock-shadow-lg: 0 18px 55px rgba(15, 23, 42, 0.10), 0 2px 8px rgba(15, 23, 42, 0.06);
-  --ustock-shadow-md: 0 12px 32px rgba(15, 23, 42, 0.08);
-}
-
-/* Base document background */
 html,
 body {
   margin: 0;
   padding: 0;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+
+  font-family:
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
     sans-serif;
+
   background: var(--ustock-bg-page);
   color: var(--ustock-text-main);
 }
 
-/* ========= APP SHELL LAYOUT ======================================== */
 
-/* ========= APP SHELL LAYOUT ======================================== */
+/* =====================================================
+   APP SHELL LAYOUT
+===================================================== */
 
 .app-shell {
   min-height: 100vh;
   background: var(--ustock-bg-page);
+
   display: flex;
   position: relative;
 
-  /* ✅ IMPORTANT: do NOT clip on X — it causes right-side cutoffs on tiny widths */
-  overflow-x: auto;     /* allow scroll if something exceeds viewport */
+  overflow-x: auto;
   overflow-y: visible;
 
-  /* Helps prevent rubber-banding sideways on mobile while still allowing scroll when needed */
   overscroll-behavior-x: contain;
-
-  /* Smooth scroll on iOS */
   -webkit-overflow-scrolling: touch;
 }
 
-/* when navOpen = true, margin-left is added to content (desktop only) */
 .app-shell--nav-open .app-main {
   margin-left: 260px;
 }
 
 .app-main {
   flex: 1;
+
   display: flex;
   flex-direction: column;
-  align-items: stretch;
-  transition: margin-left 0.23s ease-out;
 
-  /* 👇 make room for fixed topbar */
+  align-items: stretch;
+
+  transition: margin-left .23s ease-out;
+
   padding-top: 64px;
 }
 
-/* Wraps each page's content area */
 .app-content {
   flex: 1;
+
   display: flex;
   flex-direction: column;
 }
 
-/* Shared page wrapper: controls max width + padding for ALL pages */
+
+/* =====================================================
+   PAGE WRAPPER
+===================================================== */
+
 .app-page {
   width: 100%;
-  max-width: 1280px;
+  max-width: var(--lane-default);
+
   margin: 0 auto;
-  padding: 24px 48px 48px; /* top | sides | bottom */
+
+  padding: 24px 48px 48px;
+
   box-sizing: border-box;
 }
 
-/* Tablets / small laptops */
-@media (max-width: 1024px) {
+
+/* =====================================================
+   RESPONSIVE PAGE
+===================================================== */
+
+@media (max-width:1024px) {
+
   .app-page {
     padding: 20px 24px 40px;
   }
+
 }
 
-/* Mobile */
-@media (max-width: 768px) {
+@media (max-width:768px) {
+
   .app-page {
     padding: 16px 24px 32px;
   }
@@ -107,46 +100,65 @@ body {
     margin-left: 0;
   }
 
-  /* slightly smaller gap on small screens if you want */
   .app-main {
     padding-top: 60px;
   }
+
 }
 
-/* Extra-small mobile: make the main column fill the viewport exactly */
-@media (max-width: 480px) {
+@media (max-width:480px) {
+
   .app-page {
-    max-width: none;          /* stop trying to center a 1280px column */
-    width: 100vw;             /* match the viewport width */
-    margin: 0;                /* no auto-centering margins */
-    padding: 16px 16px 32px;  /* symmetric side padding */
+    max-width: none;
+    width: 100vw;
+
+    margin: 0;
+
+    padding: 16px 16px 32px;
+
     box-sizing: border-box;
   }
+
 }
 
-/* ✅ Universal cutoff: below 320px, stop shrinking the layout */
-@media (max-width: 319px) {
+@media (max-width:319px) {
+
   .app-page {
-    min-width: 320px; /* forces overflow instead of crushing cards */
+    min-width: 320px;
   }
+
 }
 
-/* -------- FOOTER --------------------------------------------------- */
+
+/* =====================================================
+   FOOTER
+===================================================== */
 
 .site-footer {
   margin-top: auto;
+
   text-align: center;
-  font-size: 12px;
+
+  font-size: var(--font-caption);
+
   color: var(--ustock-text-muted);
+
   padding: 14px 0 0;
-  opacity: 0.9;
+
+  opacity: .9;
 }
 
-/* -------- GLOBAL UTILITIES ---------------------------------------- */
+
+/* =====================================================
+   GLOBAL UTILITIES
+===================================================== */
 
 .page-title {
+
   color: var(--ustock-green-main);
+
   font-weight: 800;
+
   margin: 0;
 }
 
@@ -154,98 +166,271 @@ body {
   color: var(--ustock-text-muted);
 }
 
-/* Base “panel/card” style used across the app */
+
+/* =====================================================
+   PANELS / CARDS
+===================================================== */
+
 .panel {
+
   background: var(--ustock-bg-card);
-  border-radius: var(--ustock-radius-lg);
-  padding: 18px 20px;
-  box-shadow: var(--ustock-shadow-md);
+
+  border-radius: var(--radius-lg);
+
+  padding: var(--space-card-sm);
+
+  box-shadow: var(--shadow-md);
+
   border: 1px solid var(--ustock-border-card);
+
   color: var(--ustock-text-main);
 }
 
-/* Shared title + text helpers other pages can reuse */
 .panel-title {
-  font-size: 15px;
+
+  font-size: var(--font-body-md);
+
   font-weight: 600;
+
   color: var(--ustock-text-strong);
+
   margin: 0;
 }
 
 .panel-subtitle {
-  font-size: 12px;
+
+  font-size: var(--font-caption);
+
   color: var(--ustock-text-muted);
+
   margin: 0;
 }
 
-/* Simple muted mini list used across dashboards */
+
+/* =====================================================
+   MINI LIST
+===================================================== */
+
 .mini-list {
+
   list-style: none;
+
   margin: 0;
   padding: 0;
-  font-size: 12px;
+
+  font-size: var(--font-caption);
 }
 
 .mini-list li + li {
   margin-top: 4px;
 }
 
-/* ========= LIGHT / DARK THEME TOKENS =============================== */
 
-/* light theme is already encoded in :root; just restate for clarity */
-body {
-  background: var(--ustock-bg-page);
-  color: var(--ustock-text-main);
+/* =====================================================
+   SHARED SECTION WRAPPERS
+===================================================== */
+
+.app-section {
+  padding: var(--space-section) 0;
 }
 
-/* Override tokens when the dark class is present */
-body.ustock-dark {
-  background: #020617;
-  color: #e5e7eb;
+.app-section-inner {
 
-  --ustock-bg-page: #020617;
-  --ustock-bg-card: rgba(15, 23, 42, 0.65);
-  --ustock-bg-card-soft: rgba(15, 23, 42, 0.45);
-  --ustock-border-card: rgba(148, 163, 184, 0.22);
+  max-width: var(--lane-narrow);
 
-  --ustock-text-main: #e5e7eb;
-  --ustock-text-strong: #f9fafb;
-  --ustock-text-muted: #9ca3af;
+  width: 100%;
 
-  --ustock-card-chip-bg: rgba(15, 118, 110, 0.25);
+  margin: 0 auto;
+
+  box-sizing: border-box;
+
+  min-width: 0;
 }
 
-/* main layout background tweak for dark */
-body.ustock-dark .app-shell {
-  background: #020617;
+
+/* =====================================================
+   SECTION TYPOGRAPHY
+===================================================== */
+
+.section-title {
+
+  font-size: var(--font-title-lg);
+
+  font-weight: 800;
+
+  margin: 0 0 8px;
+
+  color: var(--ustock-green-main);
 }
 
-body.ustock-dark .app-main {
-  background: radial-gradient(
-    circle at top left,
-    #022c22 0%,
-    #020617 40%,
-    #020617 100%
-  );
+.section-text {
+
+  max-width: 720px;
+
+  font-size: var(--font-body-sm);
+
+  color: var(--ustock-text-muted);
+
+  margin: 0 0 24px;
 }
 
-/* cards / panels / settings form – extra depth in dark */
-body.ustock-dark .panel,
-body.ustock-dark .about-card,
-body.ustock-dark .about-hero-card,
-body.ustock-dark .settings-card {
-  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.6);
-}
 
-body.ustock-dark .settings-input,
-body.ustock-dark .settings-select,
-body.ustock-dark .settings-textarea {
+/* =====================================================
+   SURFACES
+===================================================== */
+
+.surface {
+
   background: var(--ustock-bg-card);
-  color: var(--ustock-text-main);
-  border-color: rgba(148, 163, 184, 0.7);
+
+  border: 1px solid var(--ustock-border-card);
+
+  border-radius: var(--radius-xl);
+
+  box-shadow: var(--shadow-lg);
+
+  width: 100%;
+
+  box-sizing: border-box;
+
+  min-width: 0;
 }
 
-/* footer in dark */
-body.ustock-dark .site-footer {
-  color: #9ca3af;
+.surface--pad-lg {
+  padding: var(--space-card-lg);
+}
+
+.surface--pad-md {
+  padding: var(--space-card-md);
+}
+
+.surface--pad-sm {
+  padding: var(--space-card-sm);
+}
+
+.surface-card {
+
+  background: var(--ustock-bg-card);
+
+  border: 1px solid var(--ustock-border-card);
+
+  border-radius: var(--radius-lg);
+
+  box-shadow: var(--shadow-card);
+
+  box-sizing: border-box;
+
+  min-width: 0;
+}
+
+
+/* =====================================================
+   CARD LIFT
+===================================================== */
+
+.interactive-lift {
+  transition: transform .12s ease, box-shadow .12s ease;
+}
+
+.interactive-lift:hover {
+
+  transform: translateY(-1px);
+
+  box-shadow: var(--shadow-lg);
+}
+
+
+/* =====================================================
+   BUTTONS
+===================================================== */
+
+.btn {
+
+  border-radius: 999px;
+
+  padding: 10px 22px;
+
+  font-size: var(--font-body-sm);
+
+  font-weight: 750;
+
+  cursor: pointer;
+
+  border: 1px solid transparent;
+}
+
+.btn--primary {
+
+  border: none;
+
+  background: var(--ustock-gold);
+
+  color: var(--ustock-gold-ink);
+
+  box-shadow: 0 12px 26px rgba(251,191,36,.22);
+}
+
+.btn--primary:hover {
+  filter: brightness(.98);
+}
+
+.btn--ghost {
+
+  background: rgba(255,255,255,.10);
+
+  color: #ffffff;
+
+  border: 1px solid rgba(248,250,252,.7);
+}
+
+.btn--ghost:hover {
+  border-color: rgba(248,250,252,.85);
+}
+
+.btn--thin {
+  padding: 10px 16px;
+  opacity: .92;
+}
+
+
+/* =====================================================
+   CHIPS
+===================================================== */
+
+.chip {
+
+  display: inline-flex;
+
+  align-items: center;
+
+  width: fit-content;
+
+  padding: 4px 10px;
+
+  border-radius: 999px;
+
+  font-size: var(--font-micro);
+
+  font-weight: 800;
+}
+
+.chip--accent {
+
+  background: rgba(42,137,114,.10);
+
+  border: 1px solid rgba(42,137,114,.22);
+
+  color: rgba(42,137,114,.98);
+}
+
+
+/* =====================================================
+   DARK MODE SURFACE DEPTH
+===================================================== */
+
+body.ustock-dark .panel,
+body.ustock-dark .surface,
+body.ustock-dark .surface-card {
+
+  box-shadow: 0 18px 45px rgba(0,0,0,.6);
 }

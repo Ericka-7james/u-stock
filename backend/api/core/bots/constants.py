@@ -1,29 +1,87 @@
-# backend/api/core/bots/constants.py
 from __future__ import annotations
 
-import os
+"""Constants for bot service behavior, state normalization, and catalog configuration."""
+
 import re
+from typing import Any, Dict, List, Pattern, Set
 
-BOT_ID_RE = re.compile(r"^[a-zA-Z0-9_]{1,64}$")
+# -------------------------------------------------------------------
+# Heartbeat thresholds
+# -------------------------------------------------------------------
+HB_5_MIN = 5 * 60
+HB_15_MIN = 15 * 60
+HB_30_MIN = 30 * 60
+HB_1_HOUR = 60 * 60
 
-# intent values (user lifecycle intent)
-# running = user wants bot executing
-# stopped = user explicitly stopped / not started
-INTENTS = {"running", "stopped"}
+# -------------------------------------------------------------------
+# Bot identifiers
+# Keep conservative: lowercase letters/numbers/underscore, must start
+# with a letter, and be reasonably short for DB/API safety.
+# -------------------------------------------------------------------
+BOT_ID_RE: Pattern[str] = re.compile(r"^[a-z][a-z0-9_]{1,63}$")
 
-# desired_state values (UI composite)
-DESIRED_STATES = {"running", "stopped", "armed", "disarmed"}
+# -------------------------------------------------------------------
+# Intents / requested actions
+# These are the user- or UI-driven control states we allow.
+# -------------------------------------------------------------------
+INTENTS: Set[str] = {
+    "start",
+    "stop",
+    "arm",
+    "disarm",
+    "restart",
+}
 
-# effective_state values (runner reality)
-EFFECTIVE_STATES = {
+# -------------------------------------------------------------------
+# Effective states
+# These are the normalized states the backend can expose to UI/API.
+# Keep this broad enough so validators/state machine logic won't choke
+# if different routes/services use slightly different wording.
+# -------------------------------------------------------------------
+EFFECTIVE_STATES: Set[str] = {
+    "unknown",
+    "idle",
+    "armed",
     "starting",
     "running",
-    "waiting_for_market",
+    "stopping",
     "stopped",
     "degraded",
     "error",
     "offline",
 }
 
-HEARTBEAT_STALE_SECONDS = int(os.getenv("USTOCK_BOT_HEARTBEAT_STALE_SECONDS", "25"))
-BOT_RUNNER_SECRET = (os.getenv("BOT_RUNNER_SECRET") or "").strip()
+# -------------------------------------------------------------------
+# Bot catalog
+# -------------------------------------------------------------------
+BOT_CATALOG: List[Dict[str, Any]] = [
+    {
+        "id": "ema_trend",
+        "name": "EMA Trend Bot",
+        "description": "Trend-following EMA signals + risk gates.",
+        "wired": True,
+    },
+    {
+        "id": "orb",
+        "name": "ORB Bot",
+        "description": "Opening Range Breakout scanner + execution.",
+        "wired": False,
+    },
+    {
+        "id": "mean_revert",
+        "name": "Mean Revert Bot",
+        "description": "Mean reversion entries with confidence gating.",
+        "wired": False,
+    },
+]
+
+__all__ = [
+    "HB_5_MIN",
+    "HB_15_MIN",
+    "HB_30_MIN",
+    "HB_1_HOUR",
+    "BOT_ID_RE",
+    "INTENTS",
+    "EFFECTIVE_STATES",
+    "BOT_CATALOG",
+]

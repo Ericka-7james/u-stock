@@ -1,0 +1,109 @@
+:root {
+
+  /* =====================================================
+     BRAND COLORS
+  ===================================================== */
+
+  --ustock-green-main: var(--lucent-green);
+  --ustock-blue-main: var(--lucent-blue);
+
+  --ustock-gold: #fbbf24;
+  --ustock-gold-ink: #1f2a33;
+
+  /* =====================================================
+     BACKGROUNDS
+  ===================================================== */
+
+  --ustock-bg-page: var(--lucent-bg);
+
+  --ustock-bg-card: rgba(255,255,255,0.92);
+  --ustock-bg-card-solid: #ffffff;
+  --ustock-bg-card-soft: rgba(255,255,255,0.70);
+
+  --ustock-border-card: rgba(32,64,80,0.12);
+
+  /* =====================================================
+     TEXT COLORS
+  ===================================================== */
+
+  --ustock-text-main: var(--lucent-text);
+  --ustock-text-strong: #0b1120;
+  --ustock-text-muted: var(--lucent-muted);
+
+  /* =====================================================
+     TYPOGRAPHY SCALE
+  ===================================================== */
+
+  --font-hero-xl: 42px;
+  --font-hero-lg: 40px;
+  --font-hero-md: 32px;
+
+  --font-title-lg: 24px;
+  --font-title-md: 22px;
+
+  --font-body-lg: 16px;
+  --font-body-md: 15px;
+  --font-body-sm: 14px;
+
+  --font-caption: 12px;
+  --font-micro: 11px;
+
+  /* =====================================================
+     SPACING
+  ===================================================== */
+
+  --space-section: 64px;
+  --space-card-lg: 34px;
+  --space-card-md: 24px;
+  --space-card-sm: 18px;
+
+  /* =====================================================
+     RADII
+  ===================================================== */
+
+  --radius-xl: 24px;
+  --radius-lg: 18px;
+  --radius-md: 16px;
+  --radius-sm: 12px;
+
+  /* =====================================================
+     SHADOWS
+  ===================================================== */
+
+  --shadow-lg:
+    0 18px 55px rgba(15,23,42,0.10),
+    0 2px 8px rgba(15,23,42,0.06);
+
+  --shadow-md:
+    0 12px 32px rgba(15,23,42,0.08);
+
+  --shadow-card:
+    0 16px 44px rgba(15,23,42,0.12);
+
+  /* =====================================================
+     CONTENT LANES
+  ===================================================== */
+
+  --lane-default: 1280px;
+  --lane-narrow: 1100px;
+}
+
+
+/* =====================================================
+   DARK MODE TOKEN OVERRIDES
+===================================================== */
+
+body.ustock-dark {
+
+  --ustock-bg-page: #020617;
+
+  --ustock-bg-card: rgba(15,23,42,0.65);
+  --ustock-bg-card-soft: rgba(15,23,42,0.45);
+
+  --ustock-border-card: rgba(148,163,184,0.22);
+
+  --ustock-text-main: #e5e7eb;
+  --ustock-text-strong: #f9fafb;
+  --ustock-text-muted: #9ca3af;
+
+}
