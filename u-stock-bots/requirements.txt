@@ -12,14 +12,12 @@ click==8.3.1
 colorama==0.4.6
 coverage==7.12.0
 cryptography==46.0.3
-curl_cffi==0.13.0
 deprecation==2.1.0
 dnspython==2.8.0
 email_validator==2.2.0
 fastapi==0.128.0
 frozendict==2.4.7
 gotrue==2.12.4
-greenlet==3.3.0
 h11==0.16.0
 h2==4.3.0
 hpack==4.1.0
@@ -31,10 +29,8 @@ iniconfig==2.3.0
 lxml==6.0.2
 msgpack==1.1.2
 multidict==6.7.0
-multitasking==0.0.12
 numpy==2.3.5
 packaging==25.0
-pandas==2.3.3
 passlib==1.7.4
 peewee==3.18.3
 pip-tools==7.5.3
@@ -46,7 +42,6 @@ propcache==0.4.1
 protobuf==6.33.1
 psycopg==3.3.2
 psycopg-binary==3.3.2
-pyarrow==22.0.0
 pycparser==2.23
 pydantic==2.10.6
 pydantic_core==2.27.2
@@ -69,7 +64,6 @@ six==1.17.0
 sniffio==1.3.1
 soupsieve==2.8
 SQLAlchemy==2.0.44
-sseclient-py==1.8.0
 starlette==0.50.0
 storage3==0.12.1
 StrEnum==0.4.15
@@ -88,4 +82,3 @@ websockets==15.0.1
 wheel==0.46.3
 yahooquery==2.4.1
 yarl==1.22.0
-yfinance==0.2.66
