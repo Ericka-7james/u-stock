@@ -35,40 +35,48 @@ jobs:
         working-directory: frontend
         run: npm run test -- --coverage --run
 
+
       # -------------------------
-      # Backend (pytest)
+      # Python setup
       # -------------------------
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: "pip"
+          cache: pip
           cache-dependency-path: |
             backend/requirements.txt
             u-stock-bots/requirements.txt
 
-      - name: Install backend deps
+      - name: Install Python deps
         run: |
           python -m pip install --upgrade pip
           pip install -r backend/requirements.txt
-          pip install pytest pytest-cov
-
-      - name: Backend tests (pytest + coverage)
-        run: |
-          python -m pytest -q backend/api --cov=backend/api --cov-report=xml:coverage-backend.xml --cov-report=term-missing
-
-      # -------------------------
-      # Bots/runner (pytest)
-      # -------------------------
-      - name: Install bots deps
-        run: |
-          python -m pip install --upgrade pip
           pip install -r u-stock-bots/requirements.txt
           pip install pytest pytest-cov
 
+
+      # -------------------------
+      # Backend tests
+      # -------------------------
+      - name: Backend tests (pytest + coverage)
+        run: |
+          python -m pytest -q backend/api \
+          --cov=backend/api \
+          --cov-report=xml:coverage-backend.xml \
+          --cov-report=term-missing
+
+
+      # -------------------------
+      # Bots tests
+      # -------------------------
       - name: Bots tests (pytest + coverage)
         run: |
-          python -m pytest -q u-stock-bots --cov=u-stock-bots --cov-report=xml:u-stock-bots/coverage-bots.xml --cov-report=term-missing
+          python -m pytest -q u-stock-bots \
+          --cov=u-stock-bots \
+          --cov-report=xml:u-stock-bots/coverage-bots.xml \
+          --cov-report=term-missing
+
 
       # -------------------------
       # Upload artifacts
